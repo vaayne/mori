@@ -1,6 +1,7 @@
 import AppKit
 import MoriCore
 import MoriPersistence
+import MoriTerminal
 import MoriTmux
 
 @MainActor
@@ -9,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var mainWindowController: MainWindowController?
     private var workspaceManager: WorkspaceManager?
     private var appState: AppState?
+    private var terminalAreaController: TerminalAreaViewController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -76,16 +78,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
 
-        let contentController = PlaceholderContentViewController()
+        let terminalArea = TerminalAreaViewController()
+        self.terminalAreaController = terminalArea
 
         let splitVC = RootSplitViewController(
             railController: railController,
             sidebarController: sidebarController,
-            contentController: contentController
+            contentController: terminalArea
         )
 
         windowController.contentViewController = splitVC
         windowController.showWindow(nil)
+
+        // Wire terminal switch: when worktree selection changes, attach terminal
+        manager.onTerminalSwitch = { [weak terminalArea] sessionName, workingDirectory in
+            terminalArea?.attachToSession(sessionName: sessionName, workingDirectory: workingDirectory)
+        }
 
         // Update window title from current project
         updateWindowTitle()
@@ -105,6 +113,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Clean up terminal surfaces
+        terminalAreaController?.removeAllSurfaces()
         // TODO: Phase 5 — Persist UI state before exit
     }
 

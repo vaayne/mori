@@ -15,6 +15,10 @@ final class WorkspaceManager {
     let uiStateRepo: UIStateRepository
     let tmuxBackend: TmuxBackend
 
+    /// Callback invoked when the terminal should switch to a different session.
+    /// Parameters: (sessionName, workingDirectory)
+    var onTerminalSwitch: ((String, String) -> Void)?
+
     init(
         appState: AppState,
         projectRepo: ProjectRepository,
@@ -67,10 +71,15 @@ final class WorkspaceManager {
 
         guard let worktree = appState.worktrees.first(where: { $0.id == worktreeId }) else { return }
 
-        // Ensure tmux session exists
+        // Ensure tmux session exists, then switch terminal
         Task {
             await ensureTmuxSession(for: worktree)
             await refreshRuntimeState()
+
+            // Notify terminal to switch to this worktree's session
+            if let sessionName = worktree.tmuxSessionName {
+                onTerminalSwitch?(sessionName, worktree.path)
+            }
         }
 
         saveUIState()
@@ -88,6 +97,8 @@ final class WorkspaceManager {
             Task {
                 try? await tmuxBackend.selectWindow(sessionId: sessionName, windowId: windowId)
             }
+            // Ensure terminal is attached to the right session and focused
+            onTerminalSwitch?(sessionName, worktree.path)
         }
 
         saveUIState()
