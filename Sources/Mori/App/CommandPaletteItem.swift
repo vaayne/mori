@@ -1,10 +1,11 @@
 import Foundation
+import MoriCore
 
 /// Represents an item in the command palette search results.
 enum CommandPaletteItem: Sendable {
     case project(id: UUID, name: String)
     case worktree(id: UUID, projectId: UUID, name: String, branch: String?)
-    case window(id: String, worktreeId: UUID, title: String)
+    case window(id: String, worktreeId: UUID, title: String, tag: WindowTag?)
     case action(id: String, title: String, subtitle: String?)
 
     var title: String {
@@ -13,7 +14,7 @@ enum CommandPaletteItem: Sendable {
             return name
         case .worktree(_, _, let name, _):
             return name
-        case .window(_, _, let title):
+        case .window(_, _, let title, _):
             return title
         case .action(_, let title, _):
             return title
@@ -26,7 +27,10 @@ enum CommandPaletteItem: Sendable {
             return "Project"
         case .worktree(_, _, _, let branch):
             return branch.map { "Branch: \($0)" } ?? "Worktree"
-        case .window:
+        case .window(_, _, _, let tag):
+            if let tag {
+                return "Window (\(tag.rawValue))"
+            }
             return "Window"
         case .action(_, _, let subtitle):
             return subtitle
@@ -39,8 +43,8 @@ enum CommandPaletteItem: Sendable {
             return "folder.fill"
         case .worktree:
             return "arrow.triangle.branch"
-        case .window:
-            return "terminal"
+        case .window(_, _, _, let tag):
+            return tag?.symbolName ?? "terminal"
         case .action(let id, _, _):
             switch id {
             case "action.create-worktree":

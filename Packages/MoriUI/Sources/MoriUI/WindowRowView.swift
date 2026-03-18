@@ -20,7 +20,7 @@ public struct WindowRowView: View {
     public var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 6) {
-                Image(systemName: "terminal")
+                Image(systemName: window.tag?.symbolName ?? "terminal")
                     .font(.caption)
                     .foregroundStyle(isActive ? Color.accentColor : .secondary)
 

@@ -35,7 +35,8 @@ final class CommandPaletteDataSource {
             items.append(.window(
                 id: window.tmuxWindowId,
                 worktreeId: window.worktreeId,
-                title: window.title
+                title: window.title,
+                tag: window.tag
             ))
         }
 
@@ -61,11 +62,30 @@ final class CommandPaletteDataSource {
 
     /// Score all items against a query and return sorted results (highest score first).
     /// Items with zero score are excluded.
+    /// Supports `tag:<tagname>` prefix to filter windows by semantic tag.
     func search(query: String) -> [CommandPaletteItem] {
         let items = allItems()
 
         if query.isEmpty {
             return items
+        }
+
+        // Handle "tag:" prefix filtering
+        if query.lowercased().hasPrefix("tag:") {
+            let tagQuery = String(query.dropFirst(4)).trimmingCharacters(in: .whitespaces).lowercased()
+            if tagQuery.isEmpty {
+                // Show all tagged windows
+                return items.filter { item in
+                    if case .window(_, _, _, let tag) = item { return tag != nil }
+                    return false
+                }
+            }
+            return items.filter { item in
+                if case .window(_, _, _, let tag) = item {
+                    return tag?.rawValue.lowercased().hasPrefix(tagQuery) == true
+                }
+                return false
+            }
         }
 
         let scored = items.compactMap { item -> (CommandPaletteItem, Int)? in

@@ -409,7 +409,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .worktree(let id, _, _, _):
             manager.selectWorktree(id)
 
-        case .window(let id, _, _):
+        case .window(let id, _, _, _):
             manager.selectWindow(id)
 
         case .action(let id, _, _):
