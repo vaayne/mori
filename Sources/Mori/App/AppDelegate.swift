@@ -163,15 +163,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handleAddProject(path: String) {
         guard let manager = workspaceManager else { return }
-        do {
-            let project = try manager.addProject(path: path)
-            mainWindowController?.updateTitle(projectName: project.name)
-        } catch {
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = "Failed to add project"
-            alert.informativeText = error.localizedDescription
-            alert.runModal()
+        Task { @MainActor in
+            do {
+                let project = try await manager.addProject(path: path)
+                mainWindowController?.updateTitle(projectName: project.name)
+            } catch {
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = "Failed to add project"
+                alert.informativeText = error.localizedDescription
+                alert.runModal()
+            }
         }
     }
 

@@ -64,4 +64,17 @@ public actor GitBackend: GitControlling {
             return false
         }
     }
+
+    public func gitCommonDir(path: String) async throws -> String {
+        let output = try await runner.run(
+            in: path,
+            ["rev-parse", "--git-common-dir"]
+        )
+        let result = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        // If the result is relative, resolve it against the given path
+        if result.hasPrefix("/") {
+            return result
+        }
+        return (path as NSString).appendingPathComponent(result)
+    }
 }

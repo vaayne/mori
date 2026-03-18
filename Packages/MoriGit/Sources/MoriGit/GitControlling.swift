@@ -27,4 +27,8 @@ public protocol GitControlling: Sendable {
 
     /// Check whether the given path is inside a git repository.
     func isGitRepo(path: String) async throws -> Bool
+
+    /// Return the git common directory for the given path (resolves via `git rev-parse --git-common-dir`).
+    /// For a main worktree this is typically `<repo>/.git`; for linked worktrees it points to the shared `.git` dir.
+    func gitCommonDir(path: String) async throws -> String
 }

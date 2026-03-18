@@ -145,15 +145,23 @@ final class WorkspaceManager {
 
     /// Add a new project from a directory path. Creates Project, default Worktree,
     /// and tmux session. Returns the new project.
+    /// Validates that the path is a git repo and resolves gitCommonDir.
     @discardableResult
-    func addProject(path: String) throws -> Project {
+    func addProject(path: String) async throws -> Project {
         let name = (path as NSString).lastPathComponent
+
+        // Validate git repo and resolve gitCommonDir
+        let isRepo = try await gitBackend.isGitRepo(path: path)
+        var commonDir = path
+        if isRepo {
+            commonDir = try await gitBackend.gitCommonDir(path: path)
+        }
 
         // Create project
         let project = Project(
             name: name,
             repoRootPath: path,
-            gitCommonDir: path,
+            gitCommonDir: commonDir,
             lastActiveAt: Date()
         )
         try projectRepo.save(project)
