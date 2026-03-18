@@ -672,12 +672,16 @@ final class WorkspaceManager {
     // MARK: - Window / Pane Operations
 
     /// Create a new tmux window in the current worktree's session.
+    /// Recreates the session if it was killed (e.g. last window closed via tmux).
     func createNewWindow() async {
         guard let worktree = selectedWorktree,
               let sessionName = worktree.tmuxSessionName else { return }
         do {
+            await ensureTmuxSession(for: worktree)
             _ = try await tmuxBackend.createWindow(sessionId: sessionName, name: nil, cwd: worktree.path)
             await refreshRuntimeState()
+            // Re-attach terminal to the (possibly recreated) session
+            onTerminalSwitch?(sessionName, worktree.path)
         } catch {
             showErrorAlert(title: "Failed to create window", message: error.localizedDescription)
         }
