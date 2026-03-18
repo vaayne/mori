@@ -6,34 +6,42 @@ Build Mori — a macOS native workspace terminal organized around Projects and W
 
 ## Progress
 
-**Phases 1–3 COMPLETE. UI polish pass done.**
+**Phases 1–3 COMPLETE. UI polish pass done. Theme sync session done.**
 
 - **Phase 1** (30 tasks): Project scaffolding, tmux backend, AppKit shell, PTY terminal, state restoration
 - **Phase 2** (47 tasks): MoriGit package, create/remove worktree, templates, git status polling, badges, unread tracking, command palette
 - **Phase 3** (36 tasks): Window tags, agent detection, richer badges, notifications, CLI/IPC, automation hooks
 - **UI Polish** (6 commits): Design tokens, accessibility, live theme, 2-column sidebar redesign
+- **Theme Sync** (4 commits): Settings persistence, tmux theme sync, sidebar/window chrome theme, settings page rewrite
 
 **553 test assertions** passing (297 core + 175 tmux + 42 persistence + 39 IPC). Zero build warnings under Swift 6 strict concurrency.
 
-### UI Polish (latest session)
+### Theme Sync (latest session)
+
+1. **Settings Persistence Fix** — Switched from `UserDefaults.standard` (unreliable under `swift run`) to `UserDefaults(suiteName: "com.mori.app")` for stable persistence across rebuilds
+2. **Settings View Reactivity** — Wrapped `TerminalSettingsView` in `SettingsWindowContent` with `@State` ownership so SwiftUI properly tracks changes (theme preview, font size, etc. update in real time)
+3. **tmux Theme Sync** — `TmuxThemeApplicator` now separates session options (`-g`) from window options (`-gw`), applies to both global defaults and existing sessions, added `setWindowOption` to `TmuxBackend`/`TmuxControlling`
+4. **Sidebar Theme Sync** — Sidebar background and color scheme match the terminal theme; `AppState.terminalSettings` provides reactive updates; `TerminalTheme.isDark` computed via ITU-R BT.709 luminance
+5. **Window Chrome Sync** — `window.appearance` set to `.darkAqua`/`.aqua` based on theme; toolbar button and titlebar controls visible in all theme/system mode combinations
+6. **Sidebar Appearance Override** — `SidebarHostingController.updateAppearance()` sets NSView-level appearance; `.preferredColorScheme` always explicit (`.dark`/`.light`, never `nil`)
+7. **Settings Page Rewrite** — Replaced generic `Form/.grouped` with theme-aware custom layout:
+   - Theme picker: visual grid with mini terminal previews (background, `Aa` text, ANSI traffic-light dots)
+   - Cursor picker: visual block/underline/bar previews in theme cursor color
+   - Settings window: transparent titlebar, background and appearance update live on theme change
+   - All colors derived from current theme (background, foreground, accent from ANSI blue)
+8. **Shared Color Helper** — Promoted `nsColor(hex:)` to package-internal in `DesignTokens.swift` (was duplicated as private)
+
+### UI Polish (prior session)
 
 1. **Design Token System** — `MoriTokens` enum in MoriUI: semantic colors, 7-step spacing scale, radii, icon sizes, typography presets, opacity levels. All 5 view files migrated.
 2. **Accessibility** — `.accessibilityLabel()` on all badge icons, status dots, indicators across WorktreeRowView and WindowRowView
 3. **Hover States** — `onHover` + highlight background on WorktreeRowView and WindowRowView
 4. **Window Restoration** — `setFrameAutosaveName("MoriMainWindow")` persists position/size
 5. **Live Theme Update** — SwiftTermAdapter nudges frame size (±1px SIGWINCH) to force tmux redraw after theme change
-6. **Settings Improvements** — Font search filter, "Restore Defaults" button, adaptive frame (min/ideal instead of fixed 460×420)
-7. **2-Column Sidebar (Option B)** — Replaced 3-column (rail | sidebar | terminal) with 2-column layout:
-   - All projects as flat section headers (no dropdown/rail)
-   - Two-line worktree rows (bold branch + subtitle with status)
-   - Star icon for main, branch icon for features
-   - Git status as `+N/-N` pill badges
-   - Windows shown only under selected worktree
-   - Footer: "Add Project" label + settings gear
-8. **Minimal Titlebar** — Hidden title visibility, transparent titlebar, compact toolbar with sidebar toggle on leading edge. Window background syncs with terminal theme.
-9. **Title Sync** — Window title updates on project/worktree/window switch (`"branch — project — Mori"`)
-10. **Crash Fix** — Guarded `UNUserNotificationCenter.current()` with `Bundle.main.bundleIdentifier != nil` for `swift run` compatibility
-11. **Command Palette** — Extracted `Layout` enum (15 constants), added keyboard shortcut hints (⌘R, ⌘O)
+6. **2-Column Sidebar (Option B)** — Replaced 3-column (rail | sidebar | terminal) with 2-column layout
+7. **Minimal Titlebar** — Hidden title visibility, transparent titlebar, compact toolbar with sidebar toggle
+8. **Title Sync** — Window title updates on project/worktree/window switch
+9. **Command Palette** — Extracted `Layout` enum (15 constants), added keyboard shortcut hints (⌘R, ⌘O)
 
 ### Phase 3 features delivered
 
@@ -49,7 +57,12 @@ Build Mori — a macOS native workspace terminal organized around Projects and W
 - **2-column layout over 3-column** — Merged project rail into sidebar as flat sections; saves horizontal space, follows Tower/Fork pattern
 - **Design tokens in MoriUI** — `MoriTokens` enum with nested enums (Color, Spacing, Radius, Icon, Size, Font, Opacity); SwiftUI-specific, no MoriCore dependency
 - **Sidebar toggle in titlebar toolbar** — Compact toolbar with single button; always accessible even when sidebar collapsed
-- **Window background from theme** — `window.backgroundColor` set from `TerminalSettings.theme.background`; updates live on theme change
+- **Window appearance from theme** — `window.appearance` set to `.darkAqua`/`.aqua` based on `TerminalTheme.isDark`; ensures toolbar and titlebar controls are visible regardless of system appearance
+- **Settings persistence via suite** — `UserDefaults(suiteName: "com.mori.app")` instead of `.standard`; stable across `swift run` rebuilds without bundle identifier
+- **Settings @State wrapper** — `SettingsWindowContent` wraps `TerminalSettingsView` with `@State` ownership; plain `Binding` on `NSObject` property didn't trigger SwiftUI re-renders
+- **terminalSettings in AppState** — Makes theme observable for sidebar; sidebar reads `appState.terminalSettings.theme` reactively
+- **TerminalTheme.isDark** — ITU-R BT.709 relative luminance on background hex; threshold at 0.5
+- **setWindowOption (-gw)** — tmux window options (`window-style`, `pane-border-style`) need `-gw` flag, distinct from session options (`-g`)
 - **UNUserNotificationCenter guarded** — All 4 call sites check `Bundle.main.bundleIdentifier != nil` for swift run compatibility
 - **DetectedAgentState in MoriTmux** — String raw values mirroring MoriCore `AgentState` to avoid cross-package dependency
 - **Agent detection scoped to `.agent`-tagged windows only** — `capture-pane` is expensive; non-agent windows derive state from `currentCommand` field alone
@@ -59,9 +72,10 @@ Build Mori — a macOS native workspace terminal organized around Projects and W
 
 ## Current State
 
-The app builds and runs via `mise run dev`. It now includes all Phase 1–3 features plus UI polish:
+The app builds and runs via `mise run dev`. It now includes all Phase 1–3 features plus full theme sync:
 - 2-column window (sidebar | terminal) with SwiftTerm
 - All projects as flat sidebar sections with two-line worktree rows
+- Sidebar, terminal, window chrome, and settings all follow the terminal theme
 - Minimal titlebar with sidebar toggle, title syncs on selection
 - Design token system with consistent styling across all views
 - Git status badges, hover states, accessibility labels
@@ -70,7 +84,8 @@ The app builds and runs via `mise run dev`. It now includes all Phase 1–3 feat
 - macOS notifications + dock badge for unread count
 - `ws` CLI for scripting (communicates via Unix socket)
 - Per-project automation hooks via `.mori/hooks.json`
-- Live theme update, font search, restore defaults in settings
+- Theme-aware settings page with visual theme/cursor pickers
+- Settings persist across `swift run` rebuilds
 
 ### Architecture
 
@@ -79,15 +94,16 @@ Sources/Mori/App/          — AppDelegate, MainWindowController, RootSplitViewC
                              TerminalAreaViewController, WorkspaceManager,
                              GitStatusCoordinator, UnreadTracker, TemplateApplicator,
                              NotificationManager, IPCHandler, HookRunner,
-                             CommandPaletteController, SidebarHostingController
+                             CommandPaletteController, SidebarHostingController,
+                             TmuxThemeApplicator, SettingsWindowContent
 Sources/WS/               — ws CLI executable (swift-argument-parser)
-Packages/MoriCore/         — Models, AppState, WindowTag, NotificationDebouncer, HookConfig
+Packages/MoriCore/         — Models, AppState (+ terminalSettings), WindowTag, NotificationDebouncer, HookConfig
 Packages/MoriPersistence/  — GRDB/SQLite (WAL), Records, Repositories
 Packages/MoriTmux/         — TmuxBackend (actor), TmuxParser, PaneStateDetector, PaneState
 Packages/MoriGit/          — GitBackend (actor), GitCommandRunner, GitStatusParser
 Packages/MoriTerminal/     — TerminalHost protocol, SwiftTermAdapter, NativeTerminalAdapter
-Packages/MoriUI/           — DesignTokens, WorktreeSidebarView, WorktreeRowView, WindowRowView,
-                             ProjectRailView (unused), TerminalSettingsView
+Packages/MoriUI/           — DesignTokens (+ nsColor helper), WorktreeSidebarView, WorktreeRowView,
+                             WindowRowView, ProjectRailView (unused), TerminalSettingsView
 Packages/MoriIPC/          — IPCServer (actor), IPCClient, IPCProtocol
 ```
 
