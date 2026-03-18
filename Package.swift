@@ -13,6 +13,7 @@ let package = Package(
     dependencies: [
         .package(path: "Packages/MoriCore"),
         .package(path: "Packages/MoriPersistence"),
+        .package(path: "Packages/MoriTmux"),
     ],
     targets: [
         .executableTarget(
@@ -20,6 +21,7 @@ let package = Package(
             dependencies: [
                 "MoriCore",
                 "MoriPersistence",
+                "MoriTmux",
             ],
             path: "Sources/Mori"
         ),
