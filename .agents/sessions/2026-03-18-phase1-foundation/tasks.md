@@ -21,14 +21,14 @@
 
 ## Phase 3: AppKit Shell & Sidebar UI
 
-- [ ] 3.1 — Implement `MainWindowController` with toolbar and window config
-- [ ] 3.2 — Implement `RootSplitViewController` with 3 split items (rail 60-80pt, sidebar 200pt, content 400pt)
-- [ ] 3.3 — Create `MoriUI` SPM package with `ProjectRailView` (SwiftUI)
-- [ ] 3.4 — Create `WorktreeSidebarView` with worktree sections and window rows (SwiftUI)
-- [ ] 3.5 — Wire `AppState` into SwiftUI views via NSHostingController
-- [ ] 3.6 — Implement "Add Project" via NSOpenPanel (creates Project + default Worktree + tmux session)
-- [ ] 3.7 — Implement `WorkspaceManager` coordinating project/worktree/window selection flow
-- [ ] 3.8 — Enforce single app instance via NSRunningApplication check
+- [x] 3.1 — Implement `MainWindowController` with toolbar and window config
+- [x] 3.2 — Implement `RootSplitViewController` with 3 split items (rail 60-80pt, sidebar 200pt, content 400pt)
+- [x] 3.3 — Create `MoriUI` SPM package with `ProjectRailView` (SwiftUI)
+- [x] 3.4 — Create `WorktreeSidebarView` with worktree sections and window rows (SwiftUI)
+- [x] 3.5 — Wire `AppState` into SwiftUI views via NSHostingController
+- [x] 3.6 — Implement "Add Project" via NSOpenPanel (creates Project + default Worktree + tmux session)
+- [x] 3.7 — Implement `WorkspaceManager` coordinating project/worktree/window selection flow
+- [x] 3.8 — Enforce single app instance via NSRunningApplication check
 
 ## Phase 4: Terminal Integration
 

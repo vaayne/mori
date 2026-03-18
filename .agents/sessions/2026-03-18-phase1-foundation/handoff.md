@@ -127,3 +127,70 @@ Packages/MoriTmux/
 
 - TmuxBackend.scanAll() iterates sessions sequentially (one list-windows call per session). This is fine for Phase 1 but could be optimized with concurrent calls if session count grows.
 - The onChange callback is @Sendable but runs on the TmuxBackend actor; Phase 3 WorkspaceManager will need to dispatch updates to main actor for UI.
+
+## Phase 3: AppKit Shell & Sidebar UI -- COMPLETE
+
+### Summary
+
+All 8 tasks implemented and committed:
+
+| Task | Description | Commit |
+|------|-------------|--------|
+| 3.1 | MainWindowController with toolbar and "Add Project" button | `c1f6bc1` |
+| 3.2 | RootSplitViewController with 3-pane split (rail/sidebar/content) | `5732367` |
+| 3.3 | MoriUI SPM package with ProjectRailView (SwiftUI) | `5e85e63` |
+| 3.4 | WorktreeSidebarView, WorktreeRowView, WindowRowView (SwiftUI) | `0930788` |
+| 3.5 | NSHostingControllers wiring AppState into SwiftUI views | `b93cbe6` |
+| 3.6 | Add Project via NSOpenPanel (creates Project + Worktree + tmux session) | `f0f902d` |
+| 3.7 | WorkspaceManager coordinating project/worktree/window selection | `c51f263` |
+| 3.8 | Single instance enforcement via NSRunningApplication check | `f0f902d` |
+
+### Key Decisions
+
+- **@MainActor on AppState** -- Added per reviewer note from Phase 1; ensures all state mutations happen on the main thread for UI safety
+- **@MainActor on AppDelegate** -- Required by Swift 6 strict concurrency since AppDelegate accesses MainActor-isolated types (NSOpenPanel, AppState, etc.)
+- **WorkspaceManager in app target** -- Lives in `Sources/Mori/App/` rather than MoriCore to avoid circular SPM dependencies (it needs MoriPersistence + MoriTmux + MoriCore)
+- **Callback-based SwiftUI wiring** -- ProjectRailView and WorktreeSidebarView use closure callbacks (`onSelect`, `onSelectWorktree`, `onSelectWindow`) rather than directly mutating AppState, keeping views pure and testable
+- **NSHostingController with @Bindable** -- `ProjectRailContentView` and `WorktreeSidebarContentView` are thin wrapper views that bridge `@Observable AppState` into the SwiftUI views via `@Bindable`
+- **PlaceholderContentViewController** -- Simple "Select a worktree" label as content area placeholder until Phase 4 terminal integration
+
+### Project Structure (new/modified files)
+
+```
+Package.swift                                     (updated: added MoriUI dependency)
+Sources/Mori/App/
+  AppDelegate.swift                               (fully wired: DB, repos, state, window, tmux polling)
+  MainWindowController.swift                      (NSWindowController with toolbar)
+  RootSplitViewController.swift                   (NSSplitViewController, 3 panes)
+  PlaceholderContentViewController.swift          (content placeholder)
+  HostingControllers.swift                        (NSHostingController wrappers for SwiftUI views)
+  WorkspaceManager.swift                          (coordinates state/persistence/tmux)
+Packages/
+  MoriCore/Sources/MoriCore/State/
+    AppState.swift                                (added @MainActor)
+  MoriUI/
+    Package.swift                                 (new package, depends on MoriCore)
+    Sources/MoriUI/
+      ProjectRailView.swift                       (project rail with circle icons)
+      WorktreeSidebarView.swift                   (worktree sections + window rows)
+      WorktreeRowView.swift                       (worktree row with status indicator)
+      WindowRowView.swift                         (window row with active indicator)
+```
+
+### What's Ready for Phase 4
+
+- Full 3-pane window layout with SwiftUI sidebar views bound to @Observable AppState
+- WorkspaceManager.selectWorktree() ensures tmux session exists and refreshes runtime state
+- RootSplitViewController.replaceContentController() is ready for swapping in TerminalAreaViewController
+- WorkspaceManager.refreshRuntimeState() maps tmux sessions/windows to RuntimeWindow models
+- Tmux polling is active with onChange callback dispatching to main actor
+- "Add Project" flow creates Project + Worktree + tmux session end-to-end
+- All existing tests pass (67 model + 42 GRDB + 95 tmux = 204 assertions)
+- Project builds cleanly with `swift build`, zero errors, zero warnings
+
+### Blockers / Notes for Next Phase
+
+- Content area shows placeholder; Phase 4 replaces it with TerminalAreaViewController hosting libghostty
+- Window title updates on addProject but not yet on project selection change (minor; can be wired in Phase 5)
+- AppDelegate.applicationWillTerminate still has TODO stub for Phase 5 state persistence on quit
+- No Xcode installed -- Command Line Tools only. Phase 4 may need Xcode for libghostty XCFramework integration.
