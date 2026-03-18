@@ -574,8 +574,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let hostingController = NSHostingController(rootView: settingsView)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Settings"
-        window.styleMask = [.titled, .closable]
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
         window.backgroundColor = NSColor(hex: self.terminalSettings.theme.background)
         window.appearance = NSAppearance(named: self.terminalSettings.theme.isDark ? .darkAqua : .aqua)
         window.center()
