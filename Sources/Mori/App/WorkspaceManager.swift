@@ -279,6 +279,38 @@ final class WorkspaceManager {
         return worktree
     }
 
+    /// Handle create worktree from UI — validates input, calls createWorktree,
+    /// and shows error alerts on failure.
+    func handleCreateWorktree(branchName: String) async {
+        let trimmed = branchName.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else {
+            showErrorAlert(title: "Invalid Branch Name", message: WorkspaceError.branchNameEmpty.localizedDescription)
+            return
+        }
+
+        guard let projectId = appState.uiState.selectedProjectId else {
+            showErrorAlert(title: "No Project Selected", message: "Please select a project first.")
+            return
+        }
+
+        do {
+            _ = try await createWorktree(projectId: projectId, branchName: trimmed)
+            await refreshRuntimeState()
+        } catch {
+            showErrorAlert(title: "Failed to Create Worktree", message: error.localizedDescription)
+        }
+    }
+
+    /// Show a user-facing error alert.
+    private func showErrorAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = title
+        alert.informativeText = message
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
     // MARK: - Remove Worktree
 
     /// Remove a worktree with confirmation dialog.

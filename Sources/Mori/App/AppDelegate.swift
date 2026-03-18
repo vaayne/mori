@@ -78,6 +78,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onSelectWindow: { [weak manager] windowId in
                 manager?.selectWindow(windowId)
+            },
+            onCreateWorktree: { [weak manager] branchName in
+                guard let manager else { return }
+                Task { @MainActor in
+                    await manager.handleCreateWorktree(branchName: branchName)
+                }
+            },
+            onRemoveWorktree: { [weak manager] worktreeId in
+                guard let manager else { return }
+                Task { @MainActor in
+                    await manager.removeWorktree(worktreeId: worktreeId)
+                }
             }
         )
 

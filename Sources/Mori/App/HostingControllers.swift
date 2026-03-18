@@ -43,12 +43,16 @@ final class WorktreeSidebarHostingController: NSHostingController<WorktreeSideba
     init(
         appState: AppState,
         onSelectWorktree: @escaping (UUID) -> Void,
-        onSelectWindow: @escaping (String) -> Void
+        onSelectWindow: @escaping (String) -> Void,
+        onCreateWorktree: ((String) -> Void)? = nil,
+        onRemoveWorktree: ((UUID) -> Void)? = nil
     ) {
         let rootView = WorktreeSidebarContentView(
             appState: appState,
             onSelectWorktree: onSelectWorktree,
-            onSelectWindow: onSelectWindow
+            onSelectWindow: onSelectWindow,
+            onCreateWorktree: onCreateWorktree,
+            onRemoveWorktree: onRemoveWorktree
         )
         super.init(rootView: rootView)
     }
@@ -64,6 +68,8 @@ struct WorktreeSidebarContentView: View {
     @Bindable var appState: AppState
     let onSelectWorktree: (UUID) -> Void
     let onSelectWindow: (String) -> Void
+    let onCreateWorktree: ((String) -> Void)?
+    let onRemoveWorktree: ((UUID) -> Void)?
 
     var body: some View {
         WorktreeSidebarView(
@@ -72,7 +78,9 @@ struct WorktreeSidebarContentView: View {
             selectedWorktreeId: appState.uiState.selectedWorktreeId,
             selectedWindowId: appState.uiState.selectedWindowId,
             onSelectWorktree: onSelectWorktree,
-            onSelectWindow: onSelectWindow
+            onSelectWindow: onSelectWindow,
+            onCreateWorktree: onCreateWorktree,
+            onRemoveWorktree: onRemoveWorktree
         )
     }
 }
