@@ -189,7 +189,7 @@ func testEnumRawValues() {
     assertEqual(WorktreeStatus.inactive.rawValue, "inactive")
     assertEqual(WorktreeStatus.unavailable.rawValue, "unavailable")
 
-    assertEqual(WindowBadge.none.rawValue, "none")
+    assertEqual(WindowBadge.idle.rawValue, "idle")
     assertEqual(WindowBadge.unread.rawValue, "unread")
     assertEqual(WindowBadge.error.rawValue, "error")
 
