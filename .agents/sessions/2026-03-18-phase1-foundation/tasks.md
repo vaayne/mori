@@ -43,8 +43,8 @@
 
 ## Phase 5: State Restoration & Polish
 
-- [ ] 5.1 — Implement UIStateRepository save/load (selected project/worktree/window)
-- [ ] 5.2 — Implement launch restoration: load state → restore selection → attach tmux → show terminal
-- [ ] 5.3 — Handle edge cases: session gone (recreate), path invalid (mark unavailable), tmux missing (alert)
-- [ ] 5.4 — Add app menu items: File > Open Project, Edit menu copy/paste passthrough
-- [ ] 5.5 — Final integration testing: full lifecycle flow
+- [x] 5.1 — Implement UIStateRepository save/load (selected project/worktree/window)
+- [x] 5.2 — Implement launch restoration: load state → restore selection → attach tmux → show terminal
+- [x] 5.3 — Handle edge cases: session gone (recreate), path invalid (mark unavailable), tmux missing (alert)
+- [x] 5.4 — Add app menu items: File > Open Project, Edit menu copy/paste passthrough
+- [x] 5.5 — Final integration testing: full lifecycle flow

@@ -257,3 +257,52 @@ Packages/
 - Terminal rendering is basic (NSTextView-based, no cursor positioning grid). Sufficient for tmux session management but not a full VT100 emulator. Upgrading to libghostty when Xcode is available will provide proper terminal emulation.
 - Window title still only updates on addProject, not on project selection change (Phase 5)
 - AppDelegate.applicationWillTerminate has surface cleanup but still needs Phase 5 UI state persistence
+
+## Phase 5: State Restoration & Polish -- COMPLETE
+
+### Summary
+
+All 5 tasks implemented and committed:
+
+| Task | Description | Commit |
+|------|-------------|--------|
+| 5.1 | UIState persistence on termination + verified existing save-on-selection | `dbab10e` |
+| 5.2 | Launch restoration: load state, restore project/worktree/window, attach tmux | `c47ee4c` |
+| 5.3 | Edge cases: path validation, tmux missing alert, session recreation | `60441af` |
+| 5.4 | App menu bar: File (Open Project), Edit (Copy/Paste/Select All), View, Window | `cb0b31f` |
+| 5.5 | Final build verification: zero errors, 204 test assertions pass | (verification only) |
+
+### Key Decisions
+
+- **UIStateRepository already functional** -- save/load were implemented in Phase 1; WorkspaceManager already called saveUIState() on every selection change. Phase 5 added explicit save in applicationWillTerminate for safety.
+- **Graceful state restoration** -- restoreState() validates each persisted ID against loaded data. If a project/worktree was deleted, it falls back to selecting the first available item instead of crashing or showing empty state.
+- **Path validation on load** -- validateProjectPaths() checks each worktree path on loadAll(). Missing directories get .unavailable status (shown with warning icon in WorktreeRowView). Paths that reappear are restored to .active.
+- **Programmatic main menu** -- Menu set up entirely in AppDelegate.setupMainMenu() without XIB. Edit menu items (Copy, Paste, Select All) pass through the responder chain to the terminal NSTextView.
+- **tmux availability check** -- checkTmuxAvailability() runs async on launch. If tmux is not found, an NSAlert shows install instructions and polling is skipped.
+
+### Files Modified
+
+```
+Sources/Mori/App/
+  AppDelegate.swift         (state save on terminate, menu setup, tmux alert, restore call)
+  WorkspaceManager.swift    (restoreState, validateProjectPaths, checkTmuxAvailability, saveUIStateOnTerminate)
+```
+
+### Final Build Status
+
+- `swift build` from root: zero errors, zero warnings
+- `swift run MoriCoreTests`: 67 assertions passed
+- `swift run MoriPersistenceTests`: 42 assertions passed
+- `swift run MoriTmuxTests`: 95 assertions passed
+- Total: 204 assertions, all passing
+
+### Phase 1 Foundation -- COMPLETE
+
+All 5 phases are now complete. The Mori app has:
+- Core data models with SQLite persistence (GRDB)
+- tmux backend with session lifecycle, polling, ws:: naming
+- 3-pane AppKit window with SwiftUI sidebar views
+- PTY-based terminal integration with LRU surface cache
+- State persistence and restoration across app launches
+- Edge case handling (missing tmux, invalid paths, stale sessions)
+- Full app menu bar with keyboard shortcuts
