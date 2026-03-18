@@ -1,6 +1,7 @@
 import AppKit
 import MoriCore
 import MoriGit
+import MoriIPC
 import MoriPersistence
 import MoriTerminal
 import MoriTmux
@@ -20,6 +21,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var keyMonitor: Any?
     private var settingsWindowController: NSWindowController?
     private var terminalSettings = TerminalSettings.load()
+    private var ipcServer: IPCServer?
+    private var ipcHandler: IPCHandler?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -137,6 +140,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Set up command palette (Cmd+K)
         setupCommandPalette(appState: state, manager: manager)
 
+        // Start IPC server for ws CLI communication
+        startIPCServer(manager: manager)
+
         // Update window title from current project
         updateWindowTitle()
 
@@ -164,6 +170,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if let monitor = keyMonitor {
             NSEvent.removeMonitor(monitor)
             keyMonitor = nil
+        }
+
+        // Stop IPC server
+        if let server = ipcServer {
+            Task { await server.stop() }
         }
 
         // Stop coordinated polling
@@ -453,6 +464,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         default:
             break
+        }
+    }
+
+    // MARK: - IPC Server
+
+    private func startIPCServer(manager: WorkspaceManager) {
+        let handler = IPCHandler(workspaceManager: manager)
+        self.ipcHandler = handler
+
+        let server = IPCServer { request in
+            await handler.handle(request)
+        }
+        self.ipcServer = server
+
+        Task {
+            do {
+                try await server.start()
+            } catch {
+                print("[Mori] Failed to start IPC server: \(error)")
+            }
         }
     }
 
