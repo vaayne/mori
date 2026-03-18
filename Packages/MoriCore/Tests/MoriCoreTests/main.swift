@@ -829,6 +829,137 @@ func testTemplateRegistryTags() {
     assertEqual(TemplateRegistry.agent.windows[3].tag, .logs)
 }
 
+// MARK: - NotificationDebouncer Tests
+
+func testDebouncerIdleToWaiting() {
+    var debouncer = NotificationDebouncer()
+    let now = Date()
+    let result = debouncer.shouldNotify(
+        windowId: "@1", oldBadge: .idle, newBadge: .waiting, now: now
+    )
+    assertEqual(result, .agentWaiting)
+}
+
+func testDebouncerIdleToError() {
+    var debouncer = NotificationDebouncer()
+    let now = Date()
+    let result = debouncer.shouldNotify(
+        windowId: "@1", oldBadge: .idle, newBadge: .error, now: now
+    )
+    assertEqual(result, .commandError)
+}
+
+func testDebouncerRunningToIdle() {
+    // running -> idle should trigger longRunningComplete
+    var debouncer = NotificationDebouncer()
+    let now = Date()
+    let result = debouncer.shouldNotify(
+        windowId: "@1", oldBadge: .running, newBadge: .idle, now: now
+    )
+    assertEqual(result, .longRunningComplete)
+}
+
+func testDebouncerLongRunningToIdle() {
+    // longRunning -> idle should trigger longRunningComplete
+    var debouncer = NotificationDebouncer()
+    let now = Date()
+    let result = debouncer.shouldNotify(
+        windowId: "@1", oldBadge: .longRunning, newBadge: .idle, now: now
+    )
+    assertEqual(result, .longRunningComplete)
+}
+
+func testDebouncerSameBadgeNoNotification() {
+    var debouncer = NotificationDebouncer()
+    let now = Date()
+    // idle -> idle: no notification
+    let r1 = debouncer.shouldNotify(windowId: "@1", oldBadge: .idle, newBadge: .idle, now: now)
+    assertNil(r1)
+    // running -> running: no notification
+    let r2 = debouncer.shouldNotify(windowId: "@2", oldBadge: .running, newBadge: .running, now: now)
+    assertNil(r2)
+    // error -> error: no notification
+    let r3 = debouncer.shouldNotify(windowId: "@3", oldBadge: .error, newBadge: .error, now: now)
+    assertNil(r3)
+}
+
+func testDebouncerNonNotifyTransitions() {
+    var debouncer = NotificationDebouncer()
+    let now = Date()
+    // idle -> running: no notification (running isn't notification-worthy on its own)
+    let r1 = debouncer.shouldNotify(windowId: "@1", oldBadge: .idle, newBadge: .running, now: now)
+    assertNil(r1)
+    // idle -> unread: no notification
+    let r2 = debouncer.shouldNotify(windowId: "@2", oldBadge: .idle, newBadge: .unread, now: now)
+    assertNil(r2)
+    // idle -> longRunning: no notification
+    let r3 = debouncer.shouldNotify(windowId: "@3", oldBadge: .idle, newBadge: .longRunning, now: now)
+    assertNil(r3)
+}
+
+func testDebouncerSuppressionWithin30s() {
+    var debouncer = NotificationDebouncer()
+    let now = Date()
+
+    // First fire should succeed
+    let r1 = debouncer.shouldNotify(windowId: "@1", oldBadge: .idle, newBadge: .waiting, now: now)
+    assertEqual(r1, .agentWaiting)
+
+    // Same event within 30s should be suppressed
+    let within = now.addingTimeInterval(15)
+    let r2 = debouncer.shouldNotify(windowId: "@1", oldBadge: .idle, newBadge: .waiting, now: within)
+    assertNil(r2)
+
+    // After 30s should fire again
+    let after = now.addingTimeInterval(31)
+    let r3 = debouncer.shouldNotify(windowId: "@1", oldBadge: .idle, newBadge: .waiting, now: after)
+    assertEqual(r3, .agentWaiting)
+}
+
+func testDebouncerMultipleWindowsIndependent() {
+    var debouncer = NotificationDebouncer()
+    let now = Date()
+
+    // Window @1 fires waiting
+    let r1 = debouncer.shouldNotify(windowId: "@1", oldBadge: .idle, newBadge: .waiting, now: now)
+    assertEqual(r1, .agentWaiting)
+
+    // Window @2 fires waiting at same time — not suppressed (different window)
+    let r2 = debouncer.shouldNotify(windowId: "@2", oldBadge: .idle, newBadge: .waiting, now: now)
+    assertEqual(r2, .agentWaiting)
+
+    // Window @1 fires error — not suppressed (different event type)
+    let r3 = debouncer.shouldNotify(windowId: "@1", oldBadge: .waiting, newBadge: .error, now: now)
+    assertEqual(r3, .commandError)
+}
+
+func testDebouncerNilOldBadgeTreatedAsIdle() {
+    var debouncer = NotificationDebouncer()
+    let now = Date()
+
+    // nil old badge (new window) going to waiting -> should notify
+    let r1 = debouncer.shouldNotify(windowId: "@1", oldBadge: nil, newBadge: .waiting, now: now)
+    assertEqual(r1, .agentWaiting)
+
+    // nil old badge going to idle -> no notification
+    let r2 = debouncer.shouldNotify(windowId: "@2", oldBadge: nil, newBadge: .idle, now: now)
+    assertNil(r2)
+}
+
+func testNotificationEventRawValues() {
+    assertEqual(NotificationEvent.agentWaiting.rawValue, "agentWaiting")
+    assertEqual(NotificationEvent.commandError.rawValue, "commandError")
+    assertEqual(NotificationEvent.longRunningComplete.rawValue, "longRunningComplete")
+}
+
+func testDebouncerErrorToIdle() {
+    // error -> idle: no longRunningComplete (only running/longRunning transitions)
+    var debouncer = NotificationDebouncer()
+    let now = Date()
+    let result = debouncer.shouldNotify(windowId: "@1", oldBadge: .error, newBadge: .idle, now: now)
+    assertNil(result)
+}
+
 // MARK: - Main
 
 print("=== MoriCore Model Tests ===")
@@ -903,6 +1034,18 @@ testAlertStateMappingForLongRunning()
 testWorktreeAggregationWithGitAndRunning()
 
 testTemplateRegistryTags()
+
+testDebouncerIdleToWaiting()
+testDebouncerIdleToError()
+testDebouncerRunningToIdle()
+testDebouncerLongRunningToIdle()
+testDebouncerSameBadgeNoNotification()
+testDebouncerNonNotifyTransitions()
+testDebouncerSuppressionWithin30s()
+testDebouncerMultipleWindowsIndependent()
+testDebouncerNilOldBadgeTreatedAsIdle()
+testNotificationEventRawValues()
+testDebouncerErrorToIdle()
 
 printResults()
 
