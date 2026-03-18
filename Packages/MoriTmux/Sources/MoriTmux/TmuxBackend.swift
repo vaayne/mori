@@ -33,9 +33,10 @@ public actor TmuxBackend: TmuxControlling {
     /// Start the background polling timer.
     public func startPolling() {
         guard pollingTask == nil else { return }
+        let interval = self.pollingInterval
         pollingTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                try? await Task.sleep(nanoseconds: interval)
                 guard !Task.isCancelled else { break }
                 guard let self = self else { break }
                 await self.pollOnce()

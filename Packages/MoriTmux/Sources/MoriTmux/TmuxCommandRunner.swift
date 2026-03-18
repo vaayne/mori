@@ -99,12 +99,13 @@ public actor TmuxCommandRunner {
     ) async throws -> (output: String, exitCode: Int32) {
         try await withCheckedThrowingContinuation { continuation in
             let process = Process()
-            let pipe = Pipe()
+            let stdoutPipe = Pipe()
+            let stderrPipe = Pipe()
 
             process.executableURL = URL(fileURLWithPath: executablePath)
             process.arguments = arguments
-            process.standardOutput = pipe
-            process.standardError = pipe
+            process.standardOutput = stdoutPipe
+            process.standardError = stderrPipe
 
             do {
                 try process.run()
@@ -113,11 +114,12 @@ public actor TmuxCommandRunner {
                 return
             }
 
-            process.waitUntilExit()
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let output = String(data: data, encoding: .utf8) ?? ""
-            continuation.resume(returning: (output, process.terminationStatus))
+            // Use terminationHandler to avoid blocking the cooperative thread pool
+            process.terminationHandler = { _ in
+                let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: data, encoding: .utf8) ?? ""
+                continuation.resume(returning: (output, process.terminationStatus))
+            }
         }
     }
 }

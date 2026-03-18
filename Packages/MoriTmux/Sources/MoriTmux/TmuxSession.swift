@@ -31,17 +31,11 @@ public struct TmuxSession: Identifiable, Equatable, Sendable {
 
     /// Extract the project slug from a Mori session name.
     public var projectSlug: String? {
-        guard isMoriSession else { return nil }
-        let parts = name.split(separator: "::", maxSplits: 3, omittingEmptySubsequences: false)
-        guard parts.count >= 3 else { return nil }
-        return String(parts[1])
+        SessionNaming.parse(name)?.projectSlug
     }
 
     /// Extract the worktree slug from a Mori session name.
     public var worktreeSlug: String? {
-        guard isMoriSession else { return nil }
-        let parts = name.split(separator: "::", maxSplits: 3, omittingEmptySubsequences: false)
-        guard parts.count >= 3 else { return nil }
-        return String(parts[2])
+        SessionNaming.parse(name)?.worktreeSlug
     }
 }
