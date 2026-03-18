@@ -1,5 +1,6 @@
 import Foundation
 import MoriCore
+import MoriGit
 import MoriPersistence
 import MoriTmux
 
@@ -14,6 +15,7 @@ final class WorkspaceManager {
     let worktreeRepo: WorktreeRepository
     let uiStateRepo: UIStateRepository
     let tmuxBackend: TmuxBackend
+    let gitBackend: GitBackend
 
     /// Callback invoked when the terminal should switch to a different session.
     /// Parameters: (sessionName, workingDirectory)
@@ -24,13 +26,15 @@ final class WorkspaceManager {
         projectRepo: ProjectRepository,
         worktreeRepo: WorktreeRepository,
         uiStateRepo: UIStateRepository,
-        tmuxBackend: TmuxBackend
+        tmuxBackend: TmuxBackend,
+        gitBackend: GitBackend = GitBackend()
     ) {
         self.appState = appState
         self.projectRepo = projectRepo
         self.worktreeRepo = worktreeRepo
         self.uiStateRepo = uiStateRepo
         self.tmuxBackend = tmuxBackend
+        self.gitBackend = gitBackend
     }
 
     /// Whether tmux is available on this system.

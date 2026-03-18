@@ -1,5 +1,6 @@
 import AppKit
 import MoriCore
+import MoriGit
 import MoriPersistence
 import MoriTerminal
 import MoriTmux
@@ -38,13 +39,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let worktreeRepo = WorktreeRepository(database: database)
         let uiStateRepo = UIStateRepository(database: database)
         let tmuxBackend = TmuxBackend()
+        let gitBackend = GitBackend()
 
         let manager = WorkspaceManager(
             appState: state,
             projectRepo: projectRepo,
             worktreeRepo: worktreeRepo,
             uiStateRepo: uiStateRepo,
-            tmuxBackend: tmuxBackend
+            tmuxBackend: tmuxBackend,
+            gitBackend: gitBackend
         )
         self.workspaceManager = manager
 
