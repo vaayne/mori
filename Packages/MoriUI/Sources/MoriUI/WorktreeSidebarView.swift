@@ -124,7 +124,7 @@ public struct WorktreeSidebarView: View {
             }
 
             // Worktrees for this project
-            let projectWorktrees = worktrees.filter { $0.projectId == project.id }
+            let projectWorktrees = worktrees.filter { $0.projectId == project.id && $0.status != .unavailable }
 
             if projectWorktrees.isEmpty, project.id == selectedProjectId {
                 Text("No worktrees")
