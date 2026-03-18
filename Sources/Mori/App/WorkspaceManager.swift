@@ -169,9 +169,30 @@ final class WorkspaceManager {
             }
             // Ensure terminal is attached to the right session and focused
             onTerminalSwitch?(sessionName, worktree.path)
+
+            // Clear unread state for this window
+            clearUnread(windowId: windowId, worktreeId: worktree.id)
         }
 
         saveUIState()
+    }
+
+    /// Clear unread output state for a window and recompute aggregates.
+    private func clearUnread(windowId: String, worktreeId: UUID) {
+        // Update the last-seen timestamp in the tracker
+        if let activity = unreadTracker.currentActivity(windowId: windowId, in: latestSessions) {
+            unreadTracker.markSeen(worktreeId: worktreeId, windowId: windowId, activity: activity)
+        }
+
+        // Reset hasUnreadOutput on the RuntimeWindow
+        if let index = appState.runtimeWindows.firstIndex(where: { $0.tmuxWindowId == windowId }) {
+            appState.runtimeWindows[index].hasUnreadOutput = false
+            appState.runtimeWindows[index].badge = StatusAggregator.windowBadge(hasUnreadOutput: false)
+        }
+
+        // Recompute worktree unread count and project aggregates
+        updateUnreadCounts()
+        updateAggregatedBadges()
     }
 
     // MARK: - Add Project
