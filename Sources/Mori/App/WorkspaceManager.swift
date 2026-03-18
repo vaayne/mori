@@ -36,6 +36,7 @@ final class WorkspaceManager {
     let tmuxBackend: TmuxBackend
     let gitBackend: GitBackend
     let gitStatusCoordinator: GitStatusCoordinator
+    let unreadTracker: UnreadTracker
 
     /// Callback invoked when the terminal should switch to a different session.
     /// Parameters: (sessionName, workingDirectory)
@@ -46,6 +47,10 @@ final class WorkspaceManager {
 
     /// Polling interval in nanoseconds (5 seconds).
     private let pollingInterval: UInt64 = 5_000_000_000
+
+    /// Cache of the latest tmux sessions from the most recent poll.
+    /// Used by selectWindow to look up current pane activity timestamps.
+    private var latestSessions: [TmuxSession] = []
 
     init(
         appState: AppState,
@@ -62,6 +67,7 @@ final class WorkspaceManager {
         self.tmuxBackend = tmuxBackend
         self.gitBackend = gitBackend
         self.gitStatusCoordinator = GitStatusCoordinator(gitBackend: gitBackend)
+        self.unreadTracker = UnreadTracker()
     }
 
     /// Whether tmux is available on this system.
@@ -506,19 +512,29 @@ final class WorkspaceManager {
 
         // Update runtime state from tmux
         if let sessions {
-            updateRuntimeState(from: sessions)
+            latestSessions = sessions
+
+            // Detect unread activity before updating runtime state
+            let unreadWindowIds = unreadTracker.processActivity(
+                sessions: sessions,
+                worktrees: appState.worktrees,
+                selectedWindowId: appState.uiState.selectedWindowId
+            )
+
+            updateRuntimeState(from: sessions, unreadWindowIds: unreadWindowIds)
         }
 
         // Update worktree fields from git status
         updateWorktreeGitStatus(gitStatuses)
 
-        // Aggregate badges and update AppState
+        // Roll up unread counts and aggregate badges
+        updateUnreadCounts()
         updateAggregatedBadges()
     }
 
     /// Update runtime windows from tmux session data.
-    /// Preserves existing `hasUnreadOutput` state across poll cycles.
-    private func updateRuntimeState(from sessions: [TmuxSession]) {
+    /// Preserves existing `hasUnreadOutput` state and merges newly detected unread windows.
+    private func updateRuntimeState(from sessions: [TmuxSession], unreadWindowIds: Set<String> = []) {
         // Build lookup of existing unread state
         let previousUnread: [String: Bool] = Dictionary(
             uniqueKeysWithValues: appState.runtimeWindows.map { ($0.tmuxWindowId, $0.hasUnreadOutput) }
@@ -532,9 +548,10 @@ final class WorkspaceManager {
             }) else { continue }
 
             for tmuxWindow in session.windows {
-                // Preserve unread state from previous poll (Phase 2.5 will set it)
-                let wasUnread = previousUnread[tmuxWindow.windowId] ?? false
-                let badge = StatusAggregator.windowBadge(hasUnreadOutput: wasUnread)
+                // Window is unread if: newly detected OR was previously unread
+                let isUnread = unreadWindowIds.contains(tmuxWindow.windowId)
+                    || (previousUnread[tmuxWindow.windowId] ?? false)
+                let badge = StatusAggregator.windowBadge(hasUnreadOutput: isUnread)
 
                 let rw = RuntimeWindow(
                     tmuxWindowId: tmuxWindow.windowId,
@@ -542,7 +559,7 @@ final class WorkspaceManager {
                     tmuxWindowIndex: tmuxWindow.windowIndex,
                     title: tmuxWindow.name,
                     paneCount: tmuxWindow.panes.count,
-                    hasUnreadOutput: wasUnread,
+                    hasUnreadOutput: isUnread,
                     badge: badge
                 )
                 runtimeWindows.append(rw)
@@ -550,6 +567,19 @@ final class WorkspaceManager {
         }
 
         appState.runtimeWindows = runtimeWindows
+    }
+
+    /// Roll up unread window counts to worktree.unreadCount.
+    private func updateUnreadCounts() {
+        for i in appState.worktrees.indices {
+            let worktreeId = appState.worktrees[i].id
+            let unreadCount = appState.runtimeWindows
+                .filter { $0.worktreeId == worktreeId && $0.hasUnreadOutput }
+                .count
+            if appState.worktrees[i].unreadCount != unreadCount {
+                appState.worktrees[i].unreadCount = unreadCount
+            }
+        }
     }
 
     /// Update worktree git status fields from polled results and persist changes.
