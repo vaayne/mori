@@ -24,18 +24,31 @@ final class CommandPaletteController: NSWindowController {
     private let scrollView = NSScrollView()
     private let containerView = NSView()
 
-    // MARK: - Constants
+    // MARK: - Layout Constants
 
-    private let panelWidth: CGFloat = 500
-    private let searchFieldHeight: CGFloat = 36
-    private let rowHeight: CGFloat = 32
-    private let maxVisibleRows: Int = 10
+    private enum Layout {
+        static let panelWidth: CGFloat = 500
+        static let searchFieldHeight: CGFloat = 36
+        static let rowHeight: CGFloat = 32
+        static let maxVisibleRows: Int = 10
+        static let panelPadding: CGFloat = 8
+        static let fieldHorizontalPadding: CGFloat = 12
+        static let cellIconSize: CGFloat = 18
+        static let cellLeadingPadding: CGFloat = 8
+        static let cellSpacing: CGFloat = 8
+        static let cellTrailingPadding: CGFloat = 8
+        static let titleFontSize: CGFloat = 13
+        static let subtitleFontSize: CGFloat = 11
+        static let shortcutFontSize: CGFloat = 11
+        static let searchFontSize: CGFloat = 16
+        static let panelTopOffset: CGFloat = 80
+    }
 
     // MARK: - Init
 
     init(appState: AppState) {
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 400),
+            contentRect: NSRect(x: 0, y: 0, width: Layout.panelWidth, height: 400),
             styleMask: [.titled, .closable, .nonactivatingPanel],
             backing: .buffered,
             defer: true
@@ -107,7 +120,7 @@ final class CommandPaletteController: NSWindowController {
     private func setupSearchField() {
         searchField.translatesAutoresizingMaskIntoConstraints = false
         searchField.placeholderString = "Search projects, worktrees, windows, actions..."
-        searchField.font = .systemFont(ofSize: 16)
+        searchField.font = .systemFont(ofSize: Layout.searchFontSize)
         searchField.isBordered = false
         searchField.focusRingType = .none
         searchField.bezelStyle = .roundedBezel
@@ -121,12 +134,12 @@ final class CommandPaletteController: NSWindowController {
     private func setupTableView() {
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("results"))
         column.title = ""
-        column.width = panelWidth - 20
+        column.width = Layout.panelWidth - 20
         tableView.addTableColumn(column)
         tableView.headerView = nil
         tableView.delegate = self
         tableView.dataSource = self
-        tableView.rowHeight = rowHeight
+        tableView.rowHeight = Layout.rowHeight
         tableView.selectionHighlightStyle = .regular
         tableView.intercellSpacing = NSSize(width: 0, height: 0)
         tableView.target = self
@@ -147,12 +160,12 @@ final class CommandPaletteController: NSWindowController {
         containerView.addSubview(separator)
 
         NSLayoutConstraint.activate([
-            searchField.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
-            searchField.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 12),
-            searchField.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -12),
-            searchField.heightAnchor.constraint(equalToConstant: searchFieldHeight),
+            searchField.topAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.panelPadding),
+            searchField.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.fieldHorizontalPadding),
+            searchField.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.fieldHorizontalPadding),
+            searchField.heightAnchor.constraint(equalToConstant: Layout.searchFieldHeight),
 
-            separator.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 8),
+            separator.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: Layout.panelPadding),
             separator.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             separator.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
 
@@ -171,21 +184,21 @@ final class CommandPaletteController: NSWindowController {
         if let mainWindow = NSApp.mainWindow ?? NSApp.keyWindow {
             let mainFrame = mainWindow.frame
             let panelHeight = computePanelHeight()
-            let x = mainFrame.midX - panelWidth / 2
-            let y = mainFrame.maxY - panelHeight - 80
-            panel.setFrame(NSRect(x: x, y: y, width: panelWidth, height: panelHeight), display: true)
+            let x = mainFrame.midX - Layout.panelWidth / 2
+            let y = mainFrame.maxY - panelHeight - Layout.panelTopOffset
+            panel.setFrame(NSRect(x: x, y: y, width: Layout.panelWidth, height: panelHeight), display: true)
         } else {
             let panelHeight = computePanelHeight()
-            panel.setFrame(NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight), display: true)
+            panel.setFrame(NSRect(x: 0, y: 0, width: Layout.panelWidth, height: panelHeight), display: true)
             panel.center()
         }
     }
 
     private func computePanelHeight() -> CGFloat {
-        let visibleRows = min(results.count, maxVisibleRows)
-        let tableHeight = CGFloat(max(visibleRows, 1)) * rowHeight
-        let topPadding: CGFloat = 8 + searchFieldHeight + 8 + 1 // padding + field + padding + separator
-        return topPadding + tableHeight + 8
+        let visibleRows = min(results.count, Layout.maxVisibleRows)
+        let tableHeight = CGFloat(max(visibleRows, 1)) * Layout.rowHeight
+        let topPadding = Layout.panelPadding + Layout.searchFieldHeight + Layout.panelPadding + 1
+        return topPadding + tableHeight + Layout.panelPadding
     }
 
     // MARK: - Results
@@ -322,6 +335,12 @@ extension CommandPaletteController: NSTableViewDelegate {
             subtitleField.isHidden = item.subtitle == nil
         }
 
+        // Configure shortcut hint (third text field, tag 101)
+        if let shortcutField = cell.viewWithTag(101) as? NSTextField {
+            shortcutField.stringValue = item.shortcutHint ?? ""
+            shortcutField.isHidden = item.shortcutHint == nil
+        }
+
         return cell
     }
 
@@ -344,36 +363,47 @@ extension CommandPaletteController: NSTableViewDelegate {
 
         let titleField = NSTextField(labelWithString: "")
         titleField.translatesAutoresizingMaskIntoConstraints = false
-        titleField.font = .systemFont(ofSize: 13)
+        titleField.font = .systemFont(ofSize: Layout.titleFontSize)
         titleField.lineBreakMode = .byTruncatingTail
         cell.addSubview(titleField)
         cell.textField = titleField
 
         let subtitleField = NSTextField(labelWithString: "")
         subtitleField.translatesAutoresizingMaskIntoConstraints = false
-        subtitleField.font = .systemFont(ofSize: 11)
+        subtitleField.font = .systemFont(ofSize: Layout.subtitleFontSize)
         subtitleField.textColor = .secondaryLabelColor
         subtitleField.lineBreakMode = .byTruncatingTail
         subtitleField.tag = 100
         cell.addSubview(subtitleField)
 
-        NSLayoutConstraint.activate([
-            imageView.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
-            imageView.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-            imageView.widthAnchor.constraint(equalToConstant: 18),
-            imageView.heightAnchor.constraint(equalToConstant: 18),
+        let shortcutField = NSTextField(labelWithString: "")
+        shortcutField.translatesAutoresizingMaskIntoConstraints = false
+        shortcutField.font = .monospacedSystemFont(ofSize: Layout.shortcutFontSize, weight: .regular)
+        shortcutField.textColor = .tertiaryLabelColor
+        shortcutField.alignment = .right
+        shortcutField.tag = 101
+        cell.addSubview(shortcutField)
 
-            titleField.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 8),
+        NSLayoutConstraint.activate([
+            imageView.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: Layout.cellLeadingPadding),
+            imageView.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            imageView.widthAnchor.constraint(equalToConstant: Layout.cellIconSize),
+            imageView.heightAnchor.constraint(equalToConstant: Layout.cellIconSize),
+
+            titleField.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: Layout.cellSpacing),
             titleField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
 
-            subtitleField.leadingAnchor.constraint(equalTo: titleField.trailingAnchor, constant: 8),
-            subtitleField.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -8),
+            subtitleField.leadingAnchor.constraint(equalTo: titleField.trailingAnchor, constant: Layout.cellSpacing),
             subtitleField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+
+            shortcutField.leadingAnchor.constraint(greaterThanOrEqualTo: subtitleField.trailingAnchor, constant: Layout.cellSpacing),
+            shortcutField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -Layout.cellTrailingPadding),
+            shortcutField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
         ])
 
-        // Let title compress but not subtitle
         titleField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        subtitleField.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        subtitleField.setContentCompressionResistancePriority(.defaultLow + 1, for: .horizontal)
+        shortcutField.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
 
         return cell
     }

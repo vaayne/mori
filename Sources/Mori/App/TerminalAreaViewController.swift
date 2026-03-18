@@ -80,6 +80,11 @@ final class TerminalAreaViewController: NSViewController {
             workingDirectory: workingDirectory
         )
 
+        guard surface.frame.size != .zero || view.bounds.size != .zero else {
+            showError("Failed to create terminal surface for session '\(sessionName)'.")
+            return
+        }
+
         // Add to view hierarchy
         surface.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(surface)
@@ -132,5 +137,15 @@ final class TerminalAreaViewController: NSViewController {
 
     private func shellEscape(_ str: String) -> String {
         "'" + str.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    private func showError(_ message: String) {
+        guard let window = view.window else { return }
+        let alert = NSAlert()
+        alert.messageText = "Terminal Error"
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.beginSheetModal(for: window)
     }
 }

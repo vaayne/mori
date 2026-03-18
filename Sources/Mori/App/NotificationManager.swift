@@ -16,15 +16,16 @@ final class NotificationManager: NSObject {
     var onNotificationClick: ((String, String) -> Void)?
 
     private var permissionRequested = false
+    private let hasBundle = Bundle.main.bundleIdentifier != nil
 
     override init() {
         super.init()
-        setupCategory()
+        if hasBundle { setupCategory() }
     }
 
     /// Request notification permission on first use.
     func requestPermissionIfNeeded() {
-        guard !permissionRequested else { return }
+        guard hasBundle, !permissionRequested else { return }
         permissionRequested = true
 
         let center = UNUserNotificationCenter.current()
@@ -75,6 +76,7 @@ final class NotificationManager: NSObject {
             trigger: nil
         )
 
+        guard hasBundle else { return }
         UNUserNotificationCenter.current().add(request)
     }
 

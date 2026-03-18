@@ -61,9 +61,30 @@ final class RootSplitViewController: NSSplitViewController {
         splitViewItems.count > 1 && splitViewItems[1].isCollapsed
     }
 
+    var isRailCollapsed: Bool {
+        splitViewItems.count > 0 && splitViewItems[0].isCollapsed
+    }
+
     func toggleSidebar() {
         guard splitViewItems.count > 1 else { return }
-        // Collapse/expand both rail and worktree sidebar together
+        let collapsed = splitViewItems[1].isCollapsed
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            splitViewItems[1].animator().isCollapsed = !collapsed
+        }
+    }
+
+    func toggleRail() {
+        guard !splitViewItems.isEmpty else { return }
+        let collapsed = splitViewItems[0].isCollapsed
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            splitViewItems[0].animator().isCollapsed = !collapsed
+        }
+    }
+
+    func toggleAll() {
+        guard splitViewItems.count > 1 else { return }
         let collapsed = splitViewItems[1].isCollapsed
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.2

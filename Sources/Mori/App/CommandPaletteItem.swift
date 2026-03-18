@@ -37,6 +37,19 @@ enum CommandPaletteItem: Sendable {
         }
     }
 
+    var shortcutHint: String? {
+        switch self {
+        case .action(let id, _, _):
+            switch id {
+            case "action.refresh": return "⌘R"
+            case "action.open-project": return "⌘O"
+            default: return nil
+            }
+        default:
+            return nil
+        }
+    }
+
     var iconName: String? {
         switch self {
         case .project:

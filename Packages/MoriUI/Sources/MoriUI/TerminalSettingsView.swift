@@ -7,6 +7,8 @@ public struct TerminalSettingsView: View {
     @Binding var settings: TerminalSettings
     var onChanged: () -> Void
 
+    @State private var fontSearch = ""
+
     public init(settings: Binding<TerminalSettings>, onChanged: @escaping () -> Void) {
         self._settings = settings
         self.onChanged = onChanged
@@ -15,6 +17,7 @@ public struct TerminalSettingsView: View {
     public var body: some View {
         Form {
             Section("Font") {
+                fontSearchField
                 fontPicker
                 fontSizeSlider
             }
@@ -27,17 +30,31 @@ public struct TerminalSettingsView: View {
             Section("Cursor") {
                 cursorStylePicker
             }
+
+            Section {
+                Button("Restore Defaults") {
+                    settings = TerminalSettings()
+                    onChanged()
+                }
+            }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 420)
+        .frame(minWidth: 420, idealWidth: 460, minHeight: 380, idealHeight: 480)
     }
 
     // MARK: - Font
 
     @ViewBuilder
+    private var fontSearchField: some View {
+        TextField("Filter fonts…", text: $fontSearch)
+            .textFieldStyle(.roundedBorder)
+            .font(.subheadline)
+    }
+
+    @ViewBuilder
     private var fontPicker: some View {
         Picker("Family", selection: $settings.fontFamily) {
-            ForEach(monospacedFontFamilies, id: \.self) { family in
+            ForEach(filteredFontFamilies, id: \.self) { family in
                 Text(family)
                     .font(.custom(family, size: MoriTokens.Size.fontPreview))
                     .tag(family)
@@ -132,6 +149,13 @@ public struct TerminalSettingsView: View {
             else { return false }
             return font.isFixedPitch
         }.sorted()
+    }
+
+    private var filteredFontFamilies: [String] {
+        let all = monospacedFontFamilies
+        guard !fontSearch.isEmpty else { return all }
+        let query = fontSearch.lowercased()
+        return all.filter { $0.lowercased().contains(query) }
     }
 }
 

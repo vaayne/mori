@@ -53,12 +53,22 @@ public final class SwiftTermAdapter: TerminalHost {
     }
 
     /// Apply current settings to an existing terminal surface.
-    /// TODO: Live update does not visually take effect while tmux is running —
-    /// tmux controls its own fg/bg via escape sequences, overriding SwiftTerm's defaults.
-    /// Font changes work; color/theme changes only apply to newly created surfaces.
+    /// Font and cursor changes apply immediately. Theme colors are set on SwiftTerm
+    /// but tmux overrides them via its own escape sequences — so we also send a
+    /// SIGWINCH-style resize event to force tmux to redraw with its updated options.
     public func applySettings(to surface: NSView) {
         guard let termView = surface as? LocalProcessTerminalView else { return }
         configureTerminalView(termView)
+
+        // Force tmux to redraw by sending a window-change signal through the PTY.
+        // SwiftTerm's resize path sends SIGWINCH to the child process, which
+        // causes tmux to re-render using its (now updated) color options.
+        let currentSize = termView.frame.size
+        if currentSize.width > 1, currentSize.height > 1 {
+            let nudged = NSSize(width: currentSize.width - 1, height: currentSize.height)
+            termView.setFrameSize(nudged)
+            termView.setFrameSize(currentSize)
+        }
     }
 
     // MARK: - Private

@@ -7,13 +7,9 @@ import MoriTmux
 /// Uses `set-option -g` for global defaults — all sessions inherit these.
 /// Then refreshes every connected client so changes take effect immediately.
 ///
-/// TODO: Live theme application does not work yet. The tmux set-option and
-/// refresh-client commands execute without error, but the visible terminal
-/// does not update. Possible causes:
-/// - SwiftTerm's embedded tmux client may not respond to external refresh-client
-/// - tmux may require the client to redraw via the PTY (not just server-side refresh)
-/// - May need to send an escape sequence or resize event through the PTY to force repaint
-/// Settings ARE persisted and applied correctly on next surface creation (new session/restart).
+/// Live theme update: tmux options are set here, and the SwiftTermAdapter
+/// triggers a frame resize nudge (SIGWINCH) to force tmux to redraw with
+/// the updated color options. Font changes apply immediately via SwiftTerm.
 enum TmuxThemeApplicator {
 
     static func apply(settings: TerminalSettings, tmuxBackend: TmuxBackend) async {

@@ -14,6 +14,7 @@ public struct WorktreeSidebarView: View {
 
     @State private var isCreatingWorktree = false
     @State private var newBranchName = ""
+    @State private var isSubmitting = false
 
     public init(
         worktrees: [Worktree],
@@ -92,13 +93,19 @@ public struct WorktreeSidebarView: View {
 
     private var branchNameInput: some View {
         HStack(spacing: MoriTokens.Spacing.sm) {
-            Image(systemName: "arrow.triangle.branch")
-                .font(MoriTokens.Font.label)
-                .foregroundStyle(MoriTokens.Color.muted)
+            if isSubmitting {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(MoriTokens.Font.label)
+                    .foregroundStyle(MoriTokens.Color.muted)
+            }
 
             TextField("Branch name", text: $newBranchName)
                 .textFieldStyle(.plain)
                 .font(.subheadline)
+                .disabled(isSubmitting)
                 .onSubmit {
                     submitBranchName()
                 }
@@ -108,13 +115,14 @@ public struct WorktreeSidebarView: View {
                     .foregroundStyle(MoriTokens.Color.success)
             }
             .buttonStyle(.plain)
-            .disabled(newBranchName.trimmingCharacters(in: .whitespaces).isEmpty)
+            .disabled(newBranchName.trimmingCharacters(in: .whitespaces).isEmpty || isSubmitting)
 
-            Button(action: { isCreatingWorktree = false }) {
+            Button(action: { cancelCreation() }) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(MoriTokens.Color.muted)
             }
             .buttonStyle(.plain)
+            .disabled(isSubmitting)
         }
         .padding(.horizontal, MoriTokens.Spacing.lg)
         .padding(.vertical, MoriTokens.Spacing.sm)
@@ -125,8 +133,15 @@ public struct WorktreeSidebarView: View {
 
     private func submitBranchName() {
         let trimmed = newBranchName.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, !isSubmitting else { return }
+        isSubmitting = true
         onCreateWorktree?(trimmed)
+        isCreatingWorktree = false
+        isSubmitting = false
+        newBranchName = ""
+    }
+
+    private func cancelCreation() {
         isCreatingWorktree = false
         newBranchName = ""
     }

@@ -28,8 +28,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Task 3.8: Single instance check
         enforceSingleInstance()
 
-        // Set self as notification center delegate for click handling
-        UNUserNotificationCenter.current().delegate = self
+        // Set self as notification center delegate for click handling.
+        // UNUserNotificationCenter requires a valid bundle proxy — guard for swift run.
+        if Bundle.main.bundleIdentifier != nil {
+            UNUserNotificationCenter.current().delegate = self
+        }
 
         // Initialize core dependencies
         let state = AppState()
@@ -514,9 +517,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             onChanged: { [weak self] in
                 guard let self else { return }
                 self.terminalSettings.save()
-                // Apply to SwiftTerm surfaces (font works; theme applied on next surface creation)
+                // Apply to SwiftTerm surfaces and force tmux redraw via SIGWINCH nudge
                 self.terminalAreaController?.applySettings(self.terminalSettings)
-                // TODO: Live tmux theme update doesn't take effect yet — see TmuxThemeApplicator
+                // Update tmux server-side color options
                 if let tmuxBackend = self.workspaceManager?.tmuxBackend {
                     let settings = self.terminalSettings
                     Task {
