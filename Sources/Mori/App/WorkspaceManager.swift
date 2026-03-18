@@ -455,6 +455,54 @@ final class WorkspaceManager {
         }
     }
 
+    /// Remove a project and all its worktrees with confirmation dialog.
+    func removeProject(projectId: UUID) async {
+        guard let project = appState.projects.first(where: { $0.id == projectId }) else { return }
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Remove project \"\(project.name)\"?"
+        alert.informativeText = "This will remove the project and all its worktrees from Mori. Git repositories on disk will not be deleted."
+        alert.addButton(withTitle: "Remove")
+        alert.addButton(withTitle: "Cancel")
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return }
+
+        // Collect worktrees belonging to this project
+        let projectWorktrees = appState.worktrees.filter { $0.projectId == projectId }
+
+        // Kill tmux sessions for all worktrees
+        for worktree in projectWorktrees {
+            if let sessionName = worktree.tmuxSessionName {
+                try? await tmuxBackend.killSession(id: sessionName)
+            }
+        }
+
+        // Remove worktrees from state and database
+        appState.worktrees.removeAll { $0.projectId == projectId }
+        for worktree in projectWorktrees {
+            try? worktreeRepo.delete(id: worktree.id)
+        }
+
+        // Remove project from state and database
+        appState.projects.removeAll { $0.id == projectId }
+        try? projectRepo.delete(id: projectId)
+
+        // Clear selection if this project was selected
+        if appState.uiState.selectedProjectId == projectId {
+            appState.uiState.selectedProjectId = nil
+            appState.uiState.selectedWorktreeId = nil
+            appState.uiState.selectedWindowId = nil
+
+            // Select the first remaining project if any
+            if let firstProject = appState.projects.first {
+                selectProject(firstProject.id)
+            }
+            saveUIState()
+        }
+    }
+
     /// Mark a worktree as unavailable and persist. Also deselect if currently selected.
     private func softDeleteWorktree(at index: Int) {
         let worktree = appState.worktrees[index]

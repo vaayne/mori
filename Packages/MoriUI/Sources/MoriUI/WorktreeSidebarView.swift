@@ -16,6 +16,7 @@ public struct WorktreeSidebarView: View {
     private let onSelectWindow: (String) -> Void
     private let onCreateWorktree: ((String) -> Void)?
     private let onRemoveWorktree: ((UUID) -> Void)?
+    private let onRemoveProject: ((UUID) -> Void)?
     private let onToggleCollapse: ((UUID) -> Void)?
     private let onAddProject: (() -> Void)?
     private let onOpenSettings: (() -> Void)?
@@ -38,6 +39,7 @@ public struct WorktreeSidebarView: View {
         onSelectWindow: @escaping (String) -> Void,
         onCreateWorktree: ((String) -> Void)? = nil,
         onRemoveWorktree: ((UUID) -> Void)? = nil,
+        onRemoveProject: ((UUID) -> Void)? = nil,
         onToggleCollapse: ((UUID) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
@@ -55,6 +57,7 @@ public struct WorktreeSidebarView: View {
         self.onSelectWindow = onSelectWindow
         self.onCreateWorktree = onCreateWorktree
         self.onRemoveWorktree = onRemoveWorktree
+        self.onRemoveProject = onRemoveProject
         self.onToggleCollapse = onToggleCollapse
         self.onAddProject = onAddProject
         self.onOpenSettings = onOpenSettings
@@ -157,9 +160,9 @@ public struct WorktreeSidebarView: View {
             Spacer()
 
             Menu {
-                if onRemoveWorktree != nil {
+                if let onRemoveProject {
                     Button(role: .destructive) {
-                        // Project-level remove not implemented yet
+                        onRemoveProject(project.id)
                     } label: {
                         Label("Remove Project...", systemImage: "trash")
                     }

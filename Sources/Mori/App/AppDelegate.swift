@@ -103,6 +103,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                     await manager.removeWorktree(worktreeId: worktreeId)
                 }
             },
+            onRemoveProject: { [weak manager] projectId in
+                guard let manager else { return }
+                Task { @MainActor in
+                    await manager.removeProject(projectId: projectId)
+                }
+            },
             onToggleCollapse: { [weak manager] projectId in
                 manager?.toggleProjectCollapse(projectId)
             },
