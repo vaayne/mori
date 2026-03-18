@@ -95,6 +95,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             terminalArea?.attachToSession(sessionName: sessionName, workingDirectory: workingDirectory)
         }
 
+        // Restore previously saved UI state (project, worktree, window selection)
+        manager.restoreState()
+
         // Update window title from current project
         updateWindowTitle()
 

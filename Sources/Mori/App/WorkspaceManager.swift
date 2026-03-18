@@ -200,4 +200,60 @@ final class WorkspaceManager {
     func saveUIStateOnTerminate() {
         try? uiStateRepo.save(appState.uiState)
     }
+
+    // MARK: - Launch Restoration (Task 5.2)
+
+    /// Restore the previously saved UI state: select project, worktree, and window.
+    /// Falls back gracefully if any persisted ID no longer exists.
+    func restoreState() {
+        let uiState = appState.uiState
+
+        // 1. Restore selected project
+        guard let projectId = uiState.selectedProjectId,
+              appState.projects.contains(where: { $0.id == projectId }) else {
+            // No valid project to restore — select first if available
+            if let first = appState.projects.first {
+                selectProject(first.id)
+            }
+            return
+        }
+
+        appState.uiState.selectedProjectId = projectId
+
+        // 2. Restore selected worktree
+        guard let worktreeId = uiState.selectedWorktreeId,
+              appState.worktrees.contains(where: { $0.id == worktreeId }) else {
+            // No valid worktree — auto-select first for this project
+            let worktrees = appState.worktreesForSelectedProject
+            if let first = worktrees.first {
+                selectWorktree(first.id)
+            }
+            return
+        }
+
+        appState.uiState.selectedWorktreeId = worktreeId
+
+        // Ensure tmux session exists and connect terminal
+        if let worktree = appState.worktrees.first(where: { $0.id == worktreeId }) {
+            Task {
+                await ensureTmuxSession(for: worktree)
+                await refreshRuntimeState()
+
+                // Notify terminal to attach
+                if let sessionName = worktree.tmuxSessionName {
+                    onTerminalSwitch?(sessionName, worktree.path)
+                }
+
+                // 3. Restore selected window (after runtime state is loaded)
+                if let windowId = uiState.selectedWindowId,
+                   appState.runtimeWindows.contains(where: { $0.tmuxWindowId == windowId }) {
+                    appState.uiState.selectedWindowId = windowId
+                    // Switch tmux to the saved window
+                    if let sessionName = worktree.tmuxSessionName {
+                        try? await tmuxBackend.selectWindow(sessionId: sessionName, windowId: windowId)
+                    }
+                }
+            }
+        }
+    }
 }
