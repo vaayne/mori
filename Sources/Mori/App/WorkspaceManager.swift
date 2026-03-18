@@ -1071,6 +1071,33 @@ final class WorkspaceManager {
         return session.windows.first?.panes.first?.paneId
     }
 
+    /// Open a CLI tool (e.g. lazygit, yazi) in a new tmux window at the active pane's cwd.
+    /// The window auto-names after the tool and closes when the tool exits.
+    func openToolWindow(command: String) async {
+        guard let worktree = selectedWorktree,
+              let sessionName = worktree.tmuxSessionName else { return }
+
+        // Resolve cwd from the active pane, falling back to worktree path
+        let cwd = activePaneCwd() ?? worktree.path
+
+        do {
+            await ensureTmuxSession(for: worktree)
+            let window = try await tmuxBackend.createWindow(sessionId: sessionName, name: command, cwd: cwd)
+            try await tmuxBackend.sendKeys(sessionId: sessionName, paneId: window.windowId, keys: command)
+            await refreshRuntimeState()
+            onTerminalSwitch?(sessionName, worktree.path)
+        } catch {
+            showErrorAlert(title: "Failed to open \(command)", message: error.localizedDescription)
+        }
+    }
+
+    /// Returns the cwd of the currently active pane, if available.
+    private func activePaneCwd() -> String? {
+        guard let windowId = appState.uiState.selectedWindowId else { return nil }
+        let panes = appState.panes(forWindow: windowId)
+        return panes.first(where: { $0.isActive })?.cwd ?? panes.first?.cwd
+    }
+
     // MARK: - Launch Restoration (Task 5.2)
 
     /// Restore the previously saved UI state: select project, worktree, and window.

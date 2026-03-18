@@ -329,6 +329,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         sessionMenu.addItem(.separator())
 
+        let lazygitItem = NSMenuItem(title: "Open Lazygit", action: #selector(openLazygitMenuAction), keyEquivalent: "g")
+        lazygitItem.target = self
+        sessionMenu.addItem(lazygitItem)
+
+        let yaziItem = NSMenuItem(title: "Open Yazi", action: #selector(openYaziMenuAction), keyEquivalent: "e")
+        yaziItem.target = self
+        sessionMenu.addItem(yaziItem)
+
+        sessionMenu.addItem(.separator())
+
         let nextWindowItem = NSMenuItem(title: "Next Window", action: #selector(nextWindowMenuAction), keyEquivalent: "]")
         nextWindowItem.keyEquivalentModifierMask = [.command, .shift]
         nextWindowItem.target = self
@@ -370,6 +380,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     @objc private func closeWindowMenuAction() {
         guard let manager = workspaceManager else { return }
         Task { @MainActor in await manager.closeCurrentWindow() }
+    }
+
+    @objc private func openLazygitMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.openToolWindow(command: "lazygit") }
+    }
+
+    @objc private func openYaziMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.openToolWindow(command: "yazi") }
     }
 
     @objc private func splitHorizontalMenuAction() {
