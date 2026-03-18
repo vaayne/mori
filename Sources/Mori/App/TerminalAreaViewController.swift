@@ -21,7 +21,7 @@ final class TerminalAreaViewController: NSViewController {
     // MARK: - Init
 
     init(terminalHost: TerminalHost? = nil) {
-        let host = terminalHost ?? NativeTerminalAdapter()
+        let host = terminalHost ?? SwiftTermAdapter()
         self.terminalHost = host
         self.surfaceCache = TerminalSurfaceCache(maxSize: 3, terminalHost: host)
         super.init(nibName: nil, bundle: nil)
