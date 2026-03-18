@@ -460,6 +460,11 @@ final class WorkspaceManager {
     func refreshRuntimeState() async {
         guard let sessions = try? await tmuxBackend.scanAll() else { return }
 
+        // Build lookup of existing tags to preserve
+        let previousTags: [String: WindowTag?] = Dictionary(
+            uniqueKeysWithValues: appState.runtimeWindows.map { ($0.tmuxWindowId, $0.tag) }
+        )
+
         var runtimeWindows: [RuntimeWindow] = []
 
         for session in sessions where session.isMoriSession {
@@ -469,12 +474,20 @@ final class WorkspaceManager {
             }) else { continue }
 
             for tmuxWindow in session.windows {
+                // Preserve existing tag or infer from window name
+                let tag: WindowTag? = if let existing = previousTags[tmuxWindow.windowId] {
+                    existing
+                } else {
+                    WindowTag.infer(from: tmuxWindow.name)
+                }
+
                 let rw = RuntimeWindow(
                     tmuxWindowId: tmuxWindow.windowId,
                     worktreeId: worktree.id,
                     tmuxWindowIndex: tmuxWindow.windowIndex,
                     title: tmuxWindow.name,
-                    paneCount: tmuxWindow.panes.count
+                    paneCount: tmuxWindow.panes.count,
+                    tag: tag
                 )
                 runtimeWindows.append(rw)
             }
@@ -555,10 +568,14 @@ final class WorkspaceManager {
 
     /// Update runtime windows from tmux session data.
     /// Preserves existing `hasUnreadOutput` state and merges newly detected unread windows.
+    /// Preserves existing tags or infers them from window names.
     private func updateRuntimeState(from sessions: [TmuxSession], unreadWindowIds: Set<String> = []) {
-        // Build lookup of existing unread state
+        // Build lookup of existing unread state and tags
         let previousUnread: [String: Bool] = Dictionary(
             uniqueKeysWithValues: appState.runtimeWindows.map { ($0.tmuxWindowId, $0.hasUnreadOutput) }
+        )
+        let previousTags: [String: WindowTag?] = Dictionary(
+            uniqueKeysWithValues: appState.runtimeWindows.map { ($0.tmuxWindowId, $0.tag) }
         )
 
         var runtimeWindows: [RuntimeWindow] = []
@@ -574,6 +591,13 @@ final class WorkspaceManager {
                     || (previousUnread[tmuxWindow.windowId] ?? false)
                 let badge = StatusAggregator.windowBadge(hasUnreadOutput: isUnread)
 
+                // Preserve existing tag or infer from window name
+                let tag: WindowTag? = if let existing = previousTags[tmuxWindow.windowId] {
+                    existing
+                } else {
+                    WindowTag.infer(from: tmuxWindow.name)
+                }
+
                 let rw = RuntimeWindow(
                     tmuxWindowId: tmuxWindow.windowId,
                     worktreeId: worktree.id,
@@ -581,7 +605,8 @@ final class WorkspaceManager {
                     title: tmuxWindow.name,
                     paneCount: tmuxWindow.panes.count,
                     hasUnreadOutput: isUnread,
-                    badge: badge
+                    badge: badge,
+                    tag: tag
                 )
                 runtimeWindows.append(rw)
             }
