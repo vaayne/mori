@@ -44,6 +44,15 @@ public protocol TmuxControlling: Sendable {
 
     /// Kill (destroy) a window.
     func killWindow(sessionId: String, windowId: String) async throws
+
+    /// Set a tmux server-wide option.
+    func setServerOption(option: String, value: String) async throws
+
+    /// Set a tmux session option. If sessionId is nil, sets the global default.
+    func setOption(sessionId: String?, option: String, value: String) async throws
+
+    /// Force all clients to refresh their display.
+    func refreshClients() async throws
 }
 
 // MARK: - Default implementations for future-phase methods
@@ -76,5 +85,17 @@ public extension TmuxControlling {
 
     func killWindow(sessionId: String, windowId: String) async throws {
         throw TmuxError.notYetImplemented("killWindow")
+    }
+
+    func setServerOption(option: String, value: String) async throws {
+        throw TmuxError.notYetImplemented("setServerOption")
+    }
+
+    func setOption(sessionId: String?, option: String, value: String) async throws {
+        throw TmuxError.notYetImplemented("setOption")
+    }
+
+    func refreshClients() async throws {
+        throw TmuxError.notYetImplemented("refreshClients")
     }
 }

@@ -12,11 +12,12 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.2.0"),
+        .package(path: "../MoriCore"),
     ],
     targets: [
         .target(
             name: "MoriTerminal",
-            dependencies: ["SwiftTerm"],
+            dependencies: ["SwiftTerm", "MoriCore"],
             path: "Sources/MoriTerminal"
         ),
     ]

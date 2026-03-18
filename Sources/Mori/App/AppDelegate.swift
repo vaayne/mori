@@ -4,6 +4,8 @@ import MoriGit
 import MoriPersistence
 import MoriTerminal
 import MoriTmux
+import MoriUI
+import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -15,6 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var commandPaletteController: CommandPaletteController?
     private var rootSplitVC: RootSplitViewController?
     private var keyMonitor: Any?
+    private var settingsWindowController: NSWindowController?
+    private var terminalSettings = TerminalSettings.load()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -145,6 +149,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             // Start coordinated polling (tmux + git status on each 5s tick)
             manager.startPolling()
+
+            // Apply terminal theme to tmux sessions
+            await TmuxThemeApplicator.apply(settings: self.terminalSettings, tmuxBackend: manager.tmuxBackend)
         }
     }
 
@@ -216,6 +223,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About Mori", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(.separator())
+        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(showSettingsMenuAction), keyEquivalent: ",")
+        settingsItem.target = self
+        appMenu.addItem(settingsItem)
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide Mori", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         let hideOthersItem = appMenu.addItem(withTitle: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
@@ -445,6 +456,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateWindowTitle() {
         mainWindowController?.updateTitle(projectName: appState?.selectedProject?.name)
+    }
+
+    // MARK: - Settings (Cmd+,)
+
+    @objc private func showSettingsMenuAction() {
+        showSettingsWindow()
+    }
+
+    private func showSettingsWindow() {
+        // If already open, bring to front
+        if let existing = settingsWindowController?.window, existing.isVisible {
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let settingsView = TerminalSettingsView(
+            settings: Binding(
+                get: { [weak self] in self?.terminalSettings ?? TerminalSettings() },
+                set: { [weak self] newValue in self?.terminalSettings = newValue }
+            ),
+            onChanged: { [weak self] in
+                guard let self else { return }
+                self.terminalSettings.save()
+                // Apply to SwiftTerm surfaces (font works; theme applied on next surface creation)
+                self.terminalAreaController?.applySettings(self.terminalSettings)
+                // TODO: Live tmux theme update doesn't take effect yet — see TmuxThemeApplicator
+                if let tmuxBackend = self.workspaceManager?.tmuxBackend {
+                    let settings = self.terminalSettings
+                    Task {
+                        await TmuxThemeApplicator.apply(settings: settings, tmuxBackend: tmuxBackend)
+                    }
+                }
+            }
+        )
+
+        let hostingController = NSHostingController(rootView: settingsView)
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Settings"
+        window.styleMask = [.titled, .closable]
+        window.center()
+        window.setFrameAutosaveName("MoriSettings")
+
+        let controller = NSWindowController(window: window)
+        self.settingsWindowController = controller
+        controller.showWindow(nil)
     }
 
     // MARK: - Single Instance (Task 3.8)

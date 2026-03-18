@@ -1,4 +1,5 @@
 import AppKit
+import MoriCore
 
 /// Protocol abstracting terminal surface lifecycle.
 /// Implementors provide an NSView that renders a terminal and runs a shell command.
@@ -8,6 +9,9 @@ import AppKit
 /// - `GhosttyAdapter` (libghostty-backed, requires GhosttyKit XCFramework)
 @MainActor
 public protocol TerminalHost: AnyObject {
+
+    /// Current terminal settings (font, theme, cursor).
+    var settings: TerminalSettings { get set }
 
     /// Create a terminal surface view running the given command in the specified directory.
     /// The returned NSView is ready to be added to a view hierarchy.
@@ -21,4 +25,7 @@ public protocol TerminalHost: AnyObject {
 
     /// Make the given surface the active input target.
     func focusSurface(_ surface: NSView)
+
+    /// Apply current settings to an existing surface (e.g., after user changes theme/font).
+    func applySettings(to surface: NSView)
 }

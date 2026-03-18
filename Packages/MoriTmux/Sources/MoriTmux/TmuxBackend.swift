@@ -196,4 +196,27 @@ public actor TmuxBackend: TmuxControlling {
             "kill-window", "-t", "\(sessionId):\(windowId)"
         )
     }
+
+    public func setServerOption(option: String, value: String) async throws {
+        _ = try await runner.run("set-option", "-s", option, value)
+    }
+
+    public func setOption(sessionId: String?, option: String, value: String) async throws {
+        if let sessionId {
+            _ = try await runner.run("set-option", "-t", sessionId, option, value)
+        } else {
+            // Global default (affects new sessions)
+            _ = try await runner.run("set-option", "-g", option, value)
+        }
+    }
+
+    public func refreshClients() async throws {
+        // List all connected clients and refresh each one.
+        // Bare `refresh-client` with no target only works from inside a tmux session.
+        let output = try await runner.run("list-clients", "-F", "#{client_name}")
+        let clients = output.split(separator: "\n").map(String.init)
+        for client in clients {
+            _ = try? await runner.run("refresh-client", "-t", client)
+        }
+    }
 }
