@@ -669,6 +669,103 @@ final class WorkspaceManager {
         }
     }
 
+    // MARK: - Window / Pane Operations
+
+    /// Create a new tmux window in the current worktree's session.
+    func createNewWindow() async {
+        guard let worktree = selectedWorktree,
+              let sessionName = worktree.tmuxSessionName else { return }
+        do {
+            _ = try await tmuxBackend.createWindow(sessionId: sessionName, name: nil, cwd: worktree.path)
+            await refreshRuntimeState()
+        } catch {
+            showErrorAlert(title: "Failed to create window", message: error.localizedDescription)
+        }
+    }
+
+    /// Split the active pane in the current session.
+    func splitCurrentPane(horizontal: Bool) async {
+        guard let worktree = selectedWorktree,
+              let sessionName = worktree.tmuxSessionName else { return }
+
+        // Find the active pane from the latest tmux scan
+        let activePaneId = findActivePaneId(sessionName: sessionName)
+
+        do {
+            _ = try await tmuxBackend.splitPane(
+                sessionId: sessionName,
+                paneId: activePaneId ?? "",
+                horizontal: horizontal,
+                cwd: worktree.path
+            )
+            await refreshRuntimeState()
+        } catch {
+            showErrorAlert(title: "Failed to split pane", message: error.localizedDescription)
+        }
+    }
+
+    /// Switch to the next tmux window in the current session.
+    func nextWindow() {
+        navigateWindow(offset: 1)
+    }
+
+    /// Switch to the previous tmux window in the current session.
+    func previousWindow() {
+        navigateWindow(offset: -1)
+    }
+
+    /// Close the currently selected tmux window.
+    func closeCurrentWindow() async {
+        guard let worktree = selectedWorktree,
+              let sessionName = worktree.tmuxSessionName,
+              let windowId = appState.uiState.selectedWindowId else { return }
+
+        // Don't close the last window — that would kill the session
+        let windowsInSession = appState.runtimeWindows.filter { $0.worktreeId == worktree.id }
+        if windowsInSession.count <= 1 { return }
+
+        do {
+            try await tmuxBackend.killWindow(sessionId: sessionName, windowId: windowId)
+            appState.uiState.selectedWindowId = nil
+            await refreshRuntimeState()
+            // Auto-select the first remaining window
+            if let first = appState.runtimeWindows.first(where: { $0.worktreeId == worktree.id }) {
+                selectWindow(first.tmuxWindowId)
+            }
+        } catch {
+            showErrorAlert(title: "Failed to close window", message: error.localizedDescription)
+        }
+    }
+
+    // MARK: - Window Navigation Helpers
+
+    private var selectedWorktree: Worktree? {
+        guard let id = appState.uiState.selectedWorktreeId else { return nil }
+        return appState.worktrees.first { $0.id == id }
+    }
+
+    private func navigateWindow(offset: Int) {
+        guard let worktree = selectedWorktree else { return }
+        let windows = appState.runtimeWindows
+            .filter { $0.worktreeId == worktree.id }
+            .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
+        guard !windows.isEmpty else { return }
+
+        let currentIndex = windows.firstIndex(where: { $0.tmuxWindowId == appState.uiState.selectedWindowId }) ?? 0
+        let newIndex = (currentIndex + offset + windows.count) % windows.count
+        selectWindow(windows[newIndex].tmuxWindowId)
+    }
+
+    private func findActivePaneId(sessionName: String) -> String? {
+        guard let session = latestSessions.first(where: { $0.name == sessionName }) else { return nil }
+        for window in session.windows {
+            if let pane = window.panes.first(where: { $0.isActive }) {
+                return pane.paneId
+            }
+        }
+        return session.windows.first?.panes.first?.paneId
+    }
+
     // MARK: - Launch Restoration (Task 5.2)
 
     /// Restore the previously saved UI state: select project, worktree, and window.

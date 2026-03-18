@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var appState: AppState?
     private var terminalAreaController: TerminalAreaViewController?
     private var commandPaletteController: CommandPaletteController?
+    private var rootSplitVC: RootSplitViewController?
     private var keyMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -103,6 +104,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sidebarController: sidebarController,
             contentController: terminalArea
         )
+        self.rootSplitVC = splitVC
+
+        // Wire sidebar toggle toolbar button
+        windowController.onToggleSidebar = { [weak splitVC] in
+            splitVC?.toggleSidebar()
+        }
 
         windowController.contentViewController = splitVC
         windowController.showWindow(nil)
@@ -227,7 +234,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openProjectItem.target = self
         fileMenu.addItem(openProjectItem)
         fileMenu.addItem(.separator())
-        let closeItem = NSMenuItem(title: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        let closeItem = NSMenuItem(title: "Close Tab", action: #selector(closeWindowMenuAction), keyEquivalent: "w")
+        closeItem.target = self
         fileMenu.addItem(closeItem)
         fileMenuItem.submenu = fileMenu
         mainMenu.addItem(fileMenuItem)
@@ -248,10 +256,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // View menu
         let viewMenuItem = NSMenuItem()
         let viewMenu = NSMenu(title: "View")
+        let toggleSidebarItem = NSMenuItem(title: "Toggle Sidebar", action: #selector(toggleSidebarMenuAction), keyEquivalent: "0")
+        toggleSidebarItem.target = self
+        viewMenu.addItem(toggleSidebarItem)
+        viewMenu.addItem(.separator())
         viewMenu.addItem(withTitle: "Toggle Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
             .keyEquivalentModifierMask = [.command, .control]
         viewMenuItem.submenu = viewMenu
         mainMenu.addItem(viewMenuItem)
+
+        // Session menu
+        let sessionMenuItem = NSMenuItem()
+        let sessionMenu = NSMenu(title: "Session")
+
+        let newWindowItem = NSMenuItem(title: "New Window", action: #selector(newWindowMenuAction), keyEquivalent: "t")
+        newWindowItem.target = self
+        sessionMenu.addItem(newWindowItem)
+
+        sessionMenu.addItem(.separator())
+
+        let splitHItem = NSMenuItem(title: "Split Pane Right", action: #selector(splitHorizontalMenuAction), keyEquivalent: "d")
+        splitHItem.target = self
+        sessionMenu.addItem(splitHItem)
+
+        let splitVItem = NSMenuItem(title: "Split Pane Down", action: #selector(splitVerticalMenuAction), keyEquivalent: "d")
+        splitVItem.keyEquivalentModifierMask = [.command, .shift]
+        splitVItem.target = self
+        sessionMenu.addItem(splitVItem)
+
+        sessionMenu.addItem(.separator())
+
+        let nextWindowItem = NSMenuItem(title: "Next Window", action: #selector(nextWindowMenuAction), keyEquivalent: "]")
+        nextWindowItem.keyEquivalentModifierMask = [.command, .shift]
+        nextWindowItem.target = self
+        sessionMenu.addItem(nextWindowItem)
+
+        let prevWindowItem = NSMenuItem(title: "Previous Window", action: #selector(previousWindowMenuAction), keyEquivalent: "[")
+        prevWindowItem.keyEquivalentModifierMask = [.command, .shift]
+        prevWindowItem.target = self
+        sessionMenu.addItem(prevWindowItem)
+
+        sessionMenuItem.submenu = sessionMenu
+        mainMenu.addItem(sessionMenuItem)
 
         // Window menu
         let windowMenuItem = NSMenuItem()
@@ -267,6 +313,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openProjectMenuAction() {
         showAddProjectPanel()
+    }
+
+    @objc private func toggleSidebarMenuAction() {
+        rootSplitVC?.toggleSidebar()
+    }
+
+    @objc private func newWindowMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.createNewWindow() }
+    }
+
+    @objc private func closeWindowMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.closeCurrentWindow() }
+    }
+
+    @objc private func splitHorizontalMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.splitCurrentPane(horizontal: true) }
+    }
+
+    @objc private func splitVerticalMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.splitCurrentPane(horizontal: false) }
+    }
+
+    @objc private func nextWindowMenuAction() {
+        workspaceManager?.nextWindow()
+    }
+
+    @objc private func previousWindowMenuAction() {
+        workspaceManager?.previousWindow()
     }
 
     // MARK: - Tmux Missing Alert (Task 5.3)

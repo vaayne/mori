@@ -165,4 +165,35 @@ public actor TmuxBackend: TmuxControlling {
             "send-keys", "-t", "\(sessionId):\(paneId)", keys, "Enter"
         )
     }
+
+    public func splitPane(sessionId: String, paneId: String, horizontal: Bool, cwd: String?) async throws -> TmuxPane {
+        // Pane IDs like %0 are globally unique in tmux and can be used directly.
+        // Fall back to session name to split the active pane in the active window.
+        let target = paneId.isEmpty ? sessionId : paneId
+        var args: [String] = [
+            "split-window",
+            horizontal ? "-h" : "-v",
+            "-t", target,
+            "-P", "-F", TmuxParser.paneFormat
+        ]
+        if let cwd {
+            args.append(contentsOf: ["-c", cwd])
+        }
+        let output = try await runner.run(args)
+        let panes = TmuxParser.parsePanes(output)
+        guard let pane = panes.first else {
+            throw TmuxError.executionFailed(
+                command: "split-window",
+                exitCode: -1,
+                stderr: "Failed to parse created pane"
+            )
+        }
+        return pane
+    }
+
+    public func killWindow(sessionId: String, windowId: String) async throws {
+        _ = try await runner.run(
+            "kill-window", "-t", "\(sessionId):\(windowId)"
+        )
+    }
 }

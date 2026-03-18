@@ -55,6 +55,23 @@ final class RootSplitViewController: NSSplitViewController {
         splitView.dividerStyle = .thin
     }
 
+    // MARK: - Sidebar Toggle
+
+    var isSidebarCollapsed: Bool {
+        splitViewItems.count > 1 && splitViewItems[1].isCollapsed
+    }
+
+    func toggleSidebar() {
+        guard splitViewItems.count > 1 else { return }
+        // Collapse/expand both rail and worktree sidebar together
+        let collapsed = splitViewItems[1].isCollapsed
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            splitViewItems[0].animator().isCollapsed = !collapsed
+            splitViewItems[1].animator().isCollapsed = !collapsed
+        }
+    }
+
     // MARK: - Public helpers
 
     func replaceContentController(with controller: NSViewController) {

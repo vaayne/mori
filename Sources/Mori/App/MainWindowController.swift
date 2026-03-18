@@ -6,12 +6,14 @@ final class MainWindowController: NSWindowController {
 
     private enum ToolbarID {
         static let main = NSToolbar.Identifier("MoriMainToolbar")
+        static let toggleSidebar = NSToolbarItem.Identifier("toggleSidebar")
         static let addProject = NSToolbarItem.Identifier("addProject")
     }
 
     // MARK: - Callbacks
 
     var onAddProject: (() -> Void)?
+    var onToggleSidebar: (() -> Void)?
 
     // MARK: - Init
 
@@ -59,11 +61,11 @@ final class MainWindowController: NSWindowController {
 extension MainWindowController: NSToolbarDelegate {
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.flexibleSpace, ToolbarID.addProject]
+        [ToolbarID.toggleSidebar, .flexibleSpace, ToolbarID.addProject]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [ToolbarID.addProject, .flexibleSpace, .space]
+        [ToolbarID.toggleSidebar, ToolbarID.addProject, .flexibleSpace, .space]
     }
 
     func toolbar(
@@ -72,6 +74,15 @@ extension MainWindowController: NSToolbarDelegate {
         willBeInsertedIntoToolbar flag: Bool
     ) -> NSToolbarItem? {
         switch itemIdentifier {
+        case ToolbarID.toggleSidebar:
+            let item = NSToolbarItem(itemIdentifier: ToolbarID.toggleSidebar)
+            item.label = "Toggle Sidebar"
+            item.paletteLabel = "Toggle Sidebar"
+            item.toolTip = "Show or hide the sidebar (Cmd+0)"
+            item.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: "Toggle Sidebar")
+            item.target = self
+            item.action = #selector(toggleSidebarClicked)
+            return item
         case ToolbarID.addProject:
             let item = NSToolbarItem(itemIdentifier: ToolbarID.addProject)
             item.label = "Add Project"
@@ -84,6 +95,10 @@ extension MainWindowController: NSToolbarDelegate {
         default:
             return nil
         }
+    }
+
+    @objc private func toggleSidebarClicked() {
+        onToggleSidebar?()
     }
 
     @objc private func addProjectClicked() {

@@ -1,10 +1,21 @@
 import Foundation
 
 /// Errors that can occur when running tmux commands.
-public enum TmuxError: Error, Sendable {
+public enum TmuxError: Error, LocalizedError, Sendable {
     case binaryNotFound
     case executionFailed(command: String, exitCode: Int32, stderr: String)
     case notYetImplemented(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .binaryNotFound:
+            return "tmux binary not found. Install via: brew install tmux"
+        case .executionFailed(let command, let exitCode, let stderr):
+            return "tmux failed (exit \(exitCode)): \(stderr.isEmpty ? command : stderr)"
+        case .notYetImplemented(let method):
+            return "tmux operation not yet implemented: \(method)"
+        }
+    }
 }
 
 /// Runs tmux commands via `Process` (Foundation).
@@ -37,7 +48,7 @@ public actor TmuxCommandRunner {
         }
 
         // Fall back to `which tmux`
-        let (output, exitCode) = try await runProcess(
+        let (output, _, exitCode) = try await runProcess(
             executablePath: "/usr/bin/which",
             arguments: ["tmux"]
         )
@@ -73,7 +84,7 @@ public actor TmuxCommandRunner {
     /// Run a tmux command with the given arguments array. Returns stdout as a string.
     public func run(_ arguments: [String]) async throws -> String {
         let binaryPath = try await resolveBinaryPath()
-        let (stdout, exitCode) = try await runProcess(
+        let (stdout, stderr, exitCode) = try await runProcess(
             executablePath: binaryPath,
             arguments: arguments
         )
@@ -85,7 +96,8 @@ public actor TmuxCommandRunner {
             if exitCode == 1 && stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return ""
             }
-            throw TmuxError.executionFailed(command: cmd, exitCode: exitCode, stderr: stdout)
+            let errorMessage = stderr.isEmpty ? stdout : stderr
+            throw TmuxError.executionFailed(command: cmd, exitCode: exitCode, stderr: errorMessage)
         }
 
         return stdout
@@ -96,7 +108,7 @@ public actor TmuxCommandRunner {
     private func runProcess(
         executablePath: String,
         arguments: [String]
-    ) async throws -> (output: String, exitCode: Int32) {
+    ) async throws -> (output: String, stderr: String, exitCode: Int32) {
         try await withCheckedThrowingContinuation { continuation in
             let process = Process()
             let stdoutPipe = Pipe()
@@ -116,9 +128,11 @@ public actor TmuxCommandRunner {
 
             // Use terminationHandler to avoid blocking the cooperative thread pool
             process.terminationHandler = { _ in
-                let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: data, encoding: .utf8) ?? ""
-                continuation.resume(returning: (output, process.terminationStatus))
+                let outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+                let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: outData, encoding: .utf8) ?? ""
+                let stderr = String(data: errData, encoding: .utf8) ?? ""
+                continuation.resume(returning: (output, stderr, process.terminationStatus))
             }
         }
     }
