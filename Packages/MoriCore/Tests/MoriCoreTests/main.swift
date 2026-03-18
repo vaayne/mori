@@ -198,6 +198,113 @@ func testEnumRawValues() {
     assertEqual(AlertState.error.rawValue, "error")
 }
 
+// MARK: - StatusAggregator Tests
+
+func testWindowBadgeFromUnread() {
+    assertEqual(StatusAggregator.windowBadge(hasUnreadOutput: true), .unread)
+    assertEqual(StatusAggregator.windowBadge(hasUnreadOutput: false), .idle)
+}
+
+func testAlertStateFromBadge() {
+    assertEqual(StatusAggregator.alertState(from: .idle), .none)
+    assertEqual(StatusAggregator.alertState(from: .unread), .unread)
+    assertEqual(StatusAggregator.alertState(from: .running), .info)
+    assertEqual(StatusAggregator.alertState(from: .waiting), .waiting)
+    assertEqual(StatusAggregator.alertState(from: .error), .error)
+}
+
+func testWorktreeAlertStateFromWindowBadges() {
+    // All idle -> none
+    assertEqual(StatusAggregator.worktreeAlertState(windowBadges: [.idle, .idle]), .none)
+
+    // Unread is highest
+    assertEqual(StatusAggregator.worktreeAlertState(windowBadges: [.idle, .unread]), .unread)
+
+    // Error wins over everything
+    assertEqual(StatusAggregator.worktreeAlertState(windowBadges: [.unread, .error, .idle]), .error)
+
+    // Waiting > unread
+    assertEqual(StatusAggregator.worktreeAlertState(windowBadges: [.unread, .waiting]), .waiting)
+
+    // Running maps to info, which is less than unread
+    assertEqual(StatusAggregator.worktreeAlertState(windowBadges: [.running, .unread]), .unread)
+
+    // Empty -> none
+    assertEqual(StatusAggregator.worktreeAlertState(windowBadges: []), .none)
+}
+
+func testWorktreeAlertStateWithGitDirty() {
+    // Dirty alone -> dirty
+    assertEqual(
+        StatusAggregator.worktreeAlertState(windowBadges: [.idle], hasUncommittedChanges: true),
+        .dirty
+    )
+
+    // Dirty is less than unread
+    assertEqual(
+        StatusAggregator.worktreeAlertState(windowBadges: [.unread], hasUncommittedChanges: true),
+        .unread
+    )
+
+    // Clean + idle -> none
+    assertEqual(
+        StatusAggregator.worktreeAlertState(windowBadges: [.idle], hasUncommittedChanges: false),
+        .none
+    )
+
+    // Dirty + error -> error wins
+    assertEqual(
+        StatusAggregator.worktreeAlertState(windowBadges: [.error], hasUncommittedChanges: true),
+        .error
+    )
+}
+
+func testProjectAlertStateAggregation() {
+    // Max wins
+    assertEqual(StatusAggregator.projectAlertState(worktreeStates: [.none, .dirty, .error]), .error)
+    assertEqual(StatusAggregator.projectAlertState(worktreeStates: [.none, .unread]), .unread)
+    assertEqual(StatusAggregator.projectAlertState(worktreeStates: [.dirty, .waiting]), .waiting)
+
+    // Empty -> none
+    assertEqual(StatusAggregator.projectAlertState(worktreeStates: []), .none)
+
+    // Single
+    assertEqual(StatusAggregator.projectAlertState(worktreeStates: [.dirty]), .dirty)
+
+    // All none
+    assertEqual(StatusAggregator.projectAlertState(worktreeStates: [.none, .none]), .none)
+}
+
+func testProjectUnreadCount() {
+    assertEqual(StatusAggregator.projectUnreadCount(worktreeUnreadCounts: [1, 2, 3]), 6)
+    assertEqual(StatusAggregator.projectUnreadCount(worktreeUnreadCounts: []), 0)
+    assertEqual(StatusAggregator.projectUnreadCount(worktreeUnreadCounts: [0, 0]), 0)
+    assertEqual(StatusAggregator.projectUnreadCount(worktreeUnreadCounts: [5]), 5)
+}
+
+func testAlertStateComparable() {
+    // Priority: error > waiting > warning > unread > dirty > info > none
+    assertTrue(AlertState.error > AlertState.waiting)
+    assertTrue(AlertState.waiting > AlertState.warning)
+    assertTrue(AlertState.warning > AlertState.unread)
+    assertTrue(AlertState.unread > AlertState.dirty)
+    assertTrue(AlertState.dirty > AlertState.info)
+    assertTrue(AlertState.info > AlertState.none)
+
+    // Max works correctly
+    let states: [AlertState] = [.none, .dirty, .unread, .error]
+    assertEqual(states.max(), .error)
+}
+
+func testAlertStateNewCasesCodable() {
+    // Verify new cases round-trip through JSON
+    for state: AlertState in [.dirty, .unread, .waiting] {
+        let data = try! JSONEncoder().encode(state)
+        let decoded = try! JSONDecoder().decode(AlertState.self, from: data)
+        assertEqual(decoded, state)
+    }
+}
+
 // MARK: - Main
 
 print("=== MoriCore Model Tests ===")
@@ -223,8 +330,18 @@ testUIStateCodable()
 
 testEnumRawValues()
 
+testWindowBadgeFromUnread()
+testAlertStateFromBadge()
+testWorktreeAlertStateFromWindowBadges()
+testWorktreeAlertStateWithGitDirty()
+testProjectAlertStateAggregation()
+testProjectUnreadCount()
+testAlertStateComparable()
+testAlertStateNewCasesCodable()
+
 printResults()
 
 if failCount > 0 {
+    fflush(stdout)
     fatalError("Tests failed")
 }
