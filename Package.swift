@@ -9,6 +9,7 @@ let package = Package(
     ],
     products: [
         .executable(name: "Mori", targets: ["Mori"]),
+        .executable(name: "ws", targets: ["WS"]),
     ],
     dependencies: [
         .package(path: "Packages/MoriCore"),
@@ -17,6 +18,8 @@ let package = Package(
         .package(path: "Packages/MoriTerminal"),
         .package(path: "Packages/MoriGit"),
         .package(path: "Packages/MoriUI"),
+        .package(path: "Packages/MoriIPC"),
+        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
     ],
     targets: [
         .executableTarget(
@@ -28,8 +31,17 @@ let package = Package(
                 "MoriTerminal",
                 "MoriGit",
                 "MoriUI",
+                "MoriIPC",
             ],
             path: "Sources/Mori"
+        ),
+        .executableTarget(
+            name: "WS",
+            dependencies: [
+                "MoriIPC",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            path: "Sources/WS"
         ),
     ]
 )
