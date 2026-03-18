@@ -542,6 +542,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Settings"
         window.styleMask = [.titled, .closable]
+        window.titlebarAppearsTransparent = true
+        window.backgroundColor = NSColor(hex: self.terminalSettings.theme.background)
+        window.appearance = NSAppearance(named: self.terminalSettings.theme.isDark ? .darkAqua : .aqua)
         window.center()
         window.setFrameAutosaveName("MoriSettings")
 
@@ -601,6 +604,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
 /// Thin wrapper that gives SwiftUI `@State` ownership of the settings value
 /// so pickers, sliders, and the theme preview all update in sync.
+/// Also updates the settings window's own appearance when the theme changes.
 private struct SettingsWindowContent: View {
     @State var settings: TerminalSettings
     var onChanged: (TerminalSettings) -> Void
@@ -613,6 +617,14 @@ private struct SettingsWindowContent: View {
     var body: some View {
         TerminalSettingsView(settings: $settings, onChanged: {
             onChanged(settings)
+            updateSettingsWindowAppearance()
         })
+    }
+
+    private func updateSettingsWindowAppearance() {
+        guard let window = NSApp.windows.first(where: { $0.frameAutosaveName == "MoriSettings" }) else { return }
+        let theme = settings.theme
+        window.backgroundColor = NSColor(hex: theme.background)
+        window.appearance = NSAppearance(named: theme.isDark ? .darkAqua : .aqua)
     }
 }
