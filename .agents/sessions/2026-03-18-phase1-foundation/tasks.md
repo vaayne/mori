@@ -32,14 +32,14 @@
 
 ## Phase 4: Terminal Integration
 
-- [ ] 4.0 — libghostty API verification spike (test import, surface creation, fallback plan)
-- [ ] 4.1 — Add `libghostty-spm` dependency to `MoriTerminal` package
-- [ ] 4.2 — Implement `GhosttyAdapter`: app singleton, config, surface lifecycle
-- [ ] 4.3 — Implement `TerminalAreaViewController` hosting ghostty NSView with resize handling
-- [ ] 4.4 — Connect worktree selection → ghostty surface with `tmux attach-session -t <name>`
-- [ ] 4.5 — Handle focus: terminal first responder on click and worktree/window switch
-- [ ] 4.6 — Implement LRU surface cache (max 3 surfaces, evict via ghostty_surface_free)
-- [ ] 4.7 — Handle `ghostty_app_tick()` via wakeup callback on main thread
+- [x] 4.0 — libghostty API verification spike (fallback to PTY: no Xcode, XCFramework unavailable)
+- [x] 4.1 — Create `MoriTerminal` package with TerminalHost protocol + NativeTerminalAdapter (PTY fallback)
+- [x] 4.2 — Implement `NativeTerminalAdapter`: PTY via forkpty(), ANSI parser, keyboard forwarding
+- [x] 4.3 — Implement `TerminalAreaViewController` hosting terminal NSView with resize handling
+- [x] 4.4 — Connect worktree selection → terminal surface with `tmux attach-session -t <name>`
+- [x] 4.5 — Handle focus: terminal first responder on click and worktree/window switch
+- [x] 4.6 — Implement LRU surface cache (max 3 surfaces, evict via destroySurface)
+- [x] 4.7 — N/A (ghostty_app_tick not needed; PTY uses GCD dispatch source for I/O)
 
 ## Phase 5: State Restoration & Polish
 

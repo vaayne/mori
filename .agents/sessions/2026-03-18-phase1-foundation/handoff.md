@@ -194,3 +194,66 @@ Packages/
 - Window title updates on addProject but not yet on project selection change (minor; can be wired in Phase 5)
 - AppDelegate.applicationWillTerminate still has TODO stub for Phase 5 state persistence on quit
 - No Xcode installed -- Command Line Tools only. Phase 4 may need Xcode for libghostty XCFramework integration.
+
+## Phase 4: Terminal Integration -- COMPLETE
+
+### Summary
+
+All 8 tasks implemented and committed:
+
+| Task | Description | Commit |
+|------|-------------|--------|
+| 4.0 | API verification spike: libghostty-spm unavailable (no Xcode/XCFramework), PTY fallback chosen | `26fa144` |
+| 4.1 | MoriTerminal SPM package with TerminalHost protocol + NativeTerminalAdapter | `26fa144` |
+| 4.2 | NativeTerminalAdapter: forkpty(), execv, ANSI parser, keyboard forwarding, copy/paste | `26fa144` |
+| 4.3 | TerminalAreaViewController hosting terminal surfaces with resize propagation | `2561b08` |
+| 4.4 | Worktree selection wired to terminal via WorkspaceManager.onTerminalSwitch callback | `781ea76` |
+| 4.5 | Focus: terminal becomes first responder on click, worktree switch, and window switch | `781ea76` |
+| 4.6 | LRU TerminalSurfaceCache (max 3 surfaces, keyed by session name, evicts via destroySurface) | `38ff364` |
+| 4.7 | N/A -- ghostty_app_tick not needed; PTY adapter uses GCD DispatchSourceRead for async I/O | `781ea76` |
+
+### Key Decisions
+
+- **PTY fallback instead of libghostty** -- Environment has Command Line Tools only (no Xcode), so the libghostty-spm XCFramework cannot be used. Implemented NativeTerminalAdapter using forkpty()/execv() with a real pseudo-terminal. The TerminalHost protocol abstracts the backend, so GhosttyAdapter can be added later as a drop-in replacement.
+- **execv instead of execl** -- Swift 6 strict concurrency marks variadic C functions as unavailable. Used execv() with explicit argument array.
+- **GCD DispatchSourceRead for PTY I/O** -- More efficient than FileHandle.readabilityHandler; fires on the global queue with main-thread dispatch for UI updates.
+- **ANSI parser with SGR support** -- Handles 8/16/256/truecolor SGR codes, cursor movement, clear screen/line, OSC title sequences, carriage return, bell. Sufficient for tmux rendering.
+- **Shell-escaped tmux attach command** -- Terminal runs `tmux attach-session -t '<name>' || tmux new-session -s '<name>'` with proper shell escaping of session names.
+- **Callback-based terminal switching** -- WorkspaceManager.onTerminalSwitch callback decouples workspace logic from terminal view controller. AppDelegate wires the two together.
+
+### Project Structure (new/modified files)
+
+```
+Package.swift                                     (updated: added MoriTerminal dependency)
+Sources/Mori/App/
+  AppDelegate.swift                               (updated: wires TerminalAreaViewController, cleanup)
+  WorkspaceManager.swift                          (updated: onTerminalSwitch callback)
+  TerminalAreaViewController.swift                (new: hosts terminal surfaces, LRU cache)
+Packages/
+  MoriTerminal/
+    Package.swift                                 (new package, no external dependencies)
+    Sources/MoriTerminal/
+      TerminalHost.swift                          (protocol: createSurface, destroySurface, resize, focus)
+      NativeTerminalAdapter.swift                 (PTY-based terminal: forkpty, keyboard, copy/paste)
+      ANSIParser.swift                            (incremental ANSI escape sequence parser)
+      TerminalSurfaceCache.swift                  (LRU cache, max 3 surfaces, keyed by session name)
+```
+
+### What's Ready for Phase 5
+
+- Full terminal integration: selecting a worktree creates a PTY running tmux attach-session
+- LRU cache keeps up to 3 terminal surfaces alive across worktree switches
+- Focus management: terminal becomes first responder on click and selection change
+- Keyboard input forwarded to PTY (including Ctrl+key, arrow keys, special keys)
+- Copy/paste via Cmd+C/V, select-all via Cmd+A
+- ANSI color rendering (8/16/256/truecolor) for tmux output
+- Surface cleanup on app termination
+- All 204 existing tests pass (67 model + 42 GRDB + 95 tmux)
+- Project builds cleanly with `swift build`, zero errors, zero warnings
+
+### Blockers / Notes for Next Phase
+
+- PlaceholderContentViewController is no longer used (can be removed or kept for empty state)
+- Terminal rendering is basic (NSTextView-based, no cursor positioning grid). Sufficient for tmux session management but not a full VT100 emulator. Upgrading to libghostty when Xcode is available will provide proper terminal emulation.
+- Window title still only updates on addProject, not on project selection change (Phase 5)
+- AppDelegate.applicationWillTerminate has surface cleanup but still needs Phase 5 UI state persistence
