@@ -214,31 +214,48 @@ public final class GhosttySurfaceView: NSView {
         sendMousePos(event)
     }
 
-    // MARK: - Key Equivalents (Cmd+C/V)
+    // MARK: - Key Equivalents
 
     public override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.type == .keyDown else { return false }
-        guard ghosttySurface != nil else { return false }
+        guard let surface = ghosttySurface else { return false }
 
-        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-
-        // Handle Cmd+C (copy) and Cmd+V (paste) via ghostty binding actions
-        if modifiers == .command {
-            switch event.charactersIgnoringModifiers {
-            case "c":
-                performSurfaceAction("copy_to_clipboard")
-                return true
-            case "v":
-                performSurfaceAction("paste_from_clipboard")
-                return true
-            default:
-                break
-            }
+        // Check if ghostty considers this a key binding
+        var ghosttyEvent = ghosttyKeyEvent(GHOSTTY_ACTION_PRESS, event: event)
+        let text = event.characters ?? ""
+        let isBinding = text.withCString { ptr in
+            ghosttyEvent.text = ptr
+            var flags = ghostty_binding_flags_e(rawValue: 0)
+            return ghostty_surface_key_is_binding(surface, ghosttyEvent, &flags)
         }
 
-        // Forward all other key equivalents to keyDown for ghostty processing
-        keyDown(with: event)
-        return true
+        // If ghostty recognizes it as a binding, forward to keyDown
+        if isBinding {
+            keyDown(with: event)
+            return true
+        }
+
+        // Handle Ctrl+Return (prevent default context menu equivalent)
+        if event.modifierFlags.contains(.control),
+           event.charactersIgnoringModifiers == "\r" {
+            keyDown(with: event)
+            return true
+        }
+
+        // Handle Ctrl+/ as Ctrl+_ (prevent macOS beep)
+        if event.modifierFlags.contains(.control),
+           event.modifierFlags.isDisjoint(with: [.shift, .command, .option]),
+           event.charactersIgnoringModifiers == "/" {
+            keyDown(with: event)
+            return true
+        }
+
+        // Ignore synthetic events (zero timestamp)
+        if event.timestamp == 0 { return false }
+
+        // Let all non-binding events pass through to AppKit
+        // (menu shortcuts, system shortcuts, etc.)
+        return false
     }
 
     private func performSurfaceAction(_ action: String) {
@@ -298,6 +315,33 @@ public final class GhosttySurfaceView: NSView {
         let y = bounds.height - pos.y
         let mods = Self.ghosttyMods(event.modifierFlags)
         ghostty_surface_mouse_pos(surface, pos.x, y, mods)
+    }
+
+    // MARK: - Key Event Helpers
+
+    /// Build a ghostty_input_key_s from an NSEvent without sending it.
+    private func ghosttyKeyEvent(
+        _ action: ghostty_input_action_e,
+        event: NSEvent
+    ) -> ghostty_input_key_s {
+        var keyEv = ghostty_input_key_s()
+        keyEv.action = action
+        keyEv.keycode = UInt32(event.keyCode)
+        keyEv.mods = Self.ghosttyMods(event.modifierFlags)
+        keyEv.consumed_mods = Self.ghosttyMods(
+            event.modifierFlags.subtracting([.control, .command])
+        )
+        keyEv.text = nil
+        keyEv.composing = false
+
+        if event.type == .keyDown || event.type == .keyUp {
+            if let chars = event.characters(byApplyingModifiers: []),
+               let codepoint = chars.unicodeScalars.first {
+                keyEv.unshifted_codepoint = codepoint.value
+            }
+        }
+
+        return keyEv
     }
 
     // MARK: - Modifier Helpers
