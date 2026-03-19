@@ -24,6 +24,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: GhosttyKit
+          path: .
 
       - name: Verify GhosttyKit
         run: |
