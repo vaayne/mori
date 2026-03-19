@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var sidebarController: SidebarHostingController?
     private var ipcServer: IPCServer?
     private var ipcHandler: IPCHandler?
+    private var settingsWindowController: NSWindowController?
+    private var configFile: GhosttyConfigFile?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -126,7 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 self?.showAddProjectPanel()
             },
             onOpenSettings: { [weak self] in
-                self?.showGhosttyConfig()
+                self?.showSettingsWindow()
             },
             onOpenCommandPalette: { [weak self] in
                 self?.commandPaletteController?.toggle()
@@ -258,30 +260,113 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
-    // MARK: - Ghostty Config
+    // MARK: - Settings Window
 
-    /// Open the user's ghostty config file.
-    private func showGhosttyConfig() {
-        let configPath = NSHomeDirectory() + "/.config/ghostty/config"
-
-        // Create config dir and file if they don't exist
-        if !FileManager.default.fileExists(atPath: configPath) {
-            let dir = (configPath as NSString).deletingLastPathComponent
-            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-            let defaultContent = """
-            # Ghostty terminal configuration
-            # See https://ghostty.org/docs/config for all options
-            #
-            # font-family = SF Mono
-            # font-size = 13
-            # theme = catppuccin-mocha
-
-            """
-            try? defaultContent.write(toFile: configPath, atomically: true, encoding: .utf8)
+    private func showSettingsWindow() {
+        // If already open, bring to front
+        if let existing = settingsWindowController?.window, existing.isVisible {
+            existing.makeKeyAndOrderFront(nil)
+            return
         }
 
-        // Open with default editor via NSWorkspace
-        NSWorkspace.shared.open(URL(fileURLWithPath: configPath))
+        let cf = GhosttyConfigFile()
+        self.configFile = cf
+
+        let themes = GhosttyConfigFile.availableThemes()
+        let themeInfo = terminalAreaController?.themeInfo ?? .fallback
+
+        let settingsView = SettingsWindowContent(
+            initial: readSettingsModel(from: cf),
+            availableThemes: themes,
+            onChanged: { [weak self] newModel in
+                guard let self else { return }
+                self.writeSettingsModel(newModel, to: cf)
+                cf.save()
+                self.reloadGhosttyConfig()
+            },
+            onOpenConfigFile: {
+                NSWorkspace.shared.open(URL(fileURLWithPath: GhosttyConfigFile.configPath))
+            }
+        )
+
+        let hostingController = NSHostingController(rootView: settingsView)
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Settings"
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.backgroundColor = themeInfo.background
+        window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        window.center()
+        window.setFrameAutosaveName("MoriSettings")
+
+        let controller = NSWindowController(window: window)
+        self.settingsWindowController = controller
+        controller.showWindow(nil)
+    }
+
+    private func readSettingsModel(from cf: GhosttyConfigFile) -> GhosttySettingsModel {
+        GhosttySettingsModel(
+            fontFamily: cf.get("font-family") ?? "",
+            fontSize: Int(cf.get("font-size") ?? "") ?? 13,
+            theme: cf.get("theme") ?? "",
+            cursorStyle: cf.get("cursor-style") ?? "block",
+            cursorBlink: (cf.get("cursor-style-blink") ?? "true") != "false",
+            backgroundOpacity: Double(cf.get("background-opacity") ?? "1.0") ?? 1.0,
+            macosOptionAsAlt: cf.get("macos-option-as-alt") ?? "false",
+            mouseHideWhileTyping: cf.get("mouse-hide-while-typing") == "true",
+            copyOnSelect: cf.get("copy-on-select") ?? "false",
+            windowPaddingBalance: cf.get("window-padding-balance") == "true",
+            keybinds: cf.getAll("keybind")
+        )
+    }
+
+    private func writeSettingsModel(_ model: GhosttySettingsModel, to cf: GhosttyConfigFile) {
+        if model.fontFamily.isEmpty {
+            cf.remove("font-family")
+        } else {
+            cf.set("font-family", value: model.fontFamily)
+        }
+        cf.set("font-size", value: "\(model.fontSize)")
+
+        if model.theme.isEmpty {
+            cf.remove("theme")
+        } else {
+            cf.set("theme", value: model.theme)
+        }
+
+        cf.set("cursor-style", value: model.cursorStyle)
+        cf.set("cursor-style-blink", value: model.cursorBlink ? "true" : "false")
+        cf.set("background-opacity", value: String(format: "%.2f", model.backgroundOpacity))
+        cf.set("macos-option-as-alt", value: model.macosOptionAsAlt)
+        cf.set("mouse-hide-while-typing", value: model.mouseHideWhileTyping ? "true" : "false")
+        cf.set("copy-on-select", value: model.copyOnSelect)
+        cf.set("window-padding-balance", value: model.windowPaddingBalance ? "true" : "false")
+    }
+
+    /// Reload ghostty config and sync theme to window/sidebar/tmux.
+    private func reloadGhosttyConfig() {
+        guard let adapter = terminalAreaController?.terminalHost as? GhosttyAdapter else { return }
+        adapter.reloadConfig()
+
+        let themeInfo = adapter.themeInfo
+        mainWindowController?.window?.backgroundColor = themeInfo.background
+        mainWindowController?.window?.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        sidebarController?.updateAppearance(themeInfo: themeInfo)
+        terminalAreaController?.view.layer?.backgroundColor = themeInfo.background.cgColor
+
+        // Update settings window appearance
+        if let settingsWindow = settingsWindowController?.window {
+            settingsWindow.backgroundColor = themeInfo.background
+            settingsWindow.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        }
+
+        // Sync to tmux
+        if let tmuxBackend = workspaceManager?.tmuxBackend {
+            Task {
+                await TmuxThemeApplicator.apply(themeInfo: themeInfo, tmuxBackend: tmuxBackend)
+            }
+        }
     }
 
     // MARK: - Main Menu (Task 5.4)
@@ -294,7 +379,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About Mori", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
-        let settingsItem = NSMenuItem(title: "Ghostty Config...", action: #selector(showSettingsMenuAction), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(showSettingsMenuAction), keyEquivalent: ",")
         settingsItem.target = self
         appMenu.addItem(settingsItem)
         appMenu.addItem(.separator())
@@ -601,7 +686,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     // MARK: - Settings (Cmd+,)
 
     @objc private func showSettingsMenuAction() {
-        showGhosttyConfig()
+        showSettingsWindow()
     }
 
     // MARK: - Single Instance (Task 3.8)
@@ -648,5 +733,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound])
+    }
+}
+
+// MARK: - Settings Window Wrapper
+
+/// Thin wrapper that gives SwiftUI `@State` ownership of the settings value
+/// so all controls update in sync.
+private struct SettingsWindowContent: View {
+    @State var model: GhosttySettingsModel
+    let availableThemes: [String]
+    var onChanged: (GhosttySettingsModel) -> Void
+    var onOpenConfigFile: () -> Void
+
+    init(
+        initial: GhosttySettingsModel,
+        availableThemes: [String],
+        onChanged: @escaping (GhosttySettingsModel) -> Void,
+        onOpenConfigFile: @escaping () -> Void
+    ) {
+        self._model = State(initialValue: initial)
+        self.availableThemes = availableThemes
+        self.onChanged = onChanged
+        self.onOpenConfigFile = onOpenConfigFile
+    }
+
+    var body: some View {
+        GhosttySettingsView(
+            model: $model,
+            availableThemes: availableThemes,
+            onChanged: { onChanged(model) },
+            onOpenConfigFile: onOpenConfigFile
+        )
     }
 }

@@ -20,6 +20,12 @@ public final class GhosttyAdapter: TerminalHost {
         GhosttyApp.shared.start()
     }
 
+    /// Reload ghostty config from disk and update all surfaces.
+    /// Call after writing changes to ~/.config/ghostty/config.
+    public func reloadConfig() {
+        GhosttyApp.shared.reloadConfig()
+    }
+
     public func createSurface(command: String, workingDirectory: String) -> NSView {
         guard let app = GhosttyApp.shared.app else {
             NSLog("[GhosttyAdapter] GhosttyApp not initialized, falling back to empty view")

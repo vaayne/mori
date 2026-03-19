@@ -106,6 +106,16 @@ final class GhosttyApp {
         return config
     }
 
+    /// Reload config from disk and update the running app + extract new theme.
+    /// Call after writing changes to ~/.config/ghostty/config.
+    func reloadConfig() {
+        guard let app else { return }
+        guard let config = buildConfig() else { return }
+        self.themeInfo = GhosttyThemeInfo.from(config: config)
+        ghostty_app_update_config(app, config)
+        ghostty_config_free(config)
+    }
+
     // MARK: - Event Loop
 
     func tick() {
