@@ -1,23 +1,27 @@
-import MoriCore
+import MoriTerminal
 import MoriTmux
 
-/// Applies terminal theme colors to tmux so that tmux's own rendering
-/// (pane background, status bar, borders) matches the selected theme.
+/// Applies ghostty theme colors to tmux so that tmux's own rendering
+/// (pane background, status bar, borders) matches the terminal theme.
 ///
-/// Sets both global defaults (for new sessions) and per-session overrides
-/// (for existing sessions). Then refreshes every connected client so
-/// changes take effect immediately.
+/// Reads resolved colors from GhosttyThemeInfo (extracted from ghostty's config)
+/// and sets both global defaults (for new sessions) and per-session overrides.
 enum TmuxThemeApplicator {
 
-    static func apply(settings: TerminalSettings, tmuxBackend: TmuxBackend) async {
-        let theme = settings.theme
-        let fg = hexColor(theme.foreground)
-        let bg = hexColor(theme.background)
+    static func apply(themeInfo: GhosttyThemeInfo, tmuxBackend: TmuxBackend) async {
+        let fg = GhosttyThemeInfo.hexString(themeInfo.foreground)
+        let bg = GhosttyThemeInfo.hexString(themeInfo.background)
 
         let windowStyle = "fg=\(fg),bg=\(bg)"
-        let borderFg = hexColor(theme.ansi[8])      // bright black
-        let activeBorderFg = hexColor(theme.ansi[4]) // blue
-        let statusBg = hexColor(theme.ansi[0])       // palette black
+        let borderFg = themeInfo.palette.count > 8
+            ? GhosttyThemeInfo.hexString(themeInfo.palette[8])  // bright black
+            : fg
+        let activeBorderFg = themeInfo.palette.count > 4
+            ? GhosttyThemeInfo.hexString(themeInfo.palette[4])  // blue
+            : fg
+        let statusBg = themeInfo.palette.count > 0
+            ? GhosttyThemeInfo.hexString(themeInfo.palette[0])  // palette black
+            : bg
 
         // Session-level options (set-option -g)
         let sessionOptions: [(String, String)] = [
@@ -74,10 +78,5 @@ enum TmuxThemeApplicator {
         } catch {
             print("[TmuxThemeApplicator] Failed to refresh clients: \(error)")
         }
-    }
-
-    private static func hexColor(_ hex: String) -> String {
-        let stripped = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
-        return "#\(stripped)"
     }
 }

@@ -5,6 +5,7 @@ import MoriCore
 public struct WindowRowView: View {
     let window: RuntimeWindow
     let isActive: Bool
+    let shortcutIndex: Int?
     let onSelect: () -> Void
 
     @State private var isHovered = false
@@ -12,10 +13,12 @@ public struct WindowRowView: View {
     public init(
         window: RuntimeWindow,
         isActive: Bool,
+        shortcutIndex: Int? = nil,
         onSelect: @escaping () -> Void
     ) {
         self.window = window
         self.isActive = isActive
+        self.shortcutIndex = shortcutIndex
         self.onSelect = onSelect
     }
 
@@ -32,6 +35,13 @@ public struct WindowRowView: View {
                     .foregroundStyle(isActive ? Color.primary : MoriTokens.Color.muted)
 
                 Spacer()
+
+                if let shortcutIndex {
+                    Text("\u{2318}\(shortcutIndex)")
+                        .font(MoriTokens.Font.monoSmall)
+                        .foregroundStyle(MoriTokens.Color.muted)
+                        .accessibilityLabel("Command \(shortcutIndex)")
+                }
 
                 windowBadgeView
 

@@ -1,5 +1,24 @@
 import Foundation
 
+/// Direction for pane navigation and resizing.
+public enum PaneDirection: String, Sendable {
+    case up = "U"
+    case down = "D"
+    case left = "L"
+    case right = "R"
+    case next = "next"
+    case previous = "previous"
+
+    /// The tmux `-t` target for next/previous pane selection.
+    var selectTarget: String? {
+        switch self {
+        case .next: return "{next}"
+        case .previous: return "{previous}"
+        default: return nil
+        }
+    }
+}
+
 /// Runtime model representing a parsed tmux pane.
 public struct TmuxPane: Identifiable, Equatable, Sendable {
     public var id: String { paneId }

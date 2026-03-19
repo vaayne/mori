@@ -28,7 +28,7 @@ App Target (Sources/Mori/)
   ├─ MoriCore       — Models + @Observable AppState (no I/O)
   ├─ MoriPersistence — GRDB/SQLite repositories (depends on MoriCore)
   ├─ MoriTmux       — tmux CLI integration via actors (no deps on other packages)
-  ├─ MoriTerminal   — PTY terminal + ANSI parser (no deps on other packages)
+  ├─ MoriTerminal   — libghostty GPU terminal + PTY fallback (depends on GhosttyKit XCFramework)
   └─ MoriUI         — SwiftUI sidebar views (depends on MoriCore)
 ```
 
@@ -55,7 +55,7 @@ NSSplitViewController (3 columns)
   ├─ NSHostingController → ProjectRailView      (60-80pt, SwiftUI)
   ├─ NSHostingController → WorktreeSidebarView   (200pt min, SwiftUI)
   └─ TerminalAreaViewController                  (400pt min, AppKit)
-       └─ PTYTerminalView (forkpty + ANSI parser + NSTextView)
+       └─ GhosttySurfaceView (libghostty Metal rendering)
 ```
 
 ### Key Mapping: Worktree → tmux
@@ -64,7 +64,7 @@ Each worktree binds to exactly one tmux session named `<project-short-name>/<bra
 
 ### Terminal Rendering
 
-`TerminalHost` protocol abstracts terminal backends. Current implementation is `NativeTerminalAdapter` (PTY via `forkpty()`). A `GhosttyAdapter` (libghostty) can be swapped in as a drop-in replacement when Xcode is available for XCFramework support.
+`TerminalHost` protocol abstracts terminal backends. Primary implementation is `GhosttyAdapter` (libghostty — GPU-accelerated Metal rendering, native mouse/scroll/paste/IME). `NativeTerminalAdapter` (PTY via `forkpty()`) is kept as an emergency fallback. The GhosttyKit XCFramework is built from Ghostty source via `mise run build:ghostty` (requires Zig 0.15.2 + Xcode).
 
 ### Persistence
 

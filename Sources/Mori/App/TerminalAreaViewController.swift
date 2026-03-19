@@ -1,5 +1,4 @@
 import AppKit
-import MoriCore
 import MoriTerminal
 
 /// View controller that hosts terminal surfaces, one per tmux session.
@@ -26,7 +25,7 @@ final class TerminalAreaViewController: NSViewController {
     // MARK: - Init
 
     init(terminalHost: TerminalHost? = nil) {
-        let host = terminalHost ?? SwiftTermAdapter()
+        let host = terminalHost ?? GhosttyAdapter()
         self.terminalHost = host
         self.surfaceCache = TerminalSurfaceCache(maxSize: 3, terminalHost: host)
         super.init(nibName: nil, bundle: nil)
@@ -39,11 +38,15 @@ final class TerminalAreaViewController: NSViewController {
 
     // MARK: - Lifecycle
 
+    /// Resolved theme info from ghostty's config for syncing window/sidebar appearance.
+    var themeInfo: GhosttyThemeInfo {
+        (terminalHost as? GhosttyAdapter)?.themeInfo ?? .fallback
+    }
+
     override func loadView() {
         let container = NSView()
         container.wantsLayer = true
-        let bgHex = terminalHost.settings.theme.background
-        container.layer?.backgroundColor = NSColor(hex: bgHex).cgColor
+        container.layer?.backgroundColor = themeInfo.background.cgColor
         self.view = container
         showEmptyState()
     }
@@ -130,15 +133,6 @@ final class TerminalAreaViewController: NSViewController {
     func removeAllSurfaces() {
         detach()
         surfaceCache.removeAll()
-    }
-
-    /// Apply updated terminal settings to all cached surfaces.
-    func applySettings(_ settings: TerminalSettings) {
-        terminalHost.settings = settings
-        surfaceCache.applySettingsToAll()
-
-        // Update container background to match theme
-        view.layer?.backgroundColor = NSColor(hex: settings.theme.background).cgColor
     }
 
     // MARK: - Empty State

@@ -1,6 +1,5 @@
 import AppKit
 import Darwin
-import MoriCore
 
 /// PTY-based terminal adapter. Creates a pseudo-terminal, forks a child process
 /// running the specified command, and renders output into an NSView with a monospace font.
@@ -11,11 +10,7 @@ import MoriCore
 @MainActor
 public final class NativeTerminalAdapter: TerminalHost {
 
-    public var settings: TerminalSettings
-
-    public init(settings: TerminalSettings = .load()) {
-        self.settings = settings
-    }
+    public init() {}
 
     public func createSurface(command: String, workingDirectory: String) -> NSView {
         let termView = PTYTerminalView(command: command, workingDirectory: workingDirectory)
@@ -38,9 +33,6 @@ public final class NativeTerminalAdapter: TerminalHost {
         termView.window?.makeFirstResponder(termView)
     }
 
-    public func applySettings(to surface: NSView) {
-        // NativeTerminalAdapter is a basic fallback; settings are not applied to existing surfaces.
-    }
 }
 
 // MARK: - PTYTerminalView

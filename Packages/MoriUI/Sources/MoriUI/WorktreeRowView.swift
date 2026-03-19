@@ -2,24 +2,25 @@ import SwiftUI
 import MoriCore
 
 /// A two-line row representing a single worktree: bold name + subtitle with status.
+/// Shows a hover-reveal `...` menu for management actions.
 public struct WorktreeRowView: View {
     let worktree: Worktree
     let isSelected: Bool
-    let shortcutIndex: Int?
     let onSelect: () -> Void
+    var onRemove: (() -> Void)?
 
     @State private var isHovered = false
 
     public init(
         worktree: Worktree,
         isSelected: Bool,
-        shortcutIndex: Int? = nil,
-        onSelect: @escaping () -> Void
+        onSelect: @escaping () -> Void,
+        onRemove: (() -> Void)? = nil
     ) {
         self.worktree = worktree
         self.isSelected = isSelected
-        self.shortcutIndex = shortcutIndex
         self.onSelect = onSelect
+        self.onRemove = onRemove
     }
 
     public var body: some View {
@@ -45,11 +46,9 @@ public struct WorktreeRowView: View {
 
                 alertBadgeView
 
-                if let shortcutIndex {
-                    Text("\u{2318}\(shortcutIndex)")
-                        .font(MoriTokens.Font.monoSmall)
-                        .foregroundStyle(MoriTokens.Color.muted)
-                        .accessibilityLabel("Command \(shortcutIndex)")
+                if isHovered {
+                    overflowMenu
+                        .transition(.opacity)
                 }
             }
             .padding(.vertical, MoriTokens.Spacing.md)
@@ -59,7 +58,52 @@ public struct WorktreeRowView: View {
         .buttonStyle(.plain)
         .background(rowBackground)
         .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
-        .onHover { isHovered = $0 }
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+    }
+
+    // MARK: - Overflow Menu
+
+    private var overflowMenu: some View {
+        Menu {
+            let editors = EditorLauncher.installed
+            if !editors.isEmpty {
+                ForEach(editors) { editor in
+                    Button {
+                        editor.open(path: worktree.path)
+                    } label: {
+                        Label("Open in \(editor.name)", systemImage: editor.icon)
+                    }
+                }
+                Divider()
+            }
+
+            Button {
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: worktree.path)
+            } label: {
+                Label("Reveal in Finder", systemImage: "folder")
+            }
+
+            if !worktree.isMainWorktree, let onRemove {
+                Divider()
+                Button(role: .destructive) {
+                    onRemove()
+                } label: {
+                    Label("Remove Worktree…", systemImage: "trash")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(MoriTokens.Color.muted)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .frame(width: 16)
+        .help("More Actions")
     }
 
     private var rowBackground: some ShapeStyle {

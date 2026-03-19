@@ -10,13 +10,13 @@ public struct WorktreeSidebarView: View {
     private let windows: [RuntimeWindow]
     private let selectedWorktreeId: UUID?
     private let selectedWindowId: String?
-    private let theme: TerminalTheme?
     private let onSelectProject: ((UUID) -> Void)?
     private let onSelectWorktree: (UUID) -> Void
     private let onSelectWindow: (String) -> Void
     private let onCreateWorktree: ((String) -> Void)?
     private let onRemoveWorktree: ((UUID) -> Void)?
     private let onRemoveProject: ((UUID) -> Void)?
+    private let onCloseWindow: ((String) -> Void)?
     private let onToggleCollapse: ((UUID) -> Void)?
     private let onAddProject: (() -> Void)?
     private let onOpenSettings: (() -> Void)?
@@ -33,13 +33,13 @@ public struct WorktreeSidebarView: View {
         windows: [RuntimeWindow],
         selectedWorktreeId: UUID?,
         selectedWindowId: String?,
-        theme: TerminalTheme? = nil,
         onSelectProject: ((UUID) -> Void)? = nil,
         onSelectWorktree: @escaping (UUID) -> Void,
         onSelectWindow: @escaping (String) -> Void,
         onCreateWorktree: ((String) -> Void)? = nil,
         onRemoveWorktree: ((UUID) -> Void)? = nil,
         onRemoveProject: ((UUID) -> Void)? = nil,
+        onCloseWindow: ((String) -> Void)? = nil,
         onToggleCollapse: ((UUID) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
@@ -51,13 +51,13 @@ public struct WorktreeSidebarView: View {
         self.windows = windows
         self.selectedWorktreeId = selectedWorktreeId
         self.selectedWindowId = selectedWindowId
-        self.theme = theme
         self.onSelectProject = onSelectProject
         self.onSelectWorktree = onSelectWorktree
         self.onSelectWindow = onSelectWindow
         self.onCreateWorktree = onCreateWorktree
         self.onRemoveWorktree = onRemoveWorktree
         self.onRemoveProject = onRemoveProject
+        self.onCloseWindow = onCloseWindow
         self.onToggleCollapse = onToggleCollapse
         self.onAddProject = onAddProject
         self.onOpenSettings = onOpenSettings
@@ -85,14 +85,16 @@ public struct WorktreeSidebarView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(sidebarBackground)
-        .preferredColorScheme(theme.map { $0.isDark ? .dark : .light })
+        .preferredColorScheme(.dark)
     }
 
     // MARK: - Project Section
 
+    @State private var hoveredProjectId: UUID?
+
     @ViewBuilder
     private func projectSection(_ project: Project) -> some View {
-        // Section header with collapse chevron
+        // Section header: chevron + name + hover-reveal + button
         HStack(spacing: MoriTokens.Spacing.md) {
             Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down")
                 .font(.system(size: 10, weight: .semibold))
@@ -104,6 +106,74 @@ public struct WorktreeSidebarView: View {
                 .foregroundStyle(MoriTokens.Color.muted)
 
             Spacer()
+
+            if hoveredProjectId == project.id {
+                HStack(spacing: MoriTokens.Spacing.sm) {
+                    if !project.isCollapsed, onCreateWorktree != nil {
+                        Button {
+                            onSelectProject?(project.id)
+                            editingProjectId = project.id
+                            newBranchName = ""
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(MoriTokens.Color.muted)
+                        }
+                        .buttonStyle(.plain)
+                        .help("New Workspace")
+                    }
+
+                    Menu {
+                        if !project.isCollapsed, onCreateWorktree != nil {
+                            Button {
+                                onSelectProject?(project.id)
+                                editingProjectId = project.id
+                                newBranchName = ""
+                            } label: {
+                                Label("New Workspace…", systemImage: "plus")
+                            }
+                        }
+
+                        let editors = EditorLauncher.installed
+                        if !editors.isEmpty {
+                            Divider()
+                            ForEach(editors) { editor in
+                                Button {
+                                    editor.open(path: project.repoRootPath)
+                                } label: {
+                                    Label("Open in \(editor.name)", systemImage: editor.icon)
+                                }
+                            }
+                        }
+
+                        Divider()
+
+                        Button {
+                            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.repoRootPath)
+                        } label: {
+                            Label("Reveal in Finder", systemImage: "folder")
+                        }
+
+                        if let onRemoveProject {
+                            Divider()
+                            Button(role: .destructive) {
+                                onRemoveProject(project.id)
+                            } label: {
+                                Label("Remove Project…", systemImage: "trash")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(MoriTokens.Color.muted)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .frame(width: 16)
+                    .help("More Actions")
+                }
+                .transition(.opacity)
+            }
         }
         .padding(.horizontal, MoriTokens.Spacing.xl)
         .padding(.top, MoriTokens.Spacing.xl)
@@ -113,13 +183,53 @@ public struct WorktreeSidebarView: View {
             onToggleCollapse?(project.id)
             onSelectProject?(project.id)
         }
-
-        if !project.isCollapsed {
-            // "+ New workspace" action row
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                hoveredProjectId = hovering ? project.id : nil
+            }
+        }
+        .contextMenu {
             if onCreateWorktree != nil {
-                newWorkspaceRow(project)
+                Button {
+                    onSelectProject?(project.id)
+                    editingProjectId = project.id
+                    newBranchName = ""
+                } label: {
+                    Label("New Workspace…", systemImage: "plus")
+                }
             }
 
+            let editors = EditorLauncher.installed
+            if !editors.isEmpty {
+                Divider()
+                ForEach(editors) { editor in
+                    Button {
+                        editor.open(path: project.repoRootPath)
+                    } label: {
+                        Label("Open in \(editor.name)", systemImage: editor.icon)
+                    }
+                }
+            }
+
+            Divider()
+
+            Button {
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.repoRootPath)
+            } label: {
+                Label("Reveal in Finder", systemImage: "folder")
+            }
+
+            if let onRemoveProject {
+                Divider()
+                Button(role: .destructive) {
+                    onRemoveProject(project.id)
+                } label: {
+                    Label("Remove Project…", systemImage: "trash")
+                }
+            }
+        }
+
+        if !project.isCollapsed {
             // Branch input (only for the project being edited)
             if editingProjectId == project.id {
                 branchNameInput
@@ -137,94 +247,80 @@ public struct WorktreeSidebarView: View {
                     .padding(.vertical, MoriTokens.Spacing.sm)
             }
 
-            let globalIndex = globalWorktreeIndex(for: project.id)
-
-            ForEach(Array(projectWorktrees.enumerated()), id: \.element.id) { localIndex, worktree in
-                worktreeRow(worktree, shortcutIndex: globalIndex + localIndex)
+            ForEach(projectWorktrees) { worktree in
+                worktreeRow(worktree)
             }
-        }
-    }
-
-    // MARK: - New Workspace Row
-
-    private func newWorkspaceRow(_ project: Project) -> some View {
-        HStack(spacing: MoriTokens.Spacing.md) {
-            Image(systemName: "plus")
-                .font(.system(size: 11))
-                .foregroundStyle(MoriTokens.Color.muted)
-
-            Text("New workspace")
-                .font(MoriTokens.Font.caption)
-                .foregroundStyle(MoriTokens.Color.muted)
-
-            Spacer()
-
-            Menu {
-                if let onRemoveProject {
-                    Button(role: .destructive) {
-                        onRemoveProject(project.id)
-                    } label: {
-                        Label("Remove Project...", systemImage: "trash")
-                    }
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 11))
-                    .foregroundStyle(MoriTokens.Color.muted)
-                    .frame(width: 20, height: 20)
-                    .contentShape(Rectangle())
-            }
-            .menuStyle(.borderlessButton)
-            .frame(width: 20)
-        }
-        .padding(.horizontal, MoriTokens.Spacing.xl)
-        .padding(.vertical, MoriTokens.Spacing.sm)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onSelectProject?(project.id)
-            editingProjectId = project.id
-            newBranchName = ""
         }
     }
 
     // MARK: - Worktree Row
 
     @ViewBuilder
-    private func worktreeRow(_ worktree: Worktree, shortcutIndex: Int) -> some View {
+    private func worktreeRow(_ worktree: Worktree) -> some View {
+        let isSelected = worktree.id == selectedWorktreeId
+        let worktreeWindows = windows
+            .filter { $0.worktreeId == worktree.id }
+            .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
+
         VStack(alignment: .leading, spacing: 0) {
             WorktreeRowView(
                 worktree: worktree,
-                isSelected: worktree.id == selectedWorktreeId,
-                shortcutIndex: shortcutIndex < 9 ? shortcutIndex + 1 : nil,
-                onSelect: { onSelectWorktree(worktree.id) }
+                isSelected: isSelected,
+                onSelect: { onSelectWorktree(worktree.id) },
+                onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } }
             )
+            .contextMenu {
+                let editors = EditorLauncher.installed
+                if !editors.isEmpty {
+                    ForEach(editors) { editor in
+                        Button {
+                            editor.open(path: worktree.path)
+                        } label: {
+                            Label("Open in \(editor.name)", systemImage: editor.icon)
+                        }
+                    }
+                    Divider()
+                }
 
-            // Windows under selected worktree
-            if worktree.id == selectedWorktreeId {
-                let worktreeWindows = windows
-                    .filter { $0.worktreeId == worktree.id }
-                    .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
+                Button {
+                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: worktree.path)
+                } label: {
+                    Label("Reveal in Finder", systemImage: "folder")
+                }
 
-                ForEach(worktreeWindows) { window in
+                if !worktree.isMainWorktree, let onRemove = onRemoveWorktree {
+                    Divider()
+                    Button(role: .destructive) {
+                        onRemove(worktree.id)
+                    } label: {
+                        Label("Remove Worktree…", systemImage: "trash")
+                    }
+                }
+            }
+
+            // Show windows (tabs) under every worktree that has them
+            if !worktreeWindows.isEmpty {
+                ForEach(Array(worktreeWindows.enumerated()), id: \.element.id) { index, window in
                     WindowRowView(
                         window: window,
-                        isActive: window.tmuxWindowId == selectedWindowId,
+                        isActive: isSelected && window.tmuxWindowId == selectedWindowId,
+                        shortcutIndex: isSelected && index < 9 ? index + 1 : nil,
                         onSelect: { onSelectWindow(window.tmuxWindowId) }
                     )
                     .padding(.leading, MoriTokens.Spacing.xxl)
+                    .contextMenu {
+                        if let onCloseWindow {
+                            Button(role: .destructive) {
+                                onCloseWindow(window.tmuxWindowId)
+                            } label: {
+                                Label("Close Tab", systemImage: "xmark")
+                            }
+                        }
+                    }
                 }
             }
         }
         .padding(.horizontal, MoriTokens.Spacing.sm)
-        .contextMenu {
-            if !worktree.isMainWorktree, let onRemove = onRemoveWorktree {
-                Button(role: .destructive) {
-                    onRemove(worktree.id)
-                } label: {
-                    Label("Remove Worktree...", systemImage: "trash")
-                }
-            }
-        }
     }
 
     // MARK: - Branch Name Input
@@ -283,25 +379,10 @@ public struct WorktreeSidebarView: View {
 
     // MARK: - Helpers
 
-    /// Compute the global worktree index offset for keyboard shortcuts (1-9).
-    private func globalWorktreeIndex(for projectId: UUID) -> Int {
-        var count = 0
-        for project in projects {
-            if project.id == projectId { return count }
-            if !project.isCollapsed {
-                count += worktrees.filter { $0.projectId == project.id }.count
-            }
-        }
-        return count
-    }
-
     // MARK: - Theme
 
     private var sidebarBackground: Color {
-        if let theme {
-            return Color(nsColor: nsColor(hex: theme.background))
-        }
-        return Color(nsColor: .controlBackgroundColor)
+        Color(nsColor: .controlBackgroundColor)
     }
 
     // MARK: - Footer
@@ -331,18 +412,9 @@ public struct WorktreeSidebarView: View {
                             .foregroundStyle(MoriTokens.Color.muted)
                     }
                     .buttonStyle(.plain)
-                    .help("Command Palette (⌘K)")
+                    .help("Command Palette (⇧⌘P)")
                     .accessibilityLabel("Command Palette")
                 }
-
-                Button(action: {}) {
-                    Image(systemName: "terminal")
-                        .font(.system(size: 13))
-                        .foregroundStyle(MoriTokens.Color.muted)
-                }
-                .buttonStyle(.plain)
-                .help("Terminal")
-                .accessibilityLabel("Terminal")
 
                 if let onOpenSettings {
                     Button(action: onOpenSettings) {

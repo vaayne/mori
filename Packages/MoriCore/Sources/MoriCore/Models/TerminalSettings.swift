@@ -1,54 +1,20 @@
 import Foundation
 
-/// Cursor display style in the terminal.
-public enum CursorStyle: String, Codable, Sendable, CaseIterable {
-    case block
-    case underline
-    case bar
-}
-
-/// Terminal appearance and behavior settings, persisted via UserDefaults.
+/// Minimal terminal settings placeholder.
+/// User-facing terminal configuration (font, theme, cursor, keybindings) is now
+/// managed entirely through Ghostty's native config at `~/.config/ghostty/config`.
+/// This type is retained only for backward compatibility with UserDefaults cleanup.
 public struct TerminalSettings: Codable, Equatable, Sendable {
-    public var fontFamily: String
-    public var fontSize: Double
-    public var themeName: String
-    public var cursorStyle: CursorStyle
 
-    public init(
-        fontFamily: String = "SF Mono",
-        fontSize: Double = 13,
-        themeName: String = TerminalTheme.defaultDark.name,
-        cursorStyle: CursorStyle = .block
-    ) {
-        self.fontFamily = fontFamily
-        self.fontSize = fontSize
-        self.themeName = themeName
-        self.cursorStyle = cursorStyle
-    }
+    public init() {}
 
-    /// Resolve the theme by name, falling back to Default Dark.
-    public var theme: TerminalTheme {
-        TerminalTheme.builtIn.first { $0.name == themeName } ?? .defaultDark
-    }
-
-    // MARK: - UserDefaults Persistence
+    // MARK: - UserDefaults Cleanup
 
     private static let defaultsKey = "terminalSettings"
-
-    /// Stable suite so settings survive swift-run rebuilds (no bundle ID needed).
     nonisolated(unsafe) private static let defaults = UserDefaults(suiteName: "com.mori.app")!
 
-    public static func load() -> TerminalSettings {
-        guard let data = defaults.data(forKey: defaultsKey),
-              let settings = try? JSONDecoder().decode(TerminalSettings.self, from: data)
-        else {
-            return TerminalSettings()
-        }
-        return settings
-    }
-
-    public func save() {
-        guard let data = try? JSONEncoder().encode(self) else { return }
-        Self.defaults.set(data, forKey: Self.defaultsKey)
+    /// Remove any previously persisted terminal settings from UserDefaults.
+    public static func clearLegacy() {
+        defaults.removeObject(forKey: defaultsKey)
     }
 }

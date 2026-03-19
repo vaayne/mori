@@ -1,5 +1,4 @@
 import AppKit
-import MoriCore
 import MoriTerminal
 
 final class MainWindowController: NSWindowController {
@@ -15,7 +14,7 @@ final class MainWindowController: NSWindowController {
 
     // MARK: - Init
 
-    init() {
+    init(themeInfo: GhosttyThemeInfo = .fallback) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -26,9 +25,8 @@ final class MainWindowController: NSWindowController {
         window.title = "Mori"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        let settings = TerminalSettings.load()
-        window.backgroundColor = NSColor(hex: settings.theme.background)
-        window.appearance = NSAppearance(named: settings.theme.isDark ? .darkAqua : .aqua)
+        window.backgroundColor = themeInfo.background
+        window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
         window.setFrameAutosaveName("MoriMainWindow")
         if !window.setFrameUsingName("MoriMainWindow") {
             window.center()
@@ -45,11 +43,6 @@ final class MainWindowController: NSWindowController {
     }
 
     // MARK: - Public
-
-    func updateBackground(settings: TerminalSettings) {
-        window?.backgroundColor = NSColor(hex: settings.theme.background)
-        window?.appearance = NSAppearance(named: settings.theme.isDark ? .darkAqua : .aqua)
-    }
 
     func updateTitle(projectName: String?, worktreeName: String? = nil) {
         var parts: [String] = []

@@ -224,6 +224,28 @@ public actor TmuxBackend: TmuxControlling {
         )
     }
 
+    public func navigatePane(sessionId: String, direction: PaneDirection) async throws {
+        if let target = direction.selectTarget {
+            _ = try await runner.run("select-pane", "-t", "\(sessionId):\(target)")
+        } else {
+            _ = try await runner.run("select-pane", "-t", sessionId, "-\(direction.rawValue)")
+        }
+    }
+
+    public func resizePane(sessionId: String, direction: PaneDirection, amount: Int) async throws {
+        _ = try await runner.run(
+            "resize-pane", "-t", sessionId, "-\(direction.rawValue)", "\(amount)"
+        )
+    }
+
+    public func togglePaneZoom(sessionId: String) async throws {
+        _ = try await runner.run("resize-pane", "-t", sessionId, "-Z")
+    }
+
+    public func equalizePanes(sessionId: String) async throws {
+        _ = try await runner.run("select-layout", "-t", sessionId, "tiled")
+    }
+
     public func refreshClients() async throws {
         // List all connected clients and refresh each one.
         // Bare `refresh-client` with no target only works from inside a tmux session.

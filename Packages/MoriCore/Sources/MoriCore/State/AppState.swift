@@ -8,7 +8,6 @@ public final class AppState {
     public var runtimeWindows: [RuntimeWindow] = []
     public var runtimePanes: [RuntimePane] = []
     public var uiState: UIState = UIState()
-    public var terminalSettings: TerminalSettings = .load()
 
     public init() {}
 

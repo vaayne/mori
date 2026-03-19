@@ -44,6 +44,9 @@ final class WorkspaceManager {
     /// Parameters: (sessionName, workingDirectory)
     var onTerminalSwitch: ((String, String) -> Void)?
 
+    /// Callback invoked when the terminal should detach (session killed / no active session).
+    var onTerminalDetach: (() -> Void)?
+
     /// Background coordinated polling task handle.
     private var pollingTask: Task<Void, Never>?
 
@@ -549,7 +552,7 @@ final class WorkspaceManager {
 
         var runtimeWindows: [RuntimeWindow] = []
 
-        for session in sessions where session.isMoriSession {
+        for session in sessions {
             // Find matching worktree
             guard let worktree = appState.worktrees.first(where: {
                 $0.tmuxSessionName == session.name
@@ -628,6 +631,9 @@ final class WorkspaceManager {
 
         // Update runtime state from tmux
         if let sessions {
+            // Detect dead sessions and auto-recreate before updating state
+            await detectAndRecoverDeadSessions(sessions: sessions)
+
             latestSessions = sessions
 
             // Detect unread activity before updating runtime state
@@ -671,7 +677,7 @@ final class WorkspaceManager {
 
         var runtimeWindows: [RuntimeWindow] = []
 
-        for session in sessions where session.isMoriSession {
+        for session in sessions {
             guard let worktree = appState.worktrees.first(where: {
                 $0.tmuxSessionName == session.name
             }) else { continue }
@@ -1015,14 +1021,13 @@ final class WorkspaceManager {
     }
 
     /// Close the currently selected tmux window.
+    /// If it's the last window, kills the session and shows empty state.
     func closeCurrentWindow() async {
         guard let worktree = selectedWorktree,
               let sessionName = worktree.tmuxSessionName,
               let windowId = appState.uiState.selectedWindowId else { return }
 
-        // Don't close the last window — that would kill the session
         let windowsInSession = appState.runtimeWindows.filter { $0.worktreeId == worktree.id }
-        if windowsInSession.count <= 1 { return }
 
         // Fire onWindowClose hook before kill
         let windowTitle = appState.runtimeWindows
@@ -1030,12 +1035,53 @@ final class WorkspaceManager {
         fireHook(event: .onWindowClose, worktreeId: worktree.id, windowName: windowTitle)
 
         do {
-            try await tmuxBackend.killWindow(sessionId: sessionName, windowId: windowId)
-            appState.uiState.selectedWindowId = nil
-            await refreshRuntimeState()
-            // Auto-select the first remaining window
-            if let first = appState.runtimeWindows.first(where: { $0.worktreeId == worktree.id }) {
-                selectWindow(first.tmuxWindowId)
+            if windowsInSession.count <= 1 {
+                // Last window — kill the entire session and detach terminal
+                try await tmuxBackend.killSession(id: sessionName)
+                appState.uiState.selectedWindowId = nil
+                appState.runtimeWindows.removeAll { $0.worktreeId == worktree.id }
+                onTerminalDetach?()
+            } else {
+                try await tmuxBackend.killWindow(sessionId: sessionName, windowId: windowId)
+                appState.uiState.selectedWindowId = nil
+                await refreshRuntimeState()
+                // Auto-select the first remaining window
+                if let first = appState.runtimeWindows.first(where: { $0.worktreeId == worktree.id }) {
+                    selectWindow(first.tmuxWindowId)
+                }
+            }
+        } catch {
+            showErrorAlert(title: "Failed to close window", message: error.localizedDescription)
+        }
+    }
+
+    /// Close a specific tmux window by its ID (from sidebar context menu).
+    func closeWindow(windowId: String) async {
+        guard let rw = appState.runtimeWindows.first(where: { $0.tmuxWindowId == windowId }),
+              let worktree = appState.worktrees.first(where: { $0.id == rw.worktreeId }),
+              let sessionName = worktree.tmuxSessionName else { return }
+
+        let windowsInSession = appState.runtimeWindows.filter { $0.worktreeId == worktree.id }
+
+        fireHook(event: .onWindowClose, worktreeId: worktree.id, windowName: rw.title)
+
+        do {
+            if windowsInSession.count <= 1 {
+                try await tmuxBackend.killSession(id: sessionName)
+                appState.runtimeWindows.removeAll { $0.worktreeId == worktree.id }
+                if worktree.id == appState.uiState.selectedWorktreeId {
+                    appState.uiState.selectedWindowId = nil
+                    onTerminalDetach?()
+                }
+            } else {
+                try await tmuxBackend.killWindow(sessionId: sessionName, windowId: windowId)
+                await refreshRuntimeState()
+                if windowId == appState.uiState.selectedWindowId {
+                    appState.uiState.selectedWindowId = nil
+                    if let first = appState.runtimeWindows.first(where: { $0.worktreeId == worktree.id }) {
+                        selectWindow(first.tmuxWindowId)
+                    }
+                }
             }
         } catch {
             showErrorAlert(title: "Failed to close window", message: error.localizedDescription)
@@ -1096,6 +1142,107 @@ final class WorkspaceManager {
         guard let windowId = appState.uiState.selectedWindowId else { return nil }
         let panes = appState.panes(forWindow: windowId)
         return panes.first(where: { $0.isActive })?.cwd ?? panes.first?.cwd
+    }
+
+    // MARK: - Pane Navigation & Management
+
+    /// Navigate to a pane by direction (up/down/left/right/next/previous).
+    func navigatePane(direction: PaneDirection) async {
+        guard let worktree = selectedWorktree,
+              let sessionName = worktree.tmuxSessionName else { return }
+        do {
+            try await tmuxBackend.navigatePane(sessionId: sessionName, direction: direction)
+        } catch {
+            // Non-fatal — pane may not exist in that direction
+        }
+    }
+
+    /// Resize the active pane in the given direction.
+    func resizePane(direction: PaneDirection, amount: Int = 10) async {
+        guard let worktree = selectedWorktree,
+              let sessionName = worktree.tmuxSessionName else { return }
+        do {
+            try await tmuxBackend.resizePane(sessionId: sessionName, direction: direction, amount: amount)
+        } catch {
+            // Non-fatal
+        }
+    }
+
+    /// Toggle zoom on the active pane.
+    func togglePaneZoom() async {
+        guard let worktree = selectedWorktree,
+              let sessionName = worktree.tmuxSessionName else { return }
+        do {
+            try await tmuxBackend.togglePaneZoom(sessionId: sessionName)
+        } catch {
+            // Non-fatal
+        }
+    }
+
+    /// Equalize all pane sizes in the active window.
+    func equalizePanes() async {
+        guard let worktree = selectedWorktree,
+              let sessionName = worktree.tmuxSessionName else { return }
+        do {
+            try await tmuxBackend.equalizePanes(sessionId: sessionName)
+        } catch {
+            // Non-fatal
+        }
+    }
+
+    // MARK: - Window Index Navigation
+
+    /// Select a tmux window by 1-based index (Cmd+1 through Cmd+9).
+    /// Cmd+9 selects the last window regardless of count.
+    func selectWindowByIndex(_ index: Int) {
+        let windows = appState.windowsForSelectedWorktree
+        guard !windows.isEmpty else { return }
+
+        let targetIndex: Int
+        if index == 9 {
+            targetIndex = windows.count - 1
+        } else {
+            targetIndex = index - 1
+        }
+
+        guard targetIndex >= 0, targetIndex < windows.count else { return }
+        selectWindow(windows[targetIndex].tmuxWindowId)
+    }
+
+    // MARK: - Worktree Cycling
+
+    /// Cycle to the next or previous worktree (Ctrl+Tab / Ctrl+Shift+Tab).
+    func cycleWorktree(forward: Bool) {
+        guard let projectId = appState.uiState.selectedProjectId else { return }
+        let projectWorktrees = appState.worktrees
+            .filter { $0.projectId == projectId }
+        guard !projectWorktrees.isEmpty else { return }
+
+        let currentIndex = projectWorktrees.firstIndex(where: {
+            $0.id == appState.uiState.selectedWorktreeId
+        }) ?? 0
+
+        let offset = forward ? 1 : -1
+        let newIndex = (currentIndex + offset + projectWorktrees.count) % projectWorktrees.count
+        selectWorktree(projectWorktrees[newIndex].id)
+    }
+
+    // MARK: - Session Death Detection
+
+    /// Called during polling to detect and handle dead sessions for active worktrees.
+    /// Auto-recreates sessions and re-attaches if the selected worktree's session died.
+    func detectAndRecoverDeadSessions(sessions: [TmuxSession]) async {
+        guard let worktree = appState.selectedWorktree,
+              let sessionName = worktree.tmuxSessionName else { return }
+
+        let sessionAlive = sessions.contains { $0.name == sessionName }
+        let hadWindows = appState.runtimeWindows.contains { $0.worktreeId == worktree.id }
+
+        if !sessionAlive && hadWindows {
+            // Session died — auto-recreate and re-attach
+            _ = try? await tmuxBackend.createSession(name: sessionName, cwd: worktree.path)
+            onTerminalSwitch?(sessionName, worktree.path)
+        }
     }
 
     // MARK: - Launch Restoration (Task 5.2)

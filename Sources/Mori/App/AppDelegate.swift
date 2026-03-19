@@ -19,15 +19,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var commandPaletteController: CommandPaletteController?
     private var rootSplitVC: RootSplitViewController?
     private var keyMonitor: Any?
-    private var settingsWindowController: NSWindowController?
     private var sidebarController: SidebarHostingController?
-    private var terminalSettings = TerminalSettings.load()
     private var ipcServer: IPCServer?
     private var ipcHandler: IPCHandler?
+    private var settingsWindowController: NSWindowController?
+    private var configFile: GhosttyConfigFile?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
         enforceSingleInstance()
+
+        // Clean up legacy terminal settings from UserDefaults
+        TerminalSettings.clearLegacy()
 
         // Set self as notification center delegate for click handling.
         // UNUserNotificationCenter requires a valid bundle proxy — guard for swift run.
@@ -72,8 +75,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Load persisted state
         try? manager.loadAll()
 
-        // Build the window
-        let windowController = MainWindowController()
+        // Create terminal area first — this initializes GhosttyApp and extracts theme
+        let terminalArea = TerminalAreaViewController()
+        terminalArea.onCreateSession = { [weak self] in
+            self?.showAddProjectPanel()
+        }
+        self.terminalAreaController = terminalArea
+
+        let themeInfo = terminalArea.themeInfo
+
+        // Build the window with ghostty theme
+        let windowController = MainWindowController(themeInfo: themeInfo)
         self.mainWindowController = windowController
 
         // Build split view children
@@ -109,6 +121,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                     await manager.removeProject(projectId: projectId)
                 }
             },
+            onCloseWindow: { [weak manager] windowId in
+                guard let manager else { return }
+                Task { @MainActor in
+                    await manager.closeWindow(windowId: windowId)
+                }
+            },
             onToggleCollapse: { [weak manager] projectId in
                 manager?.toggleProjectCollapse(projectId)
             },
@@ -124,13 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         )
 
         self.sidebarController = sidebarController
-        sidebarController.updateAppearance(settings: self.terminalSettings)
-
-        let terminalArea = TerminalAreaViewController()
-        terminalArea.onCreateSession = { [weak self] in
-            self?.showAddProjectPanel()
-        }
-        self.terminalAreaController = terminalArea
+        sidebarController.updateAppearance(themeInfo: themeInfo)
 
         let splitVC = RootSplitViewController(
             sidebarController: sidebarController,
@@ -151,13 +163,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             terminalArea?.attachToSession(sessionName: sessionName, workingDirectory: workingDirectory)
         }
 
+        // Wire terminal detach: when session is killed, show empty state
+        manager.onTerminalDetach = { [weak terminalArea] in
+            terminalArea?.detach()
+        }
+
         // Restore previously saved UI state (project, worktree, window selection)
         manager.restoreState()
 
         // Set up the main menu bar
         setupMainMenu()
 
-        // Set up command palette (Cmd+K)
+        // Set up command palette (Cmd+Shift+P)
         setupCommandPalette(appState: state, manager: manager)
 
         // Start IPC server for ws CLI communication
@@ -180,13 +197,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             // Start coordinated polling (tmux + git status on each 5s tick)
             manager.startPolling()
 
-            // Apply terminal theme to tmux sessions
-            await TmuxThemeApplicator.apply(settings: self.terminalSettings, tmuxBackend: manager.tmuxBackend)
+            // Apply ghostty theme colors to tmux (pane borders, status bar)
+            if let terminalArea = self.terminalAreaController {
+                await TmuxThemeApplicator.apply(
+                    themeInfo: terminalArea.themeInfo,
+                    tmuxBackend: manager.tmuxBackend
+                )
+            }
         }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Remove Cmd+K key monitor
+        // Remove key monitor
         if let monitor = keyMonitor {
             NSEvent.removeMonitor(monitor)
             keyMonitor = nil
@@ -249,6 +271,121 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
+    // MARK: - Settings Window
+
+    private func showSettingsWindow() {
+        // If already open, bring to front
+        if let existing = settingsWindowController?.window, existing.isVisible {
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let cf = GhosttyConfigFile()
+        self.configFile = cf
+
+        let themes = GhosttyConfigFile.availableThemes()
+        let ghosttyDefaults = GhosttyConfigFile.defaultKeybinds()
+        let themeInfo = terminalAreaController?.themeInfo ?? .fallback
+
+        let settingsView = SettingsWindowContent(
+            initial: readSettingsModel(from: cf),
+            availableThemes: themes,
+            ghosttyDefaults: ghosttyDefaults,
+            onChanged: { [weak self] newModel in
+                guard let self else { return }
+                self.writeSettingsModel(newModel, to: cf)
+                cf.save()
+                self.reloadGhosttyConfig()
+            },
+            onOpenConfigFile: {
+                NSWorkspace.shared.open(URL(fileURLWithPath: GhosttyConfigFile.configPath))
+            }
+        )
+
+        let hostingController = NSHostingController(rootView: settingsView)
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Settings"
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.backgroundColor = themeInfo.background
+        window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        window.center()
+        window.setFrameAutosaveName("MoriSettings")
+
+        let controller = NSWindowController(window: window)
+        self.settingsWindowController = controller
+        controller.showWindow(nil)
+    }
+
+    private func readSettingsModel(from cf: GhosttyConfigFile) -> GhosttySettingsModel {
+        GhosttySettingsModel(
+            fontFamily: cf.get("font-family") ?? "",
+            fontSize: Int(cf.get("font-size") ?? "") ?? 13,
+            theme: cf.get("theme") ?? "",
+            cursorStyle: cf.get("cursor-style") ?? "block",
+            cursorBlink: (cf.get("cursor-style-blink") ?? "true") != "false",
+            backgroundOpacity: Double(cf.get("background-opacity") ?? "1.0") ?? 1.0,
+            macosOptionAsAlt: cf.get("macos-option-as-alt") ?? "false",
+            mouseHideWhileTyping: cf.get("mouse-hide-while-typing") == "true",
+            mouseScrollMultiplier: Int(cf.get("mouse-scroll-multiplier") ?? "") ?? 1,
+            copyOnSelect: cf.get("copy-on-select") ?? "false",
+            windowPaddingBalance: cf.get("window-padding-balance") == "true",
+            keybinds: cf.getAll("keybind")
+        )
+    }
+
+    private func writeSettingsModel(_ model: GhosttySettingsModel, to cf: GhosttyConfigFile) {
+        // Write keybinds (repeatable key)
+        cf.setAll("keybind", values: model.keybinds)
+        if model.fontFamily.isEmpty {
+            cf.remove("font-family")
+        } else {
+            cf.set("font-family", value: model.fontFamily)
+        }
+        cf.set("font-size", value: "\(model.fontSize)")
+
+        if model.theme.isEmpty {
+            cf.remove("theme")
+        } else {
+            cf.set("theme", value: model.theme)
+        }
+
+        cf.set("cursor-style", value: model.cursorStyle)
+        cf.set("cursor-style-blink", value: model.cursorBlink ? "true" : "false")
+        cf.set("background-opacity", value: String(format: "%.2f", model.backgroundOpacity))
+        cf.set("macos-option-as-alt", value: model.macosOptionAsAlt)
+        cf.set("mouse-hide-while-typing", value: model.mouseHideWhileTyping ? "true" : "false")
+        cf.set("mouse-scroll-multiplier", value: "\(model.mouseScrollMultiplier)")
+        cf.set("copy-on-select", value: model.copyOnSelect)
+        cf.set("window-padding-balance", value: model.windowPaddingBalance ? "true" : "false")
+    }
+
+    /// Reload ghostty config and sync theme to window/sidebar/tmux.
+    private func reloadGhosttyConfig() {
+        guard let adapter = terminalAreaController?.terminalHost as? GhosttyAdapter else { return }
+        adapter.reloadConfig()
+
+        let themeInfo = adapter.themeInfo
+        mainWindowController?.window?.backgroundColor = themeInfo.background
+        mainWindowController?.window?.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        sidebarController?.updateAppearance(themeInfo: themeInfo)
+        terminalAreaController?.view.layer?.backgroundColor = themeInfo.background.cgColor
+
+        // Update settings window appearance
+        if let settingsWindow = settingsWindowController?.window {
+            settingsWindow.backgroundColor = themeInfo.background
+            settingsWindow.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        }
+
+        // Sync to tmux
+        if let tmuxBackend = workspaceManager?.tmuxBackend {
+            Task {
+                await TmuxThemeApplicator.apply(themeInfo: themeInfo, tmuxBackend: tmuxBackend)
+            }
+        }
+    }
+
     // MARK: - Main Menu (Task 5.4)
 
     private func setupMainMenu() {
@@ -259,7 +396,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About Mori", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
-        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(showSettingsMenuAction), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(showSettingsMenuAction), keyEquivalent: ",")
         settingsItem.target = self
         appMenu.addItem(settingsItem)
         appMenu.addItem(.separator())
@@ -280,7 +417,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         openProjectItem.target = self
         fileMenu.addItem(openProjectItem)
         fileMenu.addItem(.separator())
-        let closeItem = NSMenuItem(title: "Close Tab", action: #selector(closeWindowMenuAction), keyEquivalent: "w")
+        let closeTabFileItem = NSMenuItem(title: "Close Tab", action: #selector(closeTabMenuAction), keyEquivalent: "w")
+        closeTabFileItem.target = self
+        fileMenu.addItem(closeTabFileItem)
+        let closeItem = NSMenuItem(title: "Close Window", action: #selector(closeWindowMenuAction), keyEquivalent: "w")
+        closeItem.keyEquivalentModifierMask = [.command, .shift]
         closeItem.target = self
         fileMenu.addItem(closeItem)
         fileMenuItem.submenu = fileMenu
@@ -311,27 +452,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         viewMenuItem.submenu = viewMenu
         mainMenu.addItem(viewMenuItem)
 
-        // Session menu
+        // Session menu — Tab management (tmux windows)
         let sessionMenuItem = NSMenuItem()
         let sessionMenu = NSMenu(title: "Session")
 
-        let newWindowItem = NSMenuItem(title: "New Window", action: #selector(newWindowMenuAction), keyEquivalent: "t")
-        newWindowItem.target = self
-        sessionMenu.addItem(newWindowItem)
+        let newTabItem = NSMenuItem(title: "New Tab", action: #selector(newWindowMenuAction), keyEquivalent: "t")
+        newTabItem.target = self
+        sessionMenu.addItem(newTabItem)
+
+        let nextTabItem = NSMenuItem(title: "Next Tab", action: #selector(nextWindowMenuAction), keyEquivalent: "]")
+        nextTabItem.keyEquivalentModifierMask = [.command, .shift]
+        nextTabItem.target = self
+        sessionMenu.addItem(nextTabItem)
+
+        let prevTabItem = NSMenuItem(title: "Previous Tab", action: #selector(previousWindowMenuAction), keyEquivalent: "[")
+        prevTabItem.keyEquivalentModifierMask = [.command, .shift]
+        prevTabItem.target = self
+        sessionMenu.addItem(prevTabItem)
 
         sessionMenu.addItem(.separator())
 
-        let splitHItem = NSMenuItem(title: "Split Pane Right", action: #selector(splitHorizontalMenuAction), keyEquivalent: "d")
+        // Split pane management
+        let splitHItem = NSMenuItem(title: "Split Right", action: #selector(splitHorizontalMenuAction), keyEquivalent: "d")
         splitHItem.target = self
         sessionMenu.addItem(splitHItem)
 
-        let splitVItem = NSMenuItem(title: "Split Pane Down", action: #selector(splitVerticalMenuAction), keyEquivalent: "d")
+        let splitVItem = NSMenuItem(title: "Split Down", action: #selector(splitVerticalMenuAction), keyEquivalent: "d")
         splitVItem.keyEquivalentModifierMask = [.command, .shift]
         splitVItem.target = self
         sessionMenu.addItem(splitVItem)
 
         sessionMenu.addItem(.separator())
 
+        // Pane navigation
+        let nextPaneItem = NSMenuItem(title: "Next Pane", action: #selector(nextPaneMenuAction), keyEquivalent: "]")
+        nextPaneItem.target = self
+        sessionMenu.addItem(nextPaneItem)
+
+        let prevPaneItem = NSMenuItem(title: "Previous Pane", action: #selector(previousPaneMenuAction), keyEquivalent: "[")
+        prevPaneItem.target = self
+        sessionMenu.addItem(prevPaneItem)
+
+        let zoomPaneItem = NSMenuItem(title: "Toggle Pane Zoom", action: #selector(togglePaneZoomMenuAction), keyEquivalent: "\r")
+        zoomPaneItem.keyEquivalentModifierMask = [.command, .shift]
+        zoomPaneItem.target = self
+        sessionMenu.addItem(zoomPaneItem)
+
+        let equalizeItem = NSMenuItem(title: "Equalize Panes", action: #selector(equalizePanesMenuAction), keyEquivalent: "=")
+        equalizeItem.keyEquivalentModifierMask = [.command, .control]
+        equalizeItem.target = self
+        sessionMenu.addItem(equalizeItem)
+
+        sessionMenu.addItem(.separator())
+
+        // Tools
         let lazygitItem = NSMenuItem(title: "Open Lazygit", action: #selector(openLazygitMenuAction), keyEquivalent: "g")
         lazygitItem.target = self
         sessionMenu.addItem(lazygitItem)
@@ -339,18 +513,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let yaziItem = NSMenuItem(title: "Open Yazi", action: #selector(openYaziMenuAction), keyEquivalent: "e")
         yaziItem.target = self
         sessionMenu.addItem(yaziItem)
-
-        sessionMenu.addItem(.separator())
-
-        let nextWindowItem = NSMenuItem(title: "Next Window", action: #selector(nextWindowMenuAction), keyEquivalent: "]")
-        nextWindowItem.keyEquivalentModifierMask = [.command, .shift]
-        nextWindowItem.target = self
-        sessionMenu.addItem(nextWindowItem)
-
-        let prevWindowItem = NSMenuItem(title: "Previous Window", action: #selector(previousWindowMenuAction), keyEquivalent: "[")
-        prevWindowItem.keyEquivalentModifierMask = [.command, .shift]
-        prevWindowItem.target = self
-        sessionMenu.addItem(prevWindowItem)
 
         sessionMenuItem.submenu = sessionMenu
         mainMenu.addItem(sessionMenuItem)
@@ -381,8 +543,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     @objc private func closeWindowMenuAction() {
-        guard let manager = workspaceManager else { return }
-        Task { @MainActor in await manager.closeCurrentWindow() }
+        mainWindowController?.window?.close()
     }
 
     @objc private func openLazygitMenuAction() {
@@ -411,6 +572,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     @objc private func previousWindowMenuAction() {
         workspaceManager?.previousWindow()
+    }
+
+    @objc private func closeTabMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.closeCurrentWindow() }
+    }
+
+    @objc private func nextPaneMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.navigatePane(direction: .next) }
+    }
+
+    @objc private func previousPaneMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.navigatePane(direction: .previous) }
+    }
+
+    @objc private func togglePaneZoomMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.togglePaneZoom() }
+    }
+
+    @objc private func equalizePanesMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.equalizePanes() }
+    }
+
+    @objc private func navigatePaneUpMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.navigatePane(direction: .up) }
+    }
+
+    @objc private func navigatePaneDownMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.navigatePane(direction: .down) }
+    }
+
+    @objc private func navigatePaneLeftMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.navigatePane(direction: .left) }
+    }
+
+    @objc private func navigatePaneRightMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.navigatePane(direction: .right) }
+    }
+
+    @objc private func resizePaneUpMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.resizePane(direction: .up) }
+    }
+
+    @objc private func resizePaneDownMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.resizePane(direction: .down) }
+    }
+
+    @objc private func resizePaneLeftMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.resizePane(direction: .left) }
+    }
+
+    @objc private func resizePaneRightMenuAction() {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in await manager.resizePane(direction: .right) }
     }
 
     // MARK: - Tmux Missing Alert (Task 5.3)
@@ -445,20 +671,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             self.handlePaletteSelection(item, manager: manager)
         }
 
-        // Register Cmd+K and Cmd+1–9 local key monitor
+        // Register keyboard shortcuts that can't be expressed as menu key equivalents
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak palette, weak self] event in
-            guard event.modifierFlags.contains(.command) else { return event }
+            let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             let key = event.charactersIgnoringModifiers ?? ""
 
-            if key == "k" {
+            // Cmd+Shift+P: toggle command palette
+            if mods == [.command, .shift], key == "P" || key == "p" {
                 palette?.toggle()
                 return nil
             }
 
-            // Cmd+1 through Cmd+9: select visible worktree by index
-            if let digit = Int(key), digit >= 1, digit <= 9 {
-                self?.selectWorktreeByShortcut(index: digit)
+            // Cmd+1–9: select tmux window (tab) by index
+            if mods == [.command], let digit = Int(key), digit >= 1, digit <= 9 {
+                self?.workspaceManager?.selectWindowByIndex(digit)
                 return nil
+            }
+
+            // Ctrl+Tab / Ctrl+Shift+Tab: cycle worktrees
+            if event.keyCode == 48 { // Tab key
+                if mods == [.control] {
+                    self?.workspaceManager?.cycleWorktree(forward: true)
+                    return nil
+                }
+                if mods == [.control, .shift] {
+                    self?.workspaceManager?.cycleWorktree(forward: false)
+                    return nil
+                }
+            }
+
+            // Cmd+Alt+Arrows: directional pane navigation
+            if mods == [.command, .option] {
+                switch event.keyCode {
+                case 126: // Up
+                    Task { @MainActor in await self?.workspaceManager?.navigatePane(direction: .up) }
+                    return nil
+                case 125: // Down
+                    Task { @MainActor in await self?.workspaceManager?.navigatePane(direction: .down) }
+                    return nil
+                case 123: // Left
+                    Task { @MainActor in await self?.workspaceManager?.navigatePane(direction: .left) }
+                    return nil
+                case 124: // Right
+                    Task { @MainActor in await self?.workspaceManager?.navigatePane(direction: .right) }
+                    return nil
+                default: break
+                }
+            }
+
+            // Cmd+Ctrl+Arrows: resize pane
+            if mods == [.command, .control] {
+                switch event.keyCode {
+                case 126: // Up
+                    Task { @MainActor in await self?.workspaceManager?.resizePane(direction: .up) }
+                    return nil
+                case 125: // Down
+                    Task { @MainActor in await self?.workspaceManager?.resizePane(direction: .down) }
+                    return nil
+                case 123: // Left
+                    Task { @MainActor in await self?.workspaceManager?.resizePane(direction: .left) }
+                    return nil
+                case 124: // Right
+                    Task { @MainActor in await self?.workspaceManager?.resizePane(direction: .right) }
+                    return nil
+                default: break
+                }
             }
 
             return event
@@ -539,23 +816,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     // MARK: - Helpers
 
-    /// Select the Nth visible worktree (1-indexed) across all non-collapsed projects.
-    private func selectWorktreeByShortcut(index: Int) {
-        guard let appState, let manager = workspaceManager else { return }
-        var count = 0
-        for project in appState.projects where !project.isCollapsed {
-            let projectWorktrees = appState.worktrees.filter { $0.projectId == project.id }
-            for worktree in projectWorktrees {
-                count += 1
-                if count == index {
-                    manager.selectWorktree(worktree.id)
-                    updateWindowTitle()
-                    return
-                }
-            }
-        }
-    }
-
     private func updateWindowTitle() {
         mainWindowController?.updateTitle(
             projectName: appState?.selectedProject?.name,
@@ -567,53 +827,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     @objc private func showSettingsMenuAction() {
         showSettingsWindow()
-    }
-
-    private func showSettingsWindow() {
-        // If already open, bring to front
-        if let existing = settingsWindowController?.window, existing.isVisible {
-            existing.makeKeyAndOrderFront(nil)
-            return
-        }
-
-        // Reload from disk so we always show the persisted state
-        self.terminalSettings = TerminalSettings.load()
-
-        // Wrapper view uses @State so SwiftUI properly tracks changes and
-        // re-renders dependent UI (theme preview, etc.) on every edit.
-        let settingsView = SettingsWindowContent(
-            initial: self.terminalSettings,
-            onChanged: { [weak self] newSettings in
-                guard let self else { return }
-                self.terminalSettings = newSettings
-                self.terminalSettings.save()
-                self.appState?.terminalSettings = newSettings
-                self.terminalAreaController?.applySettings(self.terminalSettings)
-                self.mainWindowController?.updateBackground(settings: self.terminalSettings)
-                self.sidebarController?.updateAppearance(settings: self.terminalSettings)
-                if let tmuxBackend = self.workspaceManager?.tmuxBackend {
-                    let settings = self.terminalSettings
-                    Task {
-                        await TmuxThemeApplicator.apply(settings: settings, tmuxBackend: tmuxBackend)
-                    }
-                }
-            }
-        )
-
-        let hostingController = NSHostingController(rootView: settingsView)
-        let window = NSWindow(contentViewController: hostingController)
-        window.title = "Settings"
-        window.styleMask = [.titled, .closable, .fullSizeContentView]
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.backgroundColor = NSColor(hex: self.terminalSettings.theme.background)
-        window.appearance = NSAppearance(named: self.terminalSettings.theme.isDark ? .darkAqua : .aqua)
-        window.center()
-        window.setFrameAutosaveName("MoriSettings")
-
-        let controller = NSWindowController(window: window)
-        self.settingsWindowController = controller
-        controller.showWindow(nil)
     }
 
     // MARK: - Single Instance (Task 3.8)
@@ -666,28 +879,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 // MARK: - Settings Window Wrapper
 
 /// Thin wrapper that gives SwiftUI `@State` ownership of the settings value
-/// so pickers, sliders, and the theme preview all update in sync.
-/// Also updates the settings window's own appearance when the theme changes.
+/// so all controls update in sync.
 private struct SettingsWindowContent: View {
-    @State var settings: TerminalSettings
-    var onChanged: (TerminalSettings) -> Void
+    @State var model: GhosttySettingsModel
+    let availableThemes: [String]
+    let ghosttyDefaults: [String]
+    var onChanged: (GhosttySettingsModel) -> Void
+    var onOpenConfigFile: () -> Void
 
-    init(initial: TerminalSettings, onChanged: @escaping (TerminalSettings) -> Void) {
-        self._settings = State(initialValue: initial)
+    init(
+        initial: GhosttySettingsModel,
+        availableThemes: [String],
+        ghosttyDefaults: [String] = [],
+        onChanged: @escaping (GhosttySettingsModel) -> Void,
+        onOpenConfigFile: @escaping () -> Void
+    ) {
+        self._model = State(initialValue: initial)
+        self.availableThemes = availableThemes
+        self.ghosttyDefaults = ghosttyDefaults
         self.onChanged = onChanged
+        self.onOpenConfigFile = onOpenConfigFile
     }
 
     var body: some View {
-        TerminalSettingsView(settings: $settings, onChanged: {
-            onChanged(settings)
-            updateSettingsWindowAppearance()
-        })
-    }
-
-    private func updateSettingsWindowAppearance() {
-        guard let window = NSApp.windows.first(where: { $0.frameAutosaveName == "MoriSettings" }) else { return }
-        let theme = settings.theme
-        window.backgroundColor = NSColor(hex: theme.background)
-        window.appearance = NSAppearance(named: theme.isDark ? .darkAqua : .aqua)
+        GhosttySettingsView(
+            model: $model,
+            availableThemes: availableThemes,
+            ghosttyDefaults: ghosttyDefaults,
+            onChanged: { onChanged(model) },
+            onOpenConfigFile: onOpenConfigFile
+        )
     }
 }

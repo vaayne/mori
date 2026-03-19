@@ -84,13 +84,6 @@ public final class TerminalSurfaceCache {
         entries.count
     }
 
-    /// Apply current terminal host settings to all cached surfaces.
-    public func applySettingsToAll() {
-        for entry in entries.values {
-            terminalHost.applySettings(to: entry.surface)
-        }
-    }
-
     // MARK: - Private
 
     private func evictLRU() {

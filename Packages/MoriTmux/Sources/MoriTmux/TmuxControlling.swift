@@ -57,6 +57,18 @@ public protocol TmuxControlling: Sendable {
     /// Force all clients to refresh their display.
     func refreshClients() async throws
 
+    /// Navigate to a pane by direction (up/down/left/right/next/previous).
+    func navigatePane(sessionId: String, direction: PaneDirection) async throws
+
+    /// Resize the active pane in the given direction by the specified amount of cells.
+    func resizePane(sessionId: String, direction: PaneDirection, amount: Int) async throws
+
+    /// Toggle zoom on the active pane in the session.
+    func togglePaneZoom(sessionId: String) async throws
+
+    /// Equalize pane sizes in the active window (tiled layout).
+    func equalizePanes(sessionId: String) async throws
+
     /// Capture the visible output of a pane.
     /// - Parameters:
     ///   - paneId: The tmux pane ID (e.g. "%0").
@@ -115,5 +127,21 @@ public extension TmuxControlling {
 
     func capturePaneOutput(paneId: String, lineCount: Int) async throws -> String {
         throw TmuxError.notYetImplemented("capturePaneOutput")
+    }
+
+    func navigatePane(sessionId: String, direction: PaneDirection) async throws {
+        throw TmuxError.notYetImplemented("navigatePane")
+    }
+
+    func resizePane(sessionId: String, direction: PaneDirection, amount: Int) async throws {
+        throw TmuxError.notYetImplemented("resizePane")
+    }
+
+    func togglePaneZoom(sessionId: String) async throws {
+        throw TmuxError.notYetImplemented("togglePaneZoom")
+    }
+
+    func equalizePanes(sessionId: String) async throws {
+        throw TmuxError.notYetImplemented("equalizePanes")
     }
 }
