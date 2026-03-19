@@ -18,6 +18,25 @@ public enum TmuxError: Error, LocalizedError, Sendable {
     }
 }
 
+/// Thread-safe, Sendable wrapper around CheckedContinuation to ensure single resume.
+private final class SendableResumeGuard<T>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var resumed = false
+    private let continuation: CheckedContinuation<T, any Error>
+
+    init(continuation: CheckedContinuation<T, any Error>) {
+        self.continuation = continuation
+    }
+
+    func resume(with result: sending Result<T, any Error>) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !resumed else { return }
+        resumed = true
+        continuation.resume(with: result)
+    }
+}
+
 /// Runs tmux commands via `Process` (Foundation).
 /// Resolves the tmux binary path via PATH lookup with common fallback locations.
 /// Loads the user's login shell environment on first use so that tools installed
@@ -34,19 +53,32 @@ public actor TmuxCommandRunner {
 
     // MARK: - Shell Environment
 
-    /// Load the user's login shell environment by running `env` inside their default shell.
-    /// This ensures PATH includes Homebrew, mise, nix, and other user-configured paths.
+    /// Load the user's shell environment for running tmux commands.
+    /// First tries the inherited process environment (fast — works when launched from terminal).
+    /// Falls back to spawning a login shell to discover PATH (for .app bundle launches).
     private func loadShellEnvironment() async -> [String: String] {
         if let cached = shellEnvironment {
             return cached
         }
 
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        // Try the inherited process environment first — this is instant and works
+        // when launched from a terminal that already has the full PATH.
+        let processEnv = ProcessInfo.processInfo.environment
+        if hasTmuxOnPath(processEnv) {
+            shellEnvironment = processEnv
+            return processEnv
+        }
+
+        // Fallback: spawn a login shell to discover the full PATH.
+        // Needed when launched as a .app bundle with a minimal environment.
+        let shell = processEnv["SHELL"] ?? "/bin/zsh"
         do {
             let (output, _, exitCode) = try await runProcess(
                 executablePath: shell,
                 arguments: ["-l", "-i", "-c", "env"],
-                environment: nil
+                environment: processEnv,
+                stdinNull: true,
+                timeoutSeconds: 10
             )
             if exitCode == 0 {
                 var env: [String: String] = [:]
@@ -64,9 +96,20 @@ public actor TmuxCommandRunner {
             // Fall through to process environment
         }
 
-        let env = ProcessInfo.processInfo.environment
-        shellEnvironment = env
-        return env
+        shellEnvironment = processEnv
+        return processEnv
+    }
+
+    /// Quick check: is tmux findable on PATH in the given environment?
+    private func hasTmuxOnPath(_ env: [String: String]) -> Bool {
+        let commonPaths = ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux"]
+        for path in commonPaths {
+            if FileManager.default.isExecutableFile(atPath: path) { return true }
+        }
+        guard let pathVar = env["PATH"] else { return false }
+        return pathVar.split(separator: ":").contains { dir in
+            FileManager.default.isExecutableFile(atPath: "\(dir)/tmux")
+        }
     }
 
     // MARK: - Binary Resolution
@@ -152,7 +195,9 @@ public actor TmuxCommandRunner {
     private func runProcess(
         executablePath: String,
         arguments: [String],
-        environment: [String: String]?
+        environment: [String: String]?,
+        stdinNull: Bool = false,
+        timeoutSeconds: Int? = nil
     ) async throws -> (output: String, stderr: String, exitCode: Int32) {
         try await withCheckedThrowingContinuation { continuation in
             let process = Process()
@@ -166,11 +211,16 @@ public actor TmuxCommandRunner {
             }
             process.standardOutput = stdoutPipe
             process.standardError = stderrPipe
+            if stdinNull {
+                process.standardInput = FileHandle.nullDevice
+            }
+
+            let guard_ = SendableResumeGuard(continuation: continuation)
 
             do {
                 try process.run()
             } catch {
-                continuation.resume(throwing: error)
+                guard_.resume(with: .failure(error))
                 return
             }
 
@@ -180,7 +230,16 @@ public actor TmuxCommandRunner {
                 let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
                 let output = String(data: outData, encoding: .utf8) ?? ""
                 let stderr = String(data: errData, encoding: .utf8) ?? ""
-                continuation.resume(returning: (output, stderr, process.terminationStatus))
+                guard_.resume(with: .success((output, stderr, process.terminationStatus)))
+            }
+
+            // Kill the process if it exceeds the timeout
+            if let timeoutSeconds {
+                DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(timeoutSeconds)) {
+                    if process.isRunning {
+                        process.terminate()
+                    }
+                }
             }
         }
     }
