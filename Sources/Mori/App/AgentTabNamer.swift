@@ -12,8 +12,8 @@ final class AgentTabNamer {
 
     /// Emoji + label for each known agent process name.
     static let agentLabels: [String: String] = [
-        "claude": "🤖 claude",
-        "codex": "🧠 codex",
+        "claude": "✦ claude",
+        "codex": "🟩 codex",
         "omp": "🥧 pi",
         "pi": "🥧 pi",
         "droid": "🤖 droid",
