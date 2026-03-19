@@ -45,7 +45,7 @@ public actor TmuxCommandRunner {
         do {
             let (output, _, exitCode) = try await runProcess(
                 executablePath: shell,
-                arguments: ["-l", "-c", "env"],
+                arguments: ["-l", "-i", "-c", "env"],
                 environment: nil
             )
             if exitCode == 0 {

@@ -42,10 +42,11 @@ public final class GhosttyAdapter: TerminalHost {
 
         let surfaceView = GhosttySurfaceView(frame: .zero)
 
-        // Wrap command in a login shell so PATH includes mise-installed tools.
-        // Ghostty's default execution uses /bin/bash --noprofile --norc which
-        // skips profile loading, making tools like tmux unavailable.
-        let shellCommand = "/bin/zsh -l -c " + shellEscape(command)
+        // Wrap command in the user's interactive login shell so PATH includes
+        // mise/nvm/pyenv/etc. Ghostty's default execution uses /bin/bash --noprofile
+        // --norc which skips profile loading, making tools like tmux unavailable.
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let shellCommand = shell + " -l -i -c " + shellEscape(command)
         let cCommand = strdup(shellCommand)
         let cWorkDir = strdup(workingDirectory)
         defer { free(cCommand); free(cWorkDir) }
