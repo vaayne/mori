@@ -232,7 +232,9 @@ public actor TmuxBackend: TmuxControlling {
 
     public func navigatePane(sessionId: String, direction: PaneDirection) async throws {
         if let target = direction.selectTarget {
-            _ = try await runner.run("select-pane", "-t", "\(sessionId):\(target)")
+            // "session:.{next}" = next pane in the current window of the session
+            // The dot targets the current window; {next}/{previous} targets the pane.
+            _ = try await runner.run("select-pane", "-t", "\(sessionId):.\(target)")
         } else {
             _ = try await runner.run("select-pane", "-t", sessionId, "-\(direction.rawValue)")
         }

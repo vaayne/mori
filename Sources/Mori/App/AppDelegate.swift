@@ -688,6 +688,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 }
             }
 
+            // Cmd+]/[: next/previous pane (keyCode 30 = ], 33 = [)
+            if mods == [.command], event.keyCode == 30 {
+                Task { @MainActor in await self?.workspaceManager?.navigatePane(direction: .next) }
+                return nil
+            }
+            if mods == [.command], event.keyCode == 33 {
+                Task { @MainActor in await self?.workspaceManager?.navigatePane(direction: .previous) }
+                return nil
+            }
+
+            // Cmd+Shift+]/[: next/previous tab
+            if mods == [.command, .shift], event.keyCode == 30 {
+                self?.workspaceManager?.nextWindow()
+                return nil
+            }
+            if mods == [.command, .shift], event.keyCode == 33 {
+                self?.workspaceManager?.previousWindow()
+                return nil
+            }
+
             // Cmd+Alt+Arrows: directional pane navigation
             if mods == [.command, .option] {
                 switch event.keyCode {
