@@ -136,7 +136,6 @@ public struct GhosttySettingsView: View {
             .padding(.bottom, 8)
         }
         .frame(width: 180)
-        .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
     }
 
     private func sidebarRow(_ category: SettingsCategory) -> some View {
@@ -192,7 +191,6 @@ public struct GhosttySettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 

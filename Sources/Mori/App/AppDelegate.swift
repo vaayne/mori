@@ -319,6 +319,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         )
 
         let hostingController = NSHostingController(rootView: settingsView)
+        hostingController.view.wantsLayer = true
+        hostingController.view.layer?.backgroundColor = themeInfo.background.cgColor
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Settings"
         window.styleMask = [.titled, .closable, .fullSizeContentView]
@@ -392,6 +394,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if let settingsWindow = settingsWindowController?.window {
             settingsWindow.backgroundColor = themeInfo.background
             settingsWindow.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+            settingsWindow.contentViewController?.view.wantsLayer = true
+            settingsWindow.contentViewController?.view.layer?.backgroundColor = themeInfo.background.cgColor
         }
 
         // Sync to tmux

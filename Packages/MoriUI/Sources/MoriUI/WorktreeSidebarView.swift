@@ -84,8 +84,6 @@ public struct WorktreeSidebarView: View {
             sidebarFooter
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(sidebarBackground)
-        .preferredColorScheme(.dark)
     }
 
     // MARK: - Project Section
@@ -378,12 +376,6 @@ public struct WorktreeSidebarView: View {
     }
 
     // MARK: - Helpers
-
-    // MARK: - Theme
-
-    private var sidebarBackground: Color {
-        Color(nsColor: .controlBackgroundColor)
-    }
 
     // MARK: - Footer
 

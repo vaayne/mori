@@ -52,6 +52,8 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
     /// Sync the hosting controller's view appearance with the ghostty theme.
     func updateAppearance(themeInfo: GhosttyThemeInfo) {
         view.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        view.wantsLayer = true
+        view.layer?.backgroundColor = themeInfo.background.cgColor
     }
 }
 
