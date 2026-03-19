@@ -732,6 +732,17 @@ final class WorkspaceManager {
             appState.worktrees[i].agentState = .none
         }
 
+        // Single ps call to find agent child processes across all panes
+        let panePids: [(paneId: String, panePid: String)] = sessions.flatMap { session in
+            session.windows.flatMap { window in
+                window.panes.compactMap { pane in
+                    guard let pid = pane.pid else { return nil }
+                    return (paneId: pane.paneId, panePid: pid)
+                }
+            }
+        }
+        let childAgents = AgentDetector.scanForAgentProcesses(panes: panePids)
+
         var activeWindowIds = Set<String>()
 
         for i in appState.runtimeWindows.indices {
@@ -763,7 +774,9 @@ final class WorkspaceManager {
                 if paneLongRunning { windowIsLongRunning = true }
 
                 // Check if this pane is running a known coding agent
-                let isAgent = AgentDetector.isAgentProcess(pane.currentCommand)
+                let isAgentByCommand = AgentDetector.isAgentProcess(pane.currentCommand)
+                let isAgentByChild = childAgents[pane.paneId] != nil
+                let isAgent = isAgentByCommand || isAgentByChild
                 let shouldCapture = rw.tag == .agent || isAgent
 
                 if shouldCapture {
@@ -778,7 +791,8 @@ final class WorkspaceManager {
                             if let detected = AgentDetector.detect(
                                 pane: pane,
                                 capturedOutput: captured,
-                                now: now
+                                now: now,
+                                childProcesses: childAgents
                             ) {
                                 windowDetectedAgent = detected.processName
                                 let agentState = mapAgentState(detected.state)

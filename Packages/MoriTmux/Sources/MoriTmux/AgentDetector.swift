@@ -29,24 +29,87 @@ public enum AgentDetector {
     }
 
     /// Detect a coding agent and its state from pane data.
+    /// Checks both `pane_current_command` and the child process map.
     /// Returns nil if the pane is not running a known agent.
     public static func detect(
         pane: TmuxPane,
         capturedOutput: String,
-        now: TimeInterval
+        now: TimeInterval,
+        childProcesses: [String: String] = [:]
     ) -> DetectedAgent? {
-        guard let command = pane.currentCommand,
-              agentProcessNames.contains(command) else {
-            return nil
+        // First check pane_current_command directly
+        var agentName: String? = nil
+        if let command = pane.currentCommand, agentProcessNames.contains(command) {
+            agentName = command
         }
+
+        // Fallback: check child processes of pane_pid
+        // tmux reports shell as pane_current_command; the agent is a child process
+        if agentName == nil, let childName = childProcesses[pane.paneId] {
+            agentName = childName
+        }
+
+        guard let agentName else { return nil }
 
         let lines = capturedOutput
             .split(separator: "\n", omittingEmptySubsequences: false)
             .suffix(20)
             .map { String($0) }
 
-        let state = detectState(processName: command, lines: lines)
-        return DetectedAgent(processName: command, state: state)
+        let state = detectState(processName: agentName, lines: lines)
+        return DetectedAgent(processName: agentName, state: state)
+    }
+
+    /// Scan all running processes and build a map of [paneId: agentProcessName]
+    /// for panes whose child process is a known coding agent.
+    /// Performs a single `ps` call — O(1) shell invocations regardless of pane count.
+    public static func scanForAgentProcesses(
+        panes: [(paneId: String, panePid: String)]
+    ) -> [String: String] {
+        // Build pid -> paneId lookup
+        var pidToPaneId: [String: String] = [:]
+        for (paneId, panePid) in panes {
+            pidToPaneId[panePid] = paneId
+        }
+
+        guard !pidToPaneId.isEmpty else { return [:] }
+
+        // Single ps call to get all processes with their parent PID and command
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/ps")
+        process.arguments = ["-eo", "ppid,comm"]
+        process.standardInput = FileHandle.nullDevice
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return [:]
+        }
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard let output = String(data: data, encoding: .utf8) else { return [:] }
+
+        var result: [String: String] = [:]
+        for line in output.split(separator: "\n") {
+            let parts = line.trimmingCharacters(in: .whitespaces)
+                .split(separator: " ", maxSplits: 1)
+            guard parts.count == 2 else { continue }
+            let ppid = String(parts[0])
+            let comm = String(parts[1])
+
+            // Extract just the binary name from the full path
+            let name = comm.split(separator: "/").last.map(String.init) ?? comm
+
+            if let paneId = pidToPaneId[ppid], agentProcessNames.contains(name) {
+                result[paneId] = name
+            }
+        }
+
+        return result
     }
 
     // MARK: - State Detection

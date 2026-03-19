@@ -33,6 +33,8 @@ public struct TmuxPane: Identifiable, Equatable, Sendable {
     public let currentCommand: String?
     /// Unix timestamp (seconds since epoch) of when the pane's current command started, from `#{pane_start_time}`.
     public let startTime: TimeInterval?
+    /// Process ID of the pane's shell process, from `#{pane_pid}`.
+    public let pid: String?
 
     public init(
         paneId: String,
@@ -42,7 +44,8 @@ public struct TmuxPane: Identifiable, Equatable, Sendable {
         title: String? = nil,
         lastActivity: TimeInterval? = nil,
         currentCommand: String? = nil,
-        startTime: TimeInterval? = nil
+        startTime: TimeInterval? = nil,
+        pid: String? = nil
     ) {
         self.paneId = paneId
         self.tty = tty
@@ -52,5 +55,6 @@ public struct TmuxPane: Identifiable, Equatable, Sendable {
         self.lastActivity = lastActivity
         self.currentCommand = currentCommand
         self.startTime = startTime
+        self.pid = pid
     }
 }

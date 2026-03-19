@@ -38,6 +38,7 @@ public enum TmuxParser {
         "#{pane_activity}",
         "#{pane_current_command}",
         "#{pane_start_time}",
+        "#{pane_pid}",
     ].joined(separator: delimiter)
 
     // MARK: - Parsing
@@ -90,6 +91,7 @@ public enum TmuxParser {
             let lastActivity: TimeInterval? = fields.count >= 6 ? Double(fields[5]) : nil
             let currentCommand: String? = fields.count >= 7 && !fields[6].isEmpty ? fields[6] : nil
             let startTime: TimeInterval? = fields.count >= 8 ? Double(fields[7]) : nil
+            let pid: String? = fields.count >= 9 && !fields[8].isEmpty ? fields[8] : nil
             return TmuxPane(
                 paneId: paneId,
                 tty: tty,
@@ -98,7 +100,8 @@ public enum TmuxParser {
                 title: title,
                 lastActivity: lastActivity,
                 currentCommand: currentCommand,
-                startTime: startTime
+                startTime: startTime,
+                pid: pid
             )
         }
     }
