@@ -26,7 +26,7 @@ final class TerminalAreaViewController: NSViewController {
     // MARK: - Init
 
     init(terminalHost: TerminalHost? = nil) {
-        let host = terminalHost ?? SwiftTermAdapter()
+        let host = terminalHost ?? GhosttyAdapter()
         self.terminalHost = host
         self.surfaceCache = TerminalSurfaceCache(maxSize: 3, terminalHost: host)
         super.init(nibName: nil, bundle: nil)

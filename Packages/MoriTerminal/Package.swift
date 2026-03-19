@@ -17,7 +17,10 @@ let package = Package(
         .target(
             name: "MoriTerminal",
             dependencies: ["MoriCore", "GhosttyKit"],
-            path: "Sources/MoriTerminal"
+            path: "Sources/MoriTerminal",
+            linkerSettings: [
+                .linkedFramework("Carbon"),
+            ]
         ),
         .binaryTarget(
             name: "GhosttyKit",
