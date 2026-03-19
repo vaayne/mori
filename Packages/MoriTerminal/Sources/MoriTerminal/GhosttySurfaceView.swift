@@ -208,6 +208,60 @@ public final class GhosttySurfaceView: NSView {
         sendMousePos(event)
     }
 
+    public override func rightMouseDragged(with event: NSEvent) {
+        sendMousePos(event)
+    }
+
+    public override func otherMouseDragged(with event: NSEvent) {
+        sendMousePos(event)
+    }
+
+    // MARK: - Key Equivalents (Cmd+C/V)
+
+    public override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.type == .keyDown else { return false }
+        guard ghosttySurface != nil else { return false }
+
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        // Handle Cmd+C (copy) and Cmd+V (paste) via ghostty binding actions
+        if modifiers == .command {
+            switch event.charactersIgnoringModifiers {
+            case "c":
+                performSurfaceAction("copy_to_clipboard")
+                return true
+            case "v":
+                performSurfaceAction("paste_from_clipboard")
+                return true
+            default:
+                break
+            }
+        }
+
+        // Forward all other key equivalents to keyDown for ghostty processing
+        keyDown(with: event)
+        return true
+    }
+
+    private func performSurfaceAction(_ action: String) {
+        guard let surface = ghosttySurface else { return }
+        _ = ghostty_surface_binding_action(surface, action, UInt(action.utf8.count))
+    }
+
+    // MARK: - Copy/Paste IBActions
+
+    @objc func copy(_ sender: Any?) {
+        performSurfaceAction("copy_to_clipboard")
+    }
+
+    @objc func paste(_ sender: Any?) {
+        performSurfaceAction("paste_from_clipboard")
+    }
+
+    public override func selectAll(_ sender: Any?) {
+        performSurfaceAction("select_all")
+    }
+
     public override func scrollWheel(with event: NSEvent) {
         guard let surface = ghosttySurface else { return }
         var scrollMods: ghostty_input_scroll_mods_t = 0
