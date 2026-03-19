@@ -31,8 +31,11 @@ public final class GhosttyAdapter: TerminalHost {
 
         let surfaceView = GhosttySurfaceView(frame: .zero)
 
-        // Build surface config with C string lifetimes managed via strdup
-        let cCommand = strdup(command)
+        // Wrap command in a login shell so PATH includes mise-installed tools.
+        // Ghostty's default execution uses /bin/bash --noprofile --norc which
+        // skips profile loading, making tools like tmux unavailable.
+        let shellCommand = "/bin/zsh -l -c " + shellEscape(command)
+        let cCommand = strdup(shellCommand)
         let cWorkDir = strdup(workingDirectory)
         defer { free(cCommand); free(cWorkDir) }
 
@@ -114,4 +117,9 @@ public final class GhosttyAdapter: TerminalHost {
         GhosttyApp.shared.updateSurfaceConfig(surface: ghosttySurface, settings: settings)
     }
 
+    // MARK: - Private
+
+    private func shellEscape(_ str: String) -> String {
+        "'" + str.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
 }
