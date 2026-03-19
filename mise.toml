@@ -6,6 +6,7 @@ ripgrep = "latest"
 fd = "latest"
 xcbeautify = "latest"
 tmux = "latest"
+zig = "0.15.2"
 
 [env]
 PROJECT_NAME = "Mori"
@@ -43,6 +44,10 @@ run = "cd Packages/MoriTmux && swift run MoriTmuxTests"
 
 [tasks."test:ipc"]
 run = "cd Packages/MoriIPC && swift run MoriIPCTests"
+
+[tasks."build:ghostty"]
+description = "Build GhosttyKit XCFramework from source"
+run = "bash scripts/build-ghostty.sh"
 
 [tasks.bundle]
 description = "Build release and create Mori.app bundle"
