@@ -18,6 +18,8 @@ public struct RuntimeWindow: Identifiable, Codable, Equatable, Sendable {
     public var isRunning: Bool
     public var isLongRunning: Bool
     public var agentState: AgentState
+    /// Process name of a detected coding agent (e.g. "claude", "codex"), nil if none.
+    public var detectedAgent: String?
 
     public init(
         tmuxWindowId: String,
@@ -35,7 +37,8 @@ public struct RuntimeWindow: Identifiable, Codable, Equatable, Sendable {
         lastExitCode: Int? = nil,
         isRunning: Bool = false,
         isLongRunning: Bool = false,
-        agentState: AgentState = .none
+        agentState: AgentState = .none,
+        detectedAgent: String? = nil
     ) {
         self.tmuxWindowId = tmuxWindowId
         self.worktreeId = worktreeId
@@ -53,5 +56,6 @@ public struct RuntimeWindow: Identifiable, Codable, Equatable, Sendable {
         self.isRunning = isRunning
         self.isLongRunning = isLongRunning
         self.agentState = agentState
+        self.detectedAgent = detectedAgent
     }
 }

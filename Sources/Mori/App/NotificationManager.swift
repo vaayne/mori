@@ -44,7 +44,8 @@ final class NotificationManager: NSObject {
         windowTitle: String,
         worktreeName: String,
         windowId: String,
-        worktreeId: String
+        worktreeId: String,
+        agentName: String? = nil
     ) {
         requestPermissionIfNeeded()
 
@@ -57,15 +58,15 @@ final class NotificationManager: NSObject {
 
         switch event {
         case .agentWaiting:
-            content.title = "Agent Waiting for Input"
+            content.title = agentName.map { "\($0) Waiting for Input" } ?? "Agent Waiting for Input"
             content.body = "\(windowTitle) in \(worktreeName) needs your attention."
             content.sound = .default
         case .commandError:
-            content.title = "Command Error"
+            content.title = agentName.map { "\($0) Error" } ?? "Command Error"
             content.body = "\(windowTitle) in \(worktreeName) encountered an error."
             content.sound = .default
         case .longRunningComplete:
-            content.title = "Command Finished"
+            content.title = agentName.map { "\($0) Finished" } ?? "Command Finished"
             content.body = "\(windowTitle) in \(worktreeName) has completed."
             content.sound = .default
         }

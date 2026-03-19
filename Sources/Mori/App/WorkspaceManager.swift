@@ -39,6 +39,7 @@ final class WorkspaceManager {
     let unreadTracker: UnreadTracker
     let notificationManager: NotificationManager
     let hookRunner: HookRunner
+    let agentTabNamer: AgentTabNamer
 
     /// Callback invoked when the terminal should switch to a different session.
     /// Parameters: (sessionName, workingDirectory)
@@ -81,6 +82,7 @@ final class WorkspaceManager {
         self.unreadTracker = UnreadTracker()
         self.notificationManager = NotificationManager()
         self.hookRunner = HookRunner(tmuxBackend: tmuxBackend)
+        self.agentTabNamer = AgentTabNamer(tmuxBackend: tmuxBackend)
     }
 
     /// Whether tmux is available on this system.
@@ -730,11 +732,14 @@ final class WorkspaceManager {
             appState.worktrees[i].agentState = .none
         }
 
+        var activeWindowIds = Set<String>()
+
         for i in appState.runtimeWindows.indices {
             let rw = appState.runtimeWindows[i]
+            activeWindowIds.insert(rw.tmuxWindowId)
 
             // Find the matching tmux window across sessions
-            guard let (_, tmuxWindow) = findTmuxWindow(
+            guard let (session, tmuxWindow) = findTmuxWindow(
                 windowId: rw.tmuxWindowId,
                 in: sessions
             ) else { continue }
@@ -746,6 +751,7 @@ final class WorkspaceManager {
             var windowIsLongRunning = false
             var windowAgentState: AgentState = .none
             var windowExitCode: Int? = nil
+            var windowDetectedAgent: String? = nil
 
             for pane in tmuxWindow.panes {
                 let isShell = PaneStateDetector.isShellProcess(pane.currentCommand)
@@ -756,24 +762,44 @@ final class WorkspaceManager {
                 if paneRunning { windowIsRunning = true }
                 if paneLongRunning { windowIsLongRunning = true }
 
-                // Agent detection only for agent-tagged windows
-                if rw.tag == .agent {
+                // Check if this pane is running a known coding agent
+                let isAgent = AgentDetector.isAgentProcess(pane.currentCommand)
+                let shouldCapture = rw.tag == .agent || isAgent
+
+                if shouldCapture {
                     do {
                         let captured = try await tmuxBackend.capturePaneOutput(
                             paneId: pane.paneId,
                             lineCount: 20
                         )
-                        let paneState = PaneStateDetector.detect(
-                            pane: pane,
-                            capturedOutput: captured,
-                            now: now
-                        )
-                        let agentState = mapAgentState(paneState.detectedAgentState)
-                        if agentStatePriority(agentState) > agentStatePriority(windowAgentState) {
-                            windowAgentState = agentState
-                        }
-                        if let exitCode = paneState.exitCode {
-                            windowExitCode = exitCode
+
+                        if isAgent {
+                            // Use AgentDetector for known agents
+                            if let detected = AgentDetector.detect(
+                                pane: pane,
+                                capturedOutput: captured,
+                                now: now
+                            ) {
+                                windowDetectedAgent = detected.processName
+                                let agentState = mapAgentState(detected.state)
+                                if agentStatePriority(agentState) > agentStatePriority(windowAgentState) {
+                                    windowAgentState = agentState
+                                }
+                            }
+                        } else {
+                            // Fallback to generic PaneStateDetector for agent-tagged windows
+                            let paneState = PaneStateDetector.detect(
+                                pane: pane,
+                                capturedOutput: captured,
+                                now: now
+                            )
+                            let agentState = mapAgentState(paneState.detectedAgentState)
+                            if agentStatePriority(agentState) > agentStatePriority(windowAgentState) {
+                                windowAgentState = agentState
+                            }
+                            if let exitCode = paneState.exitCode {
+                                windowExitCode = exitCode
+                            }
                         }
                     } catch {
                         // capture-pane failure is non-fatal; skip this pane
@@ -781,11 +807,25 @@ final class WorkspaceManager {
                 }
             }
 
+            // Auto-upgrade tag to .agent when a coding agent is detected
+            if windowDetectedAgent != nil && rw.tag != .agent {
+                appState.runtimeWindows[i].tag = .agent
+            }
+
             // Update RuntimeWindow fields
             appState.runtimeWindows[i].isRunning = windowIsRunning
             appState.runtimeWindows[i].isLongRunning = windowIsLongRunning
             appState.runtimeWindows[i].agentState = windowAgentState
             appState.runtimeWindows[i].lastExitCode = windowExitCode
+            appState.runtimeWindows[i].detectedAgent = windowDetectedAgent
+
+            // Auto-rename tab for detected agents
+            await agentTabNamer.update(
+                windowId: rw.tmuxWindowId,
+                sessionId: session.sessionId,
+                currentTitle: tmuxWindow.name,
+                agentProcess: windowDetectedAgent
+            )
 
             // Derive badge from aggregated state
             let badge = StatusAggregator.windowBadge(
@@ -804,6 +844,9 @@ final class WorkspaceManager {
                 )
             }
         }
+
+        // Clean up stale entries in tab namer
+        agentTabNamer.pruneStaleEntries(activeWindowIds: activeWindowIds)
     }
 
     /// Find a tmux window by ID across all sessions.
@@ -951,12 +994,16 @@ final class WorkspaceManager {
                 let worktreeName = appState.worktrees
                     .first(where: { $0.id == rw.worktreeId })?.name ?? "Unknown"
 
+                let agentDisplayName = rw.detectedAgent
+                    .flatMap { AgentTabNamer.agentDisplayNames[$0] }
+
                 notificationManager.notify(
                     event,
                     windowTitle: rw.title,
                     worktreeName: worktreeName,
                     windowId: rw.tmuxWindowId,
-                    worktreeId: rw.worktreeId.uuidString
+                    worktreeId: rw.worktreeId.uuidString,
+                    agentName: agentDisplayName
                 )
             }
 

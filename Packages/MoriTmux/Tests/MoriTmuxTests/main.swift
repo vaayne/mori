@@ -488,6 +488,101 @@ func testPaneFormatContainsNewFields() {
     )
 }
 
+// MARK: - AgentDetector Tests
+
+func testAgentDetectorIsAgentProcess() {
+    assertTrue(AgentDetector.isAgentProcess("claude"))
+    assertTrue(AgentDetector.isAgentProcess("codex"))
+    assertTrue(AgentDetector.isAgentProcess("omp"))
+    assertTrue(AgentDetector.isAgentProcess("pi"))
+    assertTrue(AgentDetector.isAgentProcess("droid"))
+    assertTrue(AgentDetector.isAgentProcess("amp"))
+    assertTrue(AgentDetector.isAgentProcess("opencode"))
+}
+
+func testAgentDetectorIsNotAgentProcess() {
+    assertFalse(AgentDetector.isAgentProcess("zsh"))
+    assertFalse(AgentDetector.isAgentProcess("node"))
+    assertFalse(AgentDetector.isAgentProcess("python"))
+    assertFalse(AgentDetector.isAgentProcess(nil))
+    assertFalse(AgentDetector.isAgentProcess(""))
+}
+
+func testAgentDetectorDetectsClaude() {
+    let pane = TmuxPane(paneId: "%0", currentCommand: "claude")
+    let result = AgentDetector.detect(pane: pane, capturedOutput: "thinking...\n", now: 100)
+    assertEqual(result?.processName, "claude")
+    assertEqual(result?.state, .running)
+}
+
+func testAgentDetectorDetectsPi() {
+    let pane = TmuxPane(paneId: "%0", currentCommand: "omp")
+    let result = AgentDetector.detect(pane: pane, capturedOutput: "working\n", now: 100)
+    assertEqual(result?.processName, "omp")
+}
+
+func testAgentDetectorReturnsNilForShell() {
+    let pane = TmuxPane(paneId: "%0", currentCommand: "zsh")
+    let result = AgentDetector.detect(pane: pane, capturedOutput: "$ ", now: 100)
+    assertNil(result)
+}
+
+func testAgentDetectorClaudeWaitingPermission() {
+    let pane = TmuxPane(paneId: "%0", currentCommand: "claude")
+    let output = "I'd like to edit this file.\n  Allow  Deny\n"
+    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
+    assertEqual(result?.state, .waitingForInput)
+}
+
+func testAgentDetectorClaudeWaitingPrompt() {
+    let pane = TmuxPane(paneId: "%0", currentCommand: "claude")
+    let output = "Done editing.\n> "
+    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
+    assertEqual(result?.state, .waitingForInput)
+}
+
+func testAgentDetectorClaudeCompleted() {
+    let pane = TmuxPane(paneId: "%0", currentCommand: "claude")
+    let output = "All changes applied.\nTotal cost: $0.05\n"
+    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
+    assertEqual(result?.state, .completed)
+}
+
+func testAgentDetectorCodexWaiting() {
+    let pane = TmuxPane(paneId: "%0", currentCommand: "codex")
+    let output = "Changes ready.\n  Approve  Deny\n"
+    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
+    assertEqual(result?.state, .waitingForInput)
+}
+
+func testAgentDetectorAmpWaiting() {
+    let pane = TmuxPane(paneId: "%0", currentCommand: "amp")
+    let output = "Proposed changes:\n  Accept  Reject\n"
+    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
+    assertEqual(result?.state, .waitingForInput)
+}
+
+func testAgentDetectorGenericError() {
+    let pane = TmuxPane(paneId: "%0", currentCommand: "droid")
+    let output = "Processing...\nerror: something went wrong\n"
+    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
+    assertEqual(result?.state, .error)
+}
+
+func testAgentDetectorGenericWaiting() {
+    let pane = TmuxPane(paneId: "%0", currentCommand: "opencode")
+    let output = "Do you want to continue? [Y/n]\n"
+    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
+    assertEqual(result?.state, .waitingForInput)
+}
+
+func testAgentDetectorGenericRunning() {
+    let pane = TmuxPane(paneId: "%0", currentCommand: "droid")
+    let output = "Analyzing codebase...\nReading files...\n"
+    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
+    assertEqual(result?.state, .running)
+}
+
 // MARK: - Main
 
 print("=== MoriTmux Tests ===")
@@ -557,6 +652,21 @@ testIsShellProcess()
 testParsePanesWithCurrentCommand()
 testParsePanesWithEmptyCommandFields()
 testPaneFormatContainsNewFields()
+
+// AgentDetector
+testAgentDetectorIsAgentProcess()
+testAgentDetectorIsNotAgentProcess()
+testAgentDetectorDetectsClaude()
+testAgentDetectorDetectsPi()
+testAgentDetectorReturnsNilForShell()
+testAgentDetectorClaudeWaitingPermission()
+testAgentDetectorClaudeWaitingPrompt()
+testAgentDetectorClaudeCompleted()
+testAgentDetectorCodexWaiting()
+testAgentDetectorAmpWaiting()
+testAgentDetectorGenericError()
+testAgentDetectorGenericWaiting()
+testAgentDetectorGenericRunning()
 
 printResults()
 
