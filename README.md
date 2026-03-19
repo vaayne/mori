@@ -20,7 +20,7 @@ Instead of managing loose terminal tabs, Mori treats your git repositories as fi
 Project (git repo)
   └─ Worktree (branch checkout)
        └─ tmux Session
-            ├─ Window (tab)  →  Pane
+            ├─ Window (tab)   →  Pane
             ├─ Window         →  Pane | Pane
             └─ Window         →  Pane
 ```
@@ -84,17 +84,18 @@ Mori uses Ghostty's configuration system. Customize your terminal in `~/.config/
 
 See [docs/keymaps.md](docs/keymaps.md) for the full list. Highlights:
 
-| Shortcut | Action |
-|----------|--------|
-| `⌘T` | New tab (tmux window) |
-| `⌘W` | Close pane |
-| `⌘D` / `⌘⇧D` | Split right / down |
-| `⌘1`–`⌘9` | Go to tab N |
-| `⌃Tab` / `⌃⇧Tab` | Cycle worktrees |
-| `⌘⇧P` | Command palette |
-| `⌘B` | Toggle sidebar |
-| `⌘G` | Lazygit |
-| `⌘E` | Yazi |
+| Shortcut                                                     | Action                |
+| ------------------------------------------------------------ | --------------------- |
+| <kbd>⌘</kbd>+<kbd>T</kbd>                                    | New tab (tmux window) |
+| <kbd>⌘</kbd>+<kbd>W</kbd>                                    | Close pane            |
+| <kbd>⌘</kbd>+<kbd>D</kbd> / <kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>D</kbd> | Split right / down    |
+| <kbd>⌘</kbd>+<kbd>1</kbd>–<kbd>⌘</kbd>+<kbd>9</kbd>          | Go to tab N           |
+| <kbd>⌃</kbd>+<kbd>Tab</kbd> / <kbd>⌃</kbd>+<kbd>⇧</kbd>+<kbd>Tab</kbd> | Cycle worktrees       |
+| <kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>P</kbd>                       | Command palette       |
+| <kbd>⌘</kbd>+<kbd>B</kbd>                                    | Toggle sidebar        |
+| <kbd>⌘</kbd>+<kbd>G</kbd>                                    | Lazygit               |
+| <kbd>⌘</kbd>+<kbd>E</kbd>                                    | Yazi                  |
+
 
 ## License
 
