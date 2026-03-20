@@ -40,7 +40,8 @@ let package = Package(
                 .copy("Resources/mori-agent-hook.sh"),
                 .copy("Resources/mori-codex-hook.sh"),
                 .copy("Resources/mori-pi-extension.ts"),
-                .process("Resources/Localizable.xcstrings"),
+                .process("Resources/en.lproj"),
+                .process("Resources/zh-Hans.lproj"),
             ]
         ),
         .executableTarget(

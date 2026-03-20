@@ -1,0 +1,16 @@
+"Branch name" = "Branch name";
+"Create a new window in a worktree" = "Create a new window in a worktree";
+"Create a new worktree" = "Create a new worktree";
+"Error: %@" = "Error: %@";
+"Focus a project and worktree" = "Focus a project and worktree";
+"Keys to send" = "Keys to send";
+"List all projects" = "List all projects";
+"Mori workspace CLI — communicate with the running Mori app." = "Mori workspace CLI — communicate with the running Mori app.";
+"Open a project from a path" = "Open a project from a path";
+"Path to project directory" = "Path to project directory";
+"Project commands" = "Project commands";
+"Project name" = "Project name";
+"Send keys to a tmux window" = "Send keys to a tmux window";
+"Window name" = "Window name";
+"Worktree commands" = "Worktree commands";
+"Worktree name" = "Worktree name";

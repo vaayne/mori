@@ -1,0 +1,16 @@
+"Branch name" = "分支名称";
+"Create a new window in a worktree" = "在工作树中创建新窗口";
+"Create a new worktree" = "创建新工作树";
+"Error: %@" = "错误：%@";
+"Focus a project and worktree" = "聚焦到项目和工作树";
+"Keys to send" = "要发送的按键";
+"List all projects" = "列出所有项目";
+"Mori workspace CLI — communicate with the running Mori app." = "Mori 工作区 CLI — 与运行中的 Mori 应用通信。";
+"Open a project from a path" = "从路径打开项目";
+"Path to project directory" = "项目目录路径";
+"Project commands" = "项目命令";
+"Project name" = "项目名称";
+"Send keys to a tmux window" = "向 tmux 窗口发送按键";
+"Window name" = "窗口名称";
+"Worktree commands" = "工作树命令";
+"Worktree name" = "工作树名称";
