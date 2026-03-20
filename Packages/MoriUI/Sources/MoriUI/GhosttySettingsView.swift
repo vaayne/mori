@@ -383,7 +383,7 @@ private struct GeneralSettingsContent: View {
     ]
 
     @State private var selectedLocale: String = {
-        let lang = moriLanguageDefaults.string(forKey: "MoriLanguage") ?? "en"
+        let lang = String.moriLanguage
         return lang.lowercased().hasPrefix("zh") ? "zh-Hans" : "en"
     }()
 
@@ -401,7 +401,7 @@ private struct GeneralSettingsContent: View {
                 .labelsHidden()
                 .frame(width: 160)
                 .onChange(of: selectedLocale) { _, newValue in
-                    moriLanguageDefaults.set(newValue, forKey: "MoriLanguage")
+                    String.setMoriLanguage(newValue)
                 }
             }
 
