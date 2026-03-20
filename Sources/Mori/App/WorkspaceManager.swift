@@ -333,7 +333,8 @@ final class WorkspaceManager {
             repoPath: project.repoRootPath,
             path: worktreePath,
             branch: trimmed,
-            createBranch: true
+            createBranch: true,
+            baseBranch: nil
         )
 
         // Step 2: Create Worktree model and save to DB

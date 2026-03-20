@@ -21,11 +21,15 @@ public actor GitBackend: GitControlling {
         repoPath: String,
         path: String,
         branch: String,
-        createBranch: Bool
+        createBranch: Bool,
+        baseBranch: String? = nil
     ) async throws {
         var args = ["worktree", "add"]
         if createBranch {
             args += ["-b", branch, path]
+            if let baseBranch {
+                args.append(baseBranch)
+            }
         } else {
             args += [path, branch]
         }
