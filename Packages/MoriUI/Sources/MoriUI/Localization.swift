@@ -8,14 +8,22 @@ extension String {
         String(localized: key, bundle: .preferredLocalization)
     }
 
-    /// Read the current Mori language preference from the shared suite.
+    /// Read the current Mori language preference.
+    /// Checks shared suite first, then falls back to system locale.
     static var moriLanguage: String {
-        UserDefaults(suiteName: moriSharedSuite)?.string(forKey: moriLanguageKey) ?? "en"
+        if let lang = UserDefaults(suiteName: moriSharedSuite)?.string(forKey: moriLanguageKey) {
+            return lang
+        }
+        // Fall back to system locale so first-run respects macOS language
+        let system = Locale.preferredLanguages.first ?? "en"
+        return system.lowercased().hasPrefix("zh") ? "zh-Hans" : "en"
     }
 
-    /// Write the Mori language preference to the shared suite.
+    /// Write the Mori language preference to both shared suite and process defaults.
     static func setMoriLanguage(_ locale: String) {
         UserDefaults(suiteName: moriSharedSuite)?.set(locale, forKey: moriLanguageKey)
+        // Also set AppleLanguages so SwiftUI auto-localized Text() and AppKit pick it up
+        UserDefaults.standard.set([locale], forKey: "AppleLanguages")
     }
 }
 
