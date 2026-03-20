@@ -383,8 +383,8 @@ private struct GeneralSettingsContent: View {
     ]
 
     @State private var selectedLocale: String = {
-        let preferred = UserDefaults.standard.stringArray(forKey: "AppleLanguages")?.first ?? "en"
-        return preferred.lowercased().hasPrefix("zh") ? "zh-Hans" : "en"
+        let lang = moriLanguageDefaults.string(forKey: "MoriLanguage") ?? "en"
+        return lang.lowercased().hasPrefix("zh") ? "zh-Hans" : "en"
     }()
 
     var body: some View {
@@ -401,7 +401,7 @@ private struct GeneralSettingsContent: View {
                 .labelsHidden()
                 .frame(width: 160)
                 .onChange(of: selectedLocale) { _, newValue in
-                    UserDefaults.standard.set([newValue], forKey: "AppleLanguages")
+                    moriLanguageDefaults.set(newValue, forKey: "MoriLanguage")
                 }
             }
 
