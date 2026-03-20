@@ -14,13 +14,9 @@ enum AgentHookConfigurator {
 
     private static let home = FileManager.default.homeDirectoryForCurrentUser
 
-    private static var supportDir: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Mori")
-    }
-
     private static var hooksDir: URL {
-        supportDir.appendingPathComponent("hooks")
+        // Use ~/.config/mori/hooks/ — no spaces in path, avoids shell word-splitting
+        home.appendingPathComponent(".config/mori/hooks")
     }
 
     // MARK: - Public
