@@ -7,4 +7,5 @@ public enum WindowBadge: String, Codable, Sendable {
     case running
     case waiting
     case longRunning
+    case agentDone
 }

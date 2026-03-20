@@ -106,6 +106,12 @@ public struct WindowRowView: View {
                     .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
                     .help("Unread output")
                     .accessibilityLabel("Unread output")
+            case .agentDone:
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: MoriTokens.Icon.badge))
+                    .foregroundStyle(MoriTokens.Color.success)
+                    .help("Agent completed")
+                    .accessibilityLabel("Agent completed")
             case .idle:
                 EmptyView()
             }

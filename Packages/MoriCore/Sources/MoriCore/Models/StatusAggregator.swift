@@ -59,6 +59,8 @@ public enum StatusAggregator {
             return .waiting
         case .error:
             return .error
+        case .agentDone:
+            return .info
         }
     }
 
@@ -82,6 +84,8 @@ public enum StatusAggregator {
             return .error
         case .waitingForInput:
             return .waiting
+        case .completed:
+            return .agentDone
         default:
             break
         }

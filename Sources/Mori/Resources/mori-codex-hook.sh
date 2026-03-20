@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Mori agent hook for Codex CLI
-# Supports both legacy notify (JSON as last arg) and modern codex_hooks (JSON on stdin).
 # Sets tmux pane options and renames window on agent state transitions.
 
 set -euo pipefail
@@ -29,9 +28,6 @@ fi
 # Drain stdin if present (modern hooks send JSON on stdin)
 cat > /dev/null 2>&1 || true
 
-PANE_PATH="$(tmux display-message -p '#{pane_current_path}' 2>/dev/null || echo '')"
-DIR_NAME="$(basename "$PANE_PATH" 2>/dev/null || echo '')"
-
 save_original_name() {
     local saved
     saved="$(tmux show-option -pqv @mori-original-name 2>/dev/null || echo '')"
@@ -42,19 +38,18 @@ save_original_name() {
 
 set_state() {
     local state="$1"
-    local emoji="$2"
     tmux set-option -p @mori-agent-state "$state"
     tmux set-option -p @mori-agent-name "$AGENT_NAME"
     save_original_name
-    tmux rename-window "$emoji $AGENT_NAME $DIR_NAME"
+    tmux rename-window "$AGENT_NAME"
 }
 
 case "$HOOK_TYPE" in
     UserPromptSubmit|PreToolUse)
-        set_state "working" "⚡"
+        set_state "working"
         ;;
     Stop|Notification|agent-turn-complete)
-        set_state "done" "✅"
+        set_state "done"
         ;;
     *)
         exit 0
