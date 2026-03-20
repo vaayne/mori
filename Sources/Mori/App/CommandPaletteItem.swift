@@ -24,14 +24,14 @@ enum CommandPaletteItem: Sendable {
     var subtitle: String? {
         switch self {
         case .project:
-            return "Project"
+            return .localized("Project")
         case .worktree(_, _, _, let branch):
-            return branch.map { "Branch: \($0)" } ?? "Worktree"
+            return branch.map { .localized("Branch: \($0)") } ?? .localized("Worktree")
         case .window(_, _, _, let tag):
             if let tag {
-                return "Window (\(tag.rawValue))"
+                return .localized("Window (\(tag.rawValue))")
             }
-            return "Window"
+            return .localized("Window")
         case .action(_, _, let subtitle):
             return subtitle
         }

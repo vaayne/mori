@@ -8,7 +8,7 @@ final class PlaceholderContentViewController: NSViewController {
         let container = NSView()
         container.wantsLayer = true
 
-        let label = NSTextField(labelWithString: "Select a worktree")
+        let label = NSTextField(labelWithString: .localized("Select a worktree"))
         label.font = .systemFont(ofSize: 18, weight: .light)
         label.textColor = .secondaryLabelColor
         label.alignment = .center

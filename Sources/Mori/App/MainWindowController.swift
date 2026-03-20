@@ -100,10 +100,10 @@ extension MainWindowController: NSToolbarDelegate {
     ) -> NSToolbarItem? {
         guard itemIdentifier == ToolbarID.toggleSidebar else { return nil }
         let item = NSToolbarItem(itemIdentifier: ToolbarID.toggleSidebar)
-        item.label = "Toggle Sidebar"
-        item.paletteLabel = "Toggle Sidebar"
-        item.toolTip = "Show or hide the sidebar (⌘0)"
-        item.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: "Toggle Sidebar")
+        item.label = .localized("Toggle Sidebar")
+        item.paletteLabel = .localized("Toggle Sidebar")
+        item.toolTip = .localized("Show or hide the sidebar (⌘0)")
+        item.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: .localized("Toggle Sidebar"))
         item.target = self
         item.action = #selector(toggleSidebarClicked)
         return item
