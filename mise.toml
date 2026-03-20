@@ -23,10 +23,12 @@ swift run Mori
 
 [tasks.build]
 description = "Debug build"
+depends = ["build:ghostty"]
 run = "swift build 2>&1 | xcbeautify"
 
 [tasks."build:release"]
 description = "Release build"
+depends = ["build:ghostty"]
 run = "swift build -c release 2>&1 | xcbeautify"
 
 [tasks.test]
