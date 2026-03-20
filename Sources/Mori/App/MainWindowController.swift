@@ -11,6 +11,7 @@ final class MainWindowController: NSWindowController {
     }
 
     var onToggleSidebar: (() -> Void)?
+    var onShowCreateWorktreePanel: (() -> Void)?
 
     // MARK: - Init
 
@@ -55,6 +56,11 @@ final class MainWindowController: NSWindowController {
         guard let window else { return }
         let frameString = NSStringFromRect(window.frame)
         UserDefaults.standard.set(frameString, forKey: Self.frameKey)
+    }
+
+    /// Show the worktree creation panel. Delegates to the callback wired by AppDelegate.
+    func showCreateWorktreePanel() {
+        onShowCreateWorktreePanel?()
     }
 
     func updateTitle(projectName: String?, worktreeName: String? = nil) {

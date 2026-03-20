@@ -163,6 +163,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             splitVC?.toggleSidebar()
         }
 
+        windowController.onShowCreateWorktreePanel = { [weak self] in
+            self?.showCreateWorktreePanel()
+        }
+
         windowController.contentViewController = splitVC
         windowController.showWindow(nil)
         // Restore saved frame after all layout is complete
