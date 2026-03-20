@@ -131,43 +131,68 @@ public struct WorktreeRowView: View {
                     .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
                     .accessibilityLabel("Active")
             }
+
+            if let timeText = relativeTimeText {
+                Text(timeText)
+                    .font(MoriTokens.Font.caption)
+                    .foregroundStyle(MoriTokens.Color.inactive)
+                    .lineLimit(1)
+            }
         }
+    }
+
+    private var relativeTimeText: String? {
+        guard let date = worktree.lastActiveAt else { return nil }
+        let seconds = Int(-date.timeIntervalSinceNow)
+        if seconds < 60 { return "just now" }
+        if seconds < 3600 { return "\(seconds / 60)m ago" }
+        if seconds < 86400 { return "\(seconds / 3600)h ago" }
+        if seconds < 604_800 { return "\(seconds / 86400)d ago" }
+        return nil
     }
 
     // MARK: - Git Status Badges
 
     @ViewBuilder
     private var gitStatusBadges: some View {
-        HStack(spacing: MoriTokens.Spacing.xs) {
-            if worktree.aheadCount > 0 || worktree.behindCount > 0 {
-                HStack(spacing: MoriTokens.Spacing.xxs) {
-                    if worktree.aheadCount > 0 {
-                        Text("+\(worktree.aheadCount)")
-                            .font(MoriTokens.Font.monoSmall)
-                            .foregroundStyle(MoriTokens.Color.success)
-                            .accessibilityLabel("\(worktree.aheadCount) ahead")
-                    }
-                    if worktree.behindCount > 0 {
-                        Text("-\(worktree.behindCount)")
-                            .font(MoriTokens.Font.monoSmall)
-                            .foregroundStyle(MoriTokens.Color.error)
-                            .accessibilityLabel("\(worktree.behindCount) behind")
-                    }
+        let indicators = gitStatusIndicators
+        if !indicators.isEmpty {
+            HStack(spacing: MoriTokens.Spacing.sm) {
+                ForEach(indicators, id: \.label) { indicator in
+                    Text(indicator.text)
+                        .font(MoriTokens.Font.monoSmall)
+                        .foregroundStyle(indicator.color)
+                        .accessibilityLabel(indicator.label)
                 }
-                .padding(.horizontal, MoriTokens.Spacing.sm)
-                .padding(.vertical, MoriTokens.Spacing.xxs)
-                .background(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
-                .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
             }
-
-            if worktree.hasUncommittedChanges {
-                Image(systemName: "pencil.circle.fill")
-                    .font(.system(size: MoriTokens.Icon.badge))
-                    .foregroundStyle(MoriTokens.Color.warning)
-                    .help("Uncommitted changes")
-                    .accessibilityLabel("Uncommitted changes")
-            }
+            .padding(.horizontal, MoriTokens.Spacing.sm)
+            .padding(.vertical, MoriTokens.Spacing.xxs)
+            .background(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+            .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
         }
+    }
+
+    private var gitStatusIndicators: [(text: String, color: Color, label: String)] {
+        var result: [(text: String, color: Color, label: String)] = []
+        if !worktree.hasUpstream && worktree.branch != nil {
+            result.append(("⊘", MoriTokens.Color.info, "No upstream"))
+        }
+        if worktree.aheadCount > 0 {
+            result.append(("↑\(worktree.aheadCount)", MoriTokens.Color.success, "\(worktree.aheadCount) ahead"))
+        }
+        if worktree.behindCount > 0 {
+            result.append(("↓\(worktree.behindCount)", MoriTokens.Color.error, "\(worktree.behindCount) behind"))
+        }
+        if worktree.stagedCount > 0 {
+            result.append(("+\(worktree.stagedCount)", MoriTokens.Color.success, "\(worktree.stagedCount) staged"))
+        }
+        if worktree.modifiedCount > 0 {
+            result.append(("~\(worktree.modifiedCount)", MoriTokens.Color.warning, "\(worktree.modifiedCount) modified"))
+        }
+        if worktree.untrackedCount > 0 {
+            result.append(("?\(worktree.untrackedCount)", MoriTokens.Color.inactive, "\(worktree.untrackedCount) untracked"))
+        }
+        return result
     }
 
     // MARK: - Alert Badge

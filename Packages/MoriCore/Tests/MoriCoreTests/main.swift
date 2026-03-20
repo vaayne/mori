@@ -70,6 +70,10 @@ func testWorktreeDefaultInit() {
     assertFalse(wt.hasUncommittedChanges)
     assertEqual(wt.aheadCount, 0)
     assertEqual(wt.behindCount, 0)
+    assertEqual(wt.stagedCount, 0)
+    assertEqual(wt.modifiedCount, 0)
+    assertEqual(wt.untrackedCount, 0)
+    assertTrue(wt.hasUpstream)
     assertNil(wt.tmuxSessionId)
     assertNil(wt.tmuxSessionName)
     assertEqual(wt.unreadCount, 0)
@@ -83,12 +87,51 @@ func testWorktreeCodable() {
         name: "feat-sidebar",
         path: "/repos/anna/feat-sidebar",
         branch: "feat/sidebar",
+        stagedCount: 3,
+        modifiedCount: 2,
+        untrackedCount: 1,
+        hasUpstream: false,
         agentState: .running,
         status: .active
     )
     let data = try! JSONEncoder().encode(wt)
     let decoded = try! JSONDecoder().decode(Worktree.self, from: data)
     assertEqual(decoded, wt)
+    assertEqual(decoded.stagedCount, 3)
+    assertEqual(decoded.modifiedCount, 2)
+    assertEqual(decoded.untrackedCount, 1)
+    assertFalse(decoded.hasUpstream)
+}
+
+func testWorktreeCodableBackwardsCompat() {
+    // Simulate JSON from older version without stagedCount/modifiedCount/untrackedCount
+    let id = UUID()
+    let projectId = UUID()
+    let json = """
+    {
+        "id": "\(id.uuidString)",
+        "projectId": "\(projectId.uuidString)",
+        "name": "main",
+        "path": "/repos/test",
+        "isMainWorktree": true,
+        "isDetached": false,
+        "hasUncommittedChanges": true,
+        "aheadCount": 1,
+        "behindCount": 2,
+        "unreadCount": 0,
+        "agentState": "none",
+        "status": "active"
+    }
+    """
+    let decoded = try! JSONDecoder().decode(Worktree.self, from: json.data(using: .utf8)!)
+    assertEqual(decoded.id, id)
+    assertEqual(decoded.hasUncommittedChanges, true)
+    assertEqual(decoded.aheadCount, 1)
+    assertEqual(decoded.behindCount, 2)
+    assertEqual(decoded.stagedCount, 0)
+    assertEqual(decoded.modifiedCount, 0)
+    assertEqual(decoded.untrackedCount, 0)
+    assertTrue(decoded.hasUpstream)
 }
 
 // MARK: - RuntimeWindow Tests
@@ -1134,6 +1177,7 @@ testProjectCodable()
 
 testWorktreeDefaultInit()
 testWorktreeCodable()
+testWorktreeCodableBackwardsCompat()
 
 testRuntimeWindowIdDerivation()
 testRuntimeWindowDefaults()
