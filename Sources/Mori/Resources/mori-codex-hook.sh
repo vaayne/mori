@@ -11,13 +11,19 @@ AGENT_NAME="codex"
 [ -z "${TMUX:-}" ] && exit 0
 
 # Determine hook type.
+# Legacy notify: JSON payload as first arg with "type" field, e.g. {"type":"agent-turn-complete",...}
 # Modern codex_hooks: first arg is the event name (UserPromptSubmit, Stop, etc.)
-# Legacy notify: no args, JSON payload as last arg with "type" field.
-HOOK_TYPE="${1:-}"
+# No args: treat as done.
+RAW_ARG="${1:-}"
 
-if [ -z "$HOOK_TYPE" ]; then
-    # Legacy notify: always means agent-turn-complete = done
+if [ -z "$RAW_ARG" ]; then
     HOOK_TYPE="Stop"
+elif echo "$RAW_ARG" | grep -q '^{'; then
+    # JSON arg — extract "type" field
+    HOOK_TYPE="$(echo "$RAW_ARG" | sed -n 's/.*"type" *: *"\([^"]*\)".*/\1/p')"
+    [ -z "$HOOK_TYPE" ] && HOOK_TYPE="Stop"
+else
+    HOOK_TYPE="$RAW_ARG"
 fi
 
 # Drain stdin if present (modern hooks send JSON on stdin)

@@ -72,8 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         )
         self.workspaceManager = manager
 
-        // Install agent hook scripts for Claude Code, Codex CLI, and Pi
-        AgentHookConfigurator.installAllHooks()
+        // Agent hooks are installed on-demand via Settings > Agents
 
         // Load persisted state
         try? manager.loadAll()
@@ -310,6 +309,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             initial: readSettingsModel(from: cf),
             availableThemes: themes,
             ghosttyDefaults: ghosttyDefaults,
+            initialAgentHooks: AgentHookModel(
+                claudeEnabled: AgentHookConfigurator.isClaudeHookInstalled(),
+                codexEnabled: AgentHookConfigurator.isCodexHookInstalled(),
+                piEnabled: AgentHookConfigurator.isPiExtensionInstalled()
+            ),
             onChanged: { [weak self] newModel in
                 guard let self else { return }
                 self.writeSettingsModel(newModel, to: cf)
@@ -318,6 +322,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             onOpenConfigFile: {
                 NSWorkspace.shared.open(URL(fileURLWithPath: GhosttyConfigFile.configPath))
+            },
+            onAgentHookChanged: { newModel in
+                Self.applyAgentHookChanges(newModel)
             }
         )
 
@@ -848,6 +855,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         terminalAreaController?.reloadConfig()
     }
 
+    // MARK: - Agent Hook Settings
+
+    private static func applyAgentHookChanges(_ model: AgentHookModel) {
+        if model.claudeEnabled {
+            AgentHookConfigurator.installClaudeHook()
+        } else {
+            AgentHookConfigurator.uninstallClaudeHook()
+        }
+        if model.codexEnabled {
+            AgentHookConfigurator.installCodexHook()
+        } else {
+            AgentHookConfigurator.uninstallCodexHook()
+        }
+        if model.piEnabled {
+            AgentHookConfigurator.installPiExtension()
+        } else {
+            AgentHookConfigurator.uninstallPiExtension()
+        }
+    }
+
     // MARK: - Single Instance (Task 3.8)
 
     private func enforceSingleInstance() {
@@ -901,23 +928,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 /// so all controls update in sync.
 private struct SettingsWindowContent: View {
     @State var model: GhosttySettingsModel
+    @State var agentHooks: AgentHookModel
     let availableThemes: [String]
     let ghosttyDefaults: [String]
     var onChanged: (GhosttySettingsModel) -> Void
     var onOpenConfigFile: () -> Void
+    var onAgentHookChanged: (AgentHookModel) -> Void
 
     init(
         initial: GhosttySettingsModel,
         availableThemes: [String],
         ghosttyDefaults: [String] = [],
+        initialAgentHooks: AgentHookModel = AgentHookModel(),
         onChanged: @escaping (GhosttySettingsModel) -> Void,
-        onOpenConfigFile: @escaping () -> Void
+        onOpenConfigFile: @escaping () -> Void,
+        onAgentHookChanged: @escaping (AgentHookModel) -> Void = { _ in }
     ) {
         self._model = State(initialValue: initial)
+        self._agentHooks = State(initialValue: initialAgentHooks)
         self.availableThemes = availableThemes
         self.ghosttyDefaults = ghosttyDefaults
         self.onChanged = onChanged
         self.onOpenConfigFile = onOpenConfigFile
+        self.onAgentHookChanged = onAgentHookChanged
     }
 
     var body: some View {
@@ -926,7 +959,9 @@ private struct SettingsWindowContent: View {
             availableThemes: availableThemes,
             ghosttyDefaults: ghosttyDefaults,
             onChanged: { onChanged(model) },
-            onOpenConfigFile: onOpenConfigFile
+            onOpenConfigFile: onOpenConfigFile,
+            agentHooks: $agentHooks,
+            onAgentHookChanged: onAgentHookChanged
         )
     }
 }

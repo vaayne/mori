@@ -1,8 +1,10 @@
 import Foundation
 
-/// Installs Mori agent hook scripts and configures coding agents to use them.
-/// Writes hook scripts to ~/Library/Application Support/Mori/hooks/
-/// and merges hook entries into agent config files.
+/// Installs and uninstalls Mori agent hook scripts for coding agents.
+/// Writes hook scripts to $XDG_CONFIG_HOME/mori/hooks/ (fallback: ~/.config/mori/hooks/)
+/// and merges/removes hook entries in agent config files.
+///
+/// Hook script sources live in Sources/Mori/Resources/ and are embedded via SPM bundle resources.
 enum AgentHookConfigurator {
 
     /// Display names for notifications, keyed by agent process name.
@@ -14,32 +16,141 @@ enum AgentHookConfigurator {
 
     private static let home = FileManager.default.homeDirectoryForCurrentUser
 
+    /// Mori config directory: $XDG_CONFIG_HOME/mori or ~/.config/mori
+    private static var configDir: URL {
+        if let xdg = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"], !xdg.isEmpty {
+            return URL(fileURLWithPath: xdg).appendingPathComponent("mori")
+        }
+        return home.appendingPathComponent(".config/mori")
+    }
+
     private static var hooksDir: URL {
-        // Use ~/.config/mori/hooks/ — no spaces in path, avoids shell word-splitting
-        home.appendingPathComponent(".config/mori/hooks")
+        configDir.appendingPathComponent("hooks")
     }
 
-    // MARK: - Public
-
-    /// Install all agent hooks. Safe to call repeatedly.
-    static func installAllHooks() {
-        ensureHooksDir()
-        installClaudeHook()
-        installCodexHook()
-        installPiExtension()
+    private static var claudeHookPath: String {
+        hooksDir.appendingPathComponent("mori-agent-hook.sh").path
     }
+
+    private static var codexHookPath: String {
+        hooksDir.appendingPathComponent("mori-codex-hook.sh").path
+    }
+
+    private static var piExtensionURL: URL {
+        home.appendingPathComponent(".pi/agent/extensions/mori-tmux.ts")
+    }
+
+    // MARK: - Detection
+
+    /// Check if Claude Code hooks are installed in ~/.claude/settings.json.
+    static func isClaudeHookInstalled() -> Bool {
+        let settingsURL = home.appendingPathComponent(".claude/settings.json")
+        guard let data = try? Data(contentsOf: settingsURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let hooks = json["hooks"] as? [String: Any] else { return false }
+        return hookEntryExists(in: hooks, event: "Stop", command: "\(claudeHookPath) Stop")
+    }
+
+    /// Check if Codex CLI hook is installed in ~/.codex/config.toml.
+    static func isCodexHookInstalled() -> Bool {
+        let configURL = home.appendingPathComponent(".codex/config.toml")
+        guard let content = try? String(contentsOf: configURL, encoding: .utf8) else { return false }
+        return content.contains(codexHookPath)
+    }
+
+    /// Check if Pi extension is installed at ~/.pi/agent/extensions/mori-tmux.ts.
+    static func isPiExtensionInstalled() -> Bool {
+        FileManager.default.fileExists(atPath: piExtensionURL.path)
+    }
+
+    // MARK: - Install
 
     /// Install Claude Code hook only.
     static func installClaudeHook() {
         ensureHooksDir()
-        guard let path = installScript(name: "mori-agent-hook", source: claudeHookScript) else { return }
+        guard let source = loadBundledResource("mori-agent-hook", ext: "sh"),
+              let path = installScript(name: "mori-agent-hook", source: source) else { return }
         configureClaudeSettings(hookPath: path)
+    }
+
+    /// Install Codex CLI hook only.
+    static func installCodexHook() {
+        ensureHooksDir()
+        guard let source = loadBundledResource("mori-codex-hook", ext: "sh"),
+              let path = installScript(name: "mori-codex-hook", source: source) else { return }
+        configureCodexSettings(hookPath: path)
+    }
+
+    /// Install Pi extension only.
+    static func installPiExtension() {
+        guard let source = loadBundledResource("mori-pi-extension", ext: "ts") else { return }
+        installFile(at: piExtensionURL, content: source)
+    }
+
+    // MARK: - Uninstall
+
+    /// Remove Claude Code hooks from ~/.claude/settings.json and delete hook script.
+    static func uninstallClaudeHook() {
+        let settingsURL = home.appendingPathComponent(".claude/settings.json")
+        if let data = try? Data(contentsOf: settingsURL),
+           var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           var hooks = json["hooks"] as? [String: Any] {
+            var changed = false
+            for event in ["UserPromptSubmit", "PreToolUse", "Stop", "Notification"] {
+                let command = "\(claudeHookPath) \(event)"
+                if removeHookEntry(from: &hooks, event: event, command: command) {
+                    changed = true
+                }
+            }
+            if changed {
+                for (key, value) in hooks {
+                    if let arr = value as? [[String: Any]], arr.isEmpty {
+                        hooks.removeValue(forKey: key)
+                    }
+                }
+                if hooks.isEmpty {
+                    json.removeValue(forKey: "hooks")
+                } else {
+                    json["hooks"] = hooks
+                }
+                writeJSON(json, to: settingsURL)
+            }
+        }
+        try? FileManager.default.removeItem(atPath: claudeHookPath)
+    }
+
+    /// Remove Codex CLI hook from ~/.codex/config.toml and delete hook script.
+    static func uninstallCodexHook() {
+        let configURL = home.appendingPathComponent(".codex/config.toml")
+        if let content = try? String(contentsOf: configURL, encoding: .utf8),
+           content.contains(codexHookPath) {
+            var lines = content.components(separatedBy: "\n")
+            lines.removeAll { line in
+                line.contains(codexHookPath) || line == "# Mori agent status hook"
+            }
+            let cleaned = lines.joined(separator: "\n")
+            try? cleaned.write(to: configURL, atomically: true, encoding: .utf8)
+        }
+        try? FileManager.default.removeItem(atPath: codexHookPath)
+    }
+
+    /// Remove Pi extension file.
+    static func uninstallPiExtension() {
+        try? FileManager.default.removeItem(at: piExtensionURL)
     }
 
     // MARK: - Directory Setup
 
     private static func ensureHooksDir() {
         try? FileManager.default.createDirectory(at: hooksDir, withIntermediateDirectories: true)
+    }
+
+    // MARK: - Bundle Resources
+
+    /// Load a script from the SPM bundle resources (Sources/Mori/Resources/).
+    private static func loadBundledResource(_ name: String, ext: String) -> String? {
+        guard let url = Bundle.module.url(forResource: name, withExtension: ext) else { return nil }
+        return try? String(contentsOf: url, encoding: .utf8)
     }
 
     // MARK: - Script Installation
@@ -109,39 +220,33 @@ enum AgentHookConfigurator {
 
     // MARK: - Codex CLI
 
-    private static func installCodexHook() {
-        guard let path = installScript(name: "mori-codex-hook", source: codexHookScript) else { return }
-        configureCodexSettings(hookPath: path)
-    }
-
     private static func configureCodexSettings(hookPath: String) {
         let configURL = home.appendingPathComponent(".codex/config.toml")
 
-        // Read existing config
         let existing = (try? String(contentsOf: configURL, encoding: .utf8)) ?? ""
 
-        // Check if Mori hook is already configured
         if existing.contains(hookPath) { return }
 
-        // Ensure directory exists
         try? FileManager.default.createDirectory(
             at: configURL.deletingLastPathComponent(), withIntermediateDirectories: true
         )
 
-        // Append legacy notify hook (fires on agent-turn-complete)
-        var config = existing
-        if !config.hasSuffix("\n") && !config.isEmpty { config += "\n" }
-        config += "\n# Mori agent status hook\n"
-        config += "notify = [\"\(hookPath)\"]\n"
+        var lines = existing.components(separatedBy: "\n")
+        if let idx = lines.firstIndex(where: { $0.hasPrefix("notify") && $0.contains("[") }) {
+            // Replace existing top-level notify
+            lines[idx] = "notify = [\"\(hookPath)\"]"
+        } else {
+            // Insert before the first [section] header to keep it top-level
+            let notifyLines = ["# Mori agent status hook", "notify = [\"\(hookPath)\"]", ""]
+            if let sectionIdx = lines.firstIndex(where: { $0.hasPrefix("[") }) {
+                lines.insert(contentsOf: notifyLines, at: sectionIdx)
+            } else {
+                if !lines.last!.isEmpty { lines.append("") }
+                lines.append(contentsOf: notifyLines)
+            }
+        }
+        let config = lines.joined(separator: "\n")
         try? config.write(to: configURL, atomically: true, encoding: .utf8)
-    }
-
-    // MARK: - Pi
-
-    private static func installPiExtension() {
-        let extensionURL = home
-            .appendingPathComponent(".pi/agent/extensions/mori-tmux.ts")
-        installFile(at: extensionURL, content: piExtensionSource)
     }
 
     // MARK: - Helpers
@@ -157,100 +262,25 @@ enum AgentHookConfigurator {
         return false
     }
 
+    @discardableResult
+    private static func removeHookEntry(
+        from hooks: inout [String: Any], event: String, command: String
+    ) -> Bool {
+        guard var entries = hooks[event] as? [[String: Any]] else { return false }
+        let originalCount = entries.count
+        entries.removeAll { entry in
+            guard let hookList = entry["hooks"] as? [[String: Any]] else { return false }
+            return hookList.contains { $0["command"] as? String == command }
+        }
+        guard entries.count != originalCount else { return false }
+        hooks[event] = entries
+        return true
+    }
+
     private static func writeJSON(_ object: [String: Any], to url: URL) {
         guard let data = try? JSONSerialization.data(
             withJSONObject: object, options: [.prettyPrinted, .sortedKeys]
         ) else { return }
         try? data.write(to: url, options: .atomic)
     }
-
-    // MARK: - Hook Script Sources
-
-    private static let claudeHookScript = """
-    #!/usr/bin/env bash
-    set -euo pipefail
-    HOOK_TYPE="${1:-}"; AGENT_NAME="${2:-claude}"
-    cat > /dev/null 2>&1 || true
-    [ -z "${TMUX:-}" ] && exit 0
-    PANE_PATH="$(tmux display-message -p '#{pane_current_path}' 2>/dev/null || echo '')"
-    DIR_NAME="$(basename "$PANE_PATH" 2>/dev/null || echo '')"
-    save_original_name() {
-        local saved; saved="$(tmux show-option -pqv @mori-original-name 2>/dev/null || echo '')"
-        if [ -z "$saved" ]; then tmux set-option -p @mori-original-name "$(tmux display-message -p '#{window_name}' 2>/dev/null)"; fi
-    }
-    set_state() {
-        tmux set-option -p @mori-agent-state "$1"
-        tmux set-option -p @mori-agent-name "$AGENT_NAME"
-        save_original_name
-        tmux rename-window "$2 $AGENT_NAME $DIR_NAME"
-    }
-    case "$HOOK_TYPE" in
-        UserPromptSubmit|PreToolUse) set_state "working" "⚡" ;;
-        Stop|Notification) set_state "done" "✅" ;;
-    esac
-    exit 0
-    """
-
-    private static let codexHookScript = """
-    #!/usr/bin/env bash
-    set -euo pipefail
-    AGENT_NAME="codex"; HOOK_TYPE="${1:-}"
-    [ -z "$HOOK_TYPE" ] && HOOK_TYPE="Stop"
-    cat > /dev/null 2>&1 || true
-    [ -z "${TMUX:-}" ] && exit 0
-    PANE_PATH="$(tmux display-message -p '#{pane_current_path}' 2>/dev/null || echo '')"
-    DIR_NAME="$(basename "$PANE_PATH" 2>/dev/null || echo '')"
-    save_original_name() {
-        local saved; saved="$(tmux show-option -pqv @mori-original-name 2>/dev/null || echo '')"
-        if [ -z "$saved" ]; then tmux set-option -p @mori-original-name "$(tmux display-message -p '#{window_name}' 2>/dev/null)"; fi
-    }
-    set_state() {
-        tmux set-option -p @mori-agent-state "$1"
-        tmux set-option -p @mori-agent-name "$AGENT_NAME"
-        save_original_name
-        tmux rename-window "$2 $AGENT_NAME $DIR_NAME"
-    }
-    case "$HOOK_TYPE" in
-        UserPromptSubmit|PreToolUse) set_state "working" "⚡" ;;
-        Stop|Notification|agent-turn-complete) set_state "done" "✅" ;;
-    esac
-    exit 0
-    """
-
-    private static let piExtensionSource = """
-    // Mori integration for Pi coding agent
-    // Auto-installed by Mori to ~/.pi/agent/extensions/mori-tmux.ts
-
-    export default function (pi: any) {
-      const AGENT_NAME = "pi";
-      async function tmux(...args: string[]) {
-        try { await pi.exec("tmux", args); } catch {}
-      }
-      async function saveOriginalName() {
-        try {
-          const r = await pi.exec("tmux", ["show-option", "-pqv", "@mori-original-name"]);
-          if (!r?.stdout?.trim()) {
-            const n = await pi.exec("tmux", ["display-message", "-p", "#{window_name}"]);
-            await tmux("set-option", "-p", "@mori-original-name", n?.stdout?.trim() || "");
-          }
-        } catch {}
-      }
-      async function getDirName(): Promise<string> {
-        try {
-          const r = await pi.exec("tmux", ["display-message", "-p", "#{pane_current_path}"]);
-          return (r?.stdout?.trim() || "").split("/").pop() || "";
-        } catch { return ""; }
-      }
-      async function setState(state: string, emoji: string) {
-        const d = await getDirName();
-        await tmux("set-option", "-p", "@mori-agent-state", state);
-        await tmux("set-option", "-p", "@mori-agent-name", AGENT_NAME);
-        await saveOriginalName();
-        await tmux("rename-window", `${emoji} ${AGENT_NAME} ${d}`);
-      }
-      pi.on("agent_start", async () => { await setState("working", "⚡"); });
-      pi.on("agent_end", async () => { await setState("done", "✅"); });
-      pi.on("tool_execution_start", async () => { await setState("working", "⚡"); });
-    }
-    """
 }
