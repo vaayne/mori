@@ -1,43 +1,46 @@
 import Foundation
-import GRDB
 import MoriCore
 
 public struct WorktreeRepository: Sendable {
-    private let database: AppDatabase
+    private let store: JSONStore
 
-    public init(database: AppDatabase) {
-        self.database = database
+    public init(store: JSONStore) {
+        self.store = store
     }
 
     // MARK: - Read
 
     public func fetchAll(forProject projectId: UUID) throws -> [Worktree] {
-        try database.reader.read { db in
-            try WorktreeRecord
-                .filter(Column("projectId") == projectId.uuidString)
-                .fetchAll(db)
-                .compactMap { $0.toModel() }
-        }
+        store.data.projects.first { $0.project.id == projectId }?.worktrees ?? []
     }
 
     public func fetch(id: UUID) throws -> Worktree? {
-        try database.reader.read { db in
-            try WorktreeRecord.fetchOne(db, key: id.uuidString)?.toModel()
+        for entry in store.data.projects {
+            if let wt = entry.worktrees.first(where: { $0.id == id }) {
+                return wt
+            }
         }
+        return nil
     }
 
     // MARK: - Write
 
     public func save(_ worktree: Worktree) throws {
-        let record = WorktreeRecord(from: worktree)
-        try database.writer.write { db in
-            try record.save(db)
+        store.mutate { data in
+            guard let pi = data.projects.firstIndex(where: { $0.project.id == worktree.projectId }) else { return }
+            if let wi = data.projects[pi].worktrees.firstIndex(where: { $0.id == worktree.id }) {
+                data.projects[pi].worktrees[wi] = worktree
+            } else {
+                data.projects[pi].worktrees.append(worktree)
+            }
         }
     }
 
     public func delete(id: UUID) throws {
-        _ = try database.writer.write { db in
-            try WorktreeRecord.deleteOne(db, key: id.uuidString)
+        store.mutate { data in
+            for pi in data.projects.indices {
+                data.projects[pi].worktrees.removeAll { $0.id == id }
+            }
         }
     }
 }

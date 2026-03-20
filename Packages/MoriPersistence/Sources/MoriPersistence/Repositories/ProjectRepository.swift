@@ -1,40 +1,38 @@
 import Foundation
-import GRDB
 import MoriCore
 
 public struct ProjectRepository: Sendable {
-    private let database: AppDatabase
+    private let store: JSONStore
 
-    public init(database: AppDatabase) {
-        self.database = database
+    public init(store: JSONStore) {
+        self.store = store
     }
 
     // MARK: - Read
 
     public func fetchAll() throws -> [Project] {
-        try database.reader.read { db in
-            try ProjectRecord.fetchAll(db).compactMap { $0.toModel() }
-        }
+        store.data.projects.map { $0.project }
     }
 
     public func fetch(id: UUID) throws -> Project? {
-        try database.reader.read { db in
-            try ProjectRecord.fetchOne(db, key: id.uuidString)?.toModel()
-        }
+        store.data.projects.first { $0.project.id == id }?.project
     }
 
     // MARK: - Write
 
     public func save(_ project: Project) throws {
-        let record = ProjectRecord(from: project)
-        try database.writer.write { db in
-            try record.save(db)
+        store.mutate { data in
+            if let index = data.projects.firstIndex(where: { $0.project.id == project.id }) {
+                data.projects[index].project = project
+            } else {
+                data.projects.append(ProjectEntry(project: project))
+            }
         }
     }
 
     public func delete(id: UUID) throws {
-        _ = try database.writer.write { db in
-            try ProjectRecord.deleteOne(db, key: id.uuidString)
+        store.mutate { data in
+            data.projects.removeAll { $0.project.id == id }
         }
     }
 }

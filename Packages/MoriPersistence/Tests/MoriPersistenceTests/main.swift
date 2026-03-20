@@ -5,8 +5,8 @@ import MoriPersistence
 // MARK: - ProjectRepository Tests
 
 func testProjectInsertAndFetch() throws {
-    let db = try AppDatabase.inMemory()
-    let repo = ProjectRepository(database: db)
+    let store = JSONStore()
+    let repo = ProjectRepository(store: store)
 
     let project = Project(
         name: "mori",
@@ -29,8 +29,8 @@ func testProjectInsertAndFetch() throws {
 }
 
 func testProjectFetchAll() throws {
-    let db = try AppDatabase.inMemory()
-    let repo = ProjectRepository(database: db)
+    let store = JSONStore()
+    let repo = ProjectRepository(store: store)
 
     let p1 = Project(name: "alpha", repoRootPath: "/alpha")
     let p2 = Project(name: "beta", repoRootPath: "/beta")
@@ -43,8 +43,8 @@ func testProjectFetchAll() throws {
 }
 
 func testProjectUpdate() throws {
-    let db = try AppDatabase.inMemory()
-    let repo = ProjectRepository(database: db)
+    let store = JSONStore()
+    let repo = ProjectRepository(store: store)
 
     var project = Project(name: "old", repoRootPath: "/old")
     try repo.save(project)
@@ -61,8 +61,8 @@ func testProjectUpdate() throws {
 }
 
 func testProjectDelete() throws {
-    let db = try AppDatabase.inMemory()
-    let repo = ProjectRepository(database: db)
+    let store = JSONStore()
+    let repo = ProjectRepository(store: store)
 
     let project = Project(name: "doomed", repoRootPath: "/doomed")
     try repo.save(project)
@@ -75,9 +75,9 @@ func testProjectDelete() throws {
 // MARK: - WorktreeRepository Tests
 
 func testWorktreeInsertAndFetch() throws {
-    let db = try AppDatabase.inMemory()
-    let projectRepo = ProjectRepository(database: db)
-    let wtRepo = WorktreeRepository(database: db)
+    let store = JSONStore()
+    let projectRepo = ProjectRepository(store: store)
+    let wtRepo = WorktreeRepository(store: store)
 
     let project = Project(name: "anna", repoRootPath: "/anna")
     try projectRepo.save(project)
@@ -103,9 +103,9 @@ func testWorktreeInsertAndFetch() throws {
 }
 
 func testWorktreeFetchById() throws {
-    let db = try AppDatabase.inMemory()
-    let projectRepo = ProjectRepository(database: db)
-    let wtRepo = WorktreeRepository(database: db)
+    let store = JSONStore()
+    let projectRepo = ProjectRepository(store: store)
+    let wtRepo = WorktreeRepository(store: store)
 
     let project = Project(name: "anna", repoRootPath: "/anna")
     try projectRepo.save(project)
@@ -119,9 +119,9 @@ func testWorktreeFetchById() throws {
 }
 
 func testWorktreeUpdate() throws {
-    let db = try AppDatabase.inMemory()
-    let projectRepo = ProjectRepository(database: db)
-    let wtRepo = WorktreeRepository(database: db)
+    let store = JSONStore()
+    let projectRepo = ProjectRepository(store: store)
+    let wtRepo = WorktreeRepository(store: store)
 
     let project = Project(name: "anna", repoRootPath: "/anna")
     try projectRepo.save(project)
@@ -143,9 +143,9 @@ func testWorktreeUpdate() throws {
 }
 
 func testWorktreeCascadeDelete() throws {
-    let db = try AppDatabase.inMemory()
-    let projectRepo = ProjectRepository(database: db)
-    let wtRepo = WorktreeRepository(database: db)
+    let store = JSONStore()
+    let projectRepo = ProjectRepository(store: store)
+    let wtRepo = WorktreeRepository(store: store)
 
     let project = Project(name: "anna", repoRootPath: "/anna")
     try projectRepo.save(project)
@@ -163,9 +163,9 @@ func testWorktreeCascadeDelete() throws {
 }
 
 func testWorktreeDelete() throws {
-    let db = try AppDatabase.inMemory()
-    let projectRepo = ProjectRepository(database: db)
-    let wtRepo = WorktreeRepository(database: db)
+    let store = JSONStore()
+    let projectRepo = ProjectRepository(store: store)
+    let wtRepo = WorktreeRepository(store: store)
 
     let project = Project(name: "anna", repoRootPath: "/anna")
     try projectRepo.save(project)
@@ -180,8 +180,8 @@ func testWorktreeDelete() throws {
 // MARK: - UIStateRepository Tests
 
 func testUIStateDefault() throws {
-    let db = try AppDatabase.inMemory()
-    let repo = UIStateRepository(database: db)
+    let store = JSONStore()
+    let repo = UIStateRepository(store: store)
 
     let state = try repo.fetch()
     assertNil(state.selectedProjectId)
@@ -192,8 +192,8 @@ func testUIStateDefault() throws {
 }
 
 func testUIStateSaveAndFetch() throws {
-    let db = try AppDatabase.inMemory()
-    let repo = UIStateRepository(database: db)
+    let store = JSONStore()
+    let repo = UIStateRepository(store: store)
 
     let projectId = UUID()
     let worktreeId = UUID()
@@ -216,8 +216,8 @@ func testUIStateSaveAndFetch() throws {
 }
 
 func testUIStateOverwrite() throws {
-    let db = try AppDatabase.inMemory()
-    let repo = UIStateRepository(database: db)
+    let store = JSONStore()
+    let repo = UIStateRepository(store: store)
 
     let state1 = UIState(selectedProjectId: UUID(), sidebarMode: .worktrees, searchQuery: "first")
     try repo.save(state1)
@@ -231,9 +231,36 @@ func testUIStateOverwrite() throws {
     assertEqual(fetched.searchQuery, "second")
 }
 
+// MARK: - JSONStore File I/O Tests
+
+func testJSONStoreFileRoundTrip() throws {
+    let tmp = FileManager.default.temporaryDirectory
+        .appendingPathComponent("mori-test-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: tmp) }
+
+    let project = Project(name: "disk-test", repoRootPath: "/disk")
+    let worktree = Worktree(projectId: project.id, name: "main", path: "/disk")
+
+    // Write via repositories
+    let store1 = JSONStore(fileURL: tmp)
+    let projectRepo = ProjectRepository(store: store1)
+    let wtRepo = WorktreeRepository(store: store1)
+    try projectRepo.save(project)
+    try wtRepo.save(worktree)
+    store1.mutate { $0.uiState.selectedProjectId = project.id }
+
+    // Read back from a fresh store
+    let store2 = JSONStore(fileURL: tmp)
+    assertEqual(store2.data.projects.count, 1)
+    assertEqual(store2.data.projects.first?.project.name, "disk-test")
+    assertEqual(store2.data.projects.first?.worktrees.count, 1)
+    assertEqual(store2.data.projects.first?.worktrees.first?.name, "main")
+    assertEqual(store2.data.uiState.selectedProjectId, project.id)
+}
+
 // MARK: - Main
 
-print("=== MoriPersistence GRDB Round-Trip Tests ===")
+print("=== MoriPersistence JSON Store Tests ===")
 
 do {
     try testProjectInsertAndFetch()
@@ -250,6 +277,8 @@ do {
     try testUIStateDefault()
     try testUIStateSaveAndFetch()
     try testUIStateOverwrite()
+
+    try testJSONStoreFileRoundTrip()
 } catch {
     fputs("ERROR: \(error)\n", stderr)
     failCount += 1

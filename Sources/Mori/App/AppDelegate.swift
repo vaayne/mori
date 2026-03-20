@@ -42,23 +42,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let state = AppState()
         self.appState = state
 
-        let database: AppDatabase
-        do {
-            let appSupport = FileManager.default.urls(
-                for: .applicationSupportDirectory,
-                in: .userDomainMask
-            ).first!.appendingPathComponent("Mori", isDirectory: true)
-            try FileManager.default.createDirectory(at: appSupport, withIntermediateDirectories: true)
-            let dbPath = appSupport.appendingPathComponent("mori.sqlite").path
-            database = try AppDatabase.onDisk(path: dbPath)
-        } catch {
-            // Fallback to in-memory if disk DB fails
-            database = try! AppDatabase.inMemory()
-        }
+        let appSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first!.appendingPathComponent("Mori", isDirectory: true)
+        try? FileManager.default.createDirectory(at: appSupport, withIntermediateDirectories: true)
+        let storeURL = appSupport.appendingPathComponent("mori.json")
+        let store = JSONStore(fileURL: storeURL)
 
-        let projectRepo = ProjectRepository(database: database)
-        let worktreeRepo = WorktreeRepository(database: database)
-        let uiStateRepo = UIStateRepository(database: database)
+        let projectRepo = ProjectRepository(store: store)
+        let worktreeRepo = WorktreeRepository(store: store)
+        let uiStateRepo = UIStateRepository(store: store)
         let tmuxBackend = TmuxBackend()
         let gitBackend = GitBackend()
 

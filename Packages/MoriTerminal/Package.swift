@@ -17,6 +17,7 @@ let package = Package(
             path: "Sources/MoriTerminal",
             linkerSettings: [
                 .linkedFramework("Carbon"),
+                .linkedLibrary("c++"),
             ]
         ),
         .binaryTarget(
