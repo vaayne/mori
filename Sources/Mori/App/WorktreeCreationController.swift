@@ -284,6 +284,8 @@ final class WorktreeCreationController: NSWindowController {
             templatePopup.addItem(withTitle: template.name.capitalized)
         }
         templatePopup.controlSize = .small
+        templatePopup.target = self
+        templatePopup.action = #selector(templateChanged(_:))
         footerControlsContainer.addSubview(templatePopup)
 
         // Path preview
@@ -545,22 +547,36 @@ final class WorktreeCreationController: NSWindowController {
         }
         let row = rows[selectedIndex]
         let branchName: String?
+        var isNew = false
         switch row {
         case .createNewBranch(let name):
             branchName = name
+            isNew = true
         case .branch(let info, _):
             branchName = info.isRemote ? info.displayName : info.name
         case .sectionHeader:
             branchName = nil
         }
-        if let name = branchName {
-            pathLabel.stringValue = WorktreeCreationDataSource.previewPath(
-                projectName: projectName,
-                branchName: name
-            )
-        } else {
+        guard let name = branchName else {
             pathLabel.stringValue = ""
+            return
         }
+        let path = WorktreeCreationDataSource.previewPath(
+            projectName: projectName,
+            branchName: name
+        )
+        let template = selectedTemplate()
+        var preview = "\(String.localized("Path:")) \(path)"
+        if isNew && isNewBranchMode {
+            let base = baseBranchField.stringValue.isEmpty
+                ? (dataSource?.defaultBaseBranch ?? "main")
+                : baseBranchField.stringValue
+            preview += "  \(String.localized("from:")) \(base)"
+        }
+        if template.name != "basic" {
+            preview += "  [\(template.name.capitalized)]"
+        }
+        pathLabel.stringValue = preview
     }
 
     private func selectedTemplate() -> SessionTemplate {
@@ -575,6 +591,10 @@ final class WorktreeCreationController: NSWindowController {
 
     @objc private func searchFieldAction(_ sender: NSTextField) {
         confirmSelection()
+    }
+
+    @objc private func templateChanged(_ sender: NSPopUpButton) {
+        updatePathPreview()
     }
 
     @objc private func tableDoubleClicked() {
@@ -597,6 +617,9 @@ extension WorktreeCreationController: NSTextFieldDelegate {
                 exitNewBranchMode()
             }
             updateResults()
+        } else if field === baseBranchField {
+            // Update path preview when base branch changes
+            updatePathPreview()
         }
     }
 
