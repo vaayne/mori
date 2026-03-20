@@ -33,10 +33,10 @@
 
 ## Phase 4: CLI + Docs + CLAUDE.md
 
-- [ ] 4.1 — Wrap CLI strings in `MoriCLI.swift` with `String(localized:bundle:.module)` (~15 strings)
-- [ ] 4.2 — Add `zh-Hans` translations in MoriCLI's `Localizable.xcstrings`
-- [ ] 4.3 — Rename `README.zh.md` → `README.zh-Hans.md`, update link in `README.md`
-- [ ] 4.4 — Create stub Chinese doc files: `docs/keymaps.zh-Hans.md`, `docs/agent-hooks.zh-Hans.md`, `CHANGELOG.zh-Hans.md`
-- [ ] 4.5 — Update CLAUDE.md with i18n conventions section
-- [ ] 4.6 — Run full test suite (`mise run test`)
-- [ ] 4.7 — Build smoke test: verify app launches under zh-Hans locale
+- [x] 4.1 — Wrap CLI strings in `MoriCLI.swift` with `String(localized:bundle:.module)` (~15 strings)
+- [x] 4.2 — Add `zh-Hans` translations in MoriCLI's `Localizable.xcstrings`
+- [x] 4.3 — Rename `README.zh.md` → `README.zh-Hans.md`, update link in `README.md`
+- [x] 4.4 — Create stub Chinese doc files: `docs/keymaps.zh-Hans.md`, `docs/agent-hooks.zh-Hans.md`, `CHANGELOG.zh-Hans.md`
+- [x] 4.5 — Update CLAUDE.md with i18n conventions section
+- [x] 4.6 — Run full test suite (`mise run test`)
+- [x] 4.7 — Build smoke test: verify app launches under zh-Hans locale

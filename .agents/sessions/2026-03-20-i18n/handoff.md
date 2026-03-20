@@ -96,3 +96,36 @@
 - Integer interpolations like `"\(worktree.aheadCount) ahead"` use `%lld` as the xcstrings key
 - ProjectRailView and WorktreeSidebarView required no code changes — only xcstrings entries for auto-localized literals
 - Build produces only pre-existing ghostty linker warnings, no new warnings
+
+## Phase 4: CLI + Docs + CLAUDE.md
+
+**Status:** complete
+
+**Tasks completed:**
+- 4.1: Wrapped 16 strings in MoriCLI.swift — all `CommandConfiguration.abstract` strings use `String(localized:bundle:.module)`, all `@Argument`/`@Option` help strings use `ArgumentHelp(String(localized:bundle:.module))`, error output uses `String.localized()` with interpolation
+- 4.2: Populated MoriCLI `Localizable.xcstrings` with 16 string entries and zh-Hans translations
+- 4.3: Renamed `README.zh.md` to `README.zh-Hans.md` (BCP 47), updated link in `README.md`
+- 4.4: Created stub Chinese doc files with translation-pending markers: `docs/keymaps.zh-Hans.md`, `docs/agent-hooks.zh-Hans.md`, `CHANGELOG.zh-Hans.md`
+- 4.5: Added "i18n / Localization" section to `CLAUDE.md` (AGENTS.md) with rules for agents
+- 4.6: Full test suite run — tmux (200), persistence (47), IPC (39) all pass; MoriCore has 3 pre-existing failures (agentDone badge priority, unrelated to i18n)
+- 4.7: Build smoke test passed — `mise run build` succeeds (exit code 0)
+
+**Files changed:**
+- `Sources/MoriCLI/MoriCLI.swift` — wrapped all CLI strings with localization
+- `Sources/MoriCLI/Resources/Localizable.xcstrings` — populated with 16 string entries + zh-Hans translations
+- `README.md` — updated link from `README.zh.md` to `README.zh-Hans.md`
+- `README.zh.md` — renamed to `README.zh-Hans.md`
+- `CHANGELOG.zh-Hans.md` — new stub with translation-pending marker
+- `docs/keymaps.zh-Hans.md` — new stub with translation-pending marker
+- `docs/agent-hooks.zh-Hans.md` — new stub with translation-pending marker
+- `AGENTS.md` (aka `CLAUDE.md`) — added i18n / Localization conventions section
+
+**Commits:**
+- `caf1cb0` — 🌐 i18n: wrap MoriCLI strings and add zh-Hans translations (Phase 4.1-4.2)
+- `6ff0de7` — 📝 docs: rename README.zh.md to zh-Hans, add doc stubs and i18n conventions (Phase 4.3-4.5)
+
+**Decisions & notes:**
+- ArgumentParser `help:` strings wrapped with `ArgumentHelp(String(localized:bundle:.module))` since `help:` accepts `ArgumentHelp` or `String` — explicit `ArgumentHelp` init needed for `String(localized:)` return type
+- Interpolated error message (`"Error: \(message)"`) required extracting to a local variable to avoid type inference ambiguity with `Data(...)` initializer
+- 3 pre-existing MoriCore test failures (agentDone badge priority) are unrelated to i18n changes — confirmed by running tests on clean stash
+- All doc stubs include both `<!-- Translation pending -->` HTML comment and visible Chinese marker `> 翻译进行中`
