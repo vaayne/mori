@@ -488,99 +488,50 @@ func testPaneFormatContainsNewFields() {
     )
 }
 
-// MARK: - AgentDetector Tests
+// MARK: - Agent Pane Option Tests
 
-func testAgentDetectorIsAgentProcess() {
-    assertTrue(AgentDetector.isAgentProcess("claude"))
-    assertTrue(AgentDetector.isAgentProcess("codex"))
-    assertTrue(AgentDetector.isAgentProcess("omp"))
-    assertTrue(AgentDetector.isAgentProcess("pi"))
-    assertTrue(AgentDetector.isAgentProcess("droid"))
-    assertTrue(AgentDetector.isAgentProcess("amp"))
-    assertTrue(AgentDetector.isAgentProcess("opencode"))
+func testAgentProcessNames() {
+    assertTrue(AgentDetector.agentProcessNames.contains("claude"))
+    assertTrue(AgentDetector.agentProcessNames.contains("codex"))
+    assertTrue(AgentDetector.agentProcessNames.contains("omp"))
+    assertTrue(AgentDetector.agentProcessNames.contains("pi"))
+    assertFalse(AgentDetector.agentProcessNames.contains("zsh"))
 }
 
-func testAgentDetectorIsNotAgentProcess() {
-    assertFalse(AgentDetector.isAgentProcess("zsh"))
-    assertFalse(AgentDetector.isAgentProcess("node"))
-    assertFalse(AgentDetector.isAgentProcess("python"))
-    assertFalse(AgentDetector.isAgentProcess(nil))
-    assertFalse(AgentDetector.isAgentProcess(""))
+func testParsePanesWithAgentState() {
+    let output = "%0\t/dev/ttys001\t1\t/Users/test\tzsh\t1710784200\tclaude\t1710784100\t12345\tworking\tclaude\n"
+    let panes = TmuxParser.parsePanes(output)
+    assertEqual(panes.count, 1)
+    assertEqual(panes[0].agentState, "working")
+    assertEqual(panes[0].agentName, "claude")
 }
 
-func testAgentDetectorDetectsClaude() {
-    let pane = TmuxPane(paneId: "%0", currentCommand: "claude")
-    let result = AgentDetector.detect(pane: pane, capturedOutput: "thinking...\n", now: 100)
-    assertEqual(result?.processName, "claude")
-    assertEqual(result?.state, .running)
+func testParsePanesWithEmptyAgentFields() {
+    let output = "%0\t/dev/ttys001\t1\t/Users/test\tzsh\t1710784200\tnode\t1710784100\t12345\t\t\n"
+    let panes = TmuxParser.parsePanes(output)
+    assertEqual(panes.count, 1)
+    assertNil(panes[0].agentState)
+    assertNil(panes[0].agentName)
 }
 
-func testAgentDetectorDetectsPi() {
-    let pane = TmuxPane(paneId: "%0", currentCommand: "omp")
-    let result = AgentDetector.detect(pane: pane, capturedOutput: "working\n", now: 100)
-    assertEqual(result?.processName, "omp")
+func testParsePanesWithoutAgentFields() {
+    // Backwards compatible: fewer fields than expected
+    let output = "%0\t/dev/ttys001\t1\t/Users/test\tzsh\t1710784200\tnode\t1710784100\t12345\n"
+    let panes = TmuxParser.parsePanes(output)
+    assertEqual(panes.count, 1)
+    assertNil(panes[0].agentState)
+    assertNil(panes[0].agentName)
 }
 
-func testAgentDetectorReturnsNilForShell() {
-    let pane = TmuxPane(paneId: "%0", currentCommand: "zsh")
-    let result = AgentDetector.detect(pane: pane, capturedOutput: "$ ", now: 100)
-    assertNil(result)
-}
-
-func testAgentDetectorClaudeWaitingPermission() {
-    let pane = TmuxPane(paneId: "%0", currentCommand: "claude")
-    let output = "I'd like to edit this file.\n  Allow  Deny\n"
-    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
-    assertEqual(result?.state, .waitingForInput)
-}
-
-func testAgentDetectorClaudeWaitingPrompt() {
-    let pane = TmuxPane(paneId: "%0", currentCommand: "claude")
-    let output = "Done editing.\n> "
-    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
-    assertEqual(result?.state, .waitingForInput)
-}
-
-func testAgentDetectorClaudeCompleted() {
-    let pane = TmuxPane(paneId: "%0", currentCommand: "claude")
-    let output = "All changes applied.\nTotal cost: $0.05\n"
-    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
-    assertEqual(result?.state, .completed)
-}
-
-func testAgentDetectorCodexWaiting() {
-    let pane = TmuxPane(paneId: "%0", currentCommand: "codex")
-    let output = "Changes ready.\n  Approve  Deny\n"
-    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
-    assertEqual(result?.state, .waitingForInput)
-}
-
-func testAgentDetectorAmpWaiting() {
-    let pane = TmuxPane(paneId: "%0", currentCommand: "amp")
-    let output = "Proposed changes:\n  Accept  Reject\n"
-    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
-    assertEqual(result?.state, .waitingForInput)
-}
-
-func testAgentDetectorGenericError() {
-    let pane = TmuxPane(paneId: "%0", currentCommand: "droid")
-    let output = "Processing...\nerror: something went wrong\n"
-    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
-    assertEqual(result?.state, .error)
-}
-
-func testAgentDetectorGenericWaiting() {
-    let pane = TmuxPane(paneId: "%0", currentCommand: "opencode")
-    let output = "Do you want to continue? [Y/n]\n"
-    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
-    assertEqual(result?.state, .waitingForInput)
-}
-
-func testAgentDetectorGenericRunning() {
-    let pane = TmuxPane(paneId: "%0", currentCommand: "droid")
-    let output = "Analyzing codebase...\nReading files...\n"
-    let result = AgentDetector.detect(pane: pane, capturedOutput: output, now: 100)
-    assertEqual(result?.state, .running)
+func testPaneFormatContainsAgentFields() {
+    assertTrue(
+        TmuxParser.paneFormat.contains("#{@mori-agent-state}"),
+        "Pane format should include @mori-agent-state"
+    )
+    assertTrue(
+        TmuxParser.paneFormat.contains("#{@mori-agent-name}"),
+        "Pane format should include @mori-agent-name"
+    )
 }
 
 // MARK: - Main
@@ -653,20 +604,12 @@ testParsePanesWithCurrentCommand()
 testParsePanesWithEmptyCommandFields()
 testPaneFormatContainsNewFields()
 
-// AgentDetector
-testAgentDetectorIsAgentProcess()
-testAgentDetectorIsNotAgentProcess()
-testAgentDetectorDetectsClaude()
-testAgentDetectorDetectsPi()
-testAgentDetectorReturnsNilForShell()
-testAgentDetectorClaudeWaitingPermission()
-testAgentDetectorClaudeWaitingPrompt()
-testAgentDetectorClaudeCompleted()
-testAgentDetectorCodexWaiting()
-testAgentDetectorAmpWaiting()
-testAgentDetectorGenericError()
-testAgentDetectorGenericWaiting()
-testAgentDetectorGenericRunning()
+// Agent pane options
+testAgentProcessNames()
+testParsePanesWithAgentState()
+testParsePanesWithEmptyAgentFields()
+testParsePanesWithoutAgentFields()
+testPaneFormatContainsAgentFields()
 
 printResults()
 

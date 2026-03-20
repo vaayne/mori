@@ -39,6 +39,8 @@ public enum TmuxParser {
         "#{pane_current_command}",
         "#{pane_start_time}",
         "#{pane_pid}",
+        "#{@mori-agent-state}",
+        "#{@mori-agent-name}",
     ].joined(separator: delimiter)
 
     // MARK: - Parsing
@@ -92,6 +94,8 @@ public enum TmuxParser {
             let currentCommand: String? = fields.count >= 7 && !fields[6].isEmpty ? fields[6] : nil
             let startTime: TimeInterval? = fields.count >= 8 ? Double(fields[7]) : nil
             let pid: String? = fields.count >= 9 && !fields[8].isEmpty ? fields[8] : nil
+            let agentState: String? = fields.count >= 10 && !fields[9].isEmpty ? fields[9] : nil
+            let agentName: String? = fields.count >= 11 && !fields[10].isEmpty ? fields[10] : nil
             return TmuxPane(
                 paneId: paneId,
                 tty: tty,
@@ -101,7 +105,9 @@ public enum TmuxParser {
                 lastActivity: lastActivity,
                 currentCommand: currentCommand,
                 startTime: startTime,
-                pid: pid
+                pid: pid,
+                agentState: agentState,
+                agentName: agentName
             )
         }
     }

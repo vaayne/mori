@@ -230,6 +230,21 @@ public actor TmuxBackend: TmuxControlling {
         )
     }
 
+    /// Unset a pane-level user option.
+    public func unsetPaneOption(paneId: String, option: String) async throws {
+        _ = try await runner.run("set-option", "-pu", "-t", paneId, option)
+    }
+
+    /// Read a pane-level user option value. Returns empty string if unset.
+    public func getPaneOption(paneId: String, option: String) async throws -> String {
+        try await runner.run("show-option", "-pqv", "-t", paneId, option)
+    }
+
+    /// Rename the window containing a pane (by pane ID).
+    public func renamePaneWindow(paneId: String, newName: String) async throws {
+        _ = try await runner.run("rename-window", "-t", paneId, newName)
+    }
+
     public func navigatePane(sessionId: String, direction: PaneDirection) async throws {
         if let target = direction.selectTarget {
             // "session:.{next}" = next pane in the current window of the session

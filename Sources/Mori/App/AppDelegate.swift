@@ -72,6 +72,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         )
         self.workspaceManager = manager
 
+        // Install agent hook scripts for Claude Code, Codex CLI, and Pi
+        AgentHookConfigurator.installAllHooks()
+
         // Load persisted state
         try? manager.loadAll()
 

@@ -35,6 +35,10 @@ public struct TmuxPane: Identifiable, Equatable, Sendable {
     public let startTime: TimeInterval?
     /// Process ID of the pane's shell process, from `#{pane_pid}`.
     public let pid: String?
+    /// Agent state set by Mori hook via `@mori-agent-state` pane option (e.g. "working", "done").
+    public let agentState: String?
+    /// Agent name set by Mori hook via `@mori-agent-name` pane option (e.g. "claude", "codex").
+    public let agentName: String?
 
     public init(
         paneId: String,
@@ -45,7 +49,9 @@ public struct TmuxPane: Identifiable, Equatable, Sendable {
         lastActivity: TimeInterval? = nil,
         currentCommand: String? = nil,
         startTime: TimeInterval? = nil,
-        pid: String? = nil
+        pid: String? = nil,
+        agentState: String? = nil,
+        agentName: String? = nil
     ) {
         self.paneId = paneId
         self.tty = tty
@@ -56,5 +62,7 @@ public struct TmuxPane: Identifiable, Equatable, Sendable {
         self.currentCommand = currentCommand
         self.startTime = startTime
         self.pid = pid
+        self.agentState = agentState
+        self.agentName = agentName
     }
 }

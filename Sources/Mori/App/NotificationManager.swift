@@ -77,8 +77,24 @@ final class NotificationManager: NSObject {
             trigger: nil
         )
 
-        guard hasBundle else { return }
-        UNUserNotificationCenter.current().add(request)
+        if hasBundle {
+            UNUserNotificationCenter.current().add(request) { _ in }
+        } else {
+            postViaOsascript(title: content.title, body: content.body)
+        }
+    }
+
+    /// Fallback notification via osascript for unbundled swift run builds.
+    private func postViaOsascript(title: String, body: String) {
+        let escaped = { (s: String) -> String in
+            s.replacingOccurrences(of: "\\", with: "\\\\")
+             .replacingOccurrences(of: "\"", with: "\\\"")
+        }
+        let script = "display notification \"\(escaped(body))\" with title \"\(escaped(title))\""
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        try? process.run()
     }
 
     /// Set up notification category for click handling.
