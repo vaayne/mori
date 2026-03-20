@@ -8,7 +8,7 @@ When enabled, each agent installs hook scripts that report state changes to tmux
 - `@mori-agent-state`: `"working"` (agent is running) or `"done"` (agent finished)
 - `@mori-agent-name`: Agent name (e.g., `"claude"`, `"codex"`, `"pi"`)
 
-During Mori's 5-second polling cycle, it reads these options directly from tmux — no process scanning, no pattern matching. Tab names update to show agent status (⚡ working / ✅ done), and macOS notifications fire on completion.
+During Mori's 5-second polling cycle, it reads these options directly from tmux — no process scanning, no pattern matching. Tab names show the agent name (e.g., `claude`, `codex`, `pi`), with sidebar badges (⚡ working / ✅ done). macOS notifications fire on completion.
 
 ## Installation
 
@@ -22,7 +22,7 @@ During Mori's 5-second polling cycle, it reads these options directly from tmux 
    - `Stop` (agent stopped)
    - `Notification` (completion notification)
 
-Run Claude Code in a tmux window. Tab renames to `⚡ claude <dir>` while working, `✅ claude <dir>` when done.
+Run Claude Code in a tmux window. Tab renames to `claude` while working (⚡ badge shown in sidebar), then back to default after completion (✅ badge shown).
 
 ### Codex CLI
 
@@ -36,7 +36,7 @@ Run Claude Code in a tmux window. Tab renames to `⚡ claude <dir>` while workin
 
 **Important:** The `notify` entry must be **top-level** in the TOML file (before any `[section]` headers). Mori enforces this automatically.
 
-Run Codex in a tmux window. Tab renames to `⚡ codex <dir>` while working, `✅ codex <dir>` on completion.
+Run Codex in a tmux window. Tab renames to `codex` while working (⚡ badge shown in sidebar), then back to default on completion (✅ badge shown).
 
 ### Pi
 
@@ -51,7 +51,7 @@ Run Codex in a tmux window. Tab renames to `⚡ codex <dir>` while working, `✅
    }
    ```
 
-Run Pi in a tmux window. Tab renames to `⚡ pi <dir>` while working, `✅ pi <dir>` on completion.
+Run Pi in a tmux window. Tab renames to `pi` while working (⚡ badge shown in sidebar), then back to default on completion (✅ badge shown).
 
 ## Hook Scripts
 
@@ -117,9 +117,10 @@ Click the notification to focus the window. Bundled `.app` builds use `UNUserNot
   - Pi: `cat ~/.pi/agent/settings.json | grep mori`
 - Ensure you're running the agent _inside a tmux session_. Hooks only work in tmux.
 
-**Tab name doesn't update:**
+**Tab name doesn't change to agent name:**
 - Reload Mori's tmux polling by switching to another window and back, or restart Mori.
 - Check `tmux list-panes -F "#{pane_id} #{@mori-agent-state} #{@mori-agent-name}"` to see if pane options are set.
+- Badge should appear in the sidebar even if tab name hasn't updated yet (verify badge shows ⚡ or ✅).
 
 **Hook script permission denied:**
 - Reinstall via Settings > Agent Hooks toggle (off then on). Mori sets `0755` permissions on install.
