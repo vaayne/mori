@@ -233,7 +233,10 @@ public actor TmuxCommandRunner {
                 guard_.resume(with: .success((output, stderr, process.terminationStatus)))
             }
 
-            // Kill the process if it exceeds the timeout
+            // Kill the process if it exceeds the timeout.
+            // The SendableResumeGuard prevents double-resume if both timeout and
+            // normal termination fire. Process stays alive briefly until the
+            // timeout block runs, but this path is only used once (shell env fallback).
             if let timeoutSeconds {
                 DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(timeoutSeconds)) {
                     if process.isRunning {

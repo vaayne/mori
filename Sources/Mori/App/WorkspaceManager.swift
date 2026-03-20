@@ -821,17 +821,15 @@ final class WorkspaceManager {
     }
 
     /// Clear stale pane options when agent has exited (pane returned to shell).
-    /// Restores the original window name if saved.
+    /// Re-enables automatic-rename so tmux picks up the current process name.
     private func clearStaleAgentState(paneId: String) async {
-        try? await tmuxBackend.unsetPaneOption(paneId: paneId, option: "@mori-agent-state")
-        try? await tmuxBackend.unsetPaneOption(paneId: paneId, option: "@mori-agent-name")
-        // Restore original window name
-        let original = try? await tmuxBackend.getPaneOption(paneId: paneId, option: "@mori-original-name")
-        if let original, !original.isEmpty {
-            // Rename using the pane's parent window
-            try? await tmuxBackend.renamePaneWindow(paneId: paneId, newName: original)
-            try? await tmuxBackend.unsetPaneOption(paneId: paneId, option: "@mori-original-name")
-        }
+        // Unset state and name concurrently (independent operations)
+        async let _ = try? tmuxBackend.unsetPaneOption(paneId: paneId, option: "@mori-agent-state")
+        async let _ = try? tmuxBackend.unsetPaneOption(paneId: paneId, option: "@mori-agent-name")
+
+        // Re-enable automatic-rename so tmux sets the window name
+        // to the current process (e.g. zsh) instead of the stale agent name.
+        try? await tmuxBackend.setWindowOption(paneId: paneId, option: "automatic-rename", value: "on")
     }
 
     /// Update a worktree's agentState to the highest-priority agent state.

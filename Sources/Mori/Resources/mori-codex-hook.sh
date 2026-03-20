@@ -28,21 +28,9 @@ fi
 # Drain stdin if present (modern hooks send JSON on stdin)
 cat > /dev/null 2>&1 || true
 
-save_original_name() {
-    local saved
-    saved="$(tmux show-option -pqv @mori-original-name 2>/dev/null || echo '')"
-    if [ -z "$saved" ]; then
-        tmux set-option -p @mori-original-name "$(tmux display-message -p '#{window_name}' 2>/dev/null)"
-    fi
-}
-
-set_state() {
-    local state="$1"
-    tmux set-option -p @mori-agent-state "$state"
-    tmux set-option -p @mori-agent-name "$AGENT_NAME"
-    save_original_name
-    tmux rename-window "$AGENT_NAME"
-}
+# shellcheck source=mori-hook-common.sh
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/mori-hook-common.sh"
 
 case "$HOOK_TYPE" in
     UserPromptSubmit|PreToolUse)

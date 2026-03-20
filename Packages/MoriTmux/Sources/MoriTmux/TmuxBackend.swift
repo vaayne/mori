@@ -235,14 +235,9 @@ public actor TmuxBackend: TmuxControlling {
         _ = try await runner.run("set-option", "-pu", "-t", paneId, option)
     }
 
-    /// Read a pane-level user option value. Returns empty string if unset.
-    public func getPaneOption(paneId: String, option: String) async throws -> String {
-        try await runner.run("show-option", "-pqv", "-t", paneId, option)
-    }
-
-    /// Rename the window containing a pane (by pane ID).
-    public func renamePaneWindow(paneId: String, newName: String) async throws {
-        _ = try await runner.run("rename-window", "-t", paneId, newName)
+    /// Set a window-level option (targeting the window containing the given pane).
+    public func setWindowOption(paneId: String, option: String, value: String) async throws {
+        _ = try await runner.run("set-option", "-w", "-t", paneId, option, value)
     }
 
     public func navigatePane(sessionId: String, direction: PaneDirection) async throws {

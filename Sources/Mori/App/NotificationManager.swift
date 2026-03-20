@@ -94,6 +94,7 @@ final class NotificationManager: NSObject {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         process.arguments = ["-e", script]
+        process.terminationHandler = { _ in }
         try? process.run()
     }
 

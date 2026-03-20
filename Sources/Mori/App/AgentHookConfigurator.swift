@@ -14,6 +14,9 @@ enum AgentHookConfigurator {
         "pi": "Pi",
     ]
 
+    /// Claude Code hook event names (used for both install and uninstall).
+    private static let claudeEvents = ["UserPromptSubmit", "PreToolUse", "Stop", "Notification"]
+
     private static let home = FileManager.default.homeDirectoryForCurrentUser
 
     /// Mori config directory: $XDG_CONFIG_HOME/mori or ~/.config/mori
@@ -74,9 +77,16 @@ enum AgentHookConfigurator {
 
     // MARK: - Install
 
+    /// Ensure the shared hook library is installed (sourced by agent-specific scripts).
+    private static func installCommonScript() {
+        guard let source = loadBundledResource("mori-hook-common", ext: "sh") else { return }
+        installScript(name: "mori-hook-common", source: source)
+    }
+
     /// Install Claude Code hook only.
     static func installClaudeHook() {
         ensureHooksDir()
+        installCommonScript()
         guard let source = loadBundledResource("mori-agent-hook", ext: "sh"),
               let path = installScript(name: "mori-agent-hook", source: source) else { return }
         configureClaudeSettings(hookPath: path)
@@ -85,6 +95,7 @@ enum AgentHookConfigurator {
     /// Install Codex CLI hook only.
     static func installCodexHook() {
         ensureHooksDir()
+        installCommonScript()
         guard let source = loadBundledResource("mori-codex-hook", ext: "sh"),
               let path = installScript(name: "mori-codex-hook", source: source) else { return }
         configureCodexSettings(hookPath: path)
@@ -107,7 +118,7 @@ enum AgentHookConfigurator {
            var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            var hooks = json["hooks"] as? [String: Any] {
             var changed = false
-            for event in ["UserPromptSubmit", "PreToolUse", "Stop", "Notification"] {
+            for event in claudeEvents {
                 let command = "\(claudeHookPath) \(event)"
                 if removeHookEntry(from: &hooks, event: event, command: command) {
                     changed = true
@@ -226,7 +237,7 @@ enum AgentHookConfigurator {
         var hooks = settings["hooks"] as? [String: Any] ?? [:]
         var changed = false
 
-        for event in ["UserPromptSubmit", "PreToolUse", "Stop", "Notification"] {
+        for event in claudeEvents {
             let command = "\(hookPath) \(event)"
             if !hookEntryExists(in: hooks, event: event, command: command) {
                 let entry: [String: Any] = [

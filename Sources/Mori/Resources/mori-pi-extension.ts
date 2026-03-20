@@ -12,35 +12,11 @@ export default function (pi: any) {
     }
   }
 
-  async function saveOriginalName() {
-    try {
-      const result = await pi.exec("tmux", [
-        "show-option",
-        "-pqv",
-        "@mori-original-name",
-      ]);
-      if (!result?.stdout?.trim()) {
-        const name = await pi.exec("tmux", [
-          "display-message",
-          "-p",
-          "#{window_name}",
-        ]);
-        await tmux(
-          "set-option",
-          "-p",
-          "@mori-original-name",
-          name?.stdout?.trim() || ""
-        );
-      }
-    } catch {
-      // ignore
-    }
-  }
-
   async function setState(state: string) {
     await tmux("set-option", "-p", "@mori-agent-state", state);
     await tmux("set-option", "-p", "@mori-agent-name", AGENT_NAME);
-    await saveOriginalName();
+    // rename-window implicitly disables automatic-rename;
+    // Mori's stale cleanup re-enables it so tmux picks up the current process name.
     await tmux("rename-window", AGENT_NAME);
   }
 
