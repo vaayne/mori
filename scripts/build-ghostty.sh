@@ -11,6 +11,13 @@ FRAMEWORK_DIR="$PROJECT_ROOT/Frameworks"
 XCFRAMEWORK="$FRAMEWORK_DIR/GhosttyKit.xcframework"
 RESOURCES_DIR="$FRAMEWORK_DIR/ghostty-resources"
 
+has_valid_xcframework() {
+    [[ -f "$XCFRAMEWORK/Info.plist" ]] || return 1
+    local static_lib
+    static_lib="$(find "$XCFRAMEWORK" -type f -name "*.a" -print -quit 2>/dev/null || true)"
+    [[ -n "$static_lib" ]]
+}
+
 # Clean mode: remove built artifacts
 if [[ "${1:-}" == "--clean" ]]; then
     echo "Cleaning Ghostty build artifacts..."
@@ -24,10 +31,15 @@ if [[ ! -f "$GHOSTTY_DIR/build.zig" ]]; then
 fi
 
 # Skip if already built
-if [[ -d "$XCFRAMEWORK" && -d "$RESOURCES_DIR" ]]; then
+if has_valid_xcframework && [[ -d "$RESOURCES_DIR" ]]; then
     echo "GhosttyKit.xcframework and resources already exist at $FRAMEWORK_DIR"
     echo "Run with --clean to rebuild."
     exit 0
+fi
+
+if [[ -d "$XCFRAMEWORK" ]] && ! has_valid_xcframework; then
+    echo "Found invalid GhosttyKit.xcframework at $XCFRAMEWORK; rebuilding..."
+    rm -rf "$XCFRAMEWORK"
 fi
 
 # Verify zig is available
@@ -41,11 +53,23 @@ echo "Using Zig $ZIG_VERSION"
 
 cd "$GHOSTTY_DIR"
 
+if ! xcrun -sdk macosx --find metal >/dev/null 2>&1; then
+    echo "Metal toolchain not found. Installing with xcodebuild..."
+    xcodebuild -downloadComponent MetalToolchain
+fi
+
 # Patch: skip iOS/iOS Simulator builds when using native target.
 # Ghostty's GhosttyXCFramework.zig eagerly initializes iOS targets even
 # when xcframework-target=native. This fails without Xcode.app (needs iphoneos SDK).
 # The patch moves iOS init inside the universal branch only.
 XCFW_ZIG="$GHOSTTY_DIR/src/build/GhosttyXCFramework.zig"
+restore_native_patch() {
+    if grep -q "MORI_PATCHED" "$XCFW_ZIG" 2>/dev/null; then
+        git -C "$GHOSTTY_DIR" checkout -- src/build/GhosttyXCFramework.zig >/dev/null 2>&1 || true
+    fi
+}
+trap restore_native_patch EXIT
+
 if ! grep -q "MORI_PATCHED" "$XCFW_ZIG" 2>/dev/null; then
     echo "Applying native-only build patch..."
     cat > "$XCFW_ZIG" << 'ZIGEOF'

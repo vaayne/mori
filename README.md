@@ -61,10 +61,10 @@ mise run test            # Run all tests
 mise run clean           # Clean build artifacts
 ```
 
-The libghostty XCFramework must be built first:
+`mise run build` and `mise run build:release` automatically bootstrap the libghostty XCFramework on first run. You can also build it manually:
 
 ```bash
-mise run build:ghostty   # Requires Zig 0.15.2 + Xcode
+mise run build:ghostty   # Requires Zig 0.15.2 + Xcode (downloads Metal Toolchain if missing)
 ```
 
 ## CLI

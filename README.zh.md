@@ -61,10 +61,10 @@ mise run test            # 运行所有测试
 mise run clean           # 清理构建产物
 ```
 
-libghostty XCFramework 需要先行构建：
+`mise run build` 和 `mise run build:release` 首次运行会自动引导构建 libghostty XCFramework。你也可以手动执行：
 
 ```bash
-mise run build:ghostty   # 需要 Zig 0.15.2 + Xcode
+mise run build:ghostty   # 需要 Zig 0.15.2 + Xcode（缺少 Metal Toolchain 时会自动下载）
 ```
 
 ## CLI
