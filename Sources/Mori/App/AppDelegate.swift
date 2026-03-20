@@ -728,6 +728,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 return nil
             }
 
+            // Cmd+Shift+N: open worktree creation panel
+            if mods == [.command, .shift], key == "N" || key == "n" {
+                self?.showCreateWorktreePanel()
+                return nil
+            }
+
             // Cmd+1–9: select tmux window (tab) by index
             if mods == [.command], let digit = Int(key), digit >= 1, digit <= 9 {
                 self?.workspaceManager?.selectWindowByIndex(digit)
