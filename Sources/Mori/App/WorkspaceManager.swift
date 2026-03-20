@@ -160,8 +160,9 @@ final class WorkspaceManager {
 
         guard let worktree = appState.worktrees.first(where: { $0.id == worktreeId }) else { return }
 
-        // Ensure tmux session exists, then switch terminal
+        // Ensure tmux session exists, check branch, then switch terminal
         Task {
+            await refreshWorktreeBranch(worktreeId: worktreeId)
             await ensureTmuxSession(for: worktree)
             await refreshRuntimeState()
 
@@ -237,8 +238,14 @@ final class WorkspaceManager {
         // Validate git repo and resolve gitCommonDir
         let isRepo = try await gitBackend.isGitRepo(path: path)
         var commonDir = path
+        var detectedBranch = "main"
         if isRepo {
             commonDir = try await gitBackend.gitCommonDir(path: path)
+            // Detect the actual current branch
+            let gitStatus = try? await gitBackend.status(worktreePath: path)
+            if let branch = gitStatus?.branch {
+                detectedBranch = branch
+            }
         }
 
         // Create project
@@ -251,12 +258,12 @@ final class WorkspaceManager {
         try projectRepo.save(project)
 
         // Create default worktree
-        let sessionName = SessionNaming.sessionName(projectShortName: project.shortName, worktree: "main")
+        let sessionName = SessionNaming.sessionName(projectShortName: project.shortName, worktree: detectedBranch)
         let worktree = Worktree(
             projectId: project.id,
-            name: "main",
+            name: detectedBranch,
             path: path,
-            branch: "main",
+            branch: detectedBranch,
             isMainWorktree: true,
             tmuxSessionName: sessionName,
             status: .active
@@ -531,6 +538,20 @@ final class WorkspaceManager {
     }
 
     // MARK: - Tmux Integration
+
+    /// Check the actual git branch for a worktree and update if it changed.
+    private func refreshWorktreeBranch(worktreeId: UUID) async {
+        guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }) else { return }
+        let worktree = appState.worktrees[index]
+
+        guard let gitStatus = try? await gitBackend.status(worktreePath: worktree.path),
+              let branch = gitStatus.branch,
+              branch != worktree.branch else { return }
+
+        appState.worktrees[index].branch = branch
+        appState.worktrees[index].name = branch
+        try? worktreeRepo.save(appState.worktrees[index])
+    }
 
     /// Ensure a tmux session exists for the given worktree, creating one if needed.
     private func ensureTmuxSession(for worktree: Worktree) async {
