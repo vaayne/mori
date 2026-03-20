@@ -31,4 +31,7 @@ public protocol GitControlling: Sendable {
     /// Return the git common directory for the given path (resolves via `git rev-parse --git-common-dir`).
     /// For a main worktree this is typically `<repo>/.git`; for linked worktrees it points to the shared `.git` dir.
     func gitCommonDir(path: String) async throws -> String
+
+    /// List all branches (local and remote) for a git repository, sorted by most recent commit.
+    func listBranches(repoPath: String) async throws -> [GitBranchInfo]
 }

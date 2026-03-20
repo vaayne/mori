@@ -65,6 +65,24 @@ public actor GitBackend: GitControlling {
         }
     }
 
+    public func listBranches(repoPath: String) async throws -> [GitBranchInfo] {
+        // Get remote names for accurate remote branch detection
+        let remoteOutput = try await runner.run(in: repoPath, ["remote"])
+        let remoteNames = Set(
+            remoteOutput
+                .components(separatedBy: "\n")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        )
+
+        let format = "%(refname:short)|%(HEAD)|%(committerdate:unix)|%(upstream:short)"
+        let output = try await runner.run(
+            in: repoPath,
+            ["branch", "-a", "--sort=-committerdate", "--format=\(format)"]
+        )
+        return GitBranchParser.parse(output, remoteNames: remoteNames.isEmpty ? ["origin"] : remoteNames)
+    }
+
     public func gitCommonDir(path: String) async throws -> String {
         let output = try await runner.run(
             in: path,
