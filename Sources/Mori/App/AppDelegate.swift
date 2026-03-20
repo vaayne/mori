@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var sidebarController: SidebarHostingController?
     private var ipcServer: IPCServer?
     private var ipcHandler: IPCHandler?
+    private var worktreeCreationController: WorktreeCreationController?
     private var settingsWindowController: NSWindowController?
     private var configFile: GhosttyConfigFile?
 
@@ -114,11 +115,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 manager?.selectWindow(windowId)
                 self?.updateWindowTitle()
             },
-            onCreateWorktree: { [weak manager] branchName in
-                guard let manager else { return }
-                Task { @MainActor in
-                    await manager.handleCreateWorktree(branchName: branchName)
-                }
+            onShowCreatePanel: { [weak self] in
+                self?.showCreateWorktreePanel()
             },
             onRemoveWorktree: { [weak manager] worktreeId in
                 guard let manager else { return }
@@ -287,6 +285,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 alert.runModal()
             }
         }
+    }
+
+    // MARK: - Create Worktree Panel
+
+    private func showCreateWorktreePanel() {
+        guard let manager = workspaceManager, let state = appState else { return }
+
+        guard let projectId = state.uiState.selectedProjectId,
+              let project = state.projects.first(where: { $0.id == projectId }) else {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = .localized("No Project Selected")
+            alert.informativeText = .localized("Please select a project first.")
+            alert.addButton(withTitle: .localized("OK"))
+            alert.runModal()
+            return
+        }
+
+        if worktreeCreationController == nil {
+            worktreeCreationController = WorktreeCreationController()
+        }
+
+        let controller = worktreeCreationController!
+
+        // Wire branch fetching
+        controller.fetchBranches = { [weak manager] repoPath in
+            guard let manager else { return [] }
+            return try await manager.gitBackend.listBranches(repoPath: repoPath)
+        }
+
+        // Wire creation callback
+        controller.onCreateWorktree = { [weak manager] request in
+            guard let manager else { return }
+            Task { @MainActor in
+                await manager.handleCreateWorktreeFromPanel(request)
+            }
+        }
+
+        // Gather existing branch names from worktrees in this project
+        let existingBranches = Set(
+            state.worktrees
+                .filter { $0.projectId == projectId }
+                .compactMap { $0.branch }
+        )
+
+        controller.show(
+            projectId: projectId,
+            projectName: project.name,
+            repoPath: project.repoRootPath,
+            existingBranches: existingBranches
+        )
     }
 
     // MARK: - Settings Window
@@ -775,24 +824,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func handlePaletteAction(_ actionId: String, manager: WorkspaceManager) {
         switch actionId {
         case "action.create-worktree":
-            // Prompt for branch name via a simple input dialog
-            let alert = NSAlert()
-            alert.messageText = .localized("Create Worktree")
-            alert.informativeText = .localized("Enter a branch name:")
-            alert.addButton(withTitle: .localized("Create"))
-            alert.addButton(withTitle: .localized("Cancel"))
-
-            let inputField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-            inputField.placeholderString = "feature/my-branch"
-            alert.accessoryView = inputField
-
-            let response = alert.runModal()
-            if response == .alertFirstButtonReturn {
-                let branchName = inputField.stringValue
-                Task { @MainActor in
-                    await manager.handleCreateWorktree(branchName: branchName)
-                }
-            }
+            showCreateWorktreePanel()
 
         case "action.refresh":
             Task { @MainActor in

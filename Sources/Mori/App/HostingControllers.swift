@@ -17,7 +17,7 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         onSelectProject: @escaping (UUID) -> Void,
         onSelectWorktree: @escaping (UUID) -> Void,
         onSelectWindow: @escaping (String) -> Void,
-        onCreateWorktree: ((String) -> Void)? = nil,
+        onShowCreatePanel: (() -> Void)? = nil,
         onRemoveWorktree: ((UUID) -> Void)? = nil,
         onRemoveProject: ((UUID) -> Void)? = nil,
         onCloseWindow: ((String) -> Void)? = nil,
@@ -32,7 +32,7 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
             onSelectProject: onSelectProject,
             onSelectWorktree: onSelectWorktree,
             onSelectWindow: onSelectWindow,
-            onCreateWorktree: onCreateWorktree,
+            onShowCreatePanel: onShowCreatePanel,
             onRemoveWorktree: onRemoveWorktree,
             onRemoveProject: onRemoveProject,
             onCloseWindow: onCloseWindow,
@@ -67,7 +67,7 @@ struct SidebarContentView: View {
     let onSelectProject: (UUID) -> Void
     let onSelectWorktree: (UUID) -> Void
     let onSelectWindow: (String) -> Void
-    let onCreateWorktree: ((String) -> Void)?
+    let onShowCreatePanel: (() -> Void)?
     let onRemoveWorktree: ((UUID) -> Void)?
     let onRemoveProject: ((UUID) -> Void)?
     let onCloseWindow: ((String) -> Void)?
@@ -87,7 +87,7 @@ struct SidebarContentView: View {
             onSelectProject: onSelectProject,
             onSelectWorktree: onSelectWorktree,
             onSelectWindow: onSelectWindow,
-            onCreateWorktree: onCreateWorktree,
+            onShowCreatePanel: onShowCreatePanel,
             onRemoveWorktree: onRemoveWorktree,
             onRemoveProject: onRemoveProject,
             onCloseWindow: onCloseWindow,

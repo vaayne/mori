@@ -386,10 +386,10 @@ final class WorkspaceManager {
         return worktree
     }
 
-    /// Handle create worktree from UI — validates input, calls createWorktree,
-    /// and shows error alerts on failure.
-    func handleCreateWorktree(branchName: String) async {
-        let trimmed = branchName.trimmingCharacters(in: .whitespaces)
+    /// Handle create worktree from the creation panel — extracts parameters from the
+    /// request, calls createWorktree, and shows error alerts on failure.
+    func handleCreateWorktreeFromPanel(_ request: WorktreeCreationRequest) async {
+        let trimmed = request.branchName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else {
             showErrorAlert(title: .localized("Invalid Branch Name"), message: WorkspaceError.branchNameEmpty.localizedDescription)
             return
@@ -401,7 +401,13 @@ final class WorkspaceManager {
         }
 
         do {
-            _ = try await createWorktree(projectId: projectId, branchName: trimmed)
+            _ = try await createWorktree(
+                projectId: projectId,
+                branchName: trimmed,
+                createBranch: request.isNewBranch,
+                baseBranch: request.baseBranch,
+                template: request.template
+            )
             await refreshRuntimeState()
         } catch {
             showErrorAlert(title: .localized("Failed to Create Worktree"), message: error.localizedDescription)
