@@ -3,28 +3,48 @@ import Foundation
 extension String {
     /// Localized string from this module's bundle, respecting the user's language preference.
     static func localized(_ key: String.LocalizationValue) -> String {
+        // Use String(localized:) with the resolved bundle — this handles interpolation
+        // placeholders (%@, %lld) from String.LocalizationValue correctly.
         String(localized: key, bundle: Bundle.localizedModule)
     }
 }
 
 extension Bundle {
     /// Returns a localized sub-bundle of `.module` that respects `AppleLanguages` UserDefaults.
-    /// SPM's `Bundle.module` doesn't always pick up `AppleLanguages` overrides,
-    /// so we manually resolve the preferred `.lproj` directory.
+    /// SPM lowercases .lproj directory names (e.g. "zh-Hans" → "zh-hans"),
+    /// so we scan the bundle directory for case-insensitive matches.
     static var localizedModule: Bundle {
         let preferred = UserDefaults.standard.stringArray(forKey: "AppleLanguages")?.first ?? "en"
-        // Try exact match first (e.g. "zh-Hans"), then prefix match (e.g. "zh-Hans-US" -> "zh-Hans")
-        let candidates = [preferred] + (preferred.contains("-") ? [String(preferred.prefix(while: { $0 != "-" }))] : [])
+        // Build candidates: exact, then progressively shorter prefixes
+        // e.g. "zh-Hans-US" → ["zh-Hans-US", "zh-Hans", "zh"]
+        var candidates = [preferred.lowercased()]
+        var remaining = preferred
+        while let dashRange = remaining.lastIndex(of: "-") {
+            remaining = String(remaining[remaining.startIndex..<dashRange])
+            candidates.append(remaining.lowercased())
+        }
+
+        // Scan bundle directory for .lproj folders
+        let bundlePath = Bundle.module.bundlePath
+        let fm = FileManager.default
+        guard let contents = try? fm.contentsOfDirectory(atPath: bundlePath) else {
+            return .module
+        }
+        let lprojDirs = contents.filter { $0.hasSuffix(".lproj") }
+
         for candidate in candidates {
-            if let path = Bundle.module.path(forResource: candidate, ofType: "lproj"),
-               let bundle = Bundle(path: path) {
-                return bundle
+            for dir in lprojDirs {
+                let dirName = dir.replacingOccurrences(of: ".lproj", with: "").lowercased()
+                if dirName == candidate, let bundle = Bundle(path: "\(bundlePath)/\(dir)") {
+                    return bundle
+                }
             }
         }
-        // Fall back to en or module itself
-        if let path = Bundle.module.path(forResource: "en", ofType: "lproj"),
-           let bundle = Bundle(path: path) {
-            return bundle
+        // Fall back to en
+        for dir in lprojDirs {
+            if dir.lowercased() == "en.lproj", let bundle = Bundle(path: "\(bundlePath)/\(dir)") {
+                return bundle
+            }
         }
         return .module
     }
