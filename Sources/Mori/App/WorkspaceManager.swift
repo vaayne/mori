@@ -296,8 +296,21 @@ final class WorkspaceManager {
     /// Create a new worktree for a project: git worktree add, DB save, tmux session, template apply.
     /// Partial failure: if git succeeds but tmux fails, worktree is still saved to DB.
     /// If git fails, no DB write occurs.
+    ///
+    /// - Parameters:
+    ///   - projectId: The project to create the worktree under.
+    ///   - branchName: The branch name (existing or new).
+    ///   - createBranch: Whether to create a new branch (`true`) or use an existing one (`false`).
+    ///   - baseBranch: Base branch for new branch creation (only used when `createBranch` is `true`).
+    ///   - template: Session template to apply after tmux session creation.
     @discardableResult
-    func createWorktree(projectId: UUID, branchName: String) async throws -> Worktree {
+    func createWorktree(
+        projectId: UUID,
+        branchName: String,
+        createBranch: Bool = true,
+        baseBranch: String? = nil,
+        template: SessionTemplate = TemplateRegistry.basic
+    ) async throws -> Worktree {
         // Validate inputs
         let trimmed = branchName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else {
@@ -333,8 +346,8 @@ final class WorkspaceManager {
             repoPath: project.repoRootPath,
             path: worktreePath,
             branch: trimmed,
-            createBranch: true,
-            baseBranch: nil
+            createBranch: createBranch,
+            baseBranch: baseBranch
         )
 
         // Step 2: Create Worktree model and save to DB
@@ -355,7 +368,7 @@ final class WorkspaceManager {
             _ = try await tmuxBackend.createSession(name: sessionName, cwd: worktreePath)
             let applicator = TemplateApplicator(tmux: tmuxBackend)
             try await applicator.apply(
-                template: TemplateRegistry.basic,
+                template: template,
                 sessionId: sessionName,
                 cwd: worktreePath
             )
