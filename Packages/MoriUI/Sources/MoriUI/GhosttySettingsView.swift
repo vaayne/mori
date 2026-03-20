@@ -392,7 +392,12 @@ private struct GeneralSettingsContent: View {
     ]
 
     @State private var selectedLocale: String = {
-        UserDefaults.standard.stringArray(forKey: "AppleLanguages")?.first ?? "en"
+        guard let preferred = UserDefaults.standard.stringArray(forKey: "AppleLanguages")?.first else {
+            return "en"
+        }
+        // Match against supported locales (e.g. "zh-Hans-US" matches "zh-Hans", "en-US" matches "en")
+        let supported = supportedLanguages.map(\.locale)
+        return supported.first { preferred.hasPrefix($0) } ?? "en"
     }()
 
     var body: some View {
