@@ -657,16 +657,26 @@ extension WorktreeCreationController: NSTableViewDelegate {
                 title: "\(String.localized("Create")) \"\(name)\"",
                 subtitle: nil,
                 inUse: false,
+                isCreateNew: true,
                 tableView: tableView
             )
         case .branch(let info, let inUse):
             let icon = info.isRemote ? "cloud" : "arrow.branch"
             let subtitle = info.commitDate.map { relativeTimeString(from: $0) }
+            let displayTitle: String
+            if info.isRemote {
+                displayTitle = info.displayName
+            } else if info.isHead {
+                displayTitle = "\(info.name) *"
+            } else {
+                displayTitle = info.name
+            }
             return makeBranchCellView(
                 icon: icon,
-                title: info.isRemote ? info.displayName : info.name,
+                title: displayTitle,
                 subtitle: subtitle,
                 inUse: inUse,
+                isCreateNew: false,
                 tableView: tableView
             )
         }
@@ -712,6 +722,7 @@ extension WorktreeCreationController: NSTableViewDelegate {
         title: String,
         subtitle: String?,
         inUse: Bool,
+        isCreateNew: Bool = false,
         tableView: NSTableView
     ) -> NSView {
         let cellID = NSUserInterfaceItemIdentifier("BranchCell")
@@ -725,11 +736,23 @@ extension WorktreeCreationController: NSTableViewDelegate {
 
         // Configure icon
         cell.imageView?.image = NSImage(systemSymbolName: icon, accessibilityDescription: nil)
-        cell.imageView?.contentTintColor = inUse ? .tertiaryLabelColor : .secondaryLabelColor
+        if isCreateNew {
+            cell.imageView?.contentTintColor = .systemGreen
+        } else if inUse {
+            cell.imageView?.contentTintColor = .tertiaryLabelColor
+        } else {
+            cell.imageView?.contentTintColor = .secondaryLabelColor
+        }
 
         // Configure title
         cell.textField?.stringValue = title
-        cell.textField?.textColor = inUse ? .tertiaryLabelColor : .labelColor
+        if isCreateNew {
+            cell.textField?.textColor = .labelColor
+        } else if inUse {
+            cell.textField?.textColor = .tertiaryLabelColor
+        } else {
+            cell.textField?.textColor = .labelColor
+        }
 
         // Configure subtitle (tag 100 — relative time)
         if let timeField = cell.viewWithTag(100) as? NSTextField {
