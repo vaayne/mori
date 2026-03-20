@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "MoriUI",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v14),
     ],
@@ -17,7 +18,10 @@ let package = Package(
         .target(
             name: "MoriUI",
             dependencies: ["MoriCore"],
-            path: "Sources/MoriUI"
+            path: "Sources/MoriUI",
+            resources: [
+                .process("Resources"),
+            ]
         ),
     ]
 )

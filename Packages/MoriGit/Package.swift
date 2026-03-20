@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "MoriGit",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v14),
     ],

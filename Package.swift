@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "Mori",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v14),
     ],
@@ -39,6 +40,7 @@ let package = Package(
                 .copy("Resources/mori-agent-hook.sh"),
                 .copy("Resources/mori-codex-hook.sh"),
                 .copy("Resources/mori-pi-extension.ts"),
+                .process("Resources/Localizable.xcstrings"),
             ]
         ),
         .executableTarget(
@@ -47,7 +49,10 @@ let package = Package(
                 "MoriIPC",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
-            path: "Sources/MoriCLI"
+            path: "Sources/MoriCLI",
+            resources: [
+                .process("Resources"),
+            ]
         ),
     ]
 )
