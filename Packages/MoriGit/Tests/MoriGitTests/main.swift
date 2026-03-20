@@ -16,6 +16,22 @@ testParseWorktreeMalformedMissingPath()
 testParseWorktreeNoTrailingNewline()
 testBranchNameExtraction()
 
+// GitBranchParser tests
+testParseBranchLocal()
+testParseBranchRemote()
+testParseBranchMultiple()
+testParseBranchEmpty()
+testParseBranchWhitespaceOnly()
+testParseBranchNoDate()
+testParseBranchNoUpstream()
+testParseBranchCustomRemote()
+testParseBranchDetachedHead()
+testParseBranchCommitDate()
+testParseBranchMalformedLine()
+testParseBranchMinimalFields()
+testGitBranchInfoDisplayName()
+testGitBranchInfoRemoteName()
+
 // GitStatusParser tests
 testParseStatusClean()
 testParseStatusDirty()
