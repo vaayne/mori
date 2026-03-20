@@ -26,6 +26,7 @@ final class WorktreeCreationController: NSWindowController {
     private var projectName: String = ""
     private var projectId: UUID?
     private var repoPath: String = ""
+    nonisolated(unsafe) private var localEventMonitor: Any?
 
     // MARK: - Views
 
@@ -92,6 +93,13 @@ final class WorktreeCreationController: NSWindowController {
         super.init(window: panel)
 
         setupUI()
+        setupKeyEventMonitor()
+    }
+
+    deinit {
+        if let monitor = localEventMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
     }
 
     @available(*, unavailable)
@@ -163,6 +171,38 @@ final class WorktreeCreationController: NSWindowController {
         setupTableView()
         setupFooter()
         layoutViews()
+
+        // Tab key view chain for footer controls
+        baseBranchField.nextKeyView = templatePopup
+        templatePopup.nextKeyView = searchField
+    }
+
+    /// Monitor for keyboard events when non-text controls (e.g., templatePopup) have focus.
+    private func setupKeyEventMonitor() {
+        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, let panel = self.window, panel.isVisible else { return event }
+            let firstResponder = panel.firstResponder
+
+            // Handle Esc from template popup — return to search field
+            if event.keyCode == 53 { // Esc
+                if firstResponder === self.templatePopup || firstResponder === self.templatePopup.window {
+                    if self.isNewBranchMode {
+                        self.exitNewBranchMode()
+                        return nil
+                    }
+                }
+            }
+
+            // Handle Enter from template popup — confirm selection
+            if event.keyCode == 36 { // Return
+                if firstResponder === self.templatePopup {
+                    self.confirmSelection()
+                    return nil
+                }
+            }
+
+            return event
+        }
     }
 
     private func setupSearchField() {
@@ -580,7 +620,12 @@ extension WorktreeCreationController: NSTextFieldDelegate {
             return true
         }
         if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
-            dismiss()
+            // First Esc exits new-branch mode; second Esc dismisses panel
+            if isNewBranchMode {
+                exitNewBranchMode()
+            } else {
+                dismiss()
+            }
             return true
         }
         if commandSelector == #selector(NSResponder.insertNewline(_:)) {
