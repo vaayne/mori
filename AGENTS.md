@@ -38,15 +38,15 @@ See [release skill](.agents/skills/release/SKILL.md) for the full release workfl
 
 ## i18n / Localization
 
-- All new user-facing strings must use `.localized()` (app/UI) or `String(localized:bundle:.module)` (CLI)
-- Add `zh-Hans` translation to the target's `Localizable.xcstrings` for every new string
+- All new user-facing strings must use `.localized()` — same pattern in app, UI, and CLI
+- Add entries to both `en.lproj/Localizable.strings` and `zh-Hans.lproj/Localizable.strings`
 - SwiftUI `Text("literal")` is auto-localized; computed strings need explicit `.localized()`
 - Do not localize: log messages, internal identifiers, tmux commands
 - Keep docs in sync: when updating English docs, note that Chinese counterparts need updating
-- String catalog locations:
-  - `Sources/Mori/Resources/Localizable.xcstrings` (app target)
-  - `Packages/MoriUI/Sources/MoriUI/Resources/Localizable.xcstrings` (MoriUI)
-  - `Sources/MoriCLI/Resources/Localizable.xcstrings` (MoriCLI)
+- String file locations (each target has `en.lproj` + `zh-Hans.lproj`):
+  - `Sources/Mori/Resources/` (app target)
+  - `Packages/MoriUI/Sources/MoriUI/Resources/` (MoriUI)
+  - `Sources/MoriCLI/Resources/` (MoriCLI)
 
 ## Detailed Docs
 

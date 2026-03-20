@@ -75,16 +75,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var localizedName: String {
-        switch self {
-        case .general: return .localized("General")
-        case .theme: return .localized("Theme")
-        case .fonts: return .localized("Fonts")
-        case .cursor: return .localized("Cursor")
-        case .keyboard: return .localized("Keyboard")
-        case .mouse: return .localized("Mouse")
-        case .window: return .localized("Window")
-        case .agents: return .localized("Agent Hooks")
-        }
+        .localized(String.LocalizationValue(stringLiteral: rawValue))
     }
 
     var icon: String {
@@ -392,12 +383,8 @@ private struct GeneralSettingsContent: View {
     ]
 
     @State private var selectedLocale: String = {
-        guard let preferred = UserDefaults.standard.stringArray(forKey: "AppleLanguages")?.first else {
-            return "en"
-        }
-        // Match against supported locales (e.g. "zh-Hans-US" matches "zh-Hans", "en-US" matches "en")
-        let supported = supportedLanguages.map(\.locale)
-        return supported.first { preferred.hasPrefix($0) } ?? "en"
+        let preferred = UserDefaults.standard.stringArray(forKey: "AppleLanguages")?.first ?? "en"
+        return preferred.lowercased().hasPrefix("zh") ? "zh-Hans" : "en"
     }()
 
     var body: some View {

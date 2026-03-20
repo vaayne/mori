@@ -6,7 +6,7 @@ extension String {
     }
 }
 
-extension Bundle {
+private extension Bundle {
     static let preferredLocalization: Bundle = {
         let preferred = UserDefaults.standard.stringArray(forKey: "AppleLanguages")?.first ?? "en"
         let lang = preferred.lowercased().hasPrefix("zh") ? "zh-hans" : "en"

@@ -6,7 +6,7 @@ import MoriIPC
 struct MoriCLI: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "mori",
-        abstract: String(localized: "Mori workspace CLI — communicate with the running Mori app.", bundle: .preferredLocalization),
+        abstract: .localized("Mori workspace CLI — communicate with the running Mori app."),
         subcommands: [
             Project.self,
             WorktreeCmd.self,
@@ -44,7 +44,7 @@ func runIPCRequest(_ command: IPCCommand) throws {
 
 struct Project: ParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: String(localized: "Project commands", bundle: .preferredLocalization),
+        abstract: .localized("Project commands"),
         subcommands: [ProjectList.self]
     )
 }
@@ -52,7 +52,7 @@ struct Project: ParsableCommand {
 struct ProjectList: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "list",
-        abstract: String(localized: "List all projects", bundle: .preferredLocalization)
+        abstract: .localized("List all projects")
     )
 
     func run() throws {
@@ -65,7 +65,7 @@ struct ProjectList: ParsableCommand {
 struct WorktreeCmd: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "worktree",
-        abstract: String(localized: "Worktree commands", bundle: .preferredLocalization),
+        abstract: .localized("Worktree commands"),
         subcommands: [WorktreeCreate.self]
     )
 }
@@ -73,13 +73,13 @@ struct WorktreeCmd: ParsableCommand {
 struct WorktreeCreate: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "create",
-        abstract: String(localized: "Create a new worktree", bundle: .preferredLocalization)
+        abstract: .localized("Create a new worktree")
     )
 
-    @Argument(help: ArgumentHelp(String(localized: "Project name", bundle: .preferredLocalization)))
+    @Argument(help: ArgumentHelp(.localized("Project name")))
     var project: String
 
-    @Argument(help: ArgumentHelp(String(localized: "Branch name", bundle: .preferredLocalization)))
+    @Argument(help: ArgumentHelp(.localized("Branch name")))
     var branch: String
 
     func run() throws {
@@ -91,13 +91,13 @@ struct WorktreeCreate: ParsableCommand {
 
 struct Focus: ParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: String(localized: "Focus a project and worktree", bundle: .preferredLocalization)
+        abstract: .localized("Focus a project and worktree")
     )
 
-    @Argument(help: ArgumentHelp(String(localized: "Project name", bundle: .preferredLocalization)))
+    @Argument(help: ArgumentHelp(.localized("Project name")))
     var project: String
 
-    @Argument(help: ArgumentHelp(String(localized: "Worktree name", bundle: .preferredLocalization)))
+    @Argument(help: ArgumentHelp(.localized("Worktree name")))
     var worktree: String
 
     func run() throws {
@@ -109,19 +109,19 @@ struct Focus: ParsableCommand {
 
 struct Send: ParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: String(localized: "Send keys to a tmux window", bundle: .preferredLocalization)
+        abstract: .localized("Send keys to a tmux window")
     )
 
-    @Argument(help: ArgumentHelp(String(localized: "Project name", bundle: .preferredLocalization)))
+    @Argument(help: ArgumentHelp(.localized("Project name")))
     var project: String
 
-    @Argument(help: ArgumentHelp(String(localized: "Worktree name", bundle: .preferredLocalization)))
+    @Argument(help: ArgumentHelp(.localized("Worktree name")))
     var worktree: String
 
-    @Argument(help: ArgumentHelp(String(localized: "Window name", bundle: .preferredLocalization)))
+    @Argument(help: ArgumentHelp(.localized("Window name")))
     var window: String
 
-    @Argument(help: ArgumentHelp(String(localized: "Keys to send", bundle: .preferredLocalization)))
+    @Argument(help: ArgumentHelp(.localized("Keys to send")))
     var keys: String
 
     func run() throws {
@@ -134,16 +134,16 @@ struct Send: ParsableCommand {
 struct NewWindow: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "new-window",
-        abstract: String(localized: "Create a new window in a worktree", bundle: .preferredLocalization)
+        abstract: .localized("Create a new window in a worktree")
     )
 
-    @Argument(help: ArgumentHelp(String(localized: "Project name", bundle: .preferredLocalization)))
+    @Argument(help: ArgumentHelp(.localized("Project name")))
     var project: String
 
-    @Argument(help: ArgumentHelp(String(localized: "Worktree name", bundle: .preferredLocalization)))
+    @Argument(help: ArgumentHelp(.localized("Worktree name")))
     var worktree: String
 
-    @Option(name: .long, help: ArgumentHelp(String(localized: "Window name", bundle: .preferredLocalization)))
+    @Option(name: .long, help: ArgumentHelp(.localized("Window name")))
     var name: String?
 
     func run() throws {
@@ -155,10 +155,10 @@ struct NewWindow: ParsableCommand {
 
 struct Open: ParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: String(localized: "Open a project from a path", bundle: .preferredLocalization)
+        abstract: .localized("Open a project from a path")
     )
 
-    @Argument(help: ArgumentHelp(String(localized: "Path to project directory", bundle: .preferredLocalization)))
+    @Argument(help: ArgumentHelp(.localized("Path to project directory")))
     var path: String
 
     func run() throws {
