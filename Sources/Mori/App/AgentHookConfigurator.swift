@@ -176,7 +176,7 @@ enum AgentHookConfigurator {
     DIR_NAME="$(basename "$PANE_PATH" 2>/dev/null || echo '')"
     save_original_name() {
         local saved; saved="$(tmux show-option -pqv @mori-original-name 2>/dev/null || echo '')"
-        [ -z "$saved" ] && tmux set-option -p @mori-original-name "$(tmux display-message -p '#{window_name}' 2>/dev/null)"
+        if [ -z "$saved" ]; then tmux set-option -p @mori-original-name "$(tmux display-message -p '#{window_name}' 2>/dev/null)"; fi
     }
     set_state() {
         tmux set-option -p @mori-agent-state "$1"
@@ -202,7 +202,7 @@ enum AgentHookConfigurator {
     DIR_NAME="$(basename "$PANE_PATH" 2>/dev/null || echo '')"
     save_original_name() {
         local saved; saved="$(tmux show-option -pqv @mori-original-name 2>/dev/null || echo '')"
-        [ -z "$saved" ] && tmux set-option -p @mori-original-name "$(tmux display-message -p '#{window_name}' 2>/dev/null)"
+        if [ -z "$saved" ]; then tmux set-option -p @mori-original-name "$(tmux display-message -p '#{window_name}' 2>/dev/null)"; fi
     }
     set_state() {
         tmux set-option -p @mori-agent-state "$1"
