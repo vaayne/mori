@@ -78,3 +78,31 @@ GRDB.swift with SQLite (WAL mode) at `~/Library/Application Support/Mori/mori.sq
 - **SwiftUI views are pure**: They take data + callbacks as parameters (no direct AppState dependency). Hosting controllers bridge the gap.
 - **tmux session naming**: `<shortName>/<branchSlug>` via `SessionNaming.sessionName(projectShortName:worktree:)`. Common branch prefixes (feature/, fix/, etc.) are stripped automatically. Never assume session names are unique — use tmux session IDs internally.
 - **No XCTest**: Tests are executable targets with a custom `assertEqual`/`assertTrue` helper. Run them as executables, not via `swift test`.
+
+## Agent Hooks
+
+Hook-based agent status tracking. Hooks set `@mori-agent-state` and `@mori-agent-name` tmux pane options; Mori reads these during 5s poll (no capture-pane or process scanning). Enabled/disabled via Settings > Agent Hooks.
+
+**Configuration files:**
+- Claude Code: `~/.claude/settings.json` (`UserPromptSubmit`, `PreToolUse`, `Stop`, `Notification` events)
+- Codex CLI: `~/.codex/config.toml` (`notify` array, **top-level before [sections]**)
+- Pi: `~/.pi/agent/settings.json` (`extensions` array, file at `~/.config/mori/mori-pi-extension.ts`)
+
+**Hook scripts** in `~/.config/mori/hooks/` (loaded from `Sources/Mori/Resources/`):
+- `mori-hook-common.sh`: Sets pane options and renames window
+- `mori-agent-hook.sh`: Claude events → `"working"`/`"done"`
+- `mori-codex-hook.sh`: Codex notify (JSON arg 1) → `"working"`/`"done"`
+- `mori-pi-extension.ts`: Pi events → `"working"`/`"done"`
+
+**Implementation:**
+- `TmuxPane`: New fields `pid`, `agentState`, `agentName` read from pane options
+- `WorkspaceManager`: Maps hook state → `AgentState`, auto-tags `.agent` windows, clears stale options on shell return
+- `AgentHookConfigurator`: Install/uninstall logic, config file mutations (JSON/TOML)
+
+**TmuxCommandRunner fix:** Check inherited PATH first, fallback to login shell with 10s timeout (prevents hanging on `.app` launch). `SendableResumeGuard` prevents double-resume on concurrent timeout + termination.
+
+**Key gotchas:**
+- Shell: `[ -z "$var" ] && cmd` under `set -e` kills script if var is non-empty; use `if/then/fi`
+- Codex: notify must be top-level in TOML; JSON parsing with `sed` is fragile for quoted values
+
+See [docs/agent-hooks.md](docs/agent-hooks.md) for user guide and troubleshooting.
