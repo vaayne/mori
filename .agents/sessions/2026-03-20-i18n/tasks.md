@@ -24,12 +24,12 @@
 
 ## Phase 3: MoriUI String Wrapping (Representative Subset)
 
-- [ ] 3.1 — Add `localizedName` to `SettingsCategory` enum, replace `Text(category.rawValue)` with `Text(category.localizedName)` (~8 strings)
-- [ ] 3.2 — Wrap section headers and non-literal settings labels in `GhosttySettingsView.swift` (~10 strings)
-- [ ] 3.3 — Wrap sidebar labels/help text in `ProjectRailView.swift`, `WorktreeSidebarView.swift` (~10 strings)
-- [ ] 3.4 — Wrap status/badge labels in `WorktreeRowView.swift`, `WindowRowView.swift` (~10 strings)
-- [ ] 3.5 — Add all wrapped strings with `zh-Hans` translations to MoriUI's `Localizable.xcstrings`
-- [ ] 3.6 — Build and verify strings compile correctly
+- [x] 3.1 — Add `localizedName` to `SettingsCategory` enum, replace `Text(category.rawValue)` with `Text(category.localizedName)` (~8 strings)
+- [x] 3.2 — Wrap section headers and non-literal settings labels in `GhosttySettingsView.swift` (~10 strings)
+- [x] 3.3 — Wrap sidebar labels/help text in `ProjectRailView.swift`, `WorktreeSidebarView.swift` (~10 strings)
+- [x] 3.4 — Wrap status/badge labels in `WorktreeRowView.swift`, `WindowRowView.swift` (~10 strings)
+- [x] 3.5 — Add all wrapped strings with `zh-Hans` translations to MoriUI's `Localizable.xcstrings`
+- [x] 3.6 — Build and verify strings compile correctly
 
 ## Phase 4: CLI + Docs + CLAUDE.md
 

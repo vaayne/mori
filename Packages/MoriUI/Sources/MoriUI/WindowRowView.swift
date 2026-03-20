@@ -29,7 +29,7 @@ public struct WindowRowView: View {
                     .font(MoriTokens.Font.label)
                     .foregroundStyle(isActive ? MoriTokens.Color.active : MoriTokens.Color.muted)
 
-                Text(window.title.isEmpty ? "Window \(window.tmuxWindowIndex)" : window.title)
+                Text(window.title.isEmpty ? .localized("Window \(window.tmuxWindowIndex)") : window.title)
                     .font(MoriTokens.Font.windowTitle)
                     .lineLimit(1)
                     .foregroundStyle(isActive ? Color.primary : MoriTokens.Color.muted)

@@ -73,6 +73,18 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var localizedName: String {
+        switch self {
+        case .theme: return .localized("Theme")
+        case .fonts: return .localized("Fonts")
+        case .cursor: return .localized("Cursor")
+        case .keyboard: return .localized("Keyboard")
+        case .mouse: return .localized("Mouse")
+        case .window: return .localized("Window")
+        case .agents: return .localized("Agent Hooks")
+        }
+    }
+
     var icon: String {
         switch self {
         case .theme: return "paintpalette"
@@ -171,7 +183,7 @@ public struct GhosttySettingsView: View {
                     .font(.system(size: 13))
                     .frame(width: 20)
                     .foregroundStyle(isSelected ? .white : .secondary)
-                Text(category.rawValue)
+                Text(category.localizedName)
                     .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                     .foregroundStyle(isSelected ? .white : .primary)
                 Spacer()
@@ -191,7 +203,7 @@ public struct GhosttySettingsView: View {
     private var contentArea: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
-            Text(selectedCategory.rawValue)
+            Text(selectedCategory.localizedName)
                 .font(.title2.weight(.semibold))
                 .padding(.horizontal, 24)
                 .padding(.top, 20)
@@ -388,10 +400,10 @@ private struct ThemeSettingsContent: View {
         // Theme settings card
         SettingsCard {
             SettingRow(
-                title: "Color theme",
-                description: "Select a color scheme for the terminal."
+                title: .localized("Color theme"),
+                description: .localized("Select a color scheme for the terminal.")
             ) {
-                Text(model.theme.isEmpty ? "Default" : model.theme)
+                Text(model.theme.isEmpty ? .localized("Default") : model.theme)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .frame(width: 160, alignment: .trailing)
@@ -439,8 +451,8 @@ private struct ThemeSettingsContent: View {
             CardDivider()
 
             SettingRow(
-                title: "Background opacity",
-                description: "Translucent background behind the terminal content."
+                title: .localized("Background opacity"),
+                description: .localized("Translucent background behind the terminal content.")
             ) {
                 HStack(spacing: 8) {
                     Text(String(format: "%.2f", model.backgroundOpacity))
@@ -504,8 +516,8 @@ private struct FontSettingsContent: View {
 
         SettingsCard {
             SettingRow(
-                title: "Font family",
-                description: "The font to use for terminal text. Leave empty for the default."
+                title: .localized("Font family"),
+                description: .localized("The font to use for terminal text. Leave empty for the default.")
             ) {
                 TextField("SF Mono", text: $model.fontFamily)
                     .textFieldStyle(.roundedBorder)
@@ -517,8 +529,8 @@ private struct FontSettingsContent: View {
             CardDivider()
 
             SettingRow(
-                title: "Font size",
-                description: "Size in points for terminal text."
+                title: .localized("Font size"),
+                description: .localized("Size in points for terminal text.")
             ) {
                 HStack(spacing: 8) {
                     Text("\(model.fontSize) pt")
@@ -631,8 +643,8 @@ private struct CursorSettingsContent: View {
 
         SettingsCard {
             SettingRow(
-                title: "Cursor style",
-                description: "The shape of the cursor in the terminal."
+                title: .localized("Cursor style"),
+                description: .localized("The shape of the cursor in the terminal.")
             ) {
                 Picker("", selection: $model.cursorStyle) {
                     Text("Block").tag("block")
@@ -648,8 +660,8 @@ private struct CursorSettingsContent: View {
             CardDivider()
 
             SettingRow(
-                title: "Cursor blink",
-                description: "Whether the cursor blinks when idle."
+                title: .localized("Cursor blink"),
+                description: .localized("Whether the cursor blinks when idle.")
             ) {
                 Toggle("", isOn: $model.cursorBlink)
                     .labelsHidden()
@@ -692,8 +704,8 @@ private struct KeyboardSettingsContent: View {
     var body: some View {
         SettingsCard {
             SettingRow(
-                title: "Option as Alt",
-                description: "Treat the macOS Option key as Alt for terminal escape sequences."
+                title: .localized("Option as Alt"),
+                description: .localized("Treat the macOS Option key as Alt for terminal escape sequences.")
             ) {
                 Picker("", selection: $model.macosOptionAsAlt) {
                     Text("Off").tag("false")
@@ -743,21 +755,21 @@ private struct KeyboardSettingsContent: View {
                 LazyVStack(spacing: 0) {
                     // User overrides first
                     if !filteredUserBinds.isEmpty {
-                        keybindSectionHeader("User Overrides", count: filteredUserBinds.count)
+                        keybindSectionHeader(.localized("User Overrides"), count: filteredUserBinds.count)
                         ForEach(Array(filteredUserBinds.enumerated()), id: \.offset) { index, entry in
                             userKeybindRow(entry, index: index)
                         }
                     }
 
                     // Mori app shortcuts
-                    keybindSectionHeader("Mori App", count: filteredMoriBinds.count)
+                    keybindSectionHeader(.localized("Mori App"), count: filteredMoriBinds.count)
                     ForEach(filteredMoriBinds) { entry in
                         keybindRow(entry)
                     }
 
                     // Ghostty defaults
                     if !filteredGhosttyBinds.isEmpty {
-                        keybindSectionHeader("Ghostty Defaults", count: filteredGhosttyBinds.count)
+                        keybindSectionHeader(.localized("Ghostty Defaults"), count: filteredGhosttyBinds.count)
                         ForEach(filteredGhosttyBinds) { entry in
                             keybindRow(entry)
                         }
@@ -947,8 +959,8 @@ private struct MouseSettingsContent: View {
     var body: some View {
         SettingsCard {
             SettingRow(
-                title: "Hide while typing",
-                description: "Automatically hide the mouse cursor when typing in the terminal."
+                title: .localized("Hide while typing"),
+                description: .localized("Automatically hide the mouse cursor when typing in the terminal.")
             ) {
                 Toggle("", isOn: $model.mouseHideWhileTyping)
                     .labelsHidden()
@@ -958,8 +970,8 @@ private struct MouseSettingsContent: View {
             CardDivider()
 
             SettingRow(
-                title: "Scroll multiplier",
-                description: "Multiplier for mouse scroll speed."
+                title: .localized("Scroll multiplier"),
+                description: .localized("Multiplier for mouse scroll speed.")
             ) {
                 HStack(spacing: 8) {
                     Text("\(model.mouseScrollMultiplier)x")
@@ -975,8 +987,8 @@ private struct MouseSettingsContent: View {
             CardDivider()
 
             SettingRow(
-                title: "Copy on select",
-                description: "Automatically copy selected text to the clipboard."
+                title: .localized("Copy on select"),
+                description: .localized("Automatically copy selected text to the clipboard.")
             ) {
                 Picker("", selection: $model.copyOnSelect) {
                     Text("Off").tag("false")
@@ -1001,8 +1013,8 @@ private struct WindowSettingsContent: View {
     var body: some View {
         SettingsCard {
             SettingRow(
-                title: "Balance window padding",
-                description: "Distribute extra padding evenly around the terminal content to center it within the window."
+                title: .localized("Balance window padding"),
+                description: .localized("Distribute extra padding evenly around the terminal content to center it within the window.")
             ) {
                 Toggle("", isOn: $model.windowPaddingBalance)
                     .labelsHidden()
@@ -1025,23 +1037,23 @@ private struct AgentHookSettingsContent: View {
             .fixedSize(horizontal: false, vertical: true)
 
         agentCard(
-            name: "Claude Code",
+            name: .localized("Claude Code"),
             icon: "terminal",
-            description: "Adds hooks to ~/.claude/settings.json for prompt submit, tool use, stop, and notification events.",
+            description: .localized("Adds hooks to ~/.claude/settings.json for prompt submit, tool use, stop, and notification events."),
             isEnabled: $model.claudeEnabled
         )
 
         agentCard(
-            name: "Codex CLI",
+            name: .localized("Codex CLI"),
             icon: "chevron.left.forwardslash.chevron.right",
-            description: "Adds a notify entry to ~/.codex/config.toml for agent turn completion events.",
+            description: .localized("Adds a notify entry to ~/.codex/config.toml for agent turn completion events."),
             isEnabled: $model.codexEnabled
         )
 
         agentCard(
-            name: "Pi",
+            name: .localized("Pi"),
             icon: "sparkle",
-            description: "Registers an extension in Pi's settings.json for agent start, end, and tool execution events.",
+            description: .localized("Registers an extension in Pi's settings.json for agent start, end, and tool execution events."),
             isEnabled: $model.piEnabled
         )
     }

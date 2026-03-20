@@ -70,3 +70,29 @@
 - Apple standard terms used for zh-Hans: 撤销/重做/剪切/拷贝/粘贴/全选/设置/退出/隐藏/窗口/侧栏/全屏/最小化/缩放
 - `error.localizedDescription` is NOT wrapped (system-provided, already localized by Foundation)
 - Build produces only pre-existing ghostty linker warnings, no new warnings
+
+## Phase 3: MoriUI String Wrapping
+
+**Status:** complete
+
+**Tasks completed:**
+- 3.1: Added `localizedName` computed property to `SettingsCategory` enum (7 cases), replaced both `Text(category.rawValue)` usages with `Text(category.localizedName)` in sidebar row and content header
+- 3.2: Wrapped 11 `SettingRow` title/description pairs with `.localized()` (Color theme, Background opacity, Font family, Font size, Cursor style, Cursor blink, Option as Alt, Hide while typing, Scroll multiplier, Copy on select, Balance window padding). Wrapped 3 `keybindSectionHeader` call-site strings, 3 `agentCard` name/description pairs, and 1 `Text(model.theme.isEmpty ? "Default" : ...)` ternary
+- 3.3: SwiftUI literal strings in `ProjectRailView.swift` and `WorktreeSidebarView.swift` are auto-localized (`.help()`, `.accessibilityLabel()`, `Label()`, `Text("literal")`, `TextField` placeholders). Added zh-Hans translations for all these strings in the xcstrings catalog
+- 3.4: Wrapped `Text(window.title.isEmpty ? "Window \(index)" : window.title)` in WindowRowView with `.localized()`. Other strings in WorktreeRowView and WindowRowView are SwiftUI literals (`.help()`, `.accessibilityLabel()`) — auto-localized, with zh-Hans translations added to catalog
+- 3.5: Populated MoriUI `Localizable.xcstrings` with 90 string entries and zh-Hans translations
+- 3.6: Build verified — `mise run build` succeeds (exit code 0)
+
+**Files changed:**
+- `Packages/MoriUI/Sources/MoriUI/GhosttySettingsView.swift` — added `localizedName` to SettingsCategory, wrapped all SettingRow params, keybindSectionHeader params, agentCard params, and Default theme text
+- `Packages/MoriUI/Sources/MoriUI/WindowRowView.swift` — wrapped Window fallback title with `.localized()`
+- `Packages/MoriUI/Sources/MoriUI/Resources/Localizable.xcstrings` — populated with 90 string entries + zh-Hans translations
+
+**Decisions & context for next phase:**
+- SwiftUI literal `Text("string")`, `.help("string")`, `.accessibilityLabel("string")`, `Label("string", ...)` are auto-localized by SwiftUI when the module has `.xcstrings` resources — no explicit `.localized()` needed, but zh-Hans entries must be in the catalog
+- `SettingRow` and `agentCard` accept `String` params that flow into `Text(stringVar)` — these are NOT auto-localized, so callers must pass `.localized()` values
+- `keybindSectionHeader` similarly accepts a `String` param — callers use `.localized()` at call site
+- Interpolated SwiftUI strings like `"Open in \(editor.name)"` use `%@` as the xcstrings key
+- Integer interpolations like `"\(worktree.aheadCount) ahead"` use `%lld` as the xcstrings key
+- ProjectRailView and WorktreeSidebarView required no code changes — only xcstrings entries for auto-localized literals
+- Build produces only pre-existing ghostty linker warnings, no new warnings
