@@ -29,6 +29,9 @@ private extension NSEvent {
         if characters.count == 1,
            let scalar = characters.unicodeScalars.first {
             if scalar.value < 0x20 {
+                // Strip only Control here. Ghostty handles Ctrl encoding itself,
+                // but other modifiers such as Option may still be required to
+                // recover the translated text for composed input paths.
                 return self.characters(byApplyingModifiers: modifierFlags.subtracting(.control))
             }
 
@@ -38,6 +41,16 @@ private extension NSEvent {
         }
 
         return characters
+    }
+
+    var hasSingleControlCharacter: Bool {
+        guard let characters,
+              characters.count == 1,
+              let scalar = characters.unicodeScalars.first else {
+            return false
+        }
+
+        return scalar.value < 0x20
     }
 }
 
@@ -193,14 +206,19 @@ public final class GhosttySurfaceView: NSView {
                 _ = sendKeyEvent(action, event: event, translationEvent: translationEvent, text: text)
             }
         } else {
+            let composing = markedTextStorage.length > 0 || markedTextBefore
+            let text: String? = composing || !event.hasSingleControlCharacter
+                ? translationEvent.ghosttyCharacters
+                : nil
+
             // No accumulated text. If we're in preedit or just left preedit,
             // mark as composing so ghostty doesn't process it as real input.
             _ = sendKeyEvent(
                 action,
                 event: event,
                 translationEvent: translationEvent,
-                text: translationEvent.ghosttyCharacters,
-                composing: markedTextStorage.length > 0 || markedTextBefore
+                text: text,
+                composing: composing
             )
         }
     }
