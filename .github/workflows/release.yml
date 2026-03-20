@@ -34,7 +34,7 @@ jobs:
       - name: Cache SPM packages
         uses: actions/cache@v4
         with:
-          path: Frameworksbuild
+          path: .build
           key: spm-${{ hashFiles('Package.resolved', '**/Package.resolved') }}
           restore-keys: spm-
 

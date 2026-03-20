@@ -69,12 +69,17 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 </plist>
 EOF
 
-# Quit the app if it's running
-pkill -x "$APP_NAME" 2>/dev/null && sleep 1 || true
+# In CI, keep the bundle in the working directory for archiving
+if [[ -z "${CI:-}" ]]; then
+    # Quit the app if it's running
+    pkill -x "$APP_NAME" 2>/dev/null && sleep 1 || true
 
-# Move to /Applications
-rm -rf "/Applications/$APP_BUNDLE"
-mv "$APP_BUNDLE" "/Applications/$APP_BUNDLE"
+    # Move to /Applications
+    rm -rf "/Applications/$APP_BUNDLE"
+    mv "$APP_BUNDLE" "/Applications/$APP_BUNDLE"
 
-echo "✅ Built and installed to /Applications/$APP_BUNDLE"
-echo "   Run with: open /Applications/$APP_BUNDLE"
+    echo "✅ Built and installed to /Applications/$APP_BUNDLE"
+    echo "   Run with: open /Applications/$APP_BUNDLE"
+else
+    echo "✅ Built $APP_BUNDLE (CI mode — kept in working directory)"
+fi
