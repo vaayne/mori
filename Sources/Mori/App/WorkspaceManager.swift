@@ -754,17 +754,19 @@ final class WorkspaceManager {
 
                 // Read hook-reported agent state from pane options
                 if let hookState = pane.agentState {
+                    // Always process the state first (agent may have finished
+                    // before this poll tick, so pane is back to shell already)
+                    let agentState = mapHookState(hookState)
+                    if agentStatePriority(agentState) > agentStatePriority(windowAgentState) {
+                        windowAgentState = agentState
+                    }
+                    if let name = pane.agentName {
+                        windowDetectedAgent = name
+                    }
+
                     if isShell {
-                        // Agent exited but pane options linger — clean up
+                        // Agent exited — clean up stale options after processing
                         await clearStaleAgentState(paneId: pane.paneId)
-                    } else {
-                        let agentState = mapHookState(hookState)
-                        if agentStatePriority(agentState) > agentStatePriority(windowAgentState) {
-                            windowAgentState = agentState
-                        }
-                        if let name = pane.agentName {
-                            windowDetectedAgent = name
-                        }
                     }
                 }
             }

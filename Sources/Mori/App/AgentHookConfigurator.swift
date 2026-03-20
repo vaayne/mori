@@ -136,8 +136,18 @@ enum AgentHookConfigurator {
         if let content = try? String(contentsOf: configURL, encoding: .utf8),
            content.contains(codexHookPath) {
             var lines = content.components(separatedBy: "\n")
-            lines.removeAll { line in
-                line.contains(codexHookPath) || line == "# Mori agent status hook"
+            if let idx = lines.firstIndex(where: { $0.hasPrefix("notify") && $0.contains(codexHookPath) }) {
+                var entries = parseTomlStringArray(lines[idx])
+                entries.removeAll { $0 == codexHookPath }
+                if entries.isEmpty {
+                    // Remove the notify line and the comment above it
+                    lines.remove(at: idx)
+                    if idx > 0 && lines[idx - 1] == "# Mori agent status hook" {
+                        lines.remove(at: idx - 1)
+                    }
+                } else {
+                    lines[idx] = "notify = [\(entries.map { "\"\($0)\"" }.joined(separator: ", "))]"
+                }
             }
             let cleaned = lines.joined(separator: "\n")
             try? cleaned.write(to: configURL, atomically: true, encoding: .utf8)
@@ -249,8 +259,14 @@ enum AgentHookConfigurator {
 
         var lines = existing.components(separatedBy: "\n")
         if let idx = lines.firstIndex(where: { $0.hasPrefix("notify") && $0.contains("[") }) {
-            // Replace existing top-level notify
-            lines[idx] = "notify = [\"\(hookPath)\"]"
+            // Append to existing notify array, preserving other entries
+            let existingLine = lines[idx]
+            let entries = parseTomlStringArray(existingLine)
+            if !entries.contains(hookPath) {
+                var updated = entries
+                updated.append(hookPath)
+                lines[idx] = "notify = [\(updated.map { "\"\($0)\"" }.joined(separator: ", "))]"
+            }
         } else {
             // Insert before the first [section] header to keep it top-level
             let notifyLines = ["# Mori agent status hook", "notify = [\"\(hookPath)\"]", ""]
@@ -340,5 +356,17 @@ enum AgentHookConfigurator {
             withJSONObject: object, options: [.prettyPrinted, .sortedKeys]
         ) else { return }
         try? data.write(to: url, options: .atomic)
+    }
+
+    /// Parse a TOML string array like `notify = ["/a", "/b"]` into `["/a", "/b"]`.
+    private static func parseTomlStringArray(_ line: String) -> [String] {
+        guard let open = line.firstIndex(of: "["),
+              let close = line.lastIndex(of: "]") else { return [] }
+        let inner = line[line.index(after: open)..<close]
+        return inner.split(separator: ",").compactMap { segment in
+            let trimmed = segment.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") else { return nil }
+            return String(trimmed.dropFirst().dropLast())
+        }
     }
 }
