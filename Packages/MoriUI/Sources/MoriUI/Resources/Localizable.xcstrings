@@ -941,6 +941,196 @@
           }
         }
       }
+    },
+    "New Tab": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u65b0\u5efa\u6807\u7b7e\u9875"
+          }
+        }
+      }
+    },
+    "Close Window": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u5173\u95ed\u7a97\u53e3"
+          }
+        }
+      }
+    },
+    "Next Tab": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u4e0b\u4e00\u4e2a\u6807\u7b7e\u9875"
+          }
+        }
+      }
+    },
+    "Previous Tab": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u4e0a\u4e00\u4e2a\u6807\u7b7e\u9875"
+          }
+        }
+      }
+    },
+    "Go to Tab N": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u8df3\u8f6c\u5230\u7b2c N \u4e2a\u6807\u7b7e\u9875"
+          }
+        }
+      }
+    },
+    "Last Tab": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u6700\u540e\u4e00\u4e2a\u6807\u7b7e\u9875"
+          }
+        }
+      }
+    },
+    "Split Right": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u5411\u53f3\u62c6\u5206"
+          }
+        }
+      }
+    },
+    "Split Down": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u5411\u4e0b\u62c6\u5206"
+          }
+        }
+      }
+    },
+    "Next Pane": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u4e0b\u4e00\u4e2a\u9762\u677f"
+          }
+        }
+      }
+    },
+    "Previous Pane": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u4e0a\u4e00\u4e2a\u9762\u677f"
+          }
+        }
+      }
+    },
+    "Directional Pane Nav": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u65b9\u5411\u952e\u9762\u677f\u5bfc\u822a"
+          }
+        }
+      }
+    },
+    "Resize Pane": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u8c03\u6574\u9762\u677f\u5927\u5c0f"
+          }
+        }
+      }
+    },
+    "Equalize Panes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u5747\u5206\u9762\u677f"
+          }
+        }
+      }
+    },
+    "Toggle Pane Zoom": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u5207\u6362\u9762\u677f\u7f29\u653e"
+          }
+        }
+      }
+    },
+    "Next Worktree": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u4e0b\u4e00\u4e2a\u5de5\u4f5c\u533a"
+          }
+        }
+      }
+    },
+    "Previous Worktree": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u4e0a\u4e00\u4e2a\u5de5\u4f5c\u533a"
+          }
+        }
+      }
+    },
+    "Open Lazygit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u6253\u5f00 Lazygit"
+          }
+        }
+      }
+    },
+    "Open Yazi": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u6253\u5f00 Yazi"
+          }
+        }
+      }
+    },
+    "Open Project": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u6253\u5f00\u9879\u76ee"
+          }
+        }
+      }
     }
   }
 }
