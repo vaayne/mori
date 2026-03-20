@@ -36,8 +36,16 @@ enum AgentHookConfigurator {
         hooksDir.appendingPathComponent("mori-codex-hook.sh").path
     }
 
+    /// Pi config directory: $PI_CODING_AGENT_DIR or ~/.pi/agent
+    private static var piAgentDir: URL {
+        if let dir = ProcessInfo.processInfo.environment["PI_CODING_AGENT_DIR"], !dir.isEmpty {
+            return URL(fileURLWithPath: dir)
+        }
+        return home.appendingPathComponent(".pi/agent")
+    }
+
     private static var piExtensionURL: URL {
-        home.appendingPathComponent(".pi/agent/extensions/mori-tmux.ts")
+        configDir.appendingPathComponent("mori-pi-extension.ts")
     }
 
     // MARK: - Detection
@@ -58,9 +66,10 @@ enum AgentHookConfigurator {
         return content.contains(codexHookPath)
     }
 
-    /// Check if Pi extension is installed at ~/.pi/agent/extensions/mori-tmux.ts.
+    /// Check if Pi extension is installed and registered in ~/.pi/agent/settings.json.
     static func isPiExtensionInstalled() -> Bool {
-        FileManager.default.fileExists(atPath: piExtensionURL.path)
+        guard FileManager.default.fileExists(atPath: piExtensionURL.path) else { return false }
+        return piSettingsContainsExtension()
     }
 
     // MARK: - Install
@@ -81,10 +90,12 @@ enum AgentHookConfigurator {
         configureCodexSettings(hookPath: path)
     }
 
-    /// Install Pi extension only.
+    /// Install Pi extension to mori config dir and register in Pi's settings.json.
     static func installPiExtension() {
         guard let source = loadBundledResource("mori-pi-extension", ext: "ts") else { return }
+        ensureConfigDir()
         installFile(at: piExtensionURL, content: source)
+        registerPiExtension()
     }
 
     // MARK: - Uninstall
@@ -134,12 +145,17 @@ enum AgentHookConfigurator {
         try? FileManager.default.removeItem(atPath: codexHookPath)
     }
 
-    /// Remove Pi extension file.
+    /// Remove Pi extension file and unregister from settings.json.
     static func uninstallPiExtension() {
         try? FileManager.default.removeItem(at: piExtensionURL)
+        unregisterPiExtension()
     }
 
     // MARK: - Directory Setup
+
+    private static func ensureConfigDir() {
+        try? FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+    }
 
     private static func ensureHooksDir() {
         try? FileManager.default.createDirectory(at: hooksDir, withIntermediateDirectories: true)
@@ -247,6 +263,48 @@ enum AgentHookConfigurator {
         }
         let config = lines.joined(separator: "\n")
         try? config.write(to: configURL, atomically: true, encoding: .utf8)
+    }
+
+    // MARK: - Pi
+
+    private static var piExtensionSettingsPath: String {
+        // Pi settings use ~/relative paths
+        let filePath = piExtensionURL.path
+        let homePath = home.path
+        if filePath.hasPrefix(homePath) {
+            return "~" + filePath.dropFirst(homePath.count)
+        }
+        return filePath
+    }
+
+    private static var piSettingsURL: URL {
+        piAgentDir.appendingPathComponent("settings.json")
+    }
+
+    private static func piSettingsContainsExtension() -> Bool {
+        guard let data = try? Data(contentsOf: piSettingsURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let extensions = json["extensions"] as? [String] else { return false }
+        return extensions.contains(piExtensionSettingsPath)
+    }
+
+    private static func registerPiExtension() {
+        guard let data = try? Data(contentsOf: piSettingsURL),
+              var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        var extensions = json["extensions"] as? [String] ?? []
+        guard !extensions.contains(piExtensionSettingsPath) else { return }
+        extensions.append(piExtensionSettingsPath)
+        json["extensions"] = extensions
+        writeJSON(json, to: piSettingsURL)
+    }
+
+    private static func unregisterPiExtension() {
+        guard let data = try? Data(contentsOf: piSettingsURL),
+              var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              var extensions = json["extensions"] as? [String] else { return }
+        extensions.removeAll { $0 == piExtensionSettingsPath }
+        json["extensions"] = extensions
+        writeJSON(json, to: piSettingsURL)
     }
 
     // MARK: - Helpers

@@ -69,7 +69,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     case keyboard = "Keyboard"
     case mouse = "Mouse"
     case window = "Window"
-    case agents = "Agents"
+    case agents = "Agent Hooks"
 
     var id: String { rawValue }
 
@@ -1019,7 +1019,7 @@ private struct AgentHookSettingsContent: View {
     let onChanged: () -> Void
 
     var body: some View {
-        Text("Enable hooks so coding agents can report their status to Mori. When enabled, Mori installs a small hook script into the agent's config.")
+        Text("Connect coding agents to Mori so their status appears in tab names and triggers notifications. Each hook writes a small script to ~/.config/mori/ and registers it with the agent.")
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
@@ -1027,21 +1027,21 @@ private struct AgentHookSettingsContent: View {
         agentCard(
             name: "Claude Code",
             icon: "terminal",
-            description: "Hooks into UserPromptSubmit, PreToolUse, Stop, and Notification events. Modifies ~/.claude/settings.json.",
+            description: "Adds hooks to ~/.claude/settings.json for prompt submit, tool use, stop, and notification events.",
             isEnabled: $model.claudeEnabled
         )
 
         agentCard(
             name: "Codex CLI",
             icon: "chevron.left.forwardslash.chevron.right",
-            description: "Hooks into the notify callback for agent-turn-complete events. Modifies ~/.codex/config.toml.",
+            description: "Adds a notify entry to ~/.codex/config.toml for agent turn completion events.",
             isEnabled: $model.codexEnabled
         )
 
         agentCard(
             name: "Pi",
             icon: "sparkle",
-            description: "Installs a TypeScript extension for agent_start, agent_end, and tool_execution_start events at ~/.pi/agent/extensions/mori-tmux.ts.",
+            description: "Registers an extension in Pi's settings.json for agent start, end, and tool execution events.",
             isEnabled: $model.piEnabled
         )
     }
