@@ -63,6 +63,7 @@ public struct AgentHookModel: Equatable {
 // MARK: - Settings Category
 
 enum SettingsCategory: String, CaseIterable, Identifiable {
+    case general = "General"
     case theme = "Theme"
     case fonts = "Fonts"
     case cursor = "Cursor"
@@ -75,6 +76,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
 
     var localizedName: String {
         switch self {
+        case .general: return .localized("General")
         case .theme: return .localized("Theme")
         case .fonts: return .localized("Fonts")
         case .cursor: return .localized("Cursor")
@@ -87,6 +89,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
+        case .general: return "gearshape"
         case .theme: return "paintpalette"
         case .fonts: return "textformat"
         case .cursor: return "character.cursor.ibeam"
@@ -109,7 +112,7 @@ public struct GhosttySettingsView: View {
     @Binding var agentHooks: AgentHookModel
     var onAgentHookChanged: ((AgentHookModel) -> Void)?
 
-    @State private var selectedCategory: SettingsCategory = .theme
+    @State private var selectedCategory: SettingsCategory = .general
 
     public init(
         model: Binding<GhosttySettingsModel>,
@@ -213,6 +216,7 @@ public struct GhosttySettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     switch selectedCategory {
+                    case .general: GeneralSettingsContent()
                     case .theme: ThemeSettingsContent(model: $model, availableThemes: availableThemes, onChanged: onChanged)
                     case .fonts: FontSettingsContent(model: $model, onChanged: onChanged)
                     case .cursor: CursorSettingsContent(model: $model, onChanged: onChanged)
@@ -375,6 +379,45 @@ private struct TerminalPreview: View {
             Rectangle()
                 .fill(Color.white.opacity(0.5))
                 .frame(width: CGFloat(fontSize) * 0.6, height: CGFloat(fontSize))
+        }
+    }
+}
+
+// MARK: - General Settings
+
+private struct GeneralSettingsContent: View {
+    private static let supportedLanguages: [(name: String, locale: String)] = [
+        ("English", "en"),
+        ("简体中文", "zh-Hans"),
+    ]
+
+    @State private var selectedLocale: String = {
+        UserDefaults.standard.stringArray(forKey: "AppleLanguages")?.first ?? "en"
+    }()
+
+    var body: some View {
+        SettingsCard {
+            SettingRow(
+                title: .localized("Language"),
+                description: .localized("Choose the display language for Mori.")
+            ) {
+                Picker("", selection: $selectedLocale) {
+                    ForEach(Self.supportedLanguages, id: \.locale) { language in
+                        Text(language.name).tag(language.locale)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 160)
+                .onChange(of: selectedLocale) { _, newValue in
+                    UserDefaults.standard.set([newValue], forKey: "AppleLanguages")
+                }
+            }
+
+            CardDivider()
+
+            Text(String.localized("Restart Mori to apply language change."))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
         }
     }
 }

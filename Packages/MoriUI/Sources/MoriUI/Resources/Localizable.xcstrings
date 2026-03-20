@@ -901,6 +901,46 @@
           }
         }
       }
+    },
+    "General": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u901a\u7528"
+          }
+        }
+      }
+    },
+    "Language": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u8bed\u8a00"
+          }
+        }
+      }
+    },
+    "Choose the display language for Mori.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u9009\u62e9 Mori \u7684\u663e\u793a\u8bed\u8a00\u3002"
+          }
+        }
+      }
+    },
+    "Restart Mori to apply language change.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u91cd\u542f Mori \u4ee5\u5e94\u7528\u8bed\u8a00\u66f4\u6539\u3002"
+          }
+        }
+      }
     }
   }
 }

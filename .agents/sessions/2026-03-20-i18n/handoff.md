@@ -129,3 +129,24 @@
 - Interpolated error message (`"Error: \(message)"`) required extracting to a local variable to avoid type inference ambiguity with `Data(...)` initializer
 - 3 pre-existing MoriCore test failures (agentDone badge priority) are unrelated to i18n changes — confirmed by running tests on clean stash
 - All doc stubs include both `<!-- Translation pending -->` HTML comment and visible Chinese marker `> 翻译进行中`
+
+## Phase 5: In-App Language Switcher
+
+**Status:** complete
+
+**Tasks completed:**
+- 5.1: Added `.general` case as the first item in `SettingsCategory` enum with `gearshape` icon and localized name ("General" / "通用")
+- 5.2: Created `GeneralSettingsContent` private view with a language `Picker` (English / 简体中文), reads/writes `AppleLanguages` UserDefaults, includes restart hint text
+- 5.3: Added `.general` case to the `contentArea` switch in `GhosttySettingsView`, changed default `selectedCategory` to `.general`
+- 5.4: Added 4 new zh-Hans translations to MoriUI's `Localizable.xcstrings`: "General" (通用), "Language" (语言), "Choose the display language for Mori." (选择 Mori 的显示语言。), "Restart Mori to apply language change." (重启 Mori 以应用语言更改。)
+- 5.5: Build verified — `mise run build` succeeds (exit code 0, only pre-existing ghostty linker warnings)
+
+**Files changed:**
+- `Packages/MoriUI/Sources/MoriUI/GhosttySettingsView.swift` — added `.general` enum case, `GeneralSettingsContent` view, updated `contentArea` switch, changed default category to `.general`
+- `Packages/MoriUI/Sources/MoriUI/Resources/Localizable.xcstrings` — added 4 new string entries with zh-Hans translations
+
+**Decisions & notes:**
+- Default settings landing page changed from `.theme` to `.general` — General is the natural first category and contains the language picker which users need to find easily
+- Language picker uses `UserDefaults.standard` `AppleLanguages` key — standard Apple mechanism for per-app language override
+- Restart hint shown as secondary text below the picker (not an alert) — non-intrusive UX
+- Supported languages array is a static constant on the view struct for easy future extension

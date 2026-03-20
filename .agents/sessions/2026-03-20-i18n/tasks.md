@@ -40,3 +40,11 @@
 - [x] 4.5 — Update CLAUDE.md with i18n conventions section
 - [x] 4.6 — Run full test suite (`mise run test`)
 - [x] 4.7 — Build smoke test: verify app launches under zh-Hans locale
+
+## Phase 5: In-App Language Switcher
+
+- [x] 5.1 — Add `.general` case to `SettingsCategory` enum (first item, gearshape icon, localized name)
+- [x] 5.2 — Create `GeneralSettingsContent` view with language `Picker` + restart prompt
+- [x] 5.3 — Add `.general` case to `contentArea` switch in `GhosttySettingsView`
+- [x] 5.4 — Add zh-Hans translations for new strings to MoriUI's `Localizable.xcstrings`
+- [x] 5.5 — Build and verify (`mise run build`)

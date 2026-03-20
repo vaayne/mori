@@ -188,6 +188,16 @@ Wrap a representative subset in the MoriUI SwiftUI package. Target: settings cat
 6. Run full test suite (`mise run test`) to verify nothing is broken
 7. Build smoke test: verify app launches without crash under `zh-Hans` locale (`defaults write ... AppleLanguages '(zh-Hans)'`)
 
+### Phase 5: In-App Language Switcher
+
+Add a "General" settings category with a language picker so users can switch language without going to macOS System Settings.
+
+1. Add `.general` case to `SettingsCategory` enum as the first item (icon: `gearshape`, localized name: "General" / "通用"). Update `localizedName` and `icon` switch statements. (files: `Packages/MoriUI/Sources/MoriUI/GhosttySettingsView.swift`)
+2. Create `GeneralSettingsContent` view with a language `Picker`. Supported languages: "English" and "简体中文". Read current language from `UserDefaults.standard.stringArray(forKey: "AppleLanguages")`. On change, write `UserDefaults.standard.set([selectedLocale], forKey: "AppleLanguages")` and show a restart prompt. (files: `Packages/MoriUI/Sources/MoriUI/GhosttySettingsView.swift`)
+3. Add the `.general` case to the `contentArea` switch in `GhosttySettingsView` body. (files: `Packages/MoriUI/Sources/MoriUI/GhosttySettingsView.swift`)
+4. Add zh-Hans translations for new strings ("General", "Language", "Restart Mori to apply language change.", etc.) to MoriUI's `Localizable.xcstrings`. (files: `Packages/MoriUI/Sources/MoriUI/Resources/Localizable.xcstrings`)
+5. Build and verify (`mise run build`)
+
 ## Testing Strategy
 
 - `mise run build` succeeds after each phase (hard gate at Phase 1)
