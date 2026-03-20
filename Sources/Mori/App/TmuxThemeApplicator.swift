@@ -39,28 +39,11 @@ enum TmuxThemeApplicator {
             ("pane-active-border-style", "fg=\(activeBorderFg)"),
         ]
 
-        // Apply global session options
-        for (option, value) in sessionOptions {
-            do {
-                try await tmuxBackend.setOption(sessionId: nil, option: option, value: value)
-            } catch {
-                print("[TmuxThemeApplicator] Failed to set global session option \(option): \(error)")
-            }
-        }
-
-        // Apply global window options (-gw flag)
-        for (option, value) in windowOptions {
-            do {
-                try await tmuxBackend.setWindowOption(global: true, target: nil, option: option, value: value)
-            } catch {
-                print("[TmuxThemeApplicator] Failed to set global window option \(option): \(error)")
-            }
-        }
-
-        // Also apply to all existing sessions so they pick up the change immediately
+        // Apply only to Mori-managed sessions (those matching <project>/<branch> naming).
+        // Non-Mori sessions are left untouched so they inherit the user's tmux.conf.
         do {
             let sessions = try await tmuxBackend.scanAll()
-            for session in sessions {
+            for session in sessions where session.isMoriSession {
                 for (option, value) in sessionOptions {
                     try? await tmuxBackend.setOption(sessionId: session.id, option: option, value: value)
                 }
