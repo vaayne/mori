@@ -163,22 +163,22 @@ final class TerminalAreaViewController: NSViewController {
         icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 40, weight: .thin)
         icon.contentTintColor = .tertiaryLabelColor
 
-        let label = NSTextField(labelWithString: hasSelectedWorktree ? "Session ended" : "No active session")
+        let label = NSTextField(labelWithString: hasSelectedWorktree ? .localized("Session ended") : .localized("No active session"))
         label.translatesAutoresizingMaskIntoConstraints = false
         label.font = .systemFont(ofSize: 16, weight: .medium)
         label.textColor = .secondaryLabelColor
         label.alignment = .center
 
-        let subtitleText = hasSelectedWorktree
-            ? "The terminal session has exited"
-            : "Select a worktree or add a project to get started"
+        let subtitleText: String = hasSelectedWorktree
+            ? .localized("The terminal session has exited")
+            : .localized("Select a worktree or add a project to get started")
         let subtitle = NSTextField(labelWithString: subtitleText)
         subtitle.translatesAutoresizingMaskIntoConstraints = false
         subtitle.font = .systemFont(ofSize: 12)
         subtitle.textColor = .tertiaryLabelColor
         subtitle.alignment = .center
 
-        let buttonTitle = hasSelectedWorktree ? "Reconnect" : "Add Project..."
+        let buttonTitle: String = hasSelectedWorktree ? .localized("Reconnect") : .localized("Add Project...")
         let button = NSButton(title: buttonTitle, target: self, action: #selector(emptyStateButtonClicked))
         button.translatesAutoresizingMaskIntoConstraints = false
         button.bezelStyle = .rounded
@@ -232,10 +232,10 @@ final class TerminalAreaViewController: NSViewController {
     private func showError(_ message: String) {
         guard let window = view.window else { return }
         let alert = NSAlert()
-        alert.messageText = "Terminal Error"
+        alert.messageText = .localized("Terminal Error")
         alert.informativeText = message
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: .localized("OK"))
         alert.beginSheetModal(for: window)
     }
 }

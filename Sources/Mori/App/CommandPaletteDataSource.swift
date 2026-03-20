@@ -43,18 +43,18 @@ final class CommandPaletteDataSource {
         // Static actions
         items.append(.action(
             id: "action.create-worktree",
-            title: "Create Worktree",
-            subtitle: "Create a new git worktree and tmux session"
+            title: .localized("Create Worktree"),
+            subtitle: .localized("Create a new git worktree and tmux session")
         ))
         items.append(.action(
             id: "action.refresh",
-            title: "Refresh",
-            subtitle: "Trigger a tmux and git status poll"
+            title: .localized("Refresh"),
+            subtitle: .localized("Trigger a tmux and git status poll")
         ))
         items.append(.action(
             id: "action.open-project",
-            title: "Open Project",
-            subtitle: "Add a project folder to Mori"
+            title: .localized("Open Project"),
+            subtitle: .localized("Add a project folder to Mori")
         ))
 
         return items

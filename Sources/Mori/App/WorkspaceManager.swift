@@ -371,12 +371,12 @@ final class WorkspaceManager {
     func handleCreateWorktree(branchName: String) async {
         let trimmed = branchName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else {
-            showErrorAlert(title: "Invalid Branch Name", message: WorkspaceError.branchNameEmpty.localizedDescription)
+            showErrorAlert(title: .localized("Invalid Branch Name"), message: WorkspaceError.branchNameEmpty.localizedDescription)
             return
         }
 
         guard let projectId = appState.uiState.selectedProjectId else {
-            showErrorAlert(title: "No Project Selected", message: "Please select a project first.")
+            showErrorAlert(title: .localized("No Project Selected"), message: .localized("Please select a project first."))
             return
         }
 
@@ -384,7 +384,7 @@ final class WorkspaceManager {
             _ = try await createWorktree(projectId: projectId, branchName: trimmed)
             await refreshRuntimeState()
         } catch {
-            showErrorAlert(title: "Failed to Create Worktree", message: error.localizedDescription)
+            showErrorAlert(title: .localized("Failed to Create Worktree"), message: error.localizedDescription)
         }
     }
 
@@ -394,7 +394,7 @@ final class WorkspaceManager {
         alert.alertStyle = .warning
         alert.messageText = title
         alert.informativeText = message
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: .localized("OK"))
         alert.runModal()
     }
 
@@ -411,20 +411,20 @@ final class WorkspaceManager {
         if worktree.isMainWorktree {
             let alert = NSAlert()
             alert.alertStyle = .warning
-            alert.messageText = "Cannot remove main worktree"
-            alert.informativeText = "The main worktree is tied to the project's root directory and cannot be removed."
-            alert.addButton(withTitle: "OK")
+            alert.messageText = .localized("Cannot remove main worktree")
+            alert.informativeText = .localized("The main worktree is tied to the project's root directory and cannot be removed.")
+            alert.addButton(withTitle: .localized("OK"))
             alert.runModal()
             return
         }
 
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Remove worktree \"\(worktree.name)\"?"
-        alert.informativeText = "This worktree is at \(worktree.path)"
-        alert.addButton(withTitle: "Remove from Mori")
-        alert.addButton(withTitle: "Remove from Mori and Delete Files")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = .localized("Remove worktree \"\(worktree.name)\"?")
+        alert.informativeText = .localized("This worktree is at \(worktree.path)")
+        alert.addButton(withTitle: .localized("Remove from Mori"))
+        alert.addButton(withTitle: .localized("Remove from Mori and Delete Files"))
+        alert.addButton(withTitle: .localized("Cancel"))
 
         let response = alert.runModal()
 
@@ -450,9 +450,9 @@ final class WorkspaceManager {
                 } catch {
                     let errorAlert = NSAlert()
                     errorAlert.alertStyle = .warning
-                    errorAlert.messageText = "Failed to delete worktree files"
+                    errorAlert.messageText = .localized("Failed to delete worktree files")
                     errorAlert.informativeText = error.localizedDescription
-                    errorAlert.addButton(withTitle: "OK")
+                    errorAlert.addButton(withTitle: .localized("OK"))
                     errorAlert.runModal()
                 }
             }
@@ -474,10 +474,10 @@ final class WorkspaceManager {
 
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Remove project \"\(project.name)\"?"
-        alert.informativeText = "This will remove the project and all its worktrees from Mori. Git repositories on disk will not be deleted."
-        alert.addButton(withTitle: "Remove")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = .localized("Remove project \"\(project.name)\"?")
+        alert.informativeText = .localized("This will remove the project and all its worktrees from Mori. Git repositories on disk will not be deleted.")
+        alert.addButton(withTitle: .localized("Remove"))
+        alert.addButton(withTitle: .localized("Cancel"))
 
         let response = alert.runModal()
         guard response == .alertFirstButtonReturn else { return }
@@ -1014,7 +1014,7 @@ final class WorkspaceManager {
             // Fire onWindowCreate hook
             fireHook(event: .onWindowCreate, worktreeId: worktree.id)
         } catch {
-            showErrorAlert(title: "Failed to create window", message: error.localizedDescription)
+            showErrorAlert(title: .localized("Failed to create window"), message: error.localizedDescription)
         }
     }
 
@@ -1034,7 +1034,7 @@ final class WorkspaceManager {
             )
             await refreshRuntimeState()
         } catch {
-            showErrorAlert(title: "Failed to split pane", message: error.localizedDescription)
+            showErrorAlert(title: .localized("Failed to split pane"), message: error.localizedDescription)
         }
     }
 
@@ -1067,7 +1067,7 @@ final class WorkspaceManager {
                 onTerminalDetach?()
             }
         } catch {
-            showErrorAlert(title: "Failed to close pane", message: error.localizedDescription)
+            showErrorAlert(title: .localized("Failed to close pane"), message: error.localizedDescription)
         }
     }
 
@@ -1102,7 +1102,7 @@ final class WorkspaceManager {
                 }
             }
         } catch {
-            showErrorAlert(title: "Failed to close window", message: error.localizedDescription)
+            showErrorAlert(title: .localized("Failed to close window"), message: error.localizedDescription)
         }
     }
 
@@ -1135,7 +1135,7 @@ final class WorkspaceManager {
                 }
             }
         } catch {
-            showErrorAlert(title: "Failed to close window", message: error.localizedDescription)
+            showErrorAlert(title: .localized("Failed to close window"), message: error.localizedDescription)
         }
     }
 
@@ -1199,7 +1199,7 @@ final class WorkspaceManager {
             await refreshRuntimeState()
             onTerminalSwitch?(sessionName, worktree.path)
         } catch {
-            showErrorAlert(title: "Failed to open \(command)", message: error.localizedDescription)
+            showErrorAlert(title: .localized("Failed to open \(command)"), message: error.localizedDescription)
         }
     }
 

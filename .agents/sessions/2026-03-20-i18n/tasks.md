@@ -14,13 +14,13 @@
 
 ## Phase 2: App Target String Wrapping (Representative Subset)
 
-- [ ] 2.1 — Wrap menu item strings in `AppDelegate.swift` with `.localized()` (~30 strings)
-- [ ] 2.2 — Wrap alert/dialog strings in `WorkspaceManager.swift` (~10 strings)
-- [ ] 2.3 — Wrap notification strings in `NotificationManager.swift` (~5 strings)
-- [ ] 2.4 — Wrap empty state/error strings in `TerminalAreaViewController.swift` (~5 strings)
-- [ ] 2.5 — Wrap command palette strings in `CommandPaletteDataSource.swift` and `CommandPaletteController.swift` (~10 strings)
-- [ ] 2.6 — Add all wrapped strings with `zh-Hans` translations to `Sources/Mori/Resources/Localizable.xcstrings`
-- [ ] 2.7 — Build and verify strings compile correctly
+- [x] 2.1 — Wrap menu item strings in `AppDelegate.swift` with `.localized()` (~30 strings)
+- [x] 2.2 — Wrap alert/dialog strings in `WorkspaceManager.swift` (~10 strings)
+- [x] 2.3 — Wrap notification strings in `NotificationManager.swift` (~5 strings)
+- [x] 2.4 — Wrap empty state/error strings in `TerminalAreaViewController.swift` (~5 strings)
+- [x] 2.5 — Wrap command palette strings in `CommandPaletteDataSource.swift` and `CommandPaletteController.swift` (~10 strings)
+- [x] 2.6 — Add all wrapped strings with `zh-Hans` translations to `Sources/Mori/Resources/Localizable.xcstrings`
+- [x] 2.7 — Build and verify strings compile correctly
 
 ## Phase 3: MoriUI String Wrapping (Representative Subset)
 

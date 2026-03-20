@@ -119,7 +119,7 @@ final class CommandPaletteController: NSWindowController {
 
     private func setupSearchField() {
         searchField.translatesAutoresizingMaskIntoConstraints = false
-        searchField.placeholderString = "Search projects, worktrees, windows, actions..."
+        searchField.placeholderString = .localized("Search projects, worktrees, windows, actions...")
         searchField.font = .systemFont(ofSize: Layout.searchFontSize)
         searchField.isBordered = false
         searchField.focusRingType = .none

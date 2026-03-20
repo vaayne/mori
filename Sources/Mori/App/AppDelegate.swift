@@ -262,8 +262,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.message = "Select a project folder"
-        panel.prompt = "Add Project"
+        panel.message = .localized("Select a project folder")
+        panel.prompt = .localized("Add Project")
 
         guard let window = mainWindowController?.window else { return }
 
@@ -282,7 +282,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             } catch {
                 let alert = NSAlert()
                 alert.alertStyle = .warning
-                alert.messageText = "Failed to add project"
+                alert.messageText = .localized("Failed to add project")
                 alert.informativeText = error.localizedDescription
                 alert.runModal()
             }
@@ -332,7 +332,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         hostingController.view.wantsLayer = true
         hostingController.view.layer?.backgroundColor = themeInfo.background.cgColor
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Settings"
+        window.title = .localized("Settings")
         window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
@@ -424,67 +424,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // ── Mori (app) ──────────────────────────────────────────────
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About Mori", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: .localized("About Mori"), action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
-        appMenu.addItem(menuItem("Open Project…", action: #selector(openProjectMenuAction), key: "o", mods: [.command, .shift]))
+        appMenu.addItem(menuItem(.localized("Open Project…"), action: #selector(openProjectMenuAction), key: "o", mods: [.command, .shift]))
         appMenu.addItem(.separator())
-        appMenu.addItem(menuItem("Settings…", action: #selector(showSettingsMenuAction), key: ","))
-        appMenu.addItem(menuItem("Reload Settings", action: #selector(reloadSettingsMenuAction), key: ",", mods: [.command, .shift]))
+        appMenu.addItem(menuItem(.localized("Settings…"), action: #selector(showSettingsMenuAction), key: ","))
+        appMenu.addItem(menuItem(.localized("Reload Settings"), action: #selector(reloadSettingsMenuAction), key: ",", mods: [.command, .shift]))
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Hide Mori", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-        appMenu.addItem(menuItem("Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), key: "h", mods: [.command, .option]))
-        appMenu.addItem(withTitle: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: .localized("Hide Mori"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(menuItem(.localized("Hide Others"), action: #selector(NSApplication.hideOtherApplications(_:)), key: "h", mods: [.command, .option]))
+        appMenu.addItem(withTitle: .localized("Show All"), action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit Mori", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: .localized("Quit Mori"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
 
         // ── Edit ─────────────────────────────────────────────────────
         let editMenuItem = NSMenuItem()
-        let editMenu = NSMenu(title: "Edit")
-        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
-        editMenu.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        let editMenu = NSMenu(title: .localized("Edit"))
+        editMenu.addItem(withTitle: .localized("Undo"), action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: .localized("Redo"), action: Selector(("redo:")), keyEquivalent: "Z")
         editMenu.addItem(.separator())
-        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenu.addItem(withTitle: .localized("Cut"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: .localized("Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: .localized("Paste"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: .localized("Select All"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editMenuItem.submenu = editMenu
         mainMenu.addItem(editMenuItem)
 
         // ── Tmux (tabs, panes, tools) ────────────────────────────────
         let tmuxMenuItem = NSMenuItem()
-        let tmuxMenu = NSMenu(title: "Tmux")
+        let tmuxMenu = NSMenu(title: .localized("Tmux"))
 
-        tmuxMenu.addItem(menuItem("New Tab", action: #selector(newTabMenuAction), key: "t"))
-        tmuxMenu.addItem(menuItem("Close Pane", action: #selector(closePaneMenuAction), key: "w"))
+        tmuxMenu.addItem(menuItem(.localized("New Tab"), action: #selector(newTabMenuAction), key: "t"))
+        tmuxMenu.addItem(menuItem(.localized("Close Pane"), action: #selector(closePaneMenuAction), key: "w"))
         tmuxMenu.addItem(.separator())
-        tmuxMenu.addItem(menuItem("Next Tab", action: #selector(nextTabMenuAction), key: "]", mods: [.command, .shift]))
-        tmuxMenu.addItem(menuItem("Previous Tab", action: #selector(previousTabMenuAction), key: "[", mods: [.command, .shift]))
+        tmuxMenu.addItem(menuItem(.localized("Next Tab"), action: #selector(nextTabMenuAction), key: "]", mods: [.command, .shift]))
+        tmuxMenu.addItem(menuItem(.localized("Previous Tab"), action: #selector(previousTabMenuAction), key: "[", mods: [.command, .shift]))
         tmuxMenu.addItem(.separator())
-        tmuxMenu.addItem(menuItem("Split Right", action: #selector(splitRightMenuAction), key: "d"))
-        tmuxMenu.addItem(menuItem("Split Down", action: #selector(splitDownMenuAction), key: "d", mods: [.command, .shift]))
+        tmuxMenu.addItem(menuItem(.localized("Split Right"), action: #selector(splitRightMenuAction), key: "d"))
+        tmuxMenu.addItem(menuItem(.localized("Split Down"), action: #selector(splitDownMenuAction), key: "d", mods: [.command, .shift]))
         tmuxMenu.addItem(.separator())
-        tmuxMenu.addItem(menuItem("Next Pane", action: #selector(nextPaneMenuAction), key: "]"))
-        tmuxMenu.addItem(menuItem("Previous Pane", action: #selector(previousPaneMenuAction), key: "["))
-        tmuxMenu.addItem(menuItem("Toggle Pane Zoom", action: #selector(togglePaneZoomMenuAction), key: "\r", mods: [.command, .shift]))
-        tmuxMenu.addItem(menuItem("Equalize Panes", action: #selector(equalizePanesMenuAction), key: "=", mods: [.command, .control]))
+        tmuxMenu.addItem(menuItem(.localized("Next Pane"), action: #selector(nextPaneMenuAction), key: "]"))
+        tmuxMenu.addItem(menuItem(.localized("Previous Pane"), action: #selector(previousPaneMenuAction), key: "["))
+        tmuxMenu.addItem(menuItem(.localized("Toggle Pane Zoom"), action: #selector(togglePaneZoomMenuAction), key: "\r", mods: [.command, .shift]))
+        tmuxMenu.addItem(menuItem(.localized("Equalize Panes"), action: #selector(equalizePanesMenuAction), key: "=", mods: [.command, .control]))
         tmuxMenu.addItem(.separator())
-        tmuxMenu.addItem(menuItem("Open Lazygit", action: #selector(openLazygitMenuAction), key: "g"))
-        tmuxMenu.addItem(menuItem("Open Yazi", action: #selector(openYaziMenuAction), key: "e"))
+        tmuxMenu.addItem(menuItem(.localized("Open Lazygit"), action: #selector(openLazygitMenuAction), key: "g"))
+        tmuxMenu.addItem(menuItem(.localized("Open Yazi"), action: #selector(openYaziMenuAction), key: "e"))
 
         tmuxMenuItem.submenu = tmuxMenu
         mainMenu.addItem(tmuxMenuItem)
 
         // ── Window (view + window merged) ────────────────────────────
         let windowMenuItem = NSMenuItem()
-        let windowMenu = NSMenu(title: "Window")
-        windowMenu.addItem(menuItem("Toggle Sidebar", action: #selector(toggleSidebarMenuAction), key: "b"))
-        windowMenu.addItem(menuItem("Toggle Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), key: "f", mods: [.command, .control]))
+        let windowMenu = NSMenu(title: .localized("Window"))
+        windowMenu.addItem(menuItem(.localized("Toggle Sidebar"), action: #selector(toggleSidebarMenuAction), key: "b"))
+        windowMenu.addItem(menuItem(.localized("Toggle Full Screen"), action: #selector(NSWindow.toggleFullScreen(_:)), key: "f", mods: [.command, .control]))
         windowMenu.addItem(.separator())
-        windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
-        windowMenu.addItem(withTitle: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
-        windowMenu.addItem(menuItem("Close Window", action: #selector(closeWindowMenuAction), key: "w", mods: [.command, .shift]))
+        windowMenu.addItem(withTitle: .localized("Minimize"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: .localized("Zoom"), action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+        windowMenu.addItem(menuItem(.localized("Close Window"), action: #selector(closeWindowMenuAction), key: "w", mods: [.command, .shift]))
         windowMenuItem.submenu = windowMenu
         mainMenu.addItem(windowMenuItem)
         NSApp.windowsMenu = windowMenu
@@ -646,18 +646,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func showTmuxMissingAlert() {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "tmux not found"
-        alert.informativeText = """
-            Mori requires tmux to manage terminal sessions. \
-            Please install tmux and relaunch the app.
-
-            Install via Homebrew:
-              brew install tmux
-
-            Or via MacPorts:
-              sudo port install tmux
-            """
-        alert.addButton(withTitle: "OK")
+        alert.messageText = .localized("tmux not found")
+        alert.informativeText = .localized("Mori requires tmux to manage terminal sessions. Please install tmux and relaunch the app.\n\nInstall via Homebrew:\n  brew install tmux\n\nOr via MacPorts:\n  sudo port install tmux")
+        alert.addButton(withTitle: .localized("OK"))
         alert.runModal()
     }
 
@@ -786,10 +777,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         case "action.create-worktree":
             // Prompt for branch name via a simple input dialog
             let alert = NSAlert()
-            alert.messageText = "Create Worktree"
-            alert.informativeText = "Enter a branch name:"
-            alert.addButton(withTitle: "Create")
-            alert.addButton(withTitle: "Cancel")
+            alert.messageText = .localized("Create Worktree")
+            alert.informativeText = .localized("Enter a branch name:")
+            alert.addButton(withTitle: .localized("Create"))
+            alert.addButton(withTitle: .localized("Cancel"))
 
             let inputField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
             inputField.placeholderString = "feature/my-branch"

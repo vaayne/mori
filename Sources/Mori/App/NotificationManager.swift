@@ -58,16 +58,16 @@ final class NotificationManager: NSObject {
 
         switch event {
         case .agentWaiting:
-            content.title = agentName.map { "\($0) Waiting for Input" } ?? "Agent Waiting for Input"
-            content.body = "\(windowTitle) in \(worktreeName) needs your attention."
+            content.title = agentName.map { .localized("\($0) Waiting for Input") } ?? .localized("Agent Waiting for Input")
+            content.body = .localized("\(windowTitle) in \(worktreeName) needs your attention.")
             content.sound = .default
         case .commandError:
-            content.title = agentName.map { "\($0) Error" } ?? "Command Error"
-            content.body = "\(windowTitle) in \(worktreeName) encountered an error."
+            content.title = agentName.map { .localized("\($0) Error") } ?? .localized("Command Error")
+            content.body = .localized("\(windowTitle) in \(worktreeName) encountered an error.")
             content.sound = .default
         case .longRunningComplete:
-            content.title = agentName.map { "\($0) Finished" } ?? "Command Finished"
-            content.body = "\(windowTitle) in \(worktreeName) has completed."
+            content.title = agentName.map { .localized("\($0) Finished") } ?? .localized("Command Finished")
+            content.body = .localized("\(windowTitle) in \(worktreeName) has completed.")
             content.sound = .default
         }
 
