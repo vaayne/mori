@@ -46,6 +46,14 @@ testGitBranchInfoEquality()
 testGitBranchInfoCodableRoundTrip()
 testGitBranchInfoLocalWithSlashNotRemote()
 
+// addWorktree command argument tests
+testAddWorktreeArgsExistingBranch()
+testAddWorktreeArgsExistingRemoteBranch()
+testAddWorktreeArgsNewBranchFromHead()
+testAddWorktreeArgsNewBranchFromBase()
+testAddWorktreeArgsNewBranchFromRemoteBase()
+testAddWorktreeArgsBaseBranchIgnoredWhenNotCreating()
+
 // GitStatusParser tests
 testParseStatusClean()
 testParseStatusDirty()
