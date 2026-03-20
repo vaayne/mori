@@ -32,6 +32,20 @@ testParseBranchMinimalFields()
 testGitBranchInfoDisplayName()
 testGitBranchInfoRemoteName()
 
+// GitBranchParser edge case tests
+testParseBranchMultipleSlashes()
+testParseBranchRemoteMultipleSlashes()
+testParseBranchNoRemotesAtAll()
+testParseBranchHundreds()
+testParseBranchMalformedMixedWithValid()
+testParseBranchRemoteWithoutLocal()
+
+// GitBranchInfo boundary tests
+testGitBranchInfoDisplayNameDeepNesting()
+testGitBranchInfoEquality()
+testGitBranchInfoCodableRoundTrip()
+testGitBranchInfoLocalWithSlashNotRemote()
+
 // GitStatusParser tests
 testParseStatusClean()
 testParseStatusDirty()
