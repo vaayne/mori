@@ -10,6 +10,7 @@
 "Add a project folder to Mori" = "Add a project folder to Mori";
 "Agent Waiting for Input" = "Agent Waiting for Input";
 "Branch: %@" = "Branch: %@";
+"CREATE NEW BRANCH" = "CREATE NEW BRANCH";
 "Cancel" = "Cancel";
 "Cannot remove main worktree" = "Cannot remove main worktree";
 "Close Pane" = "Close Pane";
@@ -25,6 +26,7 @@
 "Enter a branch name:" = "Enter a branch name:";
 "Equalize Panes" = "Equalize Panes";
 "Failed to Create Worktree" = "Failed to Create Worktree";
+"from:" = "from:";
 "Failed to add project" = "Failed to add project";
 "Failed to close pane" = "Failed to close pane";
 "Failed to close window" = "Failed to close window";
@@ -33,8 +35,10 @@
 "Failed to open %@" = "Failed to open %@";
 "Failed to split pane" = "Failed to split pane";
 "Hide Mori" = "Hide Mori";
+"in use" = "in use";
 "Hide Others" = "Hide Others";
 "Invalid Branch Name" = "Invalid Branch Name";
+"LOCAL" = "LOCAL";
 "Minimize" = "Minimize";
 "Mori requires tmux to manage terminal sessions. Please install tmux and relaunch the app.\n\nInstall via Homebrew:\n  brew install tmux\n\nOr via MacPorts:\n  sudo port install tmux" = "Mori requires tmux to manage terminal sessions. Please install tmux and relaunch the app.\n\nInstall via Homebrew:\n  brew install tmux\n\nOr via MacPorts:\n  sudo port install tmux";
 "New Tab" = "New Tab";
@@ -42,17 +46,20 @@
 "Next Tab" = "Next Tab";
 "No Project Selected" = "No Project Selected";
 "No active session" = "No active session";
+"now" = "now";
 "OK" = "OK";
 "Open Lazygit" = "Open Lazygit";
 "Open Project" = "Open Project";
 "Open Project…" = "Open Project…";
 "Open Yazi" = "Open Yazi";
 "Paste" = "Paste";
+"Path:" = "Path:";
 "Please select a project first." = "Please select a project first.";
 "Previous Pane" = "Previous Pane";
 "Previous Tab" = "Previous Tab";
 "Project" = "Project";
 "Quit Mori" = "Quit Mori";
+"REMOTE" = "REMOTE";
 "Reconnect" = "Reconnect";
 "Redo" = "Redo";
 "Refresh" = "Refresh";
@@ -62,6 +69,7 @@
 "Remove from Mori and Delete Files" = "Remove from Mori and Delete Files";
 "Remove project \"%@\"?" = "Remove project \"%@\"?";
 "Remove worktree \"%@\"?" = "Remove worktree \"%@\"?";
+"Search branches..." = "Search branches...";
 "Search projects, worktrees, windows, actions..." = "Search projects, worktrees, windows, actions...";
 "Select All" = "Select All";
 "Select a project folder" = "Select a project folder";
@@ -74,6 +82,7 @@
 "Show or hide the sidebar (⌘0)" = "Show or hide the sidebar (⌘0)";
 "Split Down" = "Split Down";
 "Split Right" = "Split Right";
+"Template:" = "Template:";
 "Terminal Error" = "Terminal Error";
 "The main worktree is tied to the project's root directory and cannot be removed." = "The main worktree is tied to the project's root directory and cannot be removed.";
 "The terminal session has exited" = "The terminal session has exited";

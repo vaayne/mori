@@ -10,6 +10,7 @@
 "Add a project folder to Mori" = "添加项目文件夹到 Mori";
 "Agent Waiting for Input" = "代理等待输入";
 "Branch: %@" = "分支：%@";
+"CREATE NEW BRANCH" = "创建新分支";
 "Cancel" = "取消";
 "Cannot remove main worktree" = "无法移除主工作树";
 "Close Pane" = "关闭窗格";
@@ -25,6 +26,7 @@
 "Enter a branch name:" = "输入分支名称：";
 "Equalize Panes" = "均分窗格";
 "Failed to Create Worktree" = "创建工作树失败";
+"from:" = "来自：";
 "Failed to add project" = "添加项目失败";
 "Failed to close pane" = "关闭窗格失败";
 "Failed to close window" = "关闭窗口失败";
@@ -33,8 +35,10 @@
 "Failed to open %@" = "打开 %@ 失败";
 "Failed to split pane" = "拆分窗格失败";
 "Hide Mori" = "隐藏 Mori";
+"in use" = "使用中";
 "Hide Others" = "隐藏其他";
 "Invalid Branch Name" = "无效的分支名称";
+"LOCAL" = "本地";
 "Minimize" = "最小化";
 "Mori requires tmux to manage terminal sessions. Please install tmux and relaunch the app.\n\nInstall via Homebrew:\n  brew install tmux\n\nOr via MacPorts:\n  sudo port install tmux" = "Mori 需要 tmux 来管理终端会话。请安装 tmux 后重新启动应用。\n\n通过 Homebrew 安装：\n  brew install tmux\n\n或通过 MacPorts 安装：\n  sudo port install tmux";
 "New Tab" = "新建标签页";
@@ -42,17 +46,20 @@
 "Next Tab" = "下一个标签页";
 "No Project Selected" = "未选择项目";
 "No active session" = "无活跃会话";
+"now" = "刚刚";
 "OK" = "好";
 "Open Lazygit" = "打开 Lazygit";
 "Open Project" = "打开项目";
 "Open Project…" = "打开项目…";
 "Open Yazi" = "打开 Yazi";
 "Paste" = "粘贴";
+"Path:" = "路径：";
 "Please select a project first." = "请先选择一个项目。";
 "Previous Pane" = "上一个窗格";
 "Previous Tab" = "上一个标签页";
 "Project" = "项目";
 "Quit Mori" = "退出 Mori";
+"REMOTE" = "远程";
 "Reconnect" = "重新连接";
 "Redo" = "重做";
 "Refresh" = "刷新";
@@ -62,6 +69,7 @@
 "Remove from Mori and Delete Files" = "从 Mori 移除并删除文件";
 "Remove project \"%@\"?" = "移除项目“%@”？";
 "Remove worktree \"%@\"?" = "移除工作树“%@”？";
+"Search branches..." = "搜索分支…";
 "Search projects, worktrees, windows, actions..." = "搜索项目、工作树、窗口、操作…";
 "Select All" = "全选";
 "Select a project folder" = "选择一个项目文件夹";
@@ -74,6 +82,7 @@
 "Show or hide the sidebar (⌘0)" = "显示或隐藏侧栏（⌘0）";
 "Split Down" = "向下拆分";
 "Split Right" = "向右拆分";
+"Template:" = "模板：";
 "Terminal Error" = "终端错误";
 "The main worktree is tied to the project's root directory and cannot be removed." = "主工作树与项目的根目录绑定，无法移除。";
 "The terminal session has exited" = "终端会话已退出";
