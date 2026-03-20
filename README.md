@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <b>English</b> | <a href="README.zh.md">中文</a>
+  <b>English</b> | <a href="README.zh-Hans.md">中文</a>
 </p>
 
 A native macOS workspace terminal organized around **Projects** and **Worktrees**, powered by **tmux** and **libghostty**.
