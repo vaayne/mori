@@ -202,7 +202,7 @@ func testUIStateDefaultInit() {
     assertNil(state.selectedProjectId)
     assertNil(state.selectedWorktreeId)
     assertNil(state.selectedWindowId)
-    assertEqual(state.sidebarMode, .worktrees)
+    assertEqual(state.sidebarMode, .workspaces)
     assertEqual(state.searchQuery, "")
 }
 
@@ -211,7 +211,7 @@ func testUIStateCodable() {
         selectedProjectId: UUID(),
         selectedWorktreeId: UUID(),
         selectedWindowId: "@1",
-        sidebarMode: .search,
+        sidebarMode: .tasks,
         searchQuery: "test"
     )
     let data = try! JSONEncoder().encode(state)
@@ -1166,6 +1166,140 @@ func testHookEntryMatchByEvent() {
     assertEqual(matched[0].actions[0].shell, "b")
 }
 
+// MARK: - WorkflowStatus Tests
+
+func testWorkflowStatusRawValues() {
+    assertEqual(WorkflowStatus.todo.rawValue, "todo")
+    assertEqual(WorkflowStatus.inProgress.rawValue, "inProgress")
+    assertEqual(WorkflowStatus.needsReview.rawValue, "needsReview")
+    assertEqual(WorkflowStatus.done.rawValue, "done")
+    assertEqual(WorkflowStatus.cancelled.rawValue, "cancelled")
+}
+
+func testWorkflowStatusCodableRoundTrip() {
+    for status in WorkflowStatus.allCases {
+        let data = try! JSONEncoder().encode(status)
+        let decoded = try! JSONDecoder().decode(WorkflowStatus.self, from: data)
+        assertEqual(decoded, status)
+    }
+}
+
+func testWorkflowStatusSortOrder() {
+    assertEqual(WorkflowStatus.inProgress.sortOrder, 0)
+    assertEqual(WorkflowStatus.needsReview.sortOrder, 1)
+    assertEqual(WorkflowStatus.todo.sortOrder, 2)
+    assertEqual(WorkflowStatus.done.sortOrder, 3)
+    assertEqual(WorkflowStatus.cancelled.sortOrder, 4)
+
+    // Verify ordering: inProgress < needsReview < todo < done < cancelled
+    let sorted = WorkflowStatus.allCases.sorted { $0.sortOrder < $1.sortOrder }
+    assertEqual(sorted, [.inProgress, .needsReview, .todo, .done, .cancelled])
+}
+
+func testWorkflowStatusDisplayName() {
+    assertEqual(WorkflowStatus.todo.displayName, "To Do")
+    assertEqual(WorkflowStatus.inProgress.displayName, "In Progress")
+    assertEqual(WorkflowStatus.needsReview.displayName, "Needs Review")
+    assertEqual(WorkflowStatus.done.displayName, "Done")
+    assertEqual(WorkflowStatus.cancelled.displayName, "Cancelled")
+}
+
+func testWorkflowStatusIconName() {
+    assertEqual(WorkflowStatus.todo.iconName, "circle")
+    assertEqual(WorkflowStatus.inProgress.iconName, "circle.dotted.circle")
+    assertEqual(WorkflowStatus.needsReview.iconName, "eye.circle")
+    assertEqual(WorkflowStatus.done.iconName, "checkmark.circle.fill")
+    assertEqual(WorkflowStatus.cancelled.iconName, "xmark.circle")
+}
+
+func testWorktreeWorkflowStatusDefault() {
+    let wt = Worktree(projectId: UUID(), name: "main", path: "/test")
+    assertEqual(wt.workflowStatus, .todo)
+}
+
+func testWorktreeWorkflowStatusCodable() {
+    let wt = Worktree(
+        projectId: UUID(),
+        name: "feat",
+        path: "/test/feat",
+        workflowStatus: .inProgress
+    )
+    let data = try! JSONEncoder().encode(wt)
+    let decoded = try! JSONDecoder().decode(Worktree.self, from: data)
+    assertEqual(decoded.workflowStatus, .inProgress)
+}
+
+func testWorktreeCodableBackwardsCompatWorkflowStatus() {
+    // Simulate JSON from older version without workflowStatus field
+    let id = UUID()
+    let projectId = UUID()
+    let json = """
+    {
+        "id": "\(id.uuidString)",
+        "projectId": "\(projectId.uuidString)",
+        "name": "main",
+        "path": "/repos/test",
+        "isMainWorktree": true,
+        "isDetached": false,
+        "hasUncommittedChanges": false,
+        "aheadCount": 0,
+        "behindCount": 0,
+        "unreadCount": 0,
+        "agentState": "none",
+        "status": "active"
+    }
+    """
+    let decoded = try! JSONDecoder().decode(Worktree.self, from: json.data(using: .utf8)!)
+    assertEqual(decoded.workflowStatus, .todo)
+}
+
+func testWorktreeCodableWithWorkflowStatus() {
+    // JSON with explicit workflowStatus should preserve it
+    let id = UUID()
+    let projectId = UUID()
+    let json = """
+    {
+        "id": "\(id.uuidString)",
+        "projectId": "\(projectId.uuidString)",
+        "name": "feat",
+        "path": "/repos/feat",
+        "isMainWorktree": false,
+        "isDetached": false,
+        "hasUncommittedChanges": true,
+        "aheadCount": 1,
+        "behindCount": 0,
+        "unreadCount": 0,
+        "agentState": "none",
+        "status": "active",
+        "workflowStatus": "needsReview"
+    }
+    """
+    let decoded = try! JSONDecoder().decode(Worktree.self, from: json.data(using: .utf8)!)
+    assertEqual(decoded.workflowStatus, .needsReview)
+}
+
+func testSidebarModeNewValuesRoundTrip() {
+    for mode: SidebarMode in [.workspaces, .tasks] {
+        let data = try! JSONEncoder().encode(mode)
+        let decoded = try! JSONDecoder().decode(SidebarMode.self, from: data)
+        assertEqual(decoded, mode)
+    }
+}
+
+func testSidebarModeBackwardsCompatWorktrees() {
+    // Old "worktrees" value should map to .workspaces
+    let json = "\"worktrees\"".data(using: .utf8)!
+    let decoded = try! JSONDecoder().decode(SidebarMode.self, from: json)
+    assertEqual(decoded, .workspaces)
+}
+
+func testSidebarModeBackwardsCompatSearch() {
+    // Old "search" value should map to .workspaces
+    let json = "\"search\"".data(using: .utf8)!
+    let decoded = try! JSONDecoder().decode(SidebarMode.self, from: json)
+    assertEqual(decoded, .workspaces)
+}
+
 // MARK: - Main
 
 print("=== MoriCore Model Tests ===")
@@ -1267,6 +1401,19 @@ testHookConfigEmptyJsonDecode()
 testHookConfigInvalidJsonReturnsNil()
 testHookConfigMissingFieldsFails()
 testHookEntryMatchByEvent()
+
+testWorkflowStatusRawValues()
+testWorkflowStatusCodableRoundTrip()
+testWorkflowStatusSortOrder()
+testWorkflowStatusDisplayName()
+testWorkflowStatusIconName()
+testWorktreeWorkflowStatusDefault()
+testWorktreeWorkflowStatusCodable()
+testWorktreeCodableBackwardsCompatWorkflowStatus()
+testWorktreeCodableWithWorkflowStatus()
+testSidebarModeNewValuesRoundTrip()
+testSidebarModeBackwardsCompatWorktrees()
+testSidebarModeBackwardsCompatSearch()
 
 printResults()
 
