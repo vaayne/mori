@@ -21,6 +21,7 @@ public struct WorktreeSidebarView: View {
     private let onAddProject: (() -> Void)?
     private let onOpenSettings: (() -> Void)?
     private let onOpenCommandPalette: (() -> Void)?
+    private let onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)?
 
     public init(
         projects: [Project] = [],
@@ -39,7 +40,8 @@ public struct WorktreeSidebarView: View {
         onToggleCollapse: ((UUID) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
-        onOpenCommandPalette: (() -> Void)? = nil
+        onOpenCommandPalette: (() -> Void)? = nil,
+        onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)? = nil
     ) {
         self.projects = projects
         self.selectedProjectId = selectedProjectId
@@ -58,6 +60,7 @@ public struct WorktreeSidebarView: View {
         self.onAddProject = onAddProject
         self.onOpenSettings = onOpenSettings
         self.onOpenCommandPalette = onOpenCommandPalette
+        self.onSetWorkflowStatus = onSetWorkflowStatus
     }
 
     public var body: some View {
@@ -255,6 +258,14 @@ public struct WorktreeSidebarView: View {
                 onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } }
             )
             .contextMenu {
+                if let onSetWorkflowStatus {
+                    WorkflowStatusMenu(
+                        currentStatus: worktree.workflowStatus,
+                        onSetStatus: { status in onSetWorkflowStatus(worktree.id, status) }
+                    )
+                    Divider()
+                }
+
                 let editors = EditorLauncher.installed
                 if !editors.isEmpty {
                     ForEach(editors) { editor in
