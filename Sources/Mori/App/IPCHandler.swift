@@ -40,6 +40,9 @@ final class IPCHandler {
 
         case .open(let path):
             return await handleOpen(manager: manager, path: path)
+
+        case .setWorkflowStatus(let project, let worktree, let status):
+            return handleSetWorkflowStatus(manager: manager, projectName: project, worktreeName: worktree, statusString: status)
         }
     }
 
@@ -154,6 +157,28 @@ final class IPCHandler {
         } catch {
             return .error(message: "Failed to create window: \(error.localizedDescription)")
         }
+    }
+
+    private func handleSetWorkflowStatus(manager: WorkspaceManager, projectName: String, worktreeName: String, statusString: String) -> IPCResponse {
+        guard let validStatus = WorkflowStatus(rawValue: statusString) else {
+            let validValues = WorkflowStatus.allCases.map(\.rawValue).joined(separator: ", ")
+            return .error(message: "Invalid status: \(statusString). Valid values: \(validValues)")
+        }
+
+        guard let project = manager.appState.projects.first(where: {
+            $0.name.caseInsensitiveCompare(projectName) == .orderedSame
+        }) else {
+            return .error(message: "Project not found: \(projectName)")
+        }
+
+        guard let worktree = manager.appState.worktrees.first(where: {
+            $0.projectId == project.id && $0.name.caseInsensitiveCompare(worktreeName) == .orderedSame
+        }) else {
+            return .error(message: "Worktree not found: \(worktreeName)")
+        }
+
+        manager.setWorkflowStatus(worktreeId: worktree.id, status: validStatus)
+        return .success(payload: nil)
     }
 
     private func handleOpen(manager: WorkspaceManager, path: String) async -> IPCResponse {
