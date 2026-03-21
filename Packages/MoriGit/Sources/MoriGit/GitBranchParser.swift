@@ -50,6 +50,13 @@ public enum GitBranchParser {
         guard !fields.isEmpty, !fields[0].isEmpty else { return nil }
 
         let name = fields[0]
+
+        // Filter out remote HEAD symrefs (e.g., "origin" which is origin/HEAD shortened).
+        // These show up as a bare remote name with no slash after it.
+        if remoteNames.contains(name) {
+            return nil
+        }
+
         let headMarker = fields.count > 1 ? fields[1] : ""
         let dateString = fields.count > 2 ? fields[2] : ""
         let upstream = fields.count > 3 ? fields[3] : ""

@@ -292,3 +292,18 @@ func testParseBranchWithPipeInName() {
     assertEqual(branches[0].name, "feat|pipe", "Branch with pipe in name should parse correctly")
     assertTrue(branches[0].isHead)
 }
+
+func testParseBranchFiltersBareRemoteName() {
+    // `git branch -a` outputs "origin" for origin/HEAD symref.
+    // This should be filtered out since it's not a real branch.
+    let lines = [
+        "main\(tab)*\(tab)1710900000\(tab)origin/main",
+        "origin\(tab)\(tab)1710900000\(tab)",
+        "origin/main\(tab)\(tab)1710900000\(tab)",
+    ]
+    let output = lines.joined(separator: "\n")
+    let branches = GitBranchParser.parse(output)
+    assertEqual(branches.count, 2, "Bare 'origin' should be filtered out")
+    assertEqual(branches[0].name, "main")
+    assertEqual(branches[1].name, "origin/main")
+}

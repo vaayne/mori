@@ -51,24 +51,24 @@ final class WorktreeCreationController: NSWindowController {
     // MARK: - Layout Constants
 
     private enum Layout {
-        static let panelWidth: CGFloat = 500
-        static let searchFieldHeight: CGFloat = 36
-        static let rowHeight: CGFloat = 32
+        static let panelWidth: CGFloat = 480
+        static let searchFieldHeight: CGFloat = 28
+        static let rowHeight: CGFloat = 28
         static let maxVisibleRows: Int = 10
-        static let panelPadding: CGFloat = 8
-        static let fieldHorizontalPadding: CGFloat = 12
-        static let cellIconSize: CGFloat = 18
-        static let cellLeadingPadding: CGFloat = 8
-        static let cellSpacing: CGFloat = 8
-        static let cellTrailingPadding: CGFloat = 8
+        static let panelPadding: CGFloat = 6
+        static let fieldHorizontalPadding: CGFloat = 10
+        static let cellIconSize: CGFloat = 14
+        static let cellLeadingPadding: CGFloat = 10
+        static let cellSpacing: CGFloat = 6
+        static let cellTrailingPadding: CGFloat = 10
         static let titleFontSize: CGFloat = 13
         static let subtitleFontSize: CGFloat = 11
-        static let searchFontSize: CGFloat = 16
+        static let searchFontSize: CGFloat = 14
         static let panelTopOffset: CGFloat = 80
-        static let footerHeight: CGFloat = 56
+        static let footerHeight: CGFloat = 50
         static let timeFontSize: CGFloat = 11
         static let badgeFontSize: CGFloat = 10
-        static let pathFontSize: CGFloat = 11
+        static let pathFontSize: CGFloat = 10
     }
 
     // MARK: - Init
@@ -76,7 +76,7 @@ final class WorktreeCreationController: NSWindowController {
     init() {
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: Layout.panelWidth, height: 400),
-            styleMask: [.titled, .closable, .nonactivatingPanel],
+            styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: true
         )
@@ -89,6 +89,11 @@ final class WorktreeCreationController: NSWindowController {
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = true
         panel.becomesKeyOnlyIfNeeded = true
+
+        // Hide traffic light buttons
+        panel.standardWindowButton(.closeButton)?.isHidden = true
+        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        panel.standardWindowButton(.zoomButton)?.isHidden = true
 
         super.init(window: panel)
 
