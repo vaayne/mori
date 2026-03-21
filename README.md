@@ -86,7 +86,7 @@ Mori uses Ghostty's configuration system. Customize your terminal in `~/.config/
 
 ## Keyboard Shortcuts
 
-See [docs/keymaps.md](docs/keymaps.md) for the full list. Highlights:
+See [docs/worktrees.md](docs/worktrees.md) for worktree management and [docs/keymaps.md](docs/keymaps.md) for the full shortcut list. Highlights:
 
 | Shortcut                                                     | Action                |
 | ------------------------------------------------------------ | --------------------- |
@@ -95,6 +95,7 @@ See [docs/keymaps.md](docs/keymaps.md) for the full list. Highlights:
 | <kbd>⌘</kbd>+<kbd>D</kbd> / <kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>D</kbd> | Split right / down    |
 | <kbd>⌘</kbd>+<kbd>1</kbd>–<kbd>⌘</kbd>+<kbd>9</kbd>          | Go to tab N           |
 | <kbd>⌃</kbd>+<kbd>Tab</kbd> / <kbd>⌃</kbd>+<kbd>⇧</kbd>+<kbd>Tab</kbd> | Cycle worktrees       |
+| <kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>N</kbd>                       | New worktree          |
 | <kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>P</kbd>                       | Command palette       |
 | <kbd>⌘</kbd>+<kbd>B</kbd>                                    | Toggle sidebar        |
 | <kbd>⌘</kbd>+<kbd>G</kbd>                                    | Lazygit               |

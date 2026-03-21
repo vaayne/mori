@@ -74,6 +74,7 @@ windows (tabs), and panes through a native macOS interface.
 
 | Shortcut | Action |
 |----------|--------|
+| `⌘⇧N` | New Worktree |
 | `⌃Tab` | Next Worktree |
 | `⌃⇧Tab` | Previous Worktree |
 
