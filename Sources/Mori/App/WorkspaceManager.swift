@@ -62,6 +62,10 @@ final class WorkspaceManager {
     /// Debouncer for notification transitions — suppresses re-fire within 30s.
     private var notificationDebouncer = NotificationDebouncer()
 
+    /// Worktree IDs that have already been auto-transitioned from todo → inProgress.
+    /// Prevents re-transitioning worktrees that the user manually set back to todo.
+    private var autoTransitionedWorktrees: Set<UUID> = []
+
     init(
         appState: AppState,
         projectRepo: ProjectRepository,
@@ -198,9 +202,13 @@ final class WorkspaceManager {
         if let window = appState.runtimeWindows.first(where: { $0.tmuxWindowId == windowId }),
            let worktree = appState.worktrees.first(where: { $0.id == window.worktreeId }),
            let sessionName = worktree.tmuxSessionName {
-            // Keep worktree selection in sync when selecting a window from a different worktree
+            // Keep worktree and project selection in sync when selecting a window
+            // (important for task mode where windows can span projects)
             if appState.uiState.selectedWorktreeId != worktree.id {
                 appState.uiState.selectedWorktreeId = worktree.id
+            }
+            if appState.uiState.selectedProjectId != worktree.projectId {
+                appState.uiState.selectedProjectId = worktree.projectId
             }
             Task {
                 try? await tmuxBackend.selectWindow(sessionId: sessionName, windowId: windowId)
@@ -579,21 +587,25 @@ final class WorkspaceManager {
     // MARK: - Workflow Status
 
     /// Update the workflow status for a worktree and persist the change.
+    /// Also marks the worktree as auto-transitioned so the polling loop won't
+    /// override a manual `todo` status back to `inProgress`.
     func setWorkflowStatus(worktreeId: UUID, status: WorkflowStatus) {
         guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }) else { return }
         appState.worktrees[index].workflowStatus = status
+        // Mark as already transitioned so auto-transition won't override manual todo
+        autoTransitionedWorktrees.insert(worktreeId)
         try? worktreeRepo.save(appState.worktrees[index])
     }
 
     /// Auto-transition worktrees from `.todo` to `.inProgress` when activity is detected.
-    /// Signals: uncommitted changes (modified/staged/untracked), commits ahead of upstream,
-    /// active agent, or any commit on a branch without upstream (hasUncommittedChanges covers
-    /// dirty state; aheadCount covers commits with upstream; for branches without upstream,
-    /// we check hasUncommittedChanges which triggers during the working phase).
+    /// Only transitions each worktree once — if the user manually sets it back to `.todo`,
+    /// we won't override that (tracked via `autoTransitionedWorktrees` set).
+    /// Signals: uncommitted changes, commits ahead of upstream, or active agent.
     private func autoTransitionTodoWorktrees() {
         for i in appState.worktrees.indices {
             let wt = appState.worktrees[i]
             guard wt.workflowStatus == .todo else { continue }
+            guard !autoTransitionedWorktrees.contains(wt.id) else { continue }
 
             let hasActivity = wt.hasUncommittedChanges
                 || wt.aheadCount > 0
@@ -601,6 +613,7 @@ final class WorkspaceManager {
 
             if hasActivity {
                 appState.worktrees[i].workflowStatus = .inProgress
+                autoTransitionedWorktrees.insert(wt.id)
                 try? worktreeRepo.save(appState.worktrees[i])
             }
         }
