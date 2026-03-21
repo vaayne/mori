@@ -1,14 +1,13 @@
 import SwiftUI
 import MoriCore
 
-/// A two-line row representing a single worktree: bold name + subtitle with status.
-/// Shows a hover-reveal `...` menu for management actions.
 public struct WorktreeRowView: View {
     let worktree: Worktree
     let isSelected: Bool
     let onSelect: () -> Void
     var onRemove: (() -> Void)?
 
+    @Environment(\.sidebarAppearance) private var appearance
     @State private var isHovered = false
 
     public init(
@@ -25,15 +24,15 @@ public struct WorktreeRowView: View {
 
     public var body: some View {
         Button(action: onSelect) {
-            HStack(alignment: .center, spacing: MoriTokens.Spacing.md) {
+            HStack(alignment: .center, spacing: appearance.scaled(MoriTokens.Spacing.md)) {
                 Image(systemName: worktree.isMainWorktree ? "star.fill" : "arrow.triangle.branch")
-                    .font(MoriTokens.Font.label)
+                    .font(appearance.font(.label))
                     .foregroundStyle(worktree.isMainWorktree ? MoriTokens.Color.attention : MoriTokens.Color.muted)
 
                 VStack(alignment: .leading, spacing: MoriTokens.Spacing.xxs) {
-                    HStack(spacing: MoriTokens.Spacing.sm) {
+                    HStack(spacing: appearance.scaled(MoriTokens.Spacing.sm)) {
                         Text(worktree.branch ?? worktree.name)
-                            .font(.system(.body, weight: .semibold))
+                            .font(appearance.font(.rowTitle))
                             .lineLimit(1)
 
                         gitStatusBadges
@@ -51,8 +50,8 @@ public struct WorktreeRowView: View {
                         .transition(.opacity)
                 }
             }
-            .padding(.vertical, MoriTokens.Spacing.md)
-            .padding(.horizontal, MoriTokens.Spacing.lg)
+            .padding(.vertical, appearance.scaled(MoriTokens.Spacing.md))
+            .padding(.horizontal, appearance.scaled(MoriTokens.Spacing.lg))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -119,9 +118,9 @@ public struct WorktreeRowView: View {
     // MARK: - Subtitle
 
     private var subtitleText: some View {
-        HStack(spacing: MoriTokens.Spacing.sm) {
+        HStack(spacing: appearance.scaled(MoriTokens.Spacing.sm)) {
             Text(worktree.name)
-                .font(MoriTokens.Font.caption)
+                .font(appearance.font(.caption))
                 .foregroundStyle(MoriTokens.Color.muted)
                 .lineLimit(1)
 
@@ -143,13 +142,13 @@ public struct WorktreeRowView: View {
                 HStack(spacing: MoriTokens.Spacing.xxs) {
                     if worktree.aheadCount > 0 {
                         Text("+\(worktree.aheadCount)")
-                            .font(MoriTokens.Font.monoSmall)
+                            .font(appearance.font(.monoSmall))
                             .foregroundStyle(MoriTokens.Color.success)
                             .accessibilityLabel("\(worktree.aheadCount) ahead")
                     }
                     if worktree.behindCount > 0 {
                         Text("-\(worktree.behindCount)")
-                            .font(MoriTokens.Font.monoSmall)
+                            .font(appearance.font(.monoSmall))
                             .foregroundStyle(MoriTokens.Color.error)
                             .accessibilityLabel("\(worktree.behindCount) behind")
                     }

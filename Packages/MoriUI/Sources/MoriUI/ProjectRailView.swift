@@ -1,8 +1,6 @@
 import SwiftUI
 import MoriCore
 
-/// Narrow rail displaying projects as first-letter circle icons with names,
-/// plus action buttons at the bottom.
 public struct ProjectRailView: View {
     private let projects: [Project]
     private let selectedProjectId: UUID?
@@ -10,6 +8,8 @@ public struct ProjectRailView: View {
     private let onAddProject: (() -> Void)?
     private let onOpenSettings: (() -> Void)?
     private let onToggleSidebar: (() -> Void)?
+
+    @Environment(\.sidebarAppearance) private var appearance
 
     public init(
         projects: [Project],
@@ -30,7 +30,7 @@ public struct ProjectRailView: View {
     public var body: some View {
         VStack(spacing: 0) {
             ScrollView(.vertical) {
-                LazyVStack(spacing: MoriTokens.Spacing.lg) {
+                LazyVStack(spacing: appearance.scaled(MoriTokens.Spacing.lg)) {
                     ForEach(projects) { project in
                         ProjectRailRow(
                             project: project,
@@ -39,7 +39,7 @@ public struct ProjectRailView: View {
                         )
                     }
                 }
-                .padding(.vertical, MoriTokens.Spacing.lg)
+                .padding(.vertical, appearance.scaled(MoriTokens.Spacing.lg))
             }
 
             Spacer(minLength: 0)
@@ -52,13 +52,13 @@ public struct ProjectRailView: View {
 
     @ViewBuilder
     private var railFooter: some View {
-        VStack(spacing: MoriTokens.Spacing.lg) {
+        VStack(spacing: appearance.scaled(MoriTokens.Spacing.lg)) {
             Divider()
 
             if let onToggleSidebar {
                 Button(action: onToggleSidebar) {
                     Image(systemName: "sidebar.left")
-                        .font(.system(size: MoriTokens.Size.avatarFont))
+                        .font(.system(size: appearance.fontSize + 2))
                         .foregroundStyle(MoriTokens.Color.muted)
                         .frame(maxWidth: .infinity)
                 }
@@ -70,7 +70,7 @@ public struct ProjectRailView: View {
             if let onAddProject {
                 Button(action: onAddProject) {
                     Image(systemName: "plus.rectangle.on.folder")
-                        .font(.system(size: MoriTokens.Size.avatarFont))
+                        .font(.system(size: appearance.fontSize + 2))
                         .foregroundStyle(MoriTokens.Color.muted)
                         .frame(maxWidth: .infinity)
                 }
@@ -82,7 +82,7 @@ public struct ProjectRailView: View {
             if let onOpenSettings {
                 Button(action: onOpenSettings) {
                     Image(systemName: "gearshape")
-                        .font(.system(size: MoriTokens.Size.avatarFont))
+                        .font(.system(size: appearance.fontSize + 2))
                         .foregroundStyle(MoriTokens.Color.muted)
                         .frame(maxWidth: .infinity)
                 }
@@ -91,7 +91,7 @@ public struct ProjectRailView: View {
                 .accessibilityLabel("Settings")
             }
         }
-        .padding(.bottom, MoriTokens.Spacing.lg)
+        .padding(.bottom, appearance.scaled(MoriTokens.Spacing.lg))
     }
 }
 
@@ -102,27 +102,30 @@ private struct ProjectRailRow: View {
     let isSelected: Bool
     let onSelect: () -> Void
 
+    @Environment(\.sidebarAppearance) private var appearance
+
     var body: some View {
         Button(action: onSelect) {
-            VStack(spacing: MoriTokens.Spacing.sm) {
+            VStack(spacing: appearance.scaled(MoriTokens.Spacing.sm)) {
+                let avatarSize = appearance.scaled(MoriTokens.Size.avatar)
                 ZStack {
                     Circle()
                         .fill(isSelected ? MoriTokens.Color.active : MoriTokens.Color.muted.opacity(MoriTokens.Opacity.medium))
-                        .frame(width: MoriTokens.Size.avatar, height: MoriTokens.Size.avatar)
+                        .frame(width: avatarSize, height: avatarSize)
 
                     Text(firstLetter)
-                        .font(.system(size: MoriTokens.Size.avatarFont, weight: .semibold, design: .rounded))
+                        .font(.system(size: appearance.fontSize + 2, weight: .semibold, design: .rounded))
                         .foregroundStyle(isSelected ? Color.white : Color.primary)
                 }
 
                 Text(project.name)
-                    .font(MoriTokens.Font.caption)
+                    .font(appearance.font(.caption))
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .foregroundStyle(isSelected ? MoriTokens.Color.active : MoriTokens.Color.muted)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, MoriTokens.Spacing.sm)
+            .padding(.vertical, appearance.scaled(MoriTokens.Spacing.sm))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

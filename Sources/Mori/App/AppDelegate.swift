@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var ipcHandler: IPCHandler?
     private var settingsWindowController: NSWindowController?
     private var configFile: GhosttyConfigFile?
+    private var appearanceStore: SidebarAppearanceStore?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -100,8 +101,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         self.mainWindowController = windowController
 
         // Build split view children
+        let appearStore = SidebarAppearanceStore()
+        self.appearanceStore = appearStore
         let sidebarController = SidebarHostingController(
             appState: state,
+            appearanceStore: appearStore,
             onSelectProject: { [weak manager, weak self] projectId in
                 manager?.selectProject(projectId)
                 self?.updateWindowTitle()
@@ -314,6 +318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 codexEnabled: AgentHookConfigurator.isCodexHookInstalled(),
                 piEnabled: AgentHookConfigurator.isPiExtensionInstalled()
             ),
+            appearanceStore: appearanceStore,
             onChanged: { [weak self] newModel in
                 guard let self else { return }
                 self.writeSettingsModel(newModel, to: cf)
@@ -931,6 +936,7 @@ private struct SettingsWindowContent: View {
     @State var agentHooks: AgentHookModel
     let availableThemes: [String]
     let ghosttyDefaults: [String]
+    var appearanceStore: SidebarAppearanceStore?
     var onChanged: (GhosttySettingsModel) -> Void
     var onOpenConfigFile: () -> Void
     var onAgentHookChanged: (AgentHookModel) -> Void
@@ -940,6 +946,7 @@ private struct SettingsWindowContent: View {
         availableThemes: [String],
         ghosttyDefaults: [String] = [],
         initialAgentHooks: AgentHookModel = AgentHookModel(),
+        appearanceStore: SidebarAppearanceStore? = nil,
         onChanged: @escaping (GhosttySettingsModel) -> Void,
         onOpenConfigFile: @escaping () -> Void,
         onAgentHookChanged: @escaping (AgentHookModel) -> Void = { _ in }
@@ -948,6 +955,7 @@ private struct SettingsWindowContent: View {
         self._agentHooks = State(initialValue: initialAgentHooks)
         self.availableThemes = availableThemes
         self.ghosttyDefaults = ghosttyDefaults
+        self.appearanceStore = appearanceStore
         self.onChanged = onChanged
         self.onOpenConfigFile = onOpenConfigFile
         self.onAgentHookChanged = onAgentHookChanged
@@ -961,7 +969,8 @@ private struct SettingsWindowContent: View {
             onChanged: { onChanged(model) },
             onOpenConfigFile: onOpenConfigFile,
             agentHooks: $agentHooks,
-            onAgentHookChanged: onAgentHookChanged
+            onAgentHookChanged: onAgentHookChanged,
+            appearanceStore: appearanceStore
         )
     }
 }

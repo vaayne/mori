@@ -1,8 +1,6 @@
 import SwiftUI
 import MoriCore
 
-/// Unified sidebar: all projects as flat sections, worktrees as two-line rows,
-/// windows indented below, and action footer at the bottom.
 public struct WorktreeSidebarView: View {
     private let projects: [Project]
     private let selectedProjectId: UUID?
@@ -22,6 +20,7 @@ public struct WorktreeSidebarView: View {
     private let onOpenSettings: (() -> Void)?
     private let onOpenCommandPalette: (() -> Void)?
 
+    @Environment(\.sidebarAppearance) private var appearance
     @State private var editingProjectId: UUID?
     @State private var newBranchName = ""
     @State private var isSubmitting = false
@@ -71,12 +70,12 @@ public struct WorktreeSidebarView: View {
                     ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
                         if index > 0 {
                             Divider()
-                                .padding(.horizontal, MoriTokens.Spacing.xl)
+                                .padding(.horizontal, appearance.scaled(MoriTokens.Spacing.xl))
                         }
                         projectSection(project)
                     }
                 }
-                .padding(.top, MoriTokens.Spacing.lg)
+                .padding(.top, appearance.scaled(MoriTokens.Spacing.lg))
             }
 
             Spacer(minLength: 0)
@@ -92,15 +91,14 @@ public struct WorktreeSidebarView: View {
 
     @ViewBuilder
     private func projectSection(_ project: Project) -> some View {
-        // Section header: chevron + name + hover-reveal + button
-        HStack(spacing: MoriTokens.Spacing.md) {
+        HStack(spacing: appearance.scaled(MoriTokens.Spacing.md)) {
             Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(MoriTokens.Color.muted)
                 .frame(width: 12)
 
             Text(project.name)
-                .font(MoriTokens.Font.sectionTitle)
+                .font(appearance.font(.sectionTitle))
                 .foregroundStyle(MoriTokens.Color.muted)
 
             Spacer()
@@ -173,9 +171,9 @@ public struct WorktreeSidebarView: View {
                 .transition(.opacity)
             }
         }
-        .padding(.horizontal, MoriTokens.Spacing.xl)
-        .padding(.top, MoriTokens.Spacing.xl)
-        .padding(.bottom, MoriTokens.Spacing.sm)
+        .padding(.horizontal, appearance.scaled(MoriTokens.Spacing.xl))
+        .padding(.top, appearance.scaled(MoriTokens.Spacing.xl))
+        .padding(.bottom, appearance.scaled(MoriTokens.Spacing.sm))
         .contentShape(Rectangle())
         .onTapGesture {
             onToggleCollapse?(project.id)
@@ -228,21 +226,19 @@ public struct WorktreeSidebarView: View {
         }
 
         if !project.isCollapsed {
-            // Branch input (only for the project being edited)
             if editingProjectId == project.id {
                 branchNameInput
-                    .padding(.horizontal, MoriTokens.Spacing.sm)
+                    .padding(.horizontal, appearance.scaled(MoriTokens.Spacing.sm))
             }
 
-            // Worktrees for this project
             let projectWorktrees = worktrees.filter { $0.projectId == project.id && $0.status != .unavailable }
 
             if projectWorktrees.isEmpty, project.id == selectedProjectId {
                 Text("No worktrees")
-                    .font(MoriTokens.Font.caption)
+                    .font(appearance.font(.caption))
                     .foregroundStyle(MoriTokens.Color.muted)
-                    .padding(.horizontal, MoriTokens.Spacing.xl)
-                    .padding(.vertical, MoriTokens.Spacing.sm)
+                    .padding(.horizontal, appearance.scaled(MoriTokens.Spacing.xl))
+                    .padding(.vertical, appearance.scaled(MoriTokens.Spacing.sm))
             }
 
             ForEach(projectWorktrees) { worktree in
@@ -296,7 +292,6 @@ public struct WorktreeSidebarView: View {
                 }
             }
 
-            // Show windows (tabs) under every worktree that has them
             if !worktreeWindows.isEmpty {
                 ForEach(Array(worktreeWindows.enumerated()), id: \.element.id) { index, window in
                     WindowRowView(
@@ -305,7 +300,7 @@ public struct WorktreeSidebarView: View {
                         shortcutIndex: isSelected && index < 9 ? index + 1 : nil,
                         onSelect: { onSelectWindow(window.tmuxWindowId) }
                     )
-                    .padding(.leading, MoriTokens.Spacing.xxl)
+                    .padding(.leading, appearance.scaled(MoriTokens.Spacing.xxl))
                     .contextMenu {
                         if let onCloseWindow {
                             Button(role: .destructive) {
@@ -318,7 +313,7 @@ public struct WorktreeSidebarView: View {
                 }
             }
         }
-        .padding(.horizontal, MoriTokens.Spacing.sm)
+        .padding(.horizontal, appearance.scaled(MoriTokens.Spacing.sm))
     }
 
     // MARK: - Branch Name Input
@@ -330,7 +325,7 @@ public struct WorktreeSidebarView: View {
                     .controlSize(.small)
             } else {
                 Image(systemName: "arrow.triangle.branch")
-                    .font(MoriTokens.Font.label)
+                    .font(appearance.font(.label))
                     .foregroundStyle(MoriTokens.Color.muted)
             }
 
@@ -354,8 +349,8 @@ public struct WorktreeSidebarView: View {
             .buttonStyle(.plain)
             .disabled(isSubmitting)
         }
-        .padding(.horizontal, MoriTokens.Spacing.lg)
-        .padding(.vertical, MoriTokens.Spacing.sm)
+        .padding(.horizontal, appearance.scaled(MoriTokens.Spacing.lg))
+        .padding(.vertical, appearance.scaled(MoriTokens.Spacing.sm))
         .background(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
         .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
     }
@@ -375,19 +370,17 @@ public struct WorktreeSidebarView: View {
         newBranchName = ""
     }
 
-    // MARK: - Helpers
-
     // MARK: - Footer
 
     private var sidebarFooter: some View {
         VStack(spacing: 0) {
             Divider()
 
-            HStack(spacing: MoriTokens.Spacing.xl) {
+            HStack(spacing: appearance.scaled(MoriTokens.Spacing.xl)) {
                 if let onAddProject {
                     Button(action: onAddProject) {
                         Image(systemName: "plus.rectangle.on.folder")
-                            .font(.system(size: 13))
+                            .font(.system(size: appearance.fontSize))
                             .foregroundStyle(MoriTokens.Color.muted)
                     }
                     .buttonStyle(.plain)
@@ -400,7 +393,7 @@ public struct WorktreeSidebarView: View {
                 if let onOpenCommandPalette {
                     Button(action: onOpenCommandPalette) {
                         Image(systemName: "text.magnifyingglass")
-                            .font(.system(size: 13))
+                            .font(.system(size: appearance.fontSize))
                             .foregroundStyle(MoriTokens.Color.muted)
                     }
                     .buttonStyle(.plain)
@@ -411,7 +404,7 @@ public struct WorktreeSidebarView: View {
                 if let onOpenSettings {
                     Button(action: onOpenSettings) {
                         Image(systemName: "gearshape")
-                            .font(.system(size: 13))
+                            .font(.system(size: appearance.fontSize))
                             .foregroundStyle(MoriTokens.Color.muted)
                     }
                     .buttonStyle(.plain)
@@ -419,8 +412,8 @@ public struct WorktreeSidebarView: View {
                     .accessibilityLabel("Settings")
                 }
             }
-            .padding(.horizontal, MoriTokens.Spacing.xl)
-            .padding(.vertical, MoriTokens.Spacing.lg)
+            .padding(.horizontal, appearance.scaled(MoriTokens.Spacing.xl))
+            .padding(.vertical, appearance.scaled(MoriTokens.Spacing.lg))
         }
     }
 }

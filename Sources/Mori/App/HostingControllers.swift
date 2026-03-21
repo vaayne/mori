@@ -6,7 +6,6 @@ import MoriUI
 
 // MARK: - Sidebar Hosting (unified: project picker + worktrees + actions)
 
-/// Wraps WorktreeSidebarView in an NSHostingController, observing AppState.
 @MainActor
 final class SidebarHostingController: NSHostingController<SidebarContentView> {
 
@@ -14,6 +13,7 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
 
     init(
         appState: AppState,
+        appearanceStore: SidebarAppearanceStore,
         onSelectProject: @escaping (UUID) -> Void,
         onSelectWorktree: @escaping (UUID) -> Void,
         onSelectWindow: @escaping (String) -> Void,
@@ -29,6 +29,7 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         self.appState = appState
         let rootView = SidebarContentView(
             appState: appState,
+            appearanceStore: appearanceStore,
             onSelectProject: onSelectProject,
             onSelectWorktree: onSelectWorktree,
             onSelectWindow: onSelectWindow,
@@ -42,9 +43,6 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
             onOpenCommandPalette: onOpenCommandPalette
         )
         super.init(rootView: rootView)
-        // Prevent SwiftUI's layout from dictating the view size.
-        // Without this, the hosting controller sets a preferred content size
-        // that locks the split view sidebar to a fixed width.
         sizingOptions = []
     }
 
@@ -53,7 +51,6 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// Sync the hosting controller's view appearance with the ghostty theme.
     func updateAppearance(themeInfo: GhosttyThemeInfo) {
         view.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
         view.wantsLayer = true
@@ -61,9 +58,9 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
     }
 }
 
-/// Bindable wrapper that reads AppState observables into WorktreeSidebarView.
 struct SidebarContentView: View {
     @Bindable var appState: AppState
+    @Bindable var appearanceStore: SidebarAppearanceStore
     let onSelectProject: (UUID) -> Void
     let onSelectWorktree: (UUID) -> Void
     let onSelectWindow: (String) -> Void
@@ -96,5 +93,6 @@ struct SidebarContentView: View {
             onOpenSettings: onOpenSettings,
             onOpenCommandPalette: onOpenCommandPalette
         )
+        .environment(\.sidebarAppearance, appearanceStore.appearance)
     }
 }

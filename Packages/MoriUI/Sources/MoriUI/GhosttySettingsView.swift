@@ -1,4 +1,5 @@
 import SwiftUI
+import MoriCore
 
 /// Settings model representing user-facing ghostty config options.
 /// Read from and written to ~/.config/ghostty/config.
@@ -63,6 +64,7 @@ public struct AgentHookModel: Equatable {
 // MARK: - Settings Category
 
 enum SettingsCategory: String, CaseIterable, Identifiable {
+    case appearance = "Appearance"
     case theme = "Theme"
     case fonts = "Fonts"
     case cursor = "Cursor"
@@ -75,6 +77,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
+        case .appearance: return "sidebar.left"
         case .theme: return "paintpalette"
         case .fonts: return "textformat"
         case .cursor: return "character.cursor.ibeam"
@@ -96,6 +99,7 @@ public struct GhosttySettingsView: View {
     var onOpenConfigFile: () -> Void
     @Binding var agentHooks: AgentHookModel
     var onAgentHookChanged: ((AgentHookModel) -> Void)?
+    var appearanceStore: SidebarAppearanceStore?
 
     @State private var selectedCategory: SettingsCategory = .theme
 
@@ -106,7 +110,8 @@ public struct GhosttySettingsView: View {
         onChanged: @escaping () -> Void,
         onOpenConfigFile: @escaping () -> Void,
         agentHooks: Binding<AgentHookModel> = .constant(AgentHookModel()),
-        onAgentHookChanged: ((AgentHookModel) -> Void)? = nil
+        onAgentHookChanged: ((AgentHookModel) -> Void)? = nil,
+        appearanceStore: SidebarAppearanceStore? = nil
     ) {
         self._model = model
         self.availableThemes = availableThemes
@@ -115,6 +120,7 @@ public struct GhosttySettingsView: View {
         self.onOpenConfigFile = onOpenConfigFile
         self._agentHooks = agentHooks
         self.onAgentHookChanged = onAgentHookChanged
+        self.appearanceStore = appearanceStore
     }
 
     public var body: some View {
@@ -201,6 +207,10 @@ public struct GhosttySettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     switch selectedCategory {
+                    case .appearance:
+                        if let store = appearanceStore {
+                            SidebarAppearanceSettingsContent(store: store)
+                        }
                     case .theme: ThemeSettingsContent(model: $model, availableThemes: availableThemes, onChanged: onChanged)
                     case .fonts: FontSettingsContent(model: $model, onChanged: onChanged)
                     case .cursor: CursorSettingsContent(model: $model, onChanged: onChanged)
@@ -1075,5 +1085,168 @@ private struct AgentHookSettingsContent: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Sidebar Appearance Settings
+
+private struct SidebarAppearanceSettingsContent: View {
+    @Bindable var store: SidebarAppearanceStore
+
+    @State private var fontSearch = ""
+
+    private var availableFonts: [String] {
+        let families = NSFontManager.shared.availableFontFamilies.sorted()
+        if fontSearch.isEmpty { return families }
+        return families.filter { $0.localizedCaseInsensitiveContains(fontSearch) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Sidebar Font")
+                        .font(.system(size: 13, weight: .medium))
+
+                    TextField("Search fonts…", text: $fontSearch)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 12))
+
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            fontRow(name: "System Default", family: "")
+
+                            ForEach(availableFonts, id: \.self) { family in
+                                fontRow(name: family, family: family)
+                            }
+                        }
+                    }
+                    .frame(height: 180)
+                    .background(Color(nsColor: .textBackgroundColor).opacity(0.3))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+            }
+
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Text("Font Size")
+                            .font(.system(size: 13, weight: .medium))
+                        Spacer()
+                        Text("\(Int(store.appearance.fontSize)) pt")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(value: $store.appearance.fontSize, in: 10...22, step: 1)
+                }
+
+                CardDivider()
+
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Text("Spacing")
+                            .font(.system(size: 13, weight: .medium))
+                        Spacer()
+                        Text(String(format: "%.1fx", store.appearance.spacing))
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(value: $store.appearance.spacing, in: 0.8...1.8, step: 0.1)
+
+                    Text("Adjusts spacing between sidebar elements")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Preview")
+                        .font(.system(size: 13, weight: .medium))
+
+                    sidebarPreview
+                }
+            }
+        }
+    }
+
+    private func fontRow(name: String, family: String) -> some View {
+        let isSelected = store.appearance.fontFamily == family
+        return Button {
+            store.appearance.fontFamily = family
+        } label: {
+            HStack {
+                Text(name)
+                    .font(family.isEmpty ? .system(size: 13) : .custom(family, size: 13))
+                    .lineLimit(1)
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(isSelected ? Color.accentColor.opacity(0.1) : .clear)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var sidebarPreview: some View {
+        let a = store.appearance
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: a.scaled(6)) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text("my-project")
+                    .font(a.font(.sectionTitle))
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, a.scaled(12))
+            .padding(.vertical, a.scaled(8))
+
+            HStack(spacing: a.scaled(6)) {
+                Image(systemName: "star.fill")
+                    .font(a.font(.label))
+                    .foregroundStyle(.yellow)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("main")
+                        .font(a.font(.rowTitle))
+                    Text("main worktree")
+                        .font(a.font(.caption))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.vertical, a.scaled(6))
+            .padding(.horizontal, a.scaled(8))
+            .background(Color.accentColor.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .padding(.horizontal, a.scaled(4))
+
+            HStack(spacing: a.scaled(6)) {
+                Image(systemName: "terminal")
+                    .font(a.font(.label))
+                    .foregroundStyle(.secondary)
+                Text("zsh")
+                    .font(a.font(.windowTitle))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("⌘1")
+                    .font(a.font(.monoSmall))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, a.scaled(4))
+            .padding(.horizontal, a.scaled(8))
+            .padding(.leading, a.scaled(16))
+        }
+        .padding(.vertical, a.scaled(8))
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.4))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }

@@ -1,13 +1,13 @@
 import SwiftUI
 import MoriCore
 
-/// A row representing a single tmux window within a worktree section.
 public struct WindowRowView: View {
     let window: RuntimeWindow
     let isActive: Bool
     let shortcutIndex: Int?
     let onSelect: () -> Void
 
+    @Environment(\.sidebarAppearance) private var appearance
     @State private var isHovered = false
 
     public init(
@@ -24,13 +24,13 @@ public struct WindowRowView: View {
 
     public var body: some View {
         Button(action: onSelect) {
-            HStack(spacing: MoriTokens.Spacing.md) {
+            HStack(spacing: appearance.scaled(MoriTokens.Spacing.md)) {
                 Image(systemName: window.tag?.symbolName ?? "terminal")
-                    .font(MoriTokens.Font.label)
+                    .font(appearance.font(.label))
                     .foregroundStyle(isActive ? MoriTokens.Color.active : MoriTokens.Color.muted)
 
                 Text(window.title.isEmpty ? "Window \(window.tmuxWindowIndex)" : window.title)
-                    .font(MoriTokens.Font.windowTitle)
+                    .font(appearance.font(.windowTitle))
                     .lineLimit(1)
                     .foregroundStyle(isActive ? Color.primary : MoriTokens.Color.muted)
 
@@ -38,7 +38,7 @@ public struct WindowRowView: View {
 
                 if let shortcutIndex {
                     Text("\u{2318}\(shortcutIndex)")
-                        .font(MoriTokens.Font.monoSmall)
+                        .font(appearance.font(.monoSmall))
                         .foregroundStyle(MoriTokens.Color.muted)
                         .accessibilityLabel("Command \(shortcutIndex)")
                 }
@@ -52,8 +52,8 @@ public struct WindowRowView: View {
                         .accessibilityLabel("Active window")
                 }
             }
-            .padding(.vertical, MoriTokens.Spacing.xs)
-            .padding(.horizontal, MoriTokens.Spacing.lg)
+            .padding(.vertical, appearance.scaled(MoriTokens.Spacing.sm))
+            .padding(.horizontal, appearance.scaled(MoriTokens.Spacing.lg))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
