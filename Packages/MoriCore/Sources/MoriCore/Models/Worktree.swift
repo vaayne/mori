@@ -22,6 +22,7 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
     public var unreadCount: Int
     public var agentState: AgentState
     public var status: WorktreeStatus
+    public var workflowStatus: WorkflowStatus
 
     public init(
         id: UUID = UUID(),
@@ -44,7 +45,8 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
         tmuxSessionName: String? = nil,
         unreadCount: Int = 0,
         agentState: AgentState = .none,
-        status: WorktreeStatus = .active
+        status: WorktreeStatus = .active,
+        workflowStatus: WorkflowStatus = .todo
     ) {
         self.id = id
         self.projectId = projectId
@@ -67,6 +69,7 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
         self.unreadCount = unreadCount
         self.agentState = agentState
         self.status = status
+        self.workflowStatus = workflowStatus
     }
 
     // Custom Codable init for backwards compatibility with existing JSON
@@ -94,5 +97,6 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
         unreadCount = try container.decode(Int.self, forKey: .unreadCount)
         agentState = try container.decode(AgentState.self, forKey: .agentState)
         status = try container.decode(WorktreeStatus.self, forKey: .status)
+        workflowStatus = try container.decodeIfPresent(WorkflowStatus.self, forKey: .workflowStatus) ?? .todo
     }
 }
