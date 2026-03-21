@@ -2,10 +2,72 @@ import AppKit
 import MoriCore
 import MoriGit
 
+// MARK: - Row Model
+
+/// Represents a single row in the branch list — either a section header or a branch.
+enum PanelRow {
+    case sectionHeader(String) // "LOCAL" or "REMOTE"
+    case branch(BranchSuggestion)
+}
+
+// MARK: - Inset Selection Row View
+
+/// Custom NSTableRowView that draws an inset rounded selection rect
+/// instead of the default full-bleed highlight.
+final class InsetSelectionRowView: NSTableRowView {
+
+    override func drawSelection(in dirtyRect: NSRect) {
+        guard isSelected else { return }
+        let insetRect = NSRect(
+            x: 8,
+            y: (bounds.height - 30) / 2,
+            width: bounds.width - 16,
+            height: 30
+        )
+        let path = NSBezierPath(roundedRect: insetRect, xRadius: 8, yRadius: 8)
+
+        // Fill
+        NSColor.selectedContentBackgroundColor.setFill()
+        path.fill()
+
+        // 1px accent border at 18% opacity
+        NSColor.controlAccentColor.withAlphaComponent(0.18).setStroke()
+        path.lineWidth = 1
+        path.stroke()
+    }
+
+    private var isHovering = false
+
+    func setHovering(_ hovering: Bool) {
+        guard hovering != isHovering else { return }
+        isHovering = hovering
+        needsDisplay = true
+    }
+
+    override func drawBackground(in dirtyRect: NSRect) {
+        super.drawBackground(in: dirtyRect)
+        guard isHovering, !isSelected else { return }
+        let insetRect = NSRect(
+            x: 8,
+            y: (bounds.height - 30) / 2,
+            width: bounds.width - 16,
+            height: 30
+        )
+        let path = NSBezierPath(roundedRect: insetRect, xRadius: 8, yRadius: 8)
+        NSColor.controlBackgroundColor.setFill()
+        path.fill()
+        NSColor.separatorColor.setStroke()
+        path.lineWidth = 1
+        path.stroke()
+    }
+}
+
+// MARK: - Controller
+
 /// NSWindowController managing a floating worktree creation panel.
 ///
 /// Design: The search field is the primary input. As you type, autocomplete suggestions
-/// filter below. Enter creates from the typed name — if it matches an existing branch,
+/// filter below. Enter creates from the typed name -- if it matches an existing branch,
 /// uses it; otherwise creates a new branch from the base. No modes, no phases.
 @MainActor
 final class WorktreeCreationController: NSWindowController {
@@ -22,14 +84,16 @@ final class WorktreeCreationController: NSWindowController {
     // MARK: - State
 
     private var dataSource: WorktreeCreationDataSource?
+    private var rows: [PanelRow] = []
     private var suggestions: [BranchSuggestion] = []
-    private var selectedIndex: Int = -1
+    private var selectedIndex: Int = -1 // Index into `rows` (only branch rows selectable)
     private var projectName: String = ""
     private var projectId: UUID?
     private var repoPath: String = ""
     /// Incremented on each show() to invalidate stale async branch fetches.
     private var fetchGeneration: Int = 0
     nonisolated(unsafe) private var localEventMonitor: Any?
+    private var hoveredRow: Int = -1
 
     // MARK: - Views
 
@@ -38,37 +102,106 @@ final class WorktreeCreationController: NSWindowController {
     private let scrollView = NSScrollView()
     private let containerView = NSView()
     private let tableSeparator = NSBox()
-    /// Shows "✓ exists" or "✚ new" badge next to the search field.
-    private let statusBadge = NSTextField(labelWithString: "")
+    private let contextLabel = NSTextField(labelWithString: "")
+    private let projectLabel = NSTextField(labelWithString: "")
+
+    // Search field background
+    private let searchFieldBackground = NSView()
+
+    // Status pill (inside search field area)
+    private let statusPillContainer = NSView()
+    private let statusPillLabel = NSTextField(labelWithString: "")
 
     // Footer views
     private let footerContainer = NSView()
     private let footerSeparator = NSBox()
+    private let baseCard = NSView()
+    private let baseCardLabel = NSTextField(labelWithString: "")
+    private let baseCardValue = NSTextField(labelWithString: "")
+    private let templateCard = NSView()
+    private let templateCardLabel = NSTextField(labelWithString: "")
+    private let templateCardValue = NSTextField(labelWithString: "")
+    private let pathCard = NSView()
+    private let pathCardLabel = NSTextField(labelWithString: "")
+    private let pathCardValue = NSTextField(labelWithString: "")
+
+    // Hidden controls for tab navigation (base branch editing + template selection)
     private let baseBranchField = NSTextField()
     private let templatePopup = NSPopUpButton()
-    private let pathLabel = NSTextField(labelWithString: "")
 
     // MARK: - Layout Constants
 
     private enum Layout {
-        static let panelWidth: CGFloat = 480
-        static let searchFieldHeight: CGFloat = 28
-        static let rowHeight: CGFloat = 28
-        static let maxVisibleRows: Int = 10
-        static let panelPadding: CGFloat = 6
-        static let fieldHorizontalPadding: CGFloat = 10
+        static let panelWidth: CGFloat = 616
+        static let panelOuterPaddingH: CGFloat = 12
+        static let panelTopPadding: CGFloat = 12
+        static let panelBottomPadding: CGFloat = 10
+        static let cornerRadius: CGFloat = 14
+
+        static let contextRowHeight: CGFloat = 18
+        static let contextGap: CGFloat = 8
+
+        static let searchFieldHeight: CGFloat = 42
+        static let searchFieldCornerRadius: CGFloat = 10
+        static let searchFontSize: CGFloat = 16
+        static let placeholderFontSize: CGFloat = 15
+
+        static let pillWidth: CGFloat = 56
+        static let pillHeight: CGFloat = 20
+        static let pillRadius: CGFloat = 6
+        static let pillFontSize: CGFloat = 10
+
+        static let listGap: CGFloat = 8
+        static let sectionHeaderHeight: CGFloat = 20
+        static let sectionHeaderLeading: CGFloat = 16
+        static let sectionHeaderFontSize: CGFloat = 10
+
+        static let rowHeight: CGFloat = 34
+        static let rowContentPaddingH: CGFloat = 12
         static let cellIconSize: CGFloat = 14
-        static let cellLeadingPadding: CGFloat = 10
-        static let cellSpacing: CGFloat = 6
-        static let cellTrailingPadding: CGFloat = 10
-        static let titleFontSize: CGFloat = 13
-        static let subtitleFontSize: CGFloat = 11
-        static let searchFontSize: CGFloat = 14
+        static let cellIconGap: CGFloat = 8
+        static let branchFontSize: CGFloat = 13
+
+        static let headPillWidth: CGFloat = 38
+        static let headPillHeight: CGFloat = 18
+        static let headPillRadius: CGFloat = 6
+
+        static let remoteCapsuleHeight: CGFloat = 18
+        static let remoteCapsuleMinWidth: CGFloat = 42
+        static let remoteCapsulePaddingH: CGFloat = 8
+        static let remoteCapsuleRadius: CGFloat = 6
+
+        static let openPillWidth: CGFloat = 44
+        static let openPillHeight: CGFloat = 18
+        static let openPillRadius: CGFloat = 6
+
+        static let commitAgeLaneWidth: CGFloat = 60
+        static let commitAgeFontSize: CGFloat = 11
+
+        static let accentRailWidth: CGFloat = 2
+
+        static let maxVisibleRows: Int = 10
         static let panelTopOffset: CGFloat = 80
-        static let footerHeight: CGFloat = 50
-        static let timeFontSize: CGFloat = 11
-        static let badgeFontSize: CGFloat = 10
-        static let pathFontSize: CGFloat = 10
+
+        static let footerHeight: CGFloat = 92
+        static let footerPaddingTop: CGFloat = 10
+        static let footerPaddingH: CGFloat = 12
+        static let footerPaddingBottom: CGFloat = 10
+        static let cardHeight: CGFloat = 36
+        static let cardRadius: CGFloat = 10
+        static let cardPaddingH: CGFloat = 10
+        static let cardPaddingTop: CGFloat = 6
+        static let cardGap: CGFloat = 8
+        static let cardLabelFontSize: CGFloat = 10
+        static let cardValueFontSize: CGFloat = 12
+
+        static let baseCardWidth: CGFloat = 252
+        static let templateCardWidth: CGFloat = 332
+
+        static let pathCardHeight: CGFloat = 28
+        static let pathCardRadius: CGFloat = 8
+        static let pathLabelFontSize: CGFloat = 10
+        static let pathValueFontSize: CGFloat = 11
     }
 
     // MARK: - Init
@@ -129,12 +262,16 @@ final class WorktreeCreationController: NSWindowController {
         searchField.stringValue = ""
         selectedIndex = -1
         suggestions = []
+        rows = []
         dataSource = nil
         baseBranchField.stringValue = ""
         templatePopup.selectItem(at: 0)
         tableView.reloadData()
-        updateStatusBadge()
-        updatePathPreview()
+        updateStatusPill()
+        updateFooter()
+
+        // Update context row
+        projectLabel.stringValue = projectName
 
         // Position and show
         positionPanel()
@@ -175,12 +312,27 @@ final class WorktreeCreationController: NSWindowController {
     private func setupUI() {
         guard let panel = window else { return }
 
-        containerView.translatesAutoresizingMaskIntoConstraints = false
-        panel.contentView = containerView
+        // Panel corner radius
+        panel.contentView?.wantsLayer = true
+        panel.contentView?.layer?.cornerRadius = Layout.cornerRadius
+        panel.contentView?.layer?.masksToBounds = true
 
+        containerView.translatesAutoresizingMaskIntoConstraints = false
+        panel.contentView?.addSubview(containerView)
+        if let contentView = panel.contentView {
+            NSLayoutConstraint.activate([
+                containerView.topAnchor.constraint(equalTo: contentView.topAnchor),
+                containerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+                containerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+                containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            ])
+        }
+
+        setupContextRow()
         setupSearchField()
         setupTableView()
         setupFooter()
+        setupHiddenControls()
         layoutViews()
 
         // Tab key view chain
@@ -194,13 +346,13 @@ final class WorktreeCreationController: NSWindowController {
             guard let self, let panel = self.window, panel.isVisible else { return event }
             let firstResponder = panel.firstResponder
 
-            // Handle Enter from template popup — confirm
+            // Handle Enter from template popup -- confirm
             if event.keyCode == 36, firstResponder === self.templatePopup {
                 self.confirmInput()
                 return nil
             }
 
-            // Handle Esc from template popup — back to search
+            // Handle Esc from template popup -- back to search
             if event.keyCode == 53, firstResponder === self.templatePopup {
                 panel.makeFirstResponder(self.searchField)
                 return nil
@@ -210,84 +362,243 @@ final class WorktreeCreationController: NSWindowController {
         }
     }
 
+    private func setupContextRow() {
+        contextLabel.translatesAutoresizingMaskIntoConstraints = false
+        contextLabel.stringValue = String.localized("NEW WORKTREE")
+        contextLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        contextLabel.textColor = .secondaryLabelColor
+        contextLabel.isEditable = false
+        contextLabel.isBordered = false
+        contextLabel.backgroundColor = .clear
+        containerView.addSubview(contextLabel)
+
+        projectLabel.translatesAutoresizingMaskIntoConstraints = false
+        projectLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        projectLabel.textColor = .tertiaryLabelColor
+        projectLabel.alignment = .right
+        projectLabel.isEditable = false
+        projectLabel.isBordered = false
+        projectLabel.backgroundColor = .clear
+        containerView.addSubview(projectLabel)
+    }
+
     private func setupSearchField() {
         searchField.translatesAutoresizingMaskIntoConstraints = false
         searchField.placeholderString = .localized("Branch name...")
-        searchField.font = .systemFont(ofSize: Layout.searchFontSize)
+        searchField.font = .monospacedSystemFont(ofSize: Layout.searchFontSize, weight: .medium)
         searchField.isBordered = false
         searchField.focusRingType = .none
         searchField.bezelStyle = .roundedBezel
-        searchField.isBezeled = true
+        searchField.isBezeled = false
+        searchField.drawsBackground = false
         searchField.delegate = self
         searchField.target = self
         searchField.action = #selector(searchFieldAction(_:))
+
+        // Search field background container
+        searchFieldBackground.translatesAutoresizingMaskIntoConstraints = false
+        searchFieldBackground.wantsLayer = true
+        searchFieldBackground.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        searchFieldBackground.layer?.cornerRadius = Layout.searchFieldCornerRadius
+        containerView.addSubview(searchFieldBackground)
         containerView.addSubview(searchField)
 
-        // Status badge (right side of search field area)
-        statusBadge.translatesAutoresizingMaskIntoConstraints = false
-        statusBadge.font = .systemFont(ofSize: Layout.badgeFontSize, weight: .medium)
-        statusBadge.alignment = .right
-        statusBadge.isEditable = false
-        statusBadge.isBordered = false
-        statusBadge.backgroundColor = .clear
-        containerView.addSubview(statusBadge)
+        // Placeholder font styling
+        let placeholderAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: Layout.placeholderFontSize, weight: .regular),
+            .foregroundColor: NSColor.placeholderTextColor,
+        ]
+        searchField.placeholderAttributedString = NSAttributedString(
+            string: .localized("Branch name..."),
+            attributes: placeholderAttrs
+        )
+
+        // Status pill overlay
+        statusPillContainer.translatesAutoresizingMaskIntoConstraints = false
+        statusPillContainer.wantsLayer = true
+        statusPillContainer.layer?.cornerRadius = Layout.pillRadius
+        statusPillContainer.isHidden = true
+        containerView.addSubview(statusPillContainer)
+
+        statusPillLabel.translatesAutoresizingMaskIntoConstraints = false
+        statusPillLabel.font = .systemFont(ofSize: Layout.pillFontSize, weight: .semibold)
+        statusPillLabel.alignment = .center
+        statusPillLabel.isEditable = false
+        statusPillLabel.isBordered = false
+        statusPillLabel.backgroundColor = .clear
+        statusPillContainer.addSubview(statusPillLabel)
+
+        NSLayoutConstraint.activate([
+            statusPillLabel.centerXAnchor.constraint(equalTo: statusPillContainer.centerXAnchor),
+            statusPillLabel.centerYAnchor.constraint(equalTo: statusPillContainer.centerYAnchor),
+        ])
     }
 
     private func setupTableView() {
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("branches"))
         column.title = ""
-        column.width = Layout.panelWidth - 20
+        column.width = Layout.panelWidth - Layout.panelOuterPaddingH * 2
         tableView.addTableColumn(column)
         tableView.headerView = nil
         tableView.delegate = self
         tableView.dataSource = self
         tableView.rowHeight = Layout.rowHeight
-        tableView.selectionHighlightStyle = .regular
+        tableView.selectionHighlightStyle = .none // We draw our own
         tableView.intercellSpacing = NSSize(width: 0, height: 0)
         tableView.target = self
         tableView.doubleAction = #selector(tableDoubleClicked)
+        tableView.backgroundColor = .windowBackgroundColor
+        tableView.gridStyleMask = [] // No grid lines
 
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
         containerView.addSubview(scrollView)
     }
 
     private func setupFooter() {
         footerContainer.translatesAutoresizingMaskIntoConstraints = false
+        footerContainer.wantsLayer = true
+        footerContainer.layer?.backgroundColor = NSColor.underPageBackgroundColor.cgColor
         containerView.addSubview(footerContainer)
 
+        // Top divider
         footerSeparator.translatesAutoresizingMaskIntoConstraints = false
-        footerSeparator.boxType = .separator
+        footerSeparator.boxType = .custom
+        footerSeparator.fillColor = .separatorColor
         footerContainer.addSubview(footerSeparator)
 
-        // Base branch label + field
-        let fromLabel = NSTextField(labelWithString: .localized("Base:"))
-        fromLabel.translatesAutoresizingMaskIntoConstraints = false
-        fromLabel.font = .systemFont(ofSize: Layout.subtitleFontSize)
-        fromLabel.textColor = .secondaryLabelColor
-        footerContainer.addSubview(fromLabel)
+        // Base card
+        configureCard(baseCard, radius: Layout.cardRadius)
+        footerContainer.addSubview(baseCard)
 
+        baseCardLabel.translatesAutoresizingMaskIntoConstraints = false
+        baseCardLabel.stringValue = "BASE"
+        baseCardLabel.font = .systemFont(ofSize: Layout.cardLabelFontSize, weight: .semibold)
+        baseCardLabel.textColor = .tertiaryLabelColor
+        baseCardLabel.isEditable = false
+        baseCardLabel.isBordered = false
+        baseCardLabel.backgroundColor = .clear
+        baseCard.addSubview(baseCardLabel)
+
+        baseCardValue.translatesAutoresizingMaskIntoConstraints = false
+        baseCardValue.font = .monospacedSystemFont(ofSize: Layout.cardValueFontSize, weight: .medium)
+        baseCardValue.textColor = .labelColor
+        baseCardValue.isEditable = false
+        baseCardValue.isBordered = false
+        baseCardValue.backgroundColor = .clear
+        baseCardValue.lineBreakMode = .byTruncatingTail
+        baseCard.addSubview(baseCardValue)
+
+        // Template card
+        configureCard(templateCard, radius: Layout.cardRadius)
+        footerContainer.addSubview(templateCard)
+
+        templateCardLabel.translatesAutoresizingMaskIntoConstraints = false
+        templateCardLabel.stringValue = "TEMPLATE"
+        templateCardLabel.font = .systemFont(ofSize: Layout.cardLabelFontSize, weight: .semibold)
+        templateCardLabel.textColor = .tertiaryLabelColor
+        templateCardLabel.isEditable = false
+        templateCardLabel.isBordered = false
+        templateCardLabel.backgroundColor = .clear
+        templateCard.addSubview(templateCardLabel)
+
+        templateCardValue.translatesAutoresizingMaskIntoConstraints = false
+        templateCardValue.font = .systemFont(ofSize: Layout.cardValueFontSize, weight: .regular)
+        templateCardValue.textColor = .labelColor
+        templateCardValue.isEditable = false
+        templateCardValue.isBordered = false
+        templateCardValue.backgroundColor = .clear
+        templateCard.addSubview(templateCardValue)
+
+        // Path card
+        configureCard(pathCard, radius: Layout.pathCardRadius)
+        footerContainer.addSubview(pathCard)
+
+        pathCardLabel.translatesAutoresizingMaskIntoConstraints = false
+        pathCardLabel.stringValue = "PATH"
+        pathCardLabel.font = .systemFont(ofSize: Layout.pathLabelFontSize, weight: .semibold)
+        pathCardLabel.textColor = .tertiaryLabelColor
+        pathCardLabel.isEditable = false
+        pathCardLabel.isBordered = false
+        pathCardLabel.backgroundColor = .clear
+        pathCard.addSubview(pathCardLabel)
+
+        pathCardValue.translatesAutoresizingMaskIntoConstraints = false
+        pathCardValue.font = .monospacedSystemFont(ofSize: Layout.pathValueFontSize, weight: .regular)
+        pathCardValue.textColor = .secondaryLabelColor
+        pathCardValue.isEditable = false
+        pathCardValue.isBordered = false
+        pathCardValue.backgroundColor = .clear
+        pathCardValue.lineBreakMode = .byTruncatingMiddle
+        pathCard.addSubview(pathCardValue)
+
+        NSLayoutConstraint.activate([
+            footerSeparator.topAnchor.constraint(equalTo: footerContainer.topAnchor),
+            footerSeparator.leadingAnchor.constraint(equalTo: footerContainer.leadingAnchor),
+            footerSeparator.trailingAnchor.constraint(equalTo: footerContainer.trailingAnchor),
+            footerSeparator.heightAnchor.constraint(equalToConstant: 1),
+
+            // Base card
+            baseCard.topAnchor.constraint(equalTo: footerSeparator.bottomAnchor, constant: Layout.footerPaddingTop),
+            baseCard.leadingAnchor.constraint(equalTo: footerContainer.leadingAnchor, constant: Layout.footerPaddingH),
+            baseCard.widthAnchor.constraint(equalToConstant: Layout.baseCardWidth),
+            baseCard.heightAnchor.constraint(equalToConstant: Layout.cardHeight),
+
+            baseCardLabel.topAnchor.constraint(equalTo: baseCard.topAnchor, constant: Layout.cardPaddingTop),
+            baseCardLabel.leadingAnchor.constraint(equalTo: baseCard.leadingAnchor, constant: Layout.cardPaddingH),
+
+            baseCardValue.leadingAnchor.constraint(equalTo: baseCard.leadingAnchor, constant: Layout.cardPaddingH),
+            baseCardValue.bottomAnchor.constraint(equalTo: baseCard.bottomAnchor, constant: -4),
+            baseCardValue.trailingAnchor.constraint(lessThanOrEqualTo: baseCard.trailingAnchor, constant: -Layout.cardPaddingH),
+
+            // Template card
+            templateCard.topAnchor.constraint(equalTo: baseCard.topAnchor),
+            templateCard.leadingAnchor.constraint(equalTo: baseCard.trailingAnchor, constant: Layout.cardGap),
+            templateCard.widthAnchor.constraint(equalToConstant: Layout.templateCardWidth),
+            templateCard.heightAnchor.constraint(equalToConstant: Layout.cardHeight),
+
+            templateCardLabel.topAnchor.constraint(equalTo: templateCard.topAnchor, constant: Layout.cardPaddingTop),
+            templateCardLabel.leadingAnchor.constraint(equalTo: templateCard.leadingAnchor, constant: Layout.cardPaddingH),
+
+            templateCardValue.leadingAnchor.constraint(equalTo: templateCard.leadingAnchor, constant: Layout.cardPaddingH),
+            templateCardValue.bottomAnchor.constraint(equalTo: templateCard.bottomAnchor, constant: -4),
+            templateCardValue.trailingAnchor.constraint(lessThanOrEqualTo: templateCard.trailingAnchor, constant: -Layout.cardPaddingH),
+
+            // Path card
+            pathCard.topAnchor.constraint(equalTo: baseCard.bottomAnchor, constant: Layout.cardGap),
+            pathCard.leadingAnchor.constraint(equalTo: footerContainer.leadingAnchor, constant: Layout.footerPaddingH),
+            pathCard.trailingAnchor.constraint(equalTo: footerContainer.trailingAnchor, constant: -Layout.footerPaddingH),
+            pathCard.heightAnchor.constraint(equalToConstant: Layout.pathCardHeight),
+
+            pathCardLabel.centerYAnchor.constraint(equalTo: pathCard.centerYAnchor),
+            pathCardLabel.leadingAnchor.constraint(equalTo: pathCard.leadingAnchor, constant: Layout.cardPaddingH),
+
+            pathCardValue.centerYAnchor.constraint(equalTo: pathCard.centerYAnchor),
+            pathCardValue.leadingAnchor.constraint(equalTo: pathCardLabel.trailingAnchor, constant: 6),
+            pathCardValue.trailingAnchor.constraint(lessThanOrEqualTo: pathCard.trailingAnchor, constant: -Layout.cardPaddingH),
+
+            footerContainer.heightAnchor.constraint(equalToConstant: Layout.footerHeight),
+        ])
+    }
+
+    private func setupHiddenControls() {
+        // baseBranchField and templatePopup are kept off-screen for Tab navigation
         baseBranchField.translatesAutoresizingMaskIntoConstraints = false
         baseBranchField.placeholderString = "main"
-        baseBranchField.font = .systemFont(ofSize: Layout.subtitleFontSize)
+        baseBranchField.font = .systemFont(ofSize: 11)
         baseBranchField.isBordered = true
         baseBranchField.bezelStyle = .roundedBezel
         baseBranchField.focusRingType = .none
         baseBranchField.delegate = self
-        footerContainer.addSubview(baseBranchField)
-
-        // Template label + popup
-        let templateLabel = NSTextField(labelWithString: .localized("Template:"))
-        templateLabel.translatesAutoresizingMaskIntoConstraints = false
-        templateLabel.font = .systemFont(ofSize: Layout.subtitleFontSize)
-        templateLabel.textColor = .secondaryLabelColor
-        footerContainer.addSubview(templateLabel)
+        baseBranchField.isHidden = true
+        containerView.addSubview(baseBranchField)
 
         templatePopup.translatesAutoresizingMaskIntoConstraints = false
-        templatePopup.font = .systemFont(ofSize: Layout.subtitleFontSize)
+        templatePopup.font = .systemFont(ofSize: 11)
         templatePopup.removeAllItems()
         for template in TemplateRegistry.all {
             templatePopup.addItem(withTitle: template.name.capitalized)
@@ -295,66 +606,66 @@ final class WorktreeCreationController: NSWindowController {
         templatePopup.controlSize = .small
         templatePopup.target = self
         templatePopup.action = #selector(templateChanged(_:))
-        footerContainer.addSubview(templatePopup)
+        templatePopup.isHidden = true
+        containerView.addSubview(templatePopup)
+    }
 
-        // Path preview
-        pathLabel.translatesAutoresizingMaskIntoConstraints = false
-        pathLabel.font = .systemFont(ofSize: Layout.pathFontSize)
-        pathLabel.textColor = .tertiaryLabelColor
-        pathLabel.lineBreakMode = .byTruncatingMiddle
-        footerContainer.addSubview(pathLabel)
-
-        NSLayoutConstraint.activate([
-            footerSeparator.topAnchor.constraint(equalTo: footerContainer.topAnchor),
-            footerSeparator.leadingAnchor.constraint(equalTo: footerContainer.leadingAnchor),
-            footerSeparator.trailingAnchor.constraint(equalTo: footerContainer.trailingAnchor),
-
-            fromLabel.topAnchor.constraint(equalTo: footerSeparator.bottomAnchor, constant: 6),
-            fromLabel.leadingAnchor.constraint(equalTo: footerContainer.leadingAnchor, constant: Layout.fieldHorizontalPadding),
-
-            baseBranchField.leadingAnchor.constraint(equalTo: fromLabel.trailingAnchor, constant: 4),
-            baseBranchField.centerYAnchor.constraint(equalTo: fromLabel.centerYAnchor),
-            baseBranchField.widthAnchor.constraint(equalToConstant: 120),
-
-            templateLabel.leadingAnchor.constraint(equalTo: baseBranchField.trailingAnchor, constant: 16),
-            templateLabel.centerYAnchor.constraint(equalTo: fromLabel.centerYAnchor),
-
-            templatePopup.leadingAnchor.constraint(equalTo: templateLabel.trailingAnchor, constant: 4),
-            templatePopup.centerYAnchor.constraint(equalTo: fromLabel.centerYAnchor),
-            templatePopup.trailingAnchor.constraint(lessThanOrEqualTo: footerContainer.trailingAnchor, constant: -Layout.fieldHorizontalPadding),
-
-            pathLabel.topAnchor.constraint(equalTo: fromLabel.bottomAnchor, constant: 4),
-            pathLabel.leadingAnchor.constraint(equalTo: footerContainer.leadingAnchor, constant: Layout.fieldHorizontalPadding),
-            pathLabel.trailingAnchor.constraint(equalTo: footerContainer.trailingAnchor, constant: -Layout.fieldHorizontalPadding),
-            pathLabel.bottomAnchor.constraint(lessThanOrEqualTo: footerContainer.bottomAnchor, constant: -4),
-
-            footerContainer.heightAnchor.constraint(equalToConstant: Layout.footerHeight),
-        ])
+    private func configureCard(_ card: NSView, radius: CGFloat) {
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.wantsLayer = true
+        card.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        card.layer?.borderColor = NSColor.separatorColor.cgColor
+        card.layer?.borderWidth = 1
+        card.layer?.cornerRadius = radius
     }
 
     private func layoutViews() {
         tableSeparator.translatesAutoresizingMaskIntoConstraints = false
-        tableSeparator.boxType = .separator
+        tableSeparator.boxType = .custom
+        tableSeparator.fillColor = .separatorColor
         containerView.addSubview(tableSeparator)
 
+        let searchBg = searchFieldBackground
+
         NSLayoutConstraint.activate([
-            searchField.topAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.panelPadding),
-            searchField.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.fieldHorizontalPadding),
-            searchField.heightAnchor.constraint(equalToConstant: Layout.searchFieldHeight),
+            // Context row
+            contextLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.panelTopPadding),
+            contextLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.panelOuterPaddingH),
+            contextLabel.heightAnchor.constraint(equalToConstant: Layout.contextRowHeight),
 
-            statusBadge.leadingAnchor.constraint(equalTo: searchField.trailingAnchor, constant: 4),
-            statusBadge.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.fieldHorizontalPadding),
-            statusBadge.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
-            statusBadge.widthAnchor.constraint(equalToConstant: 64),
+            projectLabel.centerYAnchor.constraint(equalTo: contextLabel.centerYAnchor),
+            projectLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.panelOuterPaddingH),
 
-            tableSeparator.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: Layout.panelPadding),
+            // Search field background
+            searchBg.topAnchor.constraint(equalTo: contextLabel.bottomAnchor, constant: Layout.contextGap),
+            searchBg.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.panelOuterPaddingH),
+            searchBg.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.panelOuterPaddingH),
+            searchBg.heightAnchor.constraint(equalToConstant: Layout.searchFieldHeight),
+
+            // Search field (inside background)
+            searchField.leadingAnchor.constraint(equalTo: searchBg.leadingAnchor, constant: 10),
+            searchField.trailingAnchor.constraint(equalTo: statusPillContainer.leadingAnchor, constant: -8),
+            searchField.centerYAnchor.constraint(equalTo: searchBg.centerYAnchor),
+            searchField.heightAnchor.constraint(equalToConstant: Layout.searchFieldHeight - 4),
+
+            // Status pill (trailing inside search bg)
+            statusPillContainer.trailingAnchor.constraint(equalTo: searchBg.trailingAnchor, constant: -8),
+            statusPillContainer.centerYAnchor.constraint(equalTo: searchBg.centerYAnchor),
+            statusPillContainer.widthAnchor.constraint(equalToConstant: Layout.pillWidth),
+            statusPillContainer.heightAnchor.constraint(equalToConstant: Layout.pillHeight),
+
+            // Separator
+            tableSeparator.topAnchor.constraint(equalTo: searchBg.bottomAnchor, constant: Layout.listGap),
             tableSeparator.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             tableSeparator.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            tableSeparator.heightAnchor.constraint(equalToConstant: 1),
 
+            // Scroll view
             scrollView.topAnchor.constraint(equalTo: tableSeparator.bottomAnchor),
             scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
 
+            // Footer
             footerContainer.topAnchor.constraint(equalTo: scrollView.bottomAnchor),
             footerContainer.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             footerContainer.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
@@ -381,18 +692,44 @@ final class WorktreeCreationController: NSWindowController {
     }
 
     private func computePanelHeight() -> CGFloat {
-        let visibleRows = min(suggestions.count, Layout.maxVisibleRows)
-        let tableHeight = CGFloat(max(visibleRows, 1)) * Layout.rowHeight
-        let topPadding = Layout.panelPadding + Layout.searchFieldHeight + Layout.panelPadding + 1
-        return topPadding + tableHeight + Layout.footerHeight
+        let topArea = Layout.panelTopPadding + Layout.contextRowHeight + Layout.contextGap
+            + Layout.searchFieldHeight + Layout.listGap + 1 // separator
+        let rowCount = rows.isEmpty ? 1 : min(rows.count, Layout.maxVisibleRows)
+        let tableHeight = CGFloat(rowCount) * Layout.rowHeight
+        return topArea + tableHeight + Layout.footerHeight
     }
 
     // MARK: - Results
 
     private func updateResults() {
         let query = searchField.stringValue
-        suggestions = dataSource?.filteredSuggestions(query: query) ?? []
-        selectedIndex = suggestions.isEmpty ? -1 : 0
+        let grouped = dataSource?.filteredGrouped(query: query)
+            ?? (local: [], remote: [])
+
+        // Build flat rows with section headers only when both groups present
+        var newRows: [PanelRow] = []
+        let hasLocal = !grouped.local.isEmpty
+        let hasRemote = !grouped.remote.isEmpty
+        let showHeaders = hasLocal && hasRemote
+
+        if showHeaders {
+            newRows.append(.sectionHeader("LOCAL"))
+        }
+        for s in grouped.local {
+            newRows.append(.branch(s))
+        }
+        if showHeaders {
+            newRows.append(.sectionHeader("REMOTE"))
+        }
+        for s in grouped.remote {
+            newRows.append(.branch(s))
+        }
+
+        rows = newRows
+        suggestions = grouped.local + grouped.remote
+
+        // Select first branch row
+        selectedIndex = rows.firstIndex(where: { if case .branch = $0 { return true }; return false }) ?? -1
 
         tableView.reloadData()
 
@@ -400,8 +737,8 @@ final class WorktreeCreationController: NSWindowController {
             tableView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
         }
 
-        updateStatusBadge()
-        updatePathPreview()
+        updateStatusPill()
+        updateFooter()
         resizePanel()
     }
 
@@ -425,10 +762,9 @@ final class WorktreeCreationController: NSWindowController {
         let template = selectedTemplate()
 
         // Check: is a suggestion selected (user arrowed down into the list)?
-        if selectedIndex >= 0, selectedIndex < suggestions.count {
-            let suggestion = suggestions[selectedIndex]
+        if selectedIndex >= 0, selectedIndex < rows.count,
+           case .branch(let suggestion) = rows[selectedIndex] {
             let info = suggestion.info
-            // If the selected suggestion's name matches the query, use it as existing
             let matchName = info.isRemote ? info.displayName : info.name
             if matchName.lowercased() == query.lowercased() {
                 dismiss()
@@ -454,7 +790,7 @@ final class WorktreeCreationController: NSWindowController {
             return
         }
 
-        // No match — create new branch
+        // No match -- create new branch
         let baseBranch = baseBranchField.stringValue.isEmpty
             ? (dataSource?.defaultBaseBranch ?? "main")
             : baseBranchField.stringValue
@@ -469,12 +805,12 @@ final class WorktreeCreationController: NSWindowController {
 
     /// When user arrows into a suggestion and presses Enter, use that suggestion directly.
     private func confirmSuggestion() {
-        guard selectedIndex >= 0, selectedIndex < suggestions.count else {
+        guard selectedIndex >= 0, selectedIndex < rows.count,
+              case .branch(let suggestion) = rows[selectedIndex] else {
             confirmInput()
             return
         }
 
-        let suggestion = suggestions[selectedIndex]
         let template = selectedTemplate()
         dismiss()
         onCreateWorktree?(WorktreeCreationRequest(
@@ -486,78 +822,92 @@ final class WorktreeCreationController: NSWindowController {
     }
 
     private func moveSelectionUp() {
-        guard !suggestions.isEmpty else { return }
-        if selectedIndex > 0 {
-            selectedIndex -= 1
+        guard !rows.isEmpty else { return }
+        var candidate = selectedIndex - 1
+        while candidate >= 0 {
+            if case .branch = rows[candidate] { break }
+            candidate -= 1
         }
+        guard candidate >= 0 else { return }
+        selectedIndex = candidate
         tableView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
         tableView.scrollRowToVisible(selectedIndex)
-        updatePathPreview()
+        updateFooter()
     }
 
     private func moveSelectionDown() {
-        guard !suggestions.isEmpty else { return }
-        if selectedIndex < suggestions.count - 1 {
-            selectedIndex += 1
+        guard !rows.isEmpty else { return }
+        var candidate = selectedIndex + 1
+        while candidate < rows.count {
+            if case .branch = rows[candidate] { break }
+            candidate += 1
         }
+        guard candidate < rows.count else { return }
+        selectedIndex = candidate
         tableView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
         tableView.scrollRowToVisible(selectedIndex)
-        updatePathPreview()
+        updateFooter()
     }
 
     // MARK: - Status & Footer
 
-    private func updateStatusBadge() {
+    private func updateStatusPill() {
         let query = searchField.stringValue.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else {
-            statusBadge.stringValue = ""
+            statusPillContainer.isHidden = true
             return
         }
 
+        statusPillContainer.isHidden = false
+
         if dataSource?.exactMatch(for: query) != nil {
-            statusBadge.stringValue = "✓ exists"
-            statusBadge.textColor = .systemBlue
+            // EXISTS pill
+            statusPillLabel.stringValue = "EXISTS"
+            statusPillLabel.textColor = .controlAccentColor
+            statusPillContainer.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
         } else {
-            statusBadge.stringValue = "✚ new"
-            statusBadge.textColor = .systemGreen
+            // NEW pill
+            statusPillLabel.stringValue = "NEW"
+            statusPillLabel.textColor = .systemGreen
+            statusPillContainer.layer?.backgroundColor = NSColor.systemGreen.withAlphaComponent(0.12).cgColor
         }
     }
 
-    private func updatePathPreview() {
+    private func updateFooter() {
         let query = searchField.stringValue.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else {
-            pathLabel.stringValue = ""
-            return
-        }
-
-        // Determine the effective branch name for path preview
-        let branchForPath: String
-        if let match = dataSource?.exactMatch(for: query) {
-            branchForPath = match.isRemote ? match.displayName : match.name
-        } else {
-            branchForPath = query
-        }
-
-        let path = WorktreeCreationDataSource.previewPath(
-            projectName: projectName,
-            branchName: branchForPath
-        )
+        let isExisting = query.isEmpty ? false : dataSource?.exactMatch(for: query) != nil
         let template = selectedTemplate()
 
-        var preview = "\(String.localized("Path:")) \(path)"
-
-        // Show base branch info for new branches
-        if dataSource?.exactMatch(for: query) == nil {
+        // Base card
+        if isExisting {
+            baseCard.alphaValue = 0.55
+            baseCardValue.stringValue = String.localized("Not used")
+        } else {
+            baseCard.alphaValue = 1.0
             let base = baseBranchField.stringValue.isEmpty
                 ? (dataSource?.defaultBaseBranch ?? "main")
                 : baseBranchField.stringValue
-            preview += "  \(String.localized("from:")) \(base)"
+            baseCardValue.stringValue = base
         }
 
-        if template.name != "basic" {
-            preview += "  [\(template.name.capitalized)]"
+        // Template card
+        templateCardValue.stringValue = template.name.capitalized
+
+        // Path card
+        if query.isEmpty {
+            pathCardValue.stringValue = ""
+        } else {
+            let branchForPath: String
+            if let match = dataSource?.exactMatch(for: query) {
+                branchForPath = match.isRemote ? match.displayName : match.name
+            } else {
+                branchForPath = query
+            }
+            pathCardValue.stringValue = WorktreeCreationDataSource.previewPath(
+                projectName: projectName,
+                branchName: branchForPath
+            )
         }
-        pathLabel.stringValue = preview
     }
 
     private func selectedTemplate() -> SessionTemplate {
@@ -568,6 +918,76 @@ final class WorktreeCreationController: NSWindowController {
         return TemplateRegistry.all[index]
     }
 
+    // MARK: - Pill Factory
+
+    /// Creates a reusable pill view with rounded rect background at 12% opacity + centered label.
+    private static func makePill(
+        text: String,
+        textColor: NSColor,
+        fillColor: NSColor,
+        width: CGFloat,
+        height: CGFloat,
+        radius: CGFloat,
+        fontSize: CGFloat = 10,
+        weight: NSFont.Weight = .semibold
+    ) -> NSView {
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.wantsLayer = true
+        container.layer?.backgroundColor = fillColor.withAlphaComponent(0.12).cgColor
+        container.layer?.cornerRadius = radius
+
+        let label = NSTextField(labelWithString: text)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = .systemFont(ofSize: fontSize, weight: weight)
+        label.textColor = textColor
+        label.alignment = .center
+        label.isEditable = false
+        label.isBordered = false
+        label.backgroundColor = .clear
+        container.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            container.widthAnchor.constraint(equalToConstant: width),
+            container.heightAnchor.constraint(equalToConstant: height),
+            label.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        ])
+
+        return container
+    }
+
+    /// Creates a remote capsule (e.g., "origin") with border.
+    private static func makeRemoteCapsule(text: String) -> NSView {
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        container.layer?.borderColor = NSColor.separatorColor.cgColor
+        container.layer?.borderWidth = 1
+        container.layer?.cornerRadius = Layout.remoteCapsuleRadius
+
+        let label = NSTextField(labelWithString: text)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = .systemFont(ofSize: 10, weight: .medium)
+        label.textColor = .secondaryLabelColor
+        label.alignment = .center
+        label.isEditable = false
+        label.isBordered = false
+        label.backgroundColor = .clear
+        container.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            container.heightAnchor.constraint(equalToConstant: Layout.remoteCapsuleHeight),
+            container.widthAnchor.constraint(greaterThanOrEqualToConstant: Layout.remoteCapsuleMinWidth),
+            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: Layout.remoteCapsulePaddingH),
+            label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -Layout.remoteCapsulePaddingH),
+            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        ])
+
+        return container
+    }
+
     // MARK: - Actions
 
     @objc private func searchFieldAction(_ sender: NSTextField) {
@@ -575,14 +995,39 @@ final class WorktreeCreationController: NSWindowController {
     }
 
     @objc private func templateChanged(_ sender: NSPopUpButton) {
-        updatePathPreview()
+        updateFooter()
     }
 
     @objc private func tableDoubleClicked() {
         let row = tableView.clickedRow
-        guard row >= 0, row < suggestions.count else { return }
+        guard row >= 0, row < rows.count, case .branch = rows[row] else { return }
         selectedIndex = row
         confirmSuggestion()
+    }
+
+    // MARK: - Helpers
+
+    private func relativeTimeString(from date: Date) -> String {
+        let interval = Date().timeIntervalSince(date)
+        let seconds = Int(interval)
+        if seconds < 60 { return .localized("now") }
+        let minutes = seconds / 60
+        if minutes < 60 { return String(format: .localized("%dm ago"), minutes) }
+        let hours = minutes / 60
+        if hours < 24 { return String(format: .localized("%dh ago"), hours) }
+        let days = hours / 24
+        if days < 30 { return String(format: .localized("%dd ago"), days) }
+        let months = days / 30
+        if months < 12 { return String(format: .localized("%dmo ago"), months) }
+        let years = days / 365
+        return String(format: .localized("%dy ago"), years)
+    }
+
+    /// Returns the BranchSuggestion for a given row index, or nil if header.
+    private func branchSuggestion(at row: Int) -> BranchSuggestion? {
+        guard row >= 0, row < rows.count else { return nil }
+        if case .branch(let s) = rows[row] { return s }
+        return nil
     }
 }
 
@@ -595,7 +1040,7 @@ extension WorktreeCreationController: NSTextFieldDelegate {
         if field === searchField {
             updateResults()
         } else if field === baseBranchField {
-            updatePathPreview()
+            updateFooter()
         }
     }
 
@@ -659,7 +1104,7 @@ extension WorktreeCreationController: NSTextFieldDelegate {
 extension WorktreeCreationController: NSTableViewDataSource {
 
     func numberOfRows(in tableView: NSTableView) -> Int {
-        suggestions.count
+        rows.count
     }
 }
 
@@ -667,171 +1112,214 @@ extension WorktreeCreationController: NSTableViewDataSource {
 
 extension WorktreeCreationController: NSTableViewDelegate {
 
-    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard row < suggestions.count else { return nil }
-        let suggestion = suggestions[row]
-        let info = suggestion.info
-
-        let icon = info.isRemote ? "cloud" : "arrow.branch"
-        let displayTitle: String
-        if info.isRemote {
-            displayTitle = info.displayName
-        } else if info.isHead {
-            displayTitle = "\(info.name) *"
-        } else {
-            displayTitle = info.name
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        switch rows[row] {
+        case .sectionHeader:
+            return Layout.sectionHeaderHeight
+        case .branch:
+            return Layout.rowHeight
         }
-        let subtitle = info.commitDate.map { relativeTimeString(from: $0) }
-        // Show remote name as a dim suffix for remote branches
-        let remoteSuffix = info.isRemote ? info.remoteName : nil
+    }
 
-        return makeBranchCellView(
-            icon: icon,
-            title: displayTitle,
-            subtitle: subtitle,
-            remoteSuffix: remoteSuffix,
-            inUse: suggestion.inUse,
-            tableView: tableView
-        )
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        switch rows[row] {
+        case .sectionHeader:
+            return NSTableRowView()
+        case .branch:
+            let rowView = InsetSelectionRowView()
+            rowView.selectionHighlightStyle = .none
+            return rowView
+        }
+    }
+
+    func tableView(_ tableView: NSTableView, isGroupRow row: Int) -> Bool {
+        if case .sectionHeader = rows[row] { return true }
+        return false
+    }
+
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+        if case .sectionHeader = rows[row] { return false }
+        return true
+    }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        guard row < rows.count else { return nil }
+
+        switch rows[row] {
+        case .sectionHeader(let title):
+            return makeSectionHeaderView(title: title)
+        case .branch(let suggestion):
+            return makeBranchRowView(suggestion: suggestion)
+        }
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
         let row = tableView.selectedRow
-        if row >= 0, row < suggestions.count {
+        if row >= 0, row < rows.count, case .branch = rows[row] {
             selectedIndex = row
-            updatePathPreview()
+            updateFooter()
+        }
+        // Refresh row views for selection styling
+        tableView.enumerateAvailableRowViews { rowView, rowIdx in
+            if let inset = rowView as? InsetSelectionRowView {
+                inset.isSelected = (rowIdx == selectedIndex)
+                inset.needsDisplay = true
+            }
         }
     }
 
-    // MARK: - Cell Factory
+    // MARK: - Section Header
 
-    private func makeBranchCellView(
-        icon: String,
-        title: String,
-        subtitle: String?,
-        remoteSuffix: String?,
-        inUse: Bool,
-        tableView: NSTableView
-    ) -> NSView {
-        let cellID = NSUserInterfaceItemIdentifier("BranchCell")
-        let cell: NSTableCellView
+    private func makeSectionHeaderView(title: String) -> NSView {
+        let cell = NSTableCellView()
+        let label = NSTextField(labelWithString: title)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = .systemFont(ofSize: Layout.sectionHeaderFontSize, weight: .semibold)
+        label.textColor = .tertiaryLabelColor
+        cell.addSubview(label)
 
-        if let existing = tableView.makeView(withIdentifier: cellID, owner: nil) as? NSTableCellView {
-            cell = existing
-        } else {
-            cell = makeBranchCell(identifier: cellID)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: Layout.sectionHeaderLeading),
+            label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+        ])
+
+        return cell
+    }
+
+    // MARK: - Branch Row
+
+    private func makeBranchRowView(suggestion: BranchSuggestion) -> NSView {
+        let info = suggestion.info
+        let cell = NSView()
+        cell.wantsLayer = true
+
+        let leadingAnchor = cell.leadingAnchor
+        let leadingConstant = Layout.rowContentPaddingH
+
+        // HEAD accent rail (2px leading edge)
+        if info.isHead {
+            let rail = NSView()
+            rail.translatesAutoresizingMaskIntoConstraints = false
+            rail.wantsLayer = true
+            rail.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+            cell.addSubview(rail)
+            NSLayoutConstraint.activate([
+                rail.leadingAnchor.constraint(equalTo: cell.leadingAnchor),
+                rail.topAnchor.constraint(equalTo: cell.topAnchor),
+                rail.bottomAnchor.constraint(equalTo: cell.bottomAnchor),
+                rail.widthAnchor.constraint(equalToConstant: Layout.accentRailWidth),
+            ])
         }
 
         // Icon
-        cell.imageView?.image = NSImage(systemSymbolName: icon, accessibilityDescription: nil)
-        cell.imageView?.contentTintColor = inUse ? .tertiaryLabelColor : .secondaryLabelColor
-
-        // Title
-        cell.textField?.stringValue = title
-        cell.textField?.textColor = inUse ? .tertiaryLabelColor : .labelColor
-
-        // Subtitle / time (tag 100)
-        if let timeField = cell.viewWithTag(100) as? NSTextField {
-            timeField.stringValue = subtitle ?? ""
-            timeField.isHidden = subtitle == nil
-        }
-
-        // Remote suffix (tag 102)
-        if let remoteField = cell.viewWithTag(102) as? NSTextField {
-            remoteField.stringValue = remoteSuffix ?? ""
-            remoteField.isHidden = remoteSuffix == nil
-        }
-
-        // "in use" badge (tag 101)
-        if let badgeField = cell.viewWithTag(101) as? NSTextField {
-            badgeField.stringValue = inUse ? .localized("in use") : ""
-            badgeField.isHidden = !inUse
-        }
-
-        return cell
-    }
-
-    private func makeBranchCell(identifier: NSUserInterfaceItemIdentifier) -> NSTableCellView {
-        let cell = NSTableCellView()
-        cell.identifier = identifier
-
+        let icon = info.isRemote ? "cloud" : "arrow.branch"
         let imageView = NSImageView()
         imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.image = NSImage(systemSymbolName: icon, accessibilityDescription: nil)
         imageView.imageScaling = .scaleProportionallyDown
+        // In-use: mute icon to .secondaryLabelColor; otherwise normal
+        imageView.contentTintColor = suggestion.inUse ? .secondaryLabelColor : .secondaryLabelColor
         cell.addSubview(imageView)
-        cell.imageView = imageView
-
-        let titleField = NSTextField(labelWithString: "")
-        titleField.translatesAutoresizingMaskIntoConstraints = false
-        titleField.font = .systemFont(ofSize: Layout.titleFontSize)
-        titleField.lineBreakMode = .byTruncatingTail
-        cell.addSubview(titleField)
-        cell.textField = titleField
-
-        let timeField = NSTextField(labelWithString: "")
-        timeField.translatesAutoresizingMaskIntoConstraints = false
-        timeField.font = .systemFont(ofSize: Layout.timeFontSize)
-        timeField.textColor = .tertiaryLabelColor
-        timeField.tag = 100
-        cell.addSubview(timeField)
-
-        let remoteField = NSTextField(labelWithString: "")
-        remoteField.translatesAutoresizingMaskIntoConstraints = false
-        remoteField.font = .systemFont(ofSize: Layout.badgeFontSize)
-        remoteField.textColor = .quaternaryLabelColor
-        remoteField.tag = 102
-        cell.addSubview(remoteField)
-
-        let badgeField = NSTextField(labelWithString: "")
-        badgeField.translatesAutoresizingMaskIntoConstraints = false
-        badgeField.font = .systemFont(ofSize: Layout.badgeFontSize, weight: .medium)
-        badgeField.textColor = .tertiaryLabelColor
-        badgeField.tag = 101
-        cell.addSubview(badgeField)
 
         NSLayoutConstraint.activate([
-            imageView.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: Layout.cellLeadingPadding),
+            imageView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: leadingConstant),
             imageView.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
             imageView.widthAnchor.constraint(equalToConstant: Layout.cellIconSize),
             imageView.heightAnchor.constraint(equalToConstant: Layout.cellIconSize),
-
-            titleField.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: Layout.cellSpacing),
-            titleField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-
-            remoteField.leadingAnchor.constraint(greaterThanOrEqualTo: titleField.trailingAnchor, constant: Layout.cellSpacing),
-            remoteField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-
-            timeField.leadingAnchor.constraint(greaterThanOrEqualTo: remoteField.trailingAnchor, constant: Layout.cellSpacing),
-            timeField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-
-            badgeField.leadingAnchor.constraint(greaterThanOrEqualTo: timeField.trailingAnchor, constant: Layout.cellSpacing),
-            badgeField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -Layout.cellTrailingPadding),
-            badgeField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
         ])
 
-        titleField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        remoteField.setContentCompressionResistancePriority(.defaultHigh - 1, for: .horizontal)
-        timeField.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
-        badgeField.setContentCompressionResistancePriority(.required, for: .horizontal)
+        // Branch name
+        let displayName = info.isRemote ? info.displayName : info.name
+        let nameLabel = NSTextField(labelWithString: displayName)
+        nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        if info.isHead {
+            nameLabel.font = .monospacedSystemFont(ofSize: Layout.branchFontSize, weight: .semibold)
+        } else {
+            nameLabel.font = .monospacedSystemFont(ofSize: Layout.branchFontSize, weight: .regular)
+        }
+        nameLabel.textColor = info.isRemote ? .secondaryLabelColor : .labelColor
+        nameLabel.lineBreakMode = .byTruncatingTail
+        cell.addSubview(nameLabel)
+
+        NSLayoutConstraint.activate([
+            nameLabel.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: Layout.cellIconGap),
+            nameLabel.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+        ])
+        nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        // Trailing items are laid out right-to-left
+        var trailingAnchorRef = cell.trailingAnchor
+        var trailingConstant: CGFloat = -Layout.rowContentPaddingH
+
+        // OPEN pill (in-use)
+        if suggestion.inUse {
+            let openPill = Self.makePill(
+                text: "OPEN",
+                textColor: .systemOrange,
+                fillColor: .systemOrange,
+                width: Layout.openPillWidth,
+                height: Layout.openPillHeight,
+                radius: Layout.openPillRadius
+            )
+            cell.addSubview(openPill)
+            NSLayoutConstraint.activate([
+                openPill.trailingAnchor.constraint(equalTo: trailingAnchorRef, constant: trailingConstant),
+                openPill.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            ])
+            trailingAnchorRef = openPill.leadingAnchor
+            trailingConstant = -6
+        }
+
+        // Commit age (right-aligned 60px lane)
+        if let commitDate = info.commitDate {
+            let timeLabel = NSTextField(labelWithString: relativeTimeString(from: commitDate))
+            timeLabel.translatesAutoresizingMaskIntoConstraints = false
+            timeLabel.font = .monospacedSystemFont(ofSize: Layout.commitAgeFontSize, weight: .regular)
+            timeLabel.textColor = .tertiaryLabelColor
+            timeLabel.alignment = .right
+            cell.addSubview(timeLabel)
+            NSLayoutConstraint.activate([
+                timeLabel.trailingAnchor.constraint(equalTo: trailingAnchorRef, constant: trailingConstant),
+                timeLabel.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                timeLabel.widthAnchor.constraint(equalToConstant: Layout.commitAgeLaneWidth),
+            ])
+            trailingAnchorRef = timeLabel.leadingAnchor
+            trailingConstant = -6
+        }
+
+        // HEAD pill
+        if info.isHead {
+            let headPill = Self.makePill(
+                text: "HEAD",
+                textColor: .controlAccentColor,
+                fillColor: .controlAccentColor,
+                width: Layout.headPillWidth,
+                height: Layout.headPillHeight,
+                radius: Layout.headPillRadius
+            )
+            cell.addSubview(headPill)
+            NSLayoutConstraint.activate([
+                headPill.leadingAnchor.constraint(equalTo: nameLabel.trailingAnchor, constant: 6),
+                headPill.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            ])
+            // Don't let head pill overlap trailing items
+            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchorRef, constant: trailingConstant - Layout.headPillWidth - 12).isActive = true
+        }
+
+        // Remote capsule (origin/upstream)
+        if info.isRemote, let remoteName = info.remoteName {
+            let capsule = Self.makeRemoteCapsule(text: remoteName)
+            cell.addSubview(capsule)
+            NSLayoutConstraint.activate([
+                capsule.leadingAnchor.constraint(equalTo: nameLabel.trailingAnchor, constant: 6),
+                capsule.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            ])
+            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchorRef, constant: trailingConstant - Layout.remoteCapsuleMinWidth - 12).isActive = true
+        } else if !info.isHead {
+            // Just constrain name label to not overlap trailing
+            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchorRef, constant: trailingConstant).isActive = true
+        }
 
         return cell
-    }
-
-    // MARK: - Helpers
-
-    private func relativeTimeString(from date: Date) -> String {
-        let interval = Date().timeIntervalSince(date)
-        let seconds = Int(interval)
-        if seconds < 60 { return .localized("now") }
-        let minutes = seconds / 60
-        if minutes < 60 { return String(format: .localized("%dm ago"), minutes) }
-        let hours = minutes / 60
-        if hours < 24 { return String(format: .localized("%dh ago"), hours) }
-        let days = hours / 24
-        if days < 30 { return String(format: .localized("%dd ago"), days) }
-        let months = days / 30
-        if months < 12 { return String(format: .localized("%dmo ago"), months) }
-        let years = days / 365
-        return String(format: .localized("%dy ago"), years)
     }
 }

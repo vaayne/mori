@@ -36,27 +36,37 @@ final class WorktreeCreationDataSource: Sendable {
     /// Returns a flat list of suggestions — no section headers.
     /// Remote branches that have a local counterpart are excluded.
     func filteredSuggestions(query: String) -> [BranchSuggestion] {
+        let grouped = filteredGrouped(query: query)
+        return grouped.local + grouped.remote
+    }
+
+    /// Filter branches by query, returning separate local and remote arrays.
+    /// Remote branches that have a local counterpart are excluded.
+    func filteredGrouped(query: String) -> (local: [BranchSuggestion], remote: [BranchSuggestion]) {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         let lowerQuery = trimmed.lowercased()
 
         let localBranches = allBranches.filter { !$0.isRemote }
         let remoteBranches = deduplicatedRemoteBranches()
 
-        let matched: [GitBranchInfo]
+        let matchedLocal: [GitBranchInfo]
+        let matchedRemote: [GitBranchInfo]
         if lowerQuery.isEmpty {
-            // Show all branches: locals first, then remotes
-            matched = localBranches + remoteBranches
+            matchedLocal = localBranches
+            matchedRemote = remoteBranches
         } else {
-            let matchedLocal = localBranches.filter {
+            matchedLocal = localBranches.filter {
                 $0.name.lowercased().contains(lowerQuery)
             }
-            let matchedRemote = remoteBranches.filter {
+            matchedRemote = remoteBranches.filter {
                 $0.displayName.lowercased().contains(lowerQuery)
             }
-            matched = matchedLocal + matchedRemote
         }
 
-        return matched.map { BranchSuggestion(info: $0, inUse: isBranchInUse($0)) }
+        return (
+            local: matchedLocal.map { BranchSuggestion(info: $0, inUse: isBranchInUse($0)) },
+            remote: matchedRemote.map { BranchSuggestion(info: $0, inUse: isBranchInUse($0)) }
+        )
     }
 
     /// Check if a query exactly matches an existing branch name.
