@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- **Task Mode Sidebar**: Alternative sidebar view that groups all worktrees across projects by workflow status (To Do, In Progress, Needs Review, Done, Cancelled) instead of project hierarchy ([#14](https://github.com/vaayne/mori/issues/14))
+  - Toggle between Tasks and Workspaces views via segmented control at sidebar top
+  - Manual status changes via context menu, command palette, or `mori status` CLI command
+  - Auto-transition from To Do to In Progress on first git activity or agent usage
+  - Cancelled items hidden by default with reveal toggle; Done group collapsed by default
+  - Cross-project worktree selection syncs project context automatically
+  - Full localization support (English + Simplified Chinese)
+
 ### 🐛 Bug Fixes
 
 - `mise run build`/`build:release` now auto-bootstrap GhosttyKit via `build:ghostty` to avoid missing XCFramework errors on fresh clones
