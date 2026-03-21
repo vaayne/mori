@@ -26,6 +26,9 @@ public final class GhosttySurfaceView: NSView {
             : frame
         super.init(frame: initialFrame)
         wantsLayer = true
+        // Ghostty drives rendering via Metal — tell AppKit not to manage layer contents.
+        layerContentsRedrawPolicy = .never
+        layer?.isOpaque = true
         layer?.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
     }
 
@@ -80,8 +83,14 @@ public final class GhosttySurfaceView: NSView {
     }
 
     private func updateContentScale() {
-        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+        guard let window else { return }
+        let scale = window.backingScaleFactor
+        // Disable implicit CA animation when updating contentsScale to avoid janky
+        // scale transitions when moving between displays with different DPI.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         layer?.contentsScale = scale
+        CATransaction.commit()
         if let surface = ghosttySurface {
             ghostty_surface_set_content_scale(surface, scale, scale)
         }
@@ -96,6 +105,7 @@ public final class GhosttySurfaceView: NSView {
         }
 
         let action: ghostty_input_action_e = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS
+        let markedTextBefore = markedTextStorage.length > 0
         keyTextAccumulator = []
         defer { keyTextAccumulator = nil }
 
@@ -106,7 +116,8 @@ public final class GhosttySurfaceView: NSView {
                 _ = sendKeyEvent(action, event: event, text: text)
             }
         } else {
-            _ = sendKeyEvent(action, event: event, text: event.characters)
+            let composing = hasMarkedText() || markedTextBefore
+            _ = sendKeyEvent(action, event: event, text: event.characters, composing: composing)
         }
     }
 
@@ -126,7 +137,8 @@ public final class GhosttySurfaceView: NSView {
     private func sendKeyEvent(
         _ action: ghostty_input_action_e,
         event: NSEvent,
-        text: String?
+        text: String?,
+        composing: Bool = false
     ) -> Bool {
         guard let surface = ghosttySurface else { return false }
 
@@ -134,13 +146,8 @@ public final class GhosttySurfaceView: NSView {
         keyEv.action = action
         keyEv.keycode = UInt32(event.keyCode)
         keyEv.mods = Self.ghosttyMods(event.modifierFlags)
-        // consumed_mods tells ghostty which modifiers were used by the OS
-        // to produce the text (rather than being real modifier keys).
-        // On macOS, Option can either produce special chars (consumed) or
-        // act as Alt (not consumed). Ghostty handles this via its
-        // macos-option-as-alt config. We report all non-action modifiers
-        // as potentially consumed and let ghostty decide.
         keyEv.consumed_mods = GHOSTTY_MODS_NONE
+        keyEv.composing = composing
 
         // Unshifted codepoint
         if event.type == .keyDown || event.type == .keyUp {

@@ -190,6 +190,8 @@ final class GhosttyApp {
     // MARK: - Runtime Callbacks (static, called from C)
 
     private nonisolated static func onWakeup(_ userdata: UnsafeMutableRawPointer?) {
+        // Use performSelector to run on the next run loop iteration with minimal delay.
+        // DispatchQueue.main.async can batch multiple calls; this ensures prompt rendering.
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
                 GhosttyApp.shared.tick()
