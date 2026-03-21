@@ -4,6 +4,11 @@
 "%@ in %@ encountered an error." = "%2$@ 中的 %1$@ 遇到了错误。";
 "%@ in %@ has completed." = "%2$@ 中的 %1$@ 已完成。";
 "%@ in %@ needs your attention." = "%2$@ 中的 %1$@ 需要您的注意。";
+"%dd ago" = "%d天前";
+"%dh ago" = "%d小时前";
+"%dm ago" = "%d分钟前";
+"%dmo ago" = "%d月前";
+"%dy ago" = "%d年前";
 "About Mori" = "关于 Mori";
 "Add Project" = "添加项目";
 "Add Project..." = "添加项目…";

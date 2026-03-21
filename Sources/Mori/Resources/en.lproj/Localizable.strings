@@ -4,6 +4,11 @@
 "%@ in %@ encountered an error." = "%@ in %@ encountered an error.";
 "%@ in %@ has completed." = "%@ in %@ has completed.";
 "%@ in %@ needs your attention." = "%@ in %@ needs your attention.";
+"%dd ago" = "%dd ago";
+"%dh ago" = "%dh ago";
+"%dm ago" = "%dm ago";
+"%dmo ago" = "%dmo ago";
+"%dy ago" = "%dy ago";
 "About Mori" = "About Mori";
 "Add Project" = "Add Project";
 "Add Project..." = "Add Project...";

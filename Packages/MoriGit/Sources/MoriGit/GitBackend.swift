@@ -79,7 +79,7 @@ public actor GitBackend: GitControlling {
                 .filter { !$0.isEmpty }
         )
 
-        let format = "%(refname:short)|%(HEAD)|%(committerdate:unix)|%(upstream:short)"
+        let format = "%(refname:short)\t%(HEAD)\t%(committerdate:unix)\t%(upstream:short)"
         let output = try await runner.run(
             in: repoPath,
             ["branch", "-a", "--sort=-committerdate", "--format=\(format)"]

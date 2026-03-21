@@ -26,6 +26,8 @@ final class WorktreeCreationController: NSWindowController {
     private var projectName: String = ""
     private var projectId: UUID?
     private var repoPath: String = ""
+    /// Incremented on each show() to invalidate stale async branch fetches.
+    private var fetchGeneration: Int = 0
     nonisolated(unsafe) private var localEventMonitor: Any?
 
     // MARK: - Views
@@ -134,17 +136,22 @@ final class WorktreeCreationController: NSWindowController {
         window?.makeKeyAndOrderFront(nil)
         window?.makeFirstResponder(searchField)
 
-        // Fetch branches asynchronously
+        // Fetch branches asynchronously. Generation token prevents a slow fetch
+        // for project A from overwriting results after the user reopens for project B.
+        fetchGeneration += 1
+        let currentGeneration = fetchGeneration
         Task { [weak self] in
             guard let self else { return }
             do {
                 let branches = try await self.fetchBranches?(repoPath) ?? []
+                guard self.fetchGeneration == currentGeneration else { return }
                 self.dataSource = WorktreeCreationDataSource(
                     branches: branches,
                     existingBranchNames: existingBranches
                 )
                 self.updateResults()
             } catch {
+                guard self.fetchGeneration == currentGeneration else { return }
                 // On failure, show empty state — user can dismiss and retry
                 self.dataSource = WorktreeCreationDataSource(
                     branches: [],
@@ -461,7 +468,10 @@ final class WorktreeCreationController: NSWindowController {
             }
 
         case .branch(let info, _):
-            let branchName = info.isRemote ? info.displayName : info.name
+            // Use full name (e.g., "origin/feature/auth") so git can resolve the correct remote ref.
+            // For local branches this is just the branch name; for remote branches it preserves
+            // the remote prefix to avoid ambiguity when multiple remotes have the same branch name.
+            let branchName = info.name
             let template = selectedTemplate()
             dismiss()
             onCreateWorktree?(WorktreeCreationRequest(
@@ -907,14 +917,14 @@ extension WorktreeCreationController: NSTableViewDelegate {
         let seconds = Int(interval)
         if seconds < 60 { return .localized("now") }
         let minutes = seconds / 60
-        if minutes < 60 { return "\(minutes)m ago" }
+        if minutes < 60 { return String(format: .localized("%dm ago"), minutes) }
         let hours = minutes / 60
-        if hours < 24 { return "\(hours)h ago" }
+        if hours < 24 { return String(format: .localized("%dh ago"), hours) }
         let days = hours / 24
-        if days < 30 { return "\(days)d ago" }
+        if days < 30 { return String(format: .localized("%dd ago"), days) }
         let months = days / 30
-        if months < 12 { return "\(months)mo ago" }
+        if months < 12 { return String(format: .localized("%dmo ago"), months) }
         let years = days / 365
-        return "\(years)y ago"
+        return String(format: .localized("%dy ago"), years)
     }
 }

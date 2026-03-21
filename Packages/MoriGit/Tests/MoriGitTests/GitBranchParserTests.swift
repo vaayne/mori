@@ -1,10 +1,13 @@
 import Foundation
 import MoriGit
 
+// Tab delimiter used by GitBranchParser (matches git format string)
+private let tab = "\t"
+
 // MARK: - GitBranchParser Tests
 
 func testParseBranchLocal() {
-    let output = "main|*|1710900000|origin/main\n"
+    let output = "main\(tab)*\(tab)1710900000\(tab)origin/main\n"
     let branches = GitBranchParser.parse(output)
     assertEqual(branches.count, 1)
     assertEqual(branches[0].name, "main")
@@ -17,7 +20,7 @@ func testParseBranchLocal() {
 }
 
 func testParseBranchRemote() {
-    let output = "origin/feature/dark-mode||1710700000|\n"
+    let output = "origin/feature/dark-mode\(tab)\(tab)1710700000\(tab)\n"
     let branches = GitBranchParser.parse(output)
     assertEqual(branches.count, 1)
     assertEqual(branches[0].name, "origin/feature/dark-mode")
@@ -31,9 +34,9 @@ func testParseBranchRemote() {
 
 func testParseBranchMultiple() {
     let output = """
-    main|*|1710900000|origin/main
-    feature/auth||1710800000|origin/feature/auth
-    origin/feature/dark-mode||1710700000|
+    main\(tab)*\(tab)1710900000\(tab)origin/main
+    feature/auth\(tab)\(tab)1710800000\(tab)origin/feature/auth
+    origin/feature/dark-mode\(tab)\(tab)1710700000\(tab)
     """
     let branches = GitBranchParser.parse(output)
     assertEqual(branches.count, 3)
@@ -66,7 +69,7 @@ func testParseBranchWhitespaceOnly() {
 }
 
 func testParseBranchNoDate() {
-    let output = "main|*||\n"
+    let output = "main\(tab)*\(tab)\(tab)\n"
     let branches = GitBranchParser.parse(output)
     assertEqual(branches.count, 1)
     assertEqual(branches[0].name, "main")
@@ -75,7 +78,7 @@ func testParseBranchNoDate() {
 }
 
 func testParseBranchNoUpstream() {
-    let output = "develop||1710800000|\n"
+    let output = "develop\(tab)\(tab)1710800000\(tab)\n"
     let branches = GitBranchParser.parse(output)
     assertEqual(branches.count, 1)
     assertEqual(branches[0].name, "develop")
@@ -85,8 +88,8 @@ func testParseBranchNoUpstream() {
 
 func testParseBranchCustomRemote() {
     let output = """
-    upstream/main||1710900000|
-    fork/feature||1710800000|
+    upstream/main\(tab)\(tab)1710900000\(tab)
+    fork/feature\(tab)\(tab)1710800000\(tab)
     """
     // Default remote names only includes "origin"
     let defaultBranches = GitBranchParser.parse(output)
@@ -104,17 +107,14 @@ func testParseBranchCustomRemote() {
 }
 
 func testParseBranchDetachedHead() {
-    // When HEAD is detached, git branch -a may show "(HEAD detached at abc123)" as a branch name
-    // with the format string, detached HEAD shows as the commit ref
-    let output = "main||1710900000|origin/main\n"
+    let output = "main\(tab)\(tab)1710900000\(tab)origin/main\n"
     let branches = GitBranchParser.parse(output)
     assertEqual(branches.count, 1)
-    // No branch has isHead = true (detached HEAD doesn't mark any branch)
     assertFalse(branches[0].isHead)
 }
 
 func testParseBranchCommitDate() {
-    let output = "main|*|1710900000|\n"
+    let output = "main\(tab)*\(tab)1710900000\(tab)\n"
     let branches = GitBranchParser.parse(output)
     assertEqual(branches.count, 1)
     let expectedDate = Date(timeIntervalSince1970: 1710900000)
@@ -122,14 +122,14 @@ func testParseBranchCommitDate() {
 }
 
 func testParseBranchMalformedLine() {
-    // Line with only delimiters
-    let output = "|||\n"
+    // Line with only delimiters (empty name)
+    let output = "\(tab)\(tab)\(tab)\n"
     let branches = GitBranchParser.parse(output)
     assertEqual(branches.count, 0, "Empty name should be skipped")
 }
 
 func testParseBranchMinimalFields() {
-    // Line with only a name (no delimiters)
+    // Line with only a name (no delimiters) — still valid
     let output = "main\n"
     let branches = GitBranchParser.parse(output)
     assertEqual(branches.count, 1)
@@ -168,8 +168,7 @@ func testGitBranchInfoRemoteName() {
 // MARK: - GitBranchParser Edge Case Tests
 
 func testParseBranchMultipleSlashes() {
-    // Branch with multiple slashes (e.g., feature/auth/v2) should parse as local
-    let output = "feature/auth/v2||1710800000|origin/feature/auth/v2\n"
+    let output = "feature/auth/v2\(tab)\(tab)1710800000\(tab)origin/feature/auth/v2\n"
     let branches = GitBranchParser.parse(output)
     assertEqual(branches.count, 1)
     assertEqual(branches[0].name, "feature/auth/v2")
@@ -179,8 +178,7 @@ func testParseBranchMultipleSlashes() {
 }
 
 func testParseBranchRemoteMultipleSlashes() {
-    // Remote branch with multiple slashes
-    let output = "origin/feature/auth/v2||1710800000|\n"
+    let output = "origin/feature/auth/v2\(tab)\(tab)1710800000\(tab)\n"
     let branches = GitBranchParser.parse(output)
     assertEqual(branches.count, 1)
     assertEqual(branches[0].name, "origin/feature/auth/v2")
@@ -190,11 +188,10 @@ func testParseBranchRemoteMultipleSlashes() {
 }
 
 func testParseBranchNoRemotesAtAll() {
-    // Repo with no remotes — all branches are local
     let output = """
-    main|*|1710900000|
-    develop||1710800000|
-    feature/sidebar||1710700000|
+    main\(tab)*\(tab)1710900000\(tab)
+    develop\(tab)\(tab)1710800000\(tab)
+    feature/sidebar\(tab)\(tab)1710700000\(tab)
     """
     let branches = GitBranchParser.parse(output, remoteNames: [])
     assertEqual(branches.count, 3)
@@ -206,11 +203,10 @@ func testParseBranchNoRemotesAtAll() {
 }
 
 func testParseBranchHundreds() {
-    // Performance sanity — parse 200 branches and verify count
     var lines: [String] = []
     for i in 0..<200 {
         let date = 1710900000 - (i * 3600)
-        lines.append("branch-\(i)||\(date)|")
+        lines.append("branch-\(i)\(tab)\(tab)\(date)\(tab)")
     }
     let output = lines.joined(separator: "\n")
     let branches = GitBranchParser.parse(output)
@@ -220,15 +216,16 @@ func testParseBranchHundreds() {
 }
 
 func testParseBranchMalformedMixedWithValid() {
-    // Malformed lines should be skipped, valid lines still parsed
-    let output = """
-    main|*|1710900000|origin/main
-    |||
-
-    feature/auth||1710800000|
-    ||baddate|
-    origin/develop||1710700000|
-    """
+    // Malformed lines: empty name (tab-only), blank lines — should be skipped
+    let lines = [
+        "main\(tab)*\(tab)1710900000\(tab)origin/main",
+        "\(tab)\(tab)\(tab)",           // empty name → skipped
+        "",                              // blank line → skipped
+        "feature/auth\(tab)\(tab)1710800000\(tab)",
+        "\(tab)\(tab)baddate\(tab)",     // empty name → skipped
+        "origin/develop\(tab)\(tab)1710700000\(tab)",
+    ]
+    let output = lines.joined(separator: "\n")
     let branches = GitBranchParser.parse(output)
     assertEqual(branches.count, 3, "Should parse 3 valid branches, skip malformed")
     assertEqual(branches[0].name, "main")
@@ -237,17 +234,14 @@ func testParseBranchMalformedMixedWithValid() {
 }
 
 func testParseBranchRemoteWithoutLocal() {
-    // Remote branch without a corresponding local — should still parse
     let output = """
-    main|*|1710900000|origin/main
-    origin/feature/only-remote||1710700000|
+    main\(tab)*\(tab)1710900000\(tab)origin/main
+    origin/feature/only-remote\(tab)\(tab)1710700000\(tab)
     """
     let branches = GitBranchParser.parse(output)
     assertEqual(branches.count, 2)
-    // First is local
     assertEqual(branches[0].name, "main")
     assertFalse(branches[0].isRemote)
-    // Second is remote-only
     assertEqual(branches[1].name, "origin/feature/only-remote")
     assertTrue(branches[1].isRemote)
     assertEqual(branches[1].displayName, "feature/only-remote")
@@ -256,7 +250,6 @@ func testParseBranchRemoteWithoutLocal() {
 // MARK: - GitBranchInfo Boundary Tests
 
 func testGitBranchInfoDisplayNameDeepNesting() {
-    // Remote branch with deeply nested path
     let remote = GitBranchInfo(name: "origin/user/feature/deep/path", isRemote: true)
     assertEqual(remote.displayName, "user/feature/deep/path")
     assertEqual(remote.remoteName, "origin")
@@ -286,8 +279,16 @@ func testGitBranchInfoCodableRoundTrip() {
 }
 
 func testGitBranchInfoLocalWithSlashNotRemote() {
-    // Local branch with slash should NOT have remoteName
     let branch = GitBranchInfo(name: "feature/auth", isRemote: false)
     assertNil(branch.remoteName, "Local branch with slash should not have remoteName")
     assertEqual(branch.displayName, "feature/auth", "Local branch displayName should be same as name")
+}
+
+func testParseBranchWithPipeInName() {
+    // Branch names CAN contain `|` (git allows it). Tab delimiter avoids this conflict.
+    let output = "feat|pipe\(tab)*\(tab)1710900000\(tab)\n"
+    let branches = GitBranchParser.parse(output)
+    assertEqual(branches.count, 1)
+    assertEqual(branches[0].name, "feat|pipe", "Branch with pipe in name should parse correctly")
+    assertTrue(branches[0].isHead)
 }

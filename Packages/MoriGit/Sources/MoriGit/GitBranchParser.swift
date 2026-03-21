@@ -1,17 +1,22 @@
 import Foundation
 
-/// Parses output from `git branch -a --sort=-committerdate --format='%(refname:short)|%(HEAD)|%(committerdate:unix)|%(upstream:short)'`.
+/// Parses output from `git branch -a --sort=-committerdate --format=...` using a `\t` (tab) delimiter.
 ///
-/// Each line has `|`-delimited fields:
+/// The format string uses tab separators to avoid conflicts with `|` which is valid
+/// in git ref names (e.g., `feat|pipe`). Each line has tab-delimited fields:
 /// ```
-/// main|*|1710900000|origin/main
-/// feature/auth||1710800000|origin/feature/auth
-/// origin/feature/dark-mode||1710700000|
+/// main\t*\t1710900000\torigin/main
+/// feature/auth\t\t1710800000\torigin/feature/auth
+/// origin/feature/dark-mode\t\t1710700000\t
 /// ```
 ///
 /// Local branches have no `origin/` prefix and may have `*` for HEAD.
 /// Remote branches start with `origin/` (or other remote name) and HEAD field is always empty.
 public enum GitBranchParser {
+
+    /// The delimiter used in the git format string. Tab is safe because git ref names
+    /// cannot contain tabs (see `git-check-ref-format`).
+    static let delimiter: Character = "\t"
 
     /// Parse the full output of `git branch -a --sort=-committerdate --format=...`.
     ///
@@ -36,10 +41,11 @@ public enum GitBranchParser {
 
     /// Parse a single line into a GitBranchInfo.
     private static func parseLine(_ line: String, remoteNames: Set<String>) -> GitBranchInfo? {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        // Only trim spaces (not tabs) since tab is our field delimiter
+        let trimmed = line.trimmingCharacters(in: CharacterSet(charactersIn: " "))
         guard !trimmed.isEmpty else { return nil }
 
-        let fields = trimmed.components(separatedBy: "|")
+        let fields = trimmed.split(separator: delimiter, omittingEmptySubsequences: false).map(String.init)
         // Must have at least the name field
         guard !fields.isEmpty, !fields[0].isEmpty else { return nil }
 

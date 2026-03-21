@@ -45,6 +45,7 @@ testGitBranchInfoDisplayNameDeepNesting()
 testGitBranchInfoEquality()
 testGitBranchInfoCodableRoundTrip()
 testGitBranchInfoLocalWithSlashNotRemote()
+testParseBranchWithPipeInName()
 
 // addWorktree command argument tests
 testAddWorktreeArgsExistingBranch()
