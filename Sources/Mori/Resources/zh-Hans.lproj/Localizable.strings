@@ -108,3 +108,8 @@
 "Zoom" = "缩放";
 "tmux not found" = "未找到 tmux";
 "to create" = "创建";
+
+/* Task Mode - Command Palette */
+"Status: %@" = "状态：%@";
+"Current status for %@" = "%@ 的当前状态";
+"Set %@ to %@" = "将 %@ 设为 %@";

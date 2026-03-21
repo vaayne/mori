@@ -111,3 +111,19 @@
 "Whether the cursor blinks when idle." = "Whether the cursor blinks when idle.";
 "Window" = "Window";
 "Window %lld" = "Window %lld";
+
+/* Task Mode Sidebar */
+"Tasks" = "Tasks";
+"Workspaces" = "Workspaces";
+"Set Status" = "Set Status";
+"To Do" = "To Do";
+"In Progress" = "In Progress";
+"Needs Review" = "Needs Review";
+"Done" = "Done";
+"Cancelled" = "Cancelled";
+"Show Cancelled (%lld)" = "Show Cancelled (%lld)";
+"Hide Cancelled" = "Hide Cancelled";
+"just now" = "just now";
+"%lldm ago" = "%lldm ago";
+"%lldh ago" = "%lldh ago";
+"%lldd ago" = "%lldd ago";

@@ -96,7 +96,7 @@ public struct TaskSidebarView: View {
                             HStack(spacing: MoriTokens.Spacing.sm) {
                                 Image(systemName: showCancelled ? "eye.slash" : "eye")
                                     .font(.system(size: 10))
-                                Text(showCancelled ? "Hide Cancelled" : "Show Cancelled (\(cancelledCount))")
+                                Text(showCancelled ? String.localized("Hide Cancelled") : String.localized("Show Cancelled (\(cancelledCount))"))
                                     .font(MoriTokens.Font.caption)
                             }
                             .foregroundStyle(MoriTokens.Color.muted)
@@ -133,7 +133,7 @@ public struct TaskSidebarView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(MoriTokens.Color.muted)
 
-            Text(status.displayName)
+            Text(String.localized(String.LocalizationValue(stringLiteral: status.displayName)))
                 .font(MoriTokens.Font.sectionTitle)
                 .foregroundStyle(MoriTokens.Color.muted)
 

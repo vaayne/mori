@@ -108,3 +108,8 @@
 "Zoom" = "Zoom";
 "tmux not found" = "tmux not found";
 "to create" = "to create";
+
+/* Task Mode - Command Palette */
+"Status: %@" = "Status: %@";
+"Current status for %@" = "Current status for %@";
+"Set %@ to %@" = "Set %@ to %@";

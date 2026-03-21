@@ -105,10 +105,10 @@ public struct TaskWorktreeRowView: View {
     private var relativeTimeText: String? {
         guard let date = worktree.lastActiveAt else { return nil }
         let seconds = Int(-date.timeIntervalSinceNow)
-        if seconds < 60 { return "just now" }
-        if seconds < 3600 { return "\(seconds / 60)m ago" }
-        if seconds < 86400 { return "\(seconds / 3600)h ago" }
-        if seconds < 604_800 { return "\(seconds / 86400)d ago" }
+        if seconds < 60 { return String.localized("just now") }
+        if seconds < 3600 { return String.localized("\(seconds / 60)m ago") }
+        if seconds < 86400 { return String.localized("\(seconds / 3600)h ago") }
+        if seconds < 604_800 { return String.localized("\(seconds / 86400)d ago") }
         return nil
     }
 

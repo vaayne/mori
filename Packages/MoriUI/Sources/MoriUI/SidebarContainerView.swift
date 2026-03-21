@@ -82,8 +82,8 @@ public struct SidebarContainerView: View {
                 get: { sidebarMode },
                 set: { onToggleSidebarMode($0) }
             )) {
-                Text("Tasks").tag(SidebarMode.tasks)
-                Text("Workspaces").tag(SidebarMode.workspaces)
+                Text(String.localized("Tasks")).tag(SidebarMode.tasks)
+                Text(String.localized("Workspaces")).tag(SidebarMode.workspaces)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, MoriTokens.Spacing.xl)

@@ -16,13 +16,13 @@ public struct WorkflowStatusMenu: View {
     }
 
     public var body: some View {
-        Menu("Set Status") {
+        Menu(String.localized("Set Status")) {
             ForEach(WorkflowStatus.allCases, id: \.self) { status in
                 Button {
                     onSetStatus(status)
                 } label: {
                     HStack {
-                        Label(status.displayName, systemImage: status.iconName)
+                        Label(String.localized(String.LocalizationValue(stringLiteral: status.displayName)), systemImage: status.iconName)
                         if status == currentStatus {
                             Spacer()
                             Image(systemName: "checkmark")

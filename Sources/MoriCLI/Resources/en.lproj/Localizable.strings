@@ -14,3 +14,8 @@
 "Window name" = "Window name";
 "Worktree commands" = "Worktree commands";
 "Worktree name" = "Worktree name";
+
+/* Task Mode - Status Command */
+"Set workflow status for a worktree" = "Set workflow status for a worktree";
+"Valid statuses: todo, inProgress, needsReview, done, cancelled" = "Valid statuses: todo, inProgress, needsReview, done, cancelled";
+"Workflow status (todo, inProgress, needsReview, done, cancelled)" = "Workflow status (todo, inProgress, needsReview, done, cancelled)";
