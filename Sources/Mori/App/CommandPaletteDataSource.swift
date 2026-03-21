@@ -57,6 +57,21 @@ final class CommandPaletteDataSource {
             subtitle: .localized("Add a project folder to Mori")
         ))
 
+        // "Set Worktree Status" actions — only when a worktree is selected
+        if let selectedWorktree = appState.selectedWorktree {
+            for status in WorkflowStatus.allCases {
+                let isCurrent = selectedWorktree.workflowStatus == status
+                let subtitle = isCurrent
+                    ? .localized("Current status for \(selectedWorktree.name)")
+                    : .localized("Set \(selectedWorktree.name) to \(status.displayName)")
+                items.append(.action(
+                    id: "action.status-\(status.rawValue)",
+                    title: .localized("Status: \(status.displayName)"),
+                    subtitle: subtitle
+                ))
+            }
+        }
+
         return items
     }
 
