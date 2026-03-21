@@ -147,6 +147,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             onOpenCommandPalette: { [weak self] in
                 self?.commandPaletteController?.toggle()
+            },
+            onToggleSidebarMode: { [weak manager] mode in
+                manager?.setSidebarMode(mode)
+            },
+            onSetWorkflowStatus: { [weak manager] worktreeId, status in
+                manager?.setWorkflowStatus(worktreeId: worktreeId, status: status)
             }
         )
 
