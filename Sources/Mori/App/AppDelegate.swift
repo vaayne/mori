@@ -870,7 +870,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             if actionId.hasPrefix("action.status-") {
                 let rawValue = String(actionId.dropFirst("action.status-".count))
                 if let status = WorkflowStatus(rawValue: rawValue),
-                   let worktreeId = appState?.selectedWorktreeId {
+                   let worktreeId = appState?.uiState.selectedWorktreeId {
                     manager.setWorkflowStatus(worktreeId: worktreeId, status: status)
                 }
             }

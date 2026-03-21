@@ -61,9 +61,9 @@ final class CommandPaletteDataSource {
         if let selectedWorktree = appState.selectedWorktree {
             for status in WorkflowStatus.allCases {
                 let isCurrent = selectedWorktree.workflowStatus == status
-                let subtitle = isCurrent
-                    ? .localized("Current status for \(selectedWorktree.name)")
-                    : .localized("Set \(selectedWorktree.name) to \(status.displayName)")
+                let subtitle: String = isCurrent
+                    ? String.localized("Current status for \(selectedWorktree.name)")
+                    : String.localized("Set \(selectedWorktree.name) to \(status.displayName)")
                 items.append(.action(
                     id: "action.status-\(status.rawValue)",
                     title: .localized("Status: \(status.displayName)"),
