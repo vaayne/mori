@@ -586,14 +586,16 @@ final class WorkspaceManager {
     }
 
     /// Auto-transition worktrees from `.todo` to `.inProgress` when activity is detected.
-    /// Signals: modified files, staged files, commits ahead of remote, or active agent.
+    /// Signals: uncommitted changes (modified/staged/untracked), commits ahead of upstream,
+    /// active agent, or any commit on a branch without upstream (hasUncommittedChanges covers
+    /// dirty state; aheadCount covers commits with upstream; for branches without upstream,
+    /// we check hasUncommittedChanges which triggers during the working phase).
     private func autoTransitionTodoWorktrees() {
         for i in appState.worktrees.indices {
             let wt = appState.worktrees[i]
             guard wt.workflowStatus == .todo else { continue }
 
-            let hasActivity = wt.modifiedCount > 0
-                || wt.stagedCount > 0
+            let hasActivity = wt.hasUncommittedChanges
                 || wt.aheadCount > 0
                 || wt.agentState != .none
 

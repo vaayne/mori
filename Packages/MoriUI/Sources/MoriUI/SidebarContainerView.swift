@@ -102,6 +102,7 @@ public struct SidebarContainerView: View {
                     onSelectWorktree: onSelectWorktree,
                     onSelectWindow: onSelectWindow,
                     onCloseWindow: onCloseWindow,
+                    onRemoveWorktree: onRemoveWorktree,
                     onSetWorkflowStatus: onSetWorkflowStatus,
                     onAddProject: onAddProject,
                     onOpenSettings: onOpenSettings,

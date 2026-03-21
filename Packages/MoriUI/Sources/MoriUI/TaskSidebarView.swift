@@ -12,6 +12,7 @@ public struct TaskSidebarView: View {
     private let onSelectWorktree: (UUID) -> Void
     private let onSelectWindow: (String) -> Void
     private let onCloseWindow: ((String) -> Void)?
+    private let onRemoveWorktree: ((UUID) -> Void)?
     private let onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)?
     private let onAddProject: (() -> Void)?
     private let onOpenSettings: (() -> Void)?
@@ -32,6 +33,7 @@ public struct TaskSidebarView: View {
         onSelectWorktree: @escaping (UUID) -> Void,
         onSelectWindow: @escaping (String) -> Void,
         onCloseWindow: ((String) -> Void)? = nil,
+        onRemoveWorktree: ((UUID) -> Void)? = nil,
         onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
@@ -45,6 +47,7 @@ public struct TaskSidebarView: View {
         self.onSelectWorktree = onSelectWorktree
         self.onSelectWindow = onSelectWindow
         self.onCloseWindow = onCloseWindow
+        self.onRemoveWorktree = onRemoveWorktree
         self.onSetWorkflowStatus = onSetWorkflowStatus
         self.onAddProject = onAddProject
         self.onOpenSettings = onOpenSettings
@@ -206,6 +209,15 @@ public struct TaskSidebarView: View {
                     NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: worktree.path)
                 } label: {
                     Label("Reveal in Finder", systemImage: "folder")
+                }
+
+                if !worktree.isMainWorktree, let onRemove = onRemoveWorktree {
+                    Divider()
+                    Button(role: .destructive) {
+                        onRemove(worktree.id)
+                    } label: {
+                        Label("Remove Worktree…", systemImage: "trash")
+                    }
                 }
             }
 
