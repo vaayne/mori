@@ -80,6 +80,23 @@ final class WorktreeCreationDataSource: Sendable {
         }
     }
 
+    /// Count of branches where inUse == true.
+    var worktreeBranchCount: Int {
+        allBranches.count(where: { isBranchInUse($0) })
+    }
+
+    /// Total number of unique branches (local + deduplicated remote).
+    var totalBranchCount: Int {
+        let locals = allBranches.filter { !$0.isRemote }
+        let remotes = deduplicatedRemoteBranches()
+        return locals.count + remotes.count
+    }
+
+    /// All local branch names (for populating base branch popup).
+    var localBranchNames: [String] {
+        allBranches.filter { !$0.isRemote }.map(\.name)
+    }
+
     /// The default base branch — "main", "master", HEAD branch, or first local.
     var defaultBaseBranch: String {
         let locals = allBranches.filter { !$0.isRemote }

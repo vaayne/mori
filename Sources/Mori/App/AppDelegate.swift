@@ -327,6 +327,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             }
         }
 
+        // Wire project change callback
+        controller.onProjectChanged = { [weak self, weak state] newProjectId in
+            guard let self, let state else { return }
+            state.uiState.selectedProjectId = newProjectId
+            self.workspaceManager?.selectProject(newProjectId)
+            // Re-show with updated project context
+            self.showCreateWorktreePanel()
+        }
+
         // Gather existing branch names from worktrees in this project
         let existingBranches = Set(
             state.worktrees
@@ -335,8 +344,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         )
 
         controller.show(
-            projectId: projectId,
-            projectName: project.name,
+            projects: state.projects,
+            selectedProjectId: projectId,
             repoPath: project.repoRootPath,
             existingBranches: existingBranches
         )
