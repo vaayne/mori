@@ -11,6 +11,7 @@
 "%dy ago" = "%d年前";
 "About Mori" = "关于 Mori";
 "Base:" = "基于：";
+"Branch name" = "分支名称";
 "Branch name..." = "分支名称…";
 "Add Project" = "添加项目";
 "Add Project..." = "添加项目…";
@@ -106,3 +107,4 @@
 "Worktree" = "工作树";
 "Zoom" = "缩放";
 "tmux not found" = "未找到 tmux";
+"to create" = "创建";

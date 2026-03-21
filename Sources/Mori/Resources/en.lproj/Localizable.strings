@@ -11,6 +11,7 @@
 "%dy ago" = "%dy ago";
 "About Mori" = "About Mori";
 "Base:" = "Base:";
+"Branch name" = "Branch name";
 "Branch name..." = "Branch name...";
 "Add Project" = "Add Project";
 "Add Project..." = "Add Project...";
@@ -106,3 +107,4 @@
 "Worktree" = "Worktree";
 "Zoom" = "Zoom";
 "tmux not found" = "tmux not found";
+"to create" = "to create";

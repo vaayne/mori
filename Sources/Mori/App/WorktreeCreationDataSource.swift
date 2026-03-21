@@ -12,12 +12,6 @@ struct WorktreeCreationRequest: Sendable {
     let template: SessionTemplate
 }
 
-/// A suggestion row in the autocomplete list.
-struct BranchSuggestion: Sendable, Equatable {
-    let info: GitBranchInfo
-    let inUse: Bool
-}
-
 // MARK: - DataSource
 
 /// Pure logic for the worktree creation panel: branch filtering, exact-match detection,
@@ -32,43 +26,6 @@ final class WorktreeCreationDataSource: Sendable {
         self.existingBranchNames = existingBranchNames
     }
 
-    /// Filter branches by query (substring, case-insensitive).
-    /// Returns a flat list of suggestions — no section headers.
-    /// Remote branches that have a local counterpart are excluded.
-    func filteredSuggestions(query: String) -> [BranchSuggestion] {
-        let grouped = filteredGrouped(query: query)
-        return grouped.local + grouped.remote
-    }
-
-    /// Filter branches by query, returning separate local and remote arrays.
-    /// Remote branches that have a local counterpart are excluded.
-    func filteredGrouped(query: String) -> (local: [BranchSuggestion], remote: [BranchSuggestion]) {
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
-        let lowerQuery = trimmed.lowercased()
-
-        let localBranches = allBranches.filter { !$0.isRemote }
-        let remoteBranches = deduplicatedRemoteBranches()
-
-        let matchedLocal: [GitBranchInfo]
-        let matchedRemote: [GitBranchInfo]
-        if lowerQuery.isEmpty {
-            matchedLocal = localBranches
-            matchedRemote = remoteBranches
-        } else {
-            matchedLocal = localBranches.filter {
-                $0.name.lowercased().contains(lowerQuery)
-            }
-            matchedRemote = remoteBranches.filter {
-                $0.displayName.lowercased().contains(lowerQuery)
-            }
-        }
-
-        return (
-            local: matchedLocal.map { BranchSuggestion(info: $0, inUse: isBranchInUse($0)) },
-            remote: matchedRemote.map { BranchSuggestion(info: $0, inUse: isBranchInUse($0)) }
-        )
-    }
-
     /// Check if a query exactly matches an existing branch name.
     /// Returns the matching GitBranchInfo if found.
     func exactMatch(for query: String) -> GitBranchInfo? {
@@ -78,18 +35,6 @@ final class WorktreeCreationDataSource: Sendable {
             let name = branch.isRemote ? branch.displayName : branch.name
             return name.lowercased() == trimmed
         }
-    }
-
-    /// Count of branches where inUse == true.
-    var worktreeBranchCount: Int {
-        allBranches.count(where: { isBranchInUse($0) })
-    }
-
-    /// Total number of unique branches (local + deduplicated remote).
-    var totalBranchCount: Int {
-        let locals = allBranches.filter { !$0.isRemote }
-        let remotes = deduplicatedRemoteBranches()
-        return locals.count + remotes.count
     }
 
     /// All local branch names (for populating base branch popup).
@@ -114,16 +59,6 @@ final class WorktreeCreationDataSource: Sendable {
     }
 
     // MARK: - Private
-
-    private func deduplicatedRemoteBranches() -> [GitBranchInfo] {
-        let localNames = Set(allBranches.filter { !$0.isRemote }.map { $0.name })
-        return allBranches.filter { $0.isRemote && !localNames.contains($0.displayName) }
-    }
-
-    private func isBranchInUse(_ branch: GitBranchInfo) -> Bool {
-        let name = branch.isRemote ? branch.displayName : branch.name
-        return existingBranchNames.contains(name)
-    }
 
     private static func slugify(_ input: String) -> String {
         let lowered = input.lowercased()

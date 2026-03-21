@@ -343,11 +343,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 .compactMap { $0.branch }
         )
 
+        let themeInfo = terminalAreaController?.themeInfo ?? .fallback
         controller.show(
             projects: state.projects,
             selectedProjectId: projectId,
             repoPath: project.repoRootPath,
-            existingBranches: existingBranches
+            existingBranches: existingBranches,
+            themeInfo: themeInfo
         )
     }
 
