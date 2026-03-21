@@ -114,3 +114,37 @@
 - New user-facing strings in MoriCLI and app target need localization entries (en + zh-Hans)
 - CLI help text uses `.localized()` already — just needs Localizable.strings entries
 - Command palette strings use `.localized()` — needs entries in app Localizable.strings
+
+## Phase 5: i18n & Polish — COMPLETE
+
+**Commits:** 2 (cd091a2, 80b1b3d)
+
+**What was done:**
+- Added `.localized()` calls for computed strings in MoriUI views that were using raw string literals:
+  - `SidebarContainerView`: "Tasks" and "Workspaces" picker labels
+  - `WorkflowStatusMenu`: "Set Status" menu title, WorkflowStatus display names via `String.LocalizationValue(stringLiteral:)`
+  - `TaskSidebarView`: Status group headers (display names), "Show Cancelled"/"Hide Cancelled" toggle
+  - `TaskWorktreeRowView`: Relative time strings ("just now", "%dm ago", etc.)
+- Added localized strings (en + zh-Hans) to all 6 Localizable.strings files:
+  - MoriUI (16 new entries each): Tasks/Workspaces toggle, Set Status menu, 5 WorkflowStatus display names, Show/Hide Cancelled, relative time strings
+  - App target (3 new entries each): Command palette status actions (Status: %@, Current status for %@, Set %@ to %@)
+  - MoriCLI (3 new entries each): StatusCmd abstract, discussion, and status argument help text
+- Ran full test suite: 641 assertions passing (346 core + 47 persistence + 200 tmux + 48 IPC), zero regressions
+- Updated CHANGELOG.md with Task Mode Sidebar feature entry under [Unreleased]
+
+**Build result:** Zero errors, zero warnings (only existing ghostty linker warnings).
+
+**Test results:** 641 total assertions passing across all 4 test targets. Zero regressions.
+
+**Files modified:**
+- `Packages/MoriUI/Sources/MoriUI/SidebarContainerView.swift` (added .localized() to picker labels)
+- `Packages/MoriUI/Sources/MoriUI/WorkflowStatusMenu.swift` (added .localized() to menu title and status labels)
+- `Packages/MoriUI/Sources/MoriUI/TaskSidebarView.swift` (added .localized() to group headers and cancelled toggle)
+- `Packages/MoriUI/Sources/MoriUI/TaskWorktreeRowView.swift` (added .localized() to relative time strings)
+- `Packages/MoriUI/Sources/MoriUI/Resources/en.lproj/Localizable.strings` (16 new entries)
+- `Packages/MoriUI/Sources/MoriUI/Resources/zh-Hans.lproj/Localizable.strings` (16 new entries)
+- `Sources/Mori/Resources/en.lproj/Localizable.strings` (3 new entries)
+- `Sources/Mori/Resources/zh-Hans.lproj/Localizable.strings` (3 new entries)
+- `Sources/MoriCLI/Resources/en.lproj/Localizable.strings` (3 new entries)
+- `Sources/MoriCLI/Resources/zh-Hans.lproj/Localizable.strings` (3 new entries)
+- `CHANGELOG.md` (added Task Mode Sidebar feature entry)

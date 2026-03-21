@@ -35,6 +35,6 @@
 
 ## Phase 5: i18n & Polish
 
-- [ ] 5.1 — Add localized strings (en + zh-Hans) to all 3 `Localizable.strings` files
-- [ ] 5.2 — Run full test suite, fix regressions
-- [ ] 5.3 — Update CHANGELOG.md
+- [x] 5.1 — Add localized strings (en + zh-Hans) to all 3 `Localizable.strings` files
+- [x] 5.2 — Run full test suite, fix regressions
+- [x] 5.3 — Update CHANGELOG.md
