@@ -10,6 +10,8 @@
 "%dmo ago" = "%d月前";
 "%dy ago" = "%d年前";
 "About Mori" = "关于 Mori";
+"Base:" = "基于：";
+"Branch name..." = "分支名称…";
 "Add Project" = "添加项目";
 "Add Project..." = "添加项目…";
 "Add a project folder to Mori" = "添加项目文件夹到 Mori";

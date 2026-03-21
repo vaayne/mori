@@ -12,50 +12,19 @@ struct WorktreeCreationRequest: Sendable {
     let template: SessionTemplate
 }
 
-/// Section types for branch grouping.
-enum BranchSection: Sendable {
-    case createNew
-    case local
-    case remote
+/// A suggestion row in the autocomplete list.
+struct BranchSuggestion: Sendable, Equatable {
+    let info: GitBranchInfo
+    let inUse: Bool
 }
-
-/// A single row in the branch table — either a section header or a branch entry.
-enum BranchRow: Sendable, Equatable {
-    case sectionHeader(BranchSection)
-    case createNewBranch(name: String)
-    case branch(GitBranchInfo, inUse: Bool)
-
-    var isSectionHeader: Bool {
-        if case .sectionHeader = self { return true }
-        return false
-    }
-
-    static func == (lhs: BranchRow, rhs: BranchRow) -> Bool {
-        switch (lhs, rhs) {
-        case (.sectionHeader(let a), .sectionHeader(let b)):
-            return a == b
-        case (.createNewBranch(let a), .createNewBranch(let b)):
-            return a == b
-        case (.branch(let a, let aInUse), .branch(let b, let bInUse)):
-            return a == b && aInUse == bInUse
-        default:
-            return false
-        }
-    }
-}
-
-extension BranchSection: Equatable {}
 
 // MARK: - DataSource
 
-/// Pure logic for the worktree creation panel: branch filtering, section grouping,
+/// Pure logic for the worktree creation panel: branch filtering, exact-match detection,
 /// and "already in use" marking. No UI dependencies — testable independently.
 final class WorktreeCreationDataSource: Sendable {
 
-    /// All branches fetched from git.
     private let allBranches: [GitBranchInfo]
-
-    /// Branch names already used by existing worktrees (for "in use" marking).
     private let existingBranchNames: Set<String>
 
     init(branches: [GitBranchInfo], existingBranchNames: Set<String>) {
@@ -63,81 +32,50 @@ final class WorktreeCreationDataSource: Sendable {
         self.existingBranchNames = existingBranchNames
     }
 
-    /// Filter and group branches by query. Returns rows with section headers.
-    ///
-    /// Sections (in order):
-    /// 1. **Create New** — shown when query is non-empty and doesn't exactly match an existing branch
-    /// 2. **Local** — local branches matching the query
-    /// 3. **Remote** — remote branches matching the query (excluding those with a local counterpart)
-    func filteredRows(query: String) -> [BranchRow] {
+    /// Filter branches by query (substring, case-insensitive).
+    /// Returns a flat list of suggestions — no section headers.
+    /// Remote branches that have a local counterpart are excluded.
+    func filteredSuggestions(query: String) -> [BranchSuggestion] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         let lowerQuery = trimmed.lowercased()
 
-        // Separate local and remote branches
         let localBranches = allBranches.filter { !$0.isRemote }
         let remoteBranches = deduplicatedRemoteBranches()
 
-        // Filter by query (substring, case-insensitive)
-        let matchedLocal: [GitBranchInfo]
-        let matchedRemote: [GitBranchInfo]
-
+        let matched: [GitBranchInfo]
         if lowerQuery.isEmpty {
-            matchedLocal = localBranches
-            matchedRemote = remoteBranches
+            // Show all branches: locals first, then remotes
+            matched = localBranches + remoteBranches
         } else {
-            matchedLocal = localBranches.filter {
+            let matchedLocal = localBranches.filter {
                 $0.name.lowercased().contains(lowerQuery)
             }
-            matchedRemote = remoteBranches.filter {
+            let matchedRemote = remoteBranches.filter {
                 $0.displayName.lowercased().contains(lowerQuery)
             }
+            matched = matchedLocal + matchedRemote
         }
 
-        // Determine if "Create New" should appear:
-        // Query is non-empty AND doesn't exactly match any existing branch name
-        let exactMatchExists = allBranches.contains { branch in
-            let name = branch.isRemote ? branch.displayName : branch.name
-            return name.lowercased() == lowerQuery
-        }
-        let showCreateNew = !trimmed.isEmpty && !exactMatchExists
-
-        // Build rows
-        var rows: [BranchRow] = []
-
-        if showCreateNew {
-            rows.append(.sectionHeader(.createNew))
-            rows.append(.createNewBranch(name: trimmed))
-        }
-
-        if !matchedLocal.isEmpty {
-            rows.append(.sectionHeader(.local))
-            for branch in matchedLocal {
-                rows.append(.branch(branch, inUse: isBranchInUse(branch)))
-            }
-        }
-
-        if !matchedRemote.isEmpty {
-            rows.append(.sectionHeader(.remote))
-            for branch in matchedRemote {
-                rows.append(.branch(branch, inUse: isBranchInUse(branch)))
-            }
-        }
-
-        return rows
+        return matched.map { BranchSuggestion(info: $0, inUse: isBranchInUse($0)) }
     }
 
-    /// The default base branch — first local branch named "main" or "master", or the HEAD branch.
+    /// Check if a query exactly matches an existing branch name.
+    /// Returns the matching GitBranchInfo if found.
+    func exactMatch(for query: String) -> GitBranchInfo? {
+        let trimmed = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !trimmed.isEmpty else { return nil }
+        return allBranches.first { branch in
+            let name = branch.isRemote ? branch.displayName : branch.name
+            return name.lowercased() == trimmed
+        }
+    }
+
+    /// The default base branch — "main", "master", HEAD branch, or first local.
     var defaultBaseBranch: String {
         let locals = allBranches.filter { !$0.isRemote }
-        if let main = locals.first(where: { $0.name == "main" }) {
-            return main.name
-        }
-        if let master = locals.first(where: { $0.name == "master" }) {
-            return master.name
-        }
-        if let head = locals.first(where: { $0.isHead }) {
-            return head.name
-        }
+        if let main = locals.first(where: { $0.name == "main" }) { return main.name }
+        if let master = locals.first(where: { $0.name == "master" }) { return master.name }
+        if let head = locals.first(where: { $0.isHead }) { return head.name }
         return locals.first?.name ?? "main"
     }
 
@@ -150,19 +88,16 @@ final class WorktreeCreationDataSource: Sendable {
 
     // MARK: - Private
 
-    /// Remote branches that don't have a local counterpart.
     private func deduplicatedRemoteBranches() -> [GitBranchInfo] {
         let localNames = Set(allBranches.filter { !$0.isRemote }.map { $0.name })
         return allBranches.filter { $0.isRemote && !localNames.contains($0.displayName) }
     }
 
-    /// Check if a branch is already used by an existing worktree.
     private func isBranchInUse(_ branch: GitBranchInfo) -> Bool {
         let name = branch.isRemote ? branch.displayName : branch.name
         return existingBranchNames.contains(name)
     }
 
-    /// Simple slug generation for path preview (matches SessionNaming.slugify pattern).
     private static func slugify(_ input: String) -> String {
         let lowered = input.lowercased()
         var result = ""
@@ -176,7 +111,6 @@ final class WorktreeCreationDataSource: Sendable {
                 lastWasHyphen = true
             }
         }
-        // Trim leading/trailing hyphens
         while result.hasPrefix("-") { result.removeFirst() }
         while result.hasSuffix("-") { result.removeLast() }
         return result
