@@ -84,3 +84,33 @@
 - `setSidebarMode()` is wired and persists — sidebar toggle is fully functional
 - Auto-transition fires during each 5s poll tick, lightweight check only on `.todo` worktrees
 - Cross-project selection in task mode works: selecting a worktree from a different project auto-syncs `selectedProjectId`
+
+## Phase 4: Command Palette & IPC & CLI — COMPLETE
+
+**Commits:** 7 (75e656c, 11d2036, 745bd20, ab86426, 30708e4, 4919176, 8a386b6)
+
+**What was done:**
+- Added `setWorkflowStatus(project:worktree:status:)` case to `IPCCommand` enum in MoriIPC (4.1)
+- Added `handleSetWorkflowStatus` in `IPCHandler` — resolves project + worktree by case-insensitive name matching, validates status string against `WorkflowStatus.allCases`, returns descriptive error for invalid values (4.2)
+- Added `StatusCmd` CLI subcommand: `mori status <project> <worktree> <status>` with localized help text and discussion showing valid status values (4.3)
+- Added "Set Worktree Status" actions to `CommandPaletteDataSource` — one `.action` per `WorkflowStatus` case, only shown when a worktree is selected, with subtitle indicating current vs. target status (4.4)
+- Handled `action.status-<rawValue>` pattern in `AppDelegate.handlePaletteAction()` — parses raw value, resolves via `WorkflowStatus(rawValue:)`, calls `WorkspaceManager.setWorkflowStatus()` (4.5)
+- Added 3 IPC test functions covering: single round-trip, all 5 status values round-trip, and framing encode/decode (4.6)
+
+**Build result:** Zero errors, zero warnings (only existing ghostty linker warnings).
+
+**Test results:** 48 MoriIPC assertions passing (up from 39).
+
+**Files modified:**
+- `Packages/MoriIPC/Sources/MoriIPC/IPCProtocol.swift` (added setWorkflowStatus case)
+- `Sources/Mori/App/IPCHandler.swift` (added handleSetWorkflowStatus method + dispatch)
+- `Sources/MoriCLI/MoriCLI.swift` (added StatusCmd subcommand)
+- `Sources/Mori/App/CommandPaletteDataSource.swift` (added status action items)
+- `Sources/Mori/App/AppDelegate.swift` (added status action handling in palette)
+- `Packages/MoriIPC/Tests/MoriIPCTests/main.swift` (added 3 test functions)
+
+**Notes for Phase 5:**
+- All external interfaces (IPC, CLI, command palette) are wired and functional
+- New user-facing strings in MoriCLI and app target need localization entries (en + zh-Hans)
+- CLI help text uses `.localized()` already — just needs Localizable.strings entries
+- Command palette strings use `.localized()` — needs entries in app Localizable.strings

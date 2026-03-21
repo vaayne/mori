@@ -26,12 +26,12 @@
 
 ## Phase 4: Command Palette & IPC & CLI
 
-- [ ] 4.1 — Add `setWorkflowStatus` to `IPCCommand` (`Packages/MoriIPC/Sources/MoriIPC/IPCProtocol.swift`)
-- [ ] 4.2 — Add `handleSetWorkflowStatus` in IPCHandler (`Sources/Mori/App/IPCHandler.swift`)
-- [ ] 4.3 — Add `StatusCmd` CLI subcommand: `mori status <project> <worktree> <status>` (`Sources/MoriCLI/MoriCLI.swift`)
-- [ ] 4.4 — Add "Set Worktree Status" to CommandPaletteDataSource (`Sources/Mori/App/CommandPaletteDataSource.swift`)
-- [ ] 4.5 — Handle new palette actions in AppDelegate (`Sources/Mori/App/AppDelegate.swift`)
-- [ ] 4.6 — Add IPC tests (`Packages/MoriIPC/Tests/MoriIPCTests/main.swift`)
+- [x] 4.1 — Add `setWorkflowStatus` to `IPCCommand` (`Packages/MoriIPC/Sources/MoriIPC/IPCProtocol.swift`)
+- [x] 4.2 — Add `handleSetWorkflowStatus` in IPCHandler (`Sources/Mori/App/IPCHandler.swift`)
+- [x] 4.3 — Add `StatusCmd` CLI subcommand: `mori status <project> <worktree> <status>` (`Sources/MoriCLI/MoriCLI.swift`)
+- [x] 4.4 — Add "Set Worktree Status" to CommandPaletteDataSource (`Sources/Mori/App/CommandPaletteDataSource.swift`)
+- [x] 4.5 — Handle new palette actions in AppDelegate (`Sources/Mori/App/AppDelegate.swift`)
+- [x] 4.6 — Add IPC tests (`Packages/MoriIPC/Tests/MoriIPCTests/main.swift`)
 
 ## Phase 5: i18n & Polish
 
