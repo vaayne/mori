@@ -70,20 +70,22 @@ public actor GitBackend: GitControlling {
     }
 
     public func listBranches(repoPath: String) async throws -> [GitBranchInfo] {
-        // Get remote names for accurate remote branch detection
-        let remoteOutput = try await runner.run(in: repoPath, ["remote"])
-        let remoteNames = Set(
-            remoteOutput
-                .components(separatedBy: "\n")
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-        )
-
         let format = "%(refname:short)\t%(HEAD)\t%(committerdate:unix)\t%(upstream:short)"
-        let output = try await runner.run(
+
+        async let remoteOutput = runner.run(in: repoPath, ["remote"])
+        async let branchOutput = runner.run(
             in: repoPath,
             ["branch", "-a", "--sort=-committerdate", "--format=\(format)"]
         )
+
+        let remoteNames = Set(
+            (try? await remoteOutput)?
+                .components(separatedBy: "\n")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty } ?? []
+        )
+
+        let output = try await branchOutput
         return GitBranchParser.parse(output, remoteNames: remoteNames.isEmpty ? ["origin"] : remoteNames)
     }
 

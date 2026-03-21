@@ -11,6 +11,11 @@ import MoriTerminal
 @MainActor
 final class WorktreeCreationController: NSWindowController {
 
+    // MARK: - Constants
+
+    private static let fallbackBranch = "main"
+    private static let branchIconPrefix = "\u{2387} "
+
     // MARK: - Callbacks
 
     /// Called when the user confirms worktree creation.
@@ -107,54 +112,44 @@ final class WorktreeCreationController: NSWindowController {
         projects: [Project],
         selectedProjectId: UUID,
         repoPath: String,
-        existingBranches: Set<String>,
         themeInfo: GhosttyThemeInfo
     ) {
         self.projects = projects
         self.selectedProjectId = selectedProjectId
         self.repoPath = repoPath
 
-        // Reset state
         branchNameField.stringValue = ""
         dataSource = nil
 
-        // Apply theme
         applyTheme(themeInfo)
-
-        // Populate project popup
         populateProjectPopup()
+        resetBaseBranchPopup()
 
-        // Reset base branch popup
-        baseBranchPopup.removeAllItems()
-        baseBranchPopup.addItem(withTitle: "\u{2387} main")
-        baseBranchPopup.isEnabled = true
-
-        // Position and show
         positionPanel()
         window?.makeKeyAndOrderFront(nil)
         window?.makeFirstResponder(branchNameField)
 
-        // Fetch branches asynchronously
-        fetchGeneration += 1
-        let currentGeneration = fetchGeneration
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                let branches = try await self.fetchBranches?(repoPath) ?? []
-                guard self.fetchGeneration == currentGeneration else { return }
-                self.dataSource = WorktreeCreationDataSource(
-                    branches: branches,
-                    existingBranchNames: existingBranches
-                )
-                self.populateBaseBranchPopup()
-            } catch {
-                guard self.fetchGeneration == currentGeneration else { return }
-                self.dataSource = WorktreeCreationDataSource(
-                    branches: [],
-                    existingBranchNames: existingBranches
-                )
-            }
-        }
+        fetchBranchesAsync(repoPath: repoPath)
+    }
+
+    /// Lightweight refresh when the user switches projects — re-fetches branches
+    /// without re-positioning or re-theming the panel.
+    func refresh(
+        projects: [Project],
+        selectedProjectId: UUID,
+        repoPath: String
+    ) {
+        self.projects = projects
+        self.selectedProjectId = selectedProjectId
+        self.repoPath = repoPath
+
+        branchNameField.stringValue = ""
+        dataSource = nil
+
+        populateProjectPopup()
+        resetBaseBranchPopup()
+
+        fetchBranchesAsync(repoPath: repoPath)
     }
 
     func dismiss() {
@@ -252,8 +247,7 @@ final class WorktreeCreationController: NSWindowController {
         baseBranchPopup.controlSize = .small
         baseBranchPopup.font = .systemFont(ofSize: 12)
         baseBranchPopup.isBordered = false
-        baseBranchPopup.target = self
-        baseBranchPopup.action = #selector(baseBranchChanged(_:))
+        // No target/action — selection is read at confirm time
         toolbarContainer.addSubview(baseBranchPopup)
 
         // Create hint label
@@ -313,6 +307,32 @@ final class WorktreeCreationController: NSWindowController {
         }
     }
 
+    // MARK: - Branch Fetching
+
+    private func resetBaseBranchPopup() {
+        baseBranchPopup.removeAllItems()
+        baseBranchPopup.addItem(withTitle: Self.branchIconPrefix + Self.fallbackBranch)
+        baseBranchPopup.lastItem?.representedObject = Self.fallbackBranch
+        baseBranchPopup.isEnabled = true
+    }
+
+    private func fetchBranchesAsync(repoPath: String) {
+        fetchGeneration += 1
+        let currentGeneration = fetchGeneration
+        Task { [weak self] in
+            guard let self else { return }
+            let branches: [GitBranchInfo]
+            do {
+                branches = try await self.fetchBranches?(repoPath) ?? []
+            } catch {
+                branches = []
+            }
+            guard self.fetchGeneration == currentGeneration else { return }
+            self.dataSource = WorktreeCreationDataSource(branches: branches)
+            self.populateBaseBranchPopup()
+        }
+    }
+
     // MARK: - Populate Popups
 
     private func populateProjectPopup() {
@@ -330,13 +350,14 @@ final class WorktreeCreationController: NSWindowController {
         baseBranchPopup.removeAllItems()
         let branchNames = ds.localBranchNames
         if branchNames.isEmpty {
-            baseBranchPopup.addItem(withTitle: "\u{2387} main")
+            baseBranchPopup.addItem(withTitle: Self.branchIconPrefix + Self.fallbackBranch)
+            baseBranchPopup.lastItem?.representedObject = Self.fallbackBranch
         } else {
             for name in branchNames {
-                baseBranchPopup.addItem(withTitle: "\u{2387} \(name)")
+                baseBranchPopup.addItem(withTitle: Self.branchIconPrefix + name)
+                baseBranchPopup.lastItem?.representedObject = name
             }
-            let defaultBranch = ds.defaultBaseBranch
-            if let idx = branchNames.firstIndex(of: defaultBranch) {
+            if let idx = branchNames.firstIndex(of: ds.defaultBaseBranch) {
                 baseBranchPopup.selectItem(at: idx)
             }
         }
@@ -374,10 +395,10 @@ final class WorktreeCreationController: NSWindowController {
     }
 
     private func selectedBaseBranch() -> String {
-        let title = baseBranchPopup.titleOfSelectedItem ?? ""
-        // Strip the branch icon prefix
-        let stripped = title.hasPrefix("\u{2387} ") ? String(title.dropFirst(2)) : title
-        return stripped.isEmpty ? (dataSource?.defaultBaseBranch ?? "main") : stripped
+        if let name = baseBranchPopup.selectedItem?.representedObject as? String, !name.isEmpty {
+            return name
+        }
+        return dataSource?.defaultBaseBranch ?? Self.fallbackBranch
     }
 
     // MARK: - Actions
@@ -395,9 +416,6 @@ final class WorktreeCreationController: NSWindowController {
         onProjectChanged?(newProject.id)
     }
 
-    @objc private func baseBranchChanged(_ sender: NSPopUpButton) {
-        // No-op — base branch selection is read at confirm time
-    }
 }
 
 // MARK: - NSTextFieldDelegate

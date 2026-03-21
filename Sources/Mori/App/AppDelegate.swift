@@ -308,48 +308,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
 
         if worktreeCreationController == nil {
-            worktreeCreationController = WorktreeCreationController()
+            let controller = WorktreeCreationController()
+
+            controller.fetchBranches = { [weak manager] repoPath in
+                guard let manager else { return [] }
+                return try await manager.gitBackend.listBranches(repoPath: repoPath)
+            }
+
+            controller.onCreateWorktree = { [weak manager] request in
+                guard let manager else { return }
+                Task { @MainActor in
+                    await manager.handleCreateWorktreeFromPanel(request)
+                }
+            }
+
+            controller.onProjectChanged = { [weak self] newProjectId in
+                guard let self else { return }
+                self.appState?.uiState.selectedProjectId = newProjectId
+                self.workspaceManager?.selectProject(newProjectId)
+                self.refreshCreateWorktreePanel(for: newProjectId)
+            }
+
+            worktreeCreationController = controller
         }
 
         let controller = worktreeCreationController!
-
-        // Wire branch fetching
-        controller.fetchBranches = { [weak manager] repoPath in
-            guard let manager else { return [] }
-            return try await manager.gitBackend.listBranches(repoPath: repoPath)
-        }
-
-        // Wire creation callback
-        controller.onCreateWorktree = { [weak manager] request in
-            guard let manager else { return }
-            Task { @MainActor in
-                await manager.handleCreateWorktreeFromPanel(request)
-            }
-        }
-
-        // Wire project change callback
-        controller.onProjectChanged = { [weak self, weak state] newProjectId in
-            guard let self, let state else { return }
-            state.uiState.selectedProjectId = newProjectId
-            self.workspaceManager?.selectProject(newProjectId)
-            // Re-show with updated project context
-            self.showCreateWorktreePanel()
-        }
-
-        // Gather existing branch names from worktrees in this project
-        let existingBranches = Set(
-            state.worktrees
-                .filter { $0.projectId == projectId }
-                .compactMap { $0.branch }
-        )
 
         let themeInfo = terminalAreaController?.themeInfo ?? .fallback
         controller.show(
             projects: state.projects,
             selectedProjectId: projectId,
             repoPath: project.repoRootPath,
-            existingBranches: existingBranches,
             themeInfo: themeInfo
+        )
+    }
+
+    /// Lightweight refresh when the user changes the project dropdown — only
+    /// re-fetches branches for the new project without re-wiring callbacks or
+    /// re-positioning the panel.
+    private func refreshCreateWorktreePanel(for projectId: UUID) {
+        guard let controller = worktreeCreationController,
+              let state = appState,
+              let project = state.projects.first(where: { $0.id == projectId }) else { return }
+        controller.refresh(
+            projects: state.projects,
+            selectedProjectId: projectId,
+            repoPath: project.repoRootPath
         )
     }
 

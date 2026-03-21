@@ -14,20 +14,38 @@ struct WorktreeCreationRequest: Sendable {
 
 // MARK: - DataSource
 
-/// Pure logic for the worktree creation panel: branch filtering, exact-match detection,
-/// and "already in use" marking. No UI dependencies — testable independently.
+/// Pure logic for the worktree creation panel: branch filtering, exact-match detection.
+/// No UI dependencies — testable independently.
 final class WorktreeCreationDataSource: Sendable {
 
-    private let allBranches: [GitBranchInfo]
-    private let existingBranchNames: Set<String>
+    private static let fallbackBranch = "main"
 
-    init(branches: [GitBranchInfo], existingBranchNames: Set<String>) {
+    private let allBranches: [GitBranchInfo]
+
+    /// Local branch names, computed once at init.
+    let localBranchNames: [String]
+
+    /// The default base branch — "main", "master", HEAD branch, or first local.
+    let defaultBaseBranch: String
+
+    init(branches: [GitBranchInfo]) {
         self.allBranches = branches
-        self.existingBranchNames = existingBranchNames
+
+        let locals = branches.filter { !$0.isRemote }
+        self.localBranchNames = locals.map(\.name)
+
+        if let main = locals.first(where: { $0.name == "main" }) {
+            self.defaultBaseBranch = main.name
+        } else if let master = locals.first(where: { $0.name == "master" }) {
+            self.defaultBaseBranch = master.name
+        } else if let head = locals.first(where: { $0.isHead }) {
+            self.defaultBaseBranch = head.name
+        } else {
+            self.defaultBaseBranch = locals.first?.name ?? Self.fallbackBranch
+        }
     }
 
     /// Check if a query exactly matches an existing branch name.
-    /// Returns the matching GitBranchInfo if found.
     func exactMatch(for query: String) -> GitBranchInfo? {
         let trimmed = query.trimmingCharacters(in: .whitespaces).lowercased()
         guard !trimmed.isEmpty else { return nil }
@@ -35,46 +53,5 @@ final class WorktreeCreationDataSource: Sendable {
             let name = branch.isRemote ? branch.displayName : branch.name
             return name.lowercased() == trimmed
         }
-    }
-
-    /// All local branch names (for populating base branch popup).
-    var localBranchNames: [String] {
-        allBranches.filter { !$0.isRemote }.map(\.name)
-    }
-
-    /// The default base branch — "main", "master", HEAD branch, or first local.
-    var defaultBaseBranch: String {
-        let locals = allBranches.filter { !$0.isRemote }
-        if let main = locals.first(where: { $0.name == "main" }) { return main.name }
-        if let master = locals.first(where: { $0.name == "master" }) { return master.name }
-        if let head = locals.first(where: { $0.isHead }) { return head.name }
-        return locals.first?.name ?? "main"
-    }
-
-    /// Generate a preview path for a worktree.
-    static func previewPath(projectName: String, branchName: String) -> String {
-        let projectSlug = slugify(projectName)
-        let branchSlug = slugify(branchName)
-        return "~/.mori/\(projectSlug)/\(branchSlug)"
-    }
-
-    // MARK: - Private
-
-    private static func slugify(_ input: String) -> String {
-        let lowered = input.lowercased()
-        var result = ""
-        var lastWasHyphen = false
-        for char in lowered {
-            if char.isLetter || char.isNumber {
-                result.append(char)
-                lastWasHyphen = false
-            } else if !lastWasHyphen {
-                result.append("-")
-                lastWasHyphen = true
-            }
-        }
-        while result.hasPrefix("-") { result.removeFirst() }
-        while result.hasSuffix("-") { result.removeLast() }
-        return result
     }
 }
