@@ -76,7 +76,7 @@ final class WorktreeCreationController: NSWindowController {
         panel.backgroundColor = .windowBackgroundColor
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = true
-        panel.becomesKeyOnlyIfNeeded = true
+        panel.becomesKeyOnlyIfNeeded = false
 
         // Hide traffic light buttons
         panel.standardWindowButton(.closeButton)?.isHidden = true
