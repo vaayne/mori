@@ -866,7 +866,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             showAddProjectPanel()
 
         default:
-            break
+            // Handle "action.status-<rawValue>" patterns
+            if actionId.hasPrefix("action.status-") {
+                let rawValue = String(actionId.dropFirst("action.status-".count))
+                if let status = WorkflowStatus(rawValue: rawValue),
+                   let worktreeId = appState?.selectedWorktreeId {
+                    manager.setWorkflowStatus(worktreeId: worktreeId, status: status)
+                }
+            }
         }
     }
 
