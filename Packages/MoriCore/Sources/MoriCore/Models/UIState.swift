@@ -11,7 +11,7 @@ public struct UIState: Codable, Equatable, Sendable {
         selectedProjectId: UUID? = nil,
         selectedWorktreeId: UUID? = nil,
         selectedWindowId: String? = nil,
-        sidebarMode: SidebarMode = .worktrees,
+        sidebarMode: SidebarMode = .workspaces,
         searchQuery: String = ""
     ) {
         self.selectedProjectId = selectedProjectId
