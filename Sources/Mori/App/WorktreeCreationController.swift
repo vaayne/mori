@@ -10,13 +10,22 @@ enum PanelRow {
     case branch(BranchSuggestion)
 }
 
+// MARK: - Filter Tab
+
+/// Filter mode for the branch list.
+private enum FilterTab: Int {
+    case all = 0
+    case worktrees = 1
+}
+
 // MARK: - Controller
 
 /// NSWindowController managing a floating worktree creation panel.
 ///
-/// Design: The search field is the primary input. As you type, autocomplete suggestions
-/// filter below. Enter creates from the typed name -- if it matches an existing branch,
-/// uses it; otherwise creates a new branch from the base. No modes, no phases.
+/// Design: GitButler-inspired layout with branch name input at top, project/base branch
+/// dropdowns, filter tabs, search field, and a scrollable branch list. The branch name
+/// field is the primary input for creating new branches; the list below is for reference
+/// and selecting existing branches.
 @MainActor
 final class WorktreeCreationController: NSWindowController {
 
@@ -25,74 +34,112 @@ final class WorktreeCreationController: NSWindowController {
     /// Called when the user confirms worktree creation.
     var onCreateWorktree: ((WorktreeCreationRequest) -> Void)?
 
-    /// Called to fetch branches asynchronously. Caller provides this closure
-    /// so the controller has no direct GitBackend dependency.
+    /// Called to fetch branches asynchronously.
     var fetchBranches: ((_ repoPath: String) async throws -> [GitBranchInfo])?
+
+    /// Called when the user switches projects in the popup.
+    var onProjectChanged: ((UUID) -> Void)?
 
     // MARK: - State
 
     private var dataSource: WorktreeCreationDataSource?
     private var rows: [PanelRow] = []
-    private var suggestions: [BranchSuggestion] = []
-    private var selectedIndex: Int = -1 // Index into `rows` (only branch rows selectable)
-    private var projectName: String = ""
-    private var projectId: UUID?
+    private var selectedIndex: Int = -1
+    private var projects: [Project] = []
+    private var selectedProjectId: UUID?
     private var repoPath: String = ""
-    /// Incremented on each show() to invalidate stale async branch fetches.
+    private var isExistingBranch: Bool = false
+    private var activeFilterTab: FilterTab = .all
     private var fetchGeneration: Int = 0
     nonisolated(unsafe) private var localEventMonitor: Any?
 
     // MARK: - Views
 
-    private let searchField = NSTextField()
-    private let hintLabel = NSTextField(labelWithString: "")
+    // Branch name input (top)
+    private let branchNameField = NSTextField()
+
+    // Toolbar row
+    private let toolbarContainer = NSView()
+    private let projectPopup = NSPopUpButton()
+    private let baseBranchPopup = NSPopUpButton()
+    private let createHintLabel = NSTextField(labelWithString: "")
+    private let toolbarSeparator = NSBox()
+
+    // Filter tabs
+    private let filterTabsContainer = NSView()
+    private let filterSegment = NSSegmentedControl()
+    private let filterSeparator = NSBox()
+
+    // Search field
+    private let searchFieldContainer = NSView()
+    private let searchField = NSSearchField()
+    private let searchSeparator = NSBox()
+
+    // Branch list
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
-    private let containerView = NSView()
-    private let tableSeparator = NSBox()
 
-    // Search field background
-    private let searchFieldBackground = NSView()
-
-    // Footer views
+    // Path preview footer
     private let footerContainer = NSView()
     private let footerSeparator = NSBox()
-    private let baseLabel = NSTextField(labelWithString: "")
-    private let baseBranchField = NSTextField()
-    private let templatePopup = NSPopUpButton()
     private let pathLabel = NSTextField(labelWithString: "")
+
+    // Container
+    private let containerView = NSView()
+
+    // MARK: - Scroll height constraint
+
+    private var scrollHeightConstraint: NSLayoutConstraint?
 
     // MARK: - Layout Constants
 
     private enum Layout {
-        static let panelWidth: CGFloat = 560
+        static let panelWidth: CGFloat = 520
         static let panelPaddingH: CGFloat = 12
-        static let panelTopPadding: CGFloat = 12
         static let cornerRadius: CGFloat = 10
 
-        static let searchFieldHeight: CGFloat = 36
-        static let searchFieldCornerRadius: CGFloat = 8
-        static let searchFontSize: CGFloat = 14
+        // Branch name area: 10 + 28 + 8 = 46
+        static let branchNameTopPadding: CGFloat = 10
+        static let branchNameHeight: CGFloat = 28
+        static let branchNameBottomGap: CGFloat = 8
 
-        static let hintHeight: CGFloat = 16
-        static let hintGap: CGFloat = 4
+        // Toolbar row: 30 + 1 = 31
+        static let toolbarHeight: CGFloat = 30
+        static let toolbarSepHeight: CGFloat = 1
 
-        static let listGap: CGFloat = 6
+        // Filter tabs: 28 + 1 = 29
+        static let filterTabsHeight: CGFloat = 28
+        static let filterSepHeight: CGFloat = 1
+
+        // Search field: 6 + 24 + 6 + 1 = 37
+        static let searchPaddingV: CGFloat = 6
+        static let searchFieldHeight: CGFloat = 24
+        static let searchSepHeight: CGFloat = 1
+
+        // Branch list
+        static let rowHeight: CGFloat = 28
         static let sectionHeaderHeight: CGFloat = 20
+        static let maxVisibleRows: Int = 8
+
+        // Path footer: 24
+        static let footerHeight: CGFloat = 24
+
+        // Row internals
+        static let rowPaddingH: CGFloat = 12
+        static let cellIconSize: CGFloat = 12
+        static let cellIconGap: CGFloat = 6
+        static let branchFontSize: CGFloat = 13
+        static let commitAgeFontSize: CGFloat = 11
+        static let commitAgeLaneWidth: CGFloat = 50
+
+        // Section header
         static let sectionHeaderLeading: CGFloat = 12
 
-        static let rowHeight: CGFloat = 30
-        static let rowPaddingH: CGFloat = 12
-        static let cellIconSize: CGFloat = 13
-        static let cellIconGap: CGFloat = 8
-        static let branchFontSize: CGFloat = 13
-        static let commitAgeLaneWidth: CGFloat = 60
-        static let commitAgeFontSize: CGFloat = 11
-
-        static let maxVisibleRows: Int = 10
+        // Panel positioning
         static let panelTopOffset: CGFloat = 80
 
-        static let footerHeight: CGFloat = 36
+        // Fixed overhead: 46 + 31 + 29 + 37 + 24 = 167
+        static let fixedOverhead: CGFloat = 167
     }
 
     // MARK: - Init
@@ -140,30 +187,43 @@ final class WorktreeCreationController: NSWindowController {
 
     /// Show the panel for a given project, pre-loading branch data.
     func show(
-        projectId: UUID,
-        projectName: String,
+        projects: [Project],
+        selectedProjectId: UUID,
         repoPath: String,
         existingBranches: Set<String>
     ) {
-        self.projectId = projectId
-        self.projectName = projectName
+        self.projects = projects
+        self.selectedProjectId = selectedProjectId
         self.repoPath = repoPath
 
         // Reset state
+        branchNameField.stringValue = ""
         searchField.stringValue = ""
         selectedIndex = -1
-        suggestions = []
+        isExistingBranch = false
+        activeFilterTab = .all
         rows = []
         dataSource = nil
-        baseBranchField.stringValue = ""
-        templatePopup.selectItem(at: 0)
         tableView.reloadData()
-        updateFooter()
+
+        // Populate project popup
+        populateProjectPopup()
+
+        // Reset filter segment
+        filterSegment.selectSegment(withTag: FilterTab.all.rawValue)
+
+        // Reset base branch popup
+        baseBranchPopup.removeAllItems()
+        baseBranchPopup.addItem(withTitle: "\u{2387} main")
+        baseBranchPopup.isEnabled = true
+
+        updatePathPreview()
+        updateFilterCounts()
 
         // Position and show
         positionPanel()
         window?.makeKeyAndOrderFront(nil)
-        window?.makeFirstResponder(searchField)
+        window?.makeFirstResponder(branchNameField)
 
         // Fetch branches asynchronously
         fetchGeneration += 1
@@ -177,7 +237,8 @@ final class WorktreeCreationController: NSWindowController {
                     branches: branches,
                     existingBranchNames: existingBranches
                 )
-                self.baseBranchField.placeholderString = self.dataSource?.defaultBaseBranch ?? "main"
+                self.populateBaseBranchPopup()
+                self.updateFilterCounts()
                 self.updateResults()
             } catch {
                 guard self.fetchGeneration == currentGeneration else { return }
@@ -185,6 +246,7 @@ final class WorktreeCreationController: NSWindowController {
                     branches: [],
                     existingBranchNames: existingBranches
                 )
+                self.updateFilterCounts()
                 self.updateResults()
             }
         }
@@ -199,7 +261,6 @@ final class WorktreeCreationController: NSWindowController {
     private func setupUI() {
         guard let panel = window else { return }
 
-        // Panel corner radius
         panel.contentView?.wantsLayer = true
         panel.contentView?.layer?.cornerRadius = Layout.cornerRadius
         panel.contentView?.layer?.masksToBounds = true
@@ -215,31 +276,29 @@ final class WorktreeCreationController: NSWindowController {
             ])
         }
 
+        setupBranchNameField()
+        setupToolbarRow()
+        setupFilterTabs()
         setupSearchField()
         setupTableView()
         setupFooter()
         layoutViews()
-
-        // Tab key view chain
-        searchField.nextKeyView = baseBranchField
-        baseBranchField.nextKeyView = templatePopup
-        templatePopup.nextKeyView = searchField
     }
 
     private func setupKeyEventMonitor() {
         localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, let panel = self.window, panel.isVisible else { return event }
-            let firstResponder = panel.firstResponder
+            let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
-            // Handle Enter from template popup -- confirm
-            if event.keyCode == 36, firstResponder === self.templatePopup {
+            // Cmd+Enter from anywhere: confirm creation
+            if event.keyCode == 36, mods.contains(.command) {
                 self.confirmInput()
                 return nil
             }
 
-            // Handle Esc from template popup -- back to search
-            if event.keyCode == 53, firstResponder === self.templatePopup {
-                panel.makeFirstResponder(self.searchField)
+            // Esc from anywhere: dismiss
+            if event.keyCode == 53 {
+                self.dismiss()
                 return nil
             }
 
@@ -247,52 +306,136 @@ final class WorktreeCreationController: NSWindowController {
         }
     }
 
+    // MARK: - Branch Name Field
+
+    private func setupBranchNameField() {
+        branchNameField.translatesAutoresizingMaskIntoConstraints = false
+        branchNameField.placeholderString = .localized("Branch name")
+        branchNameField.font = .systemFont(ofSize: 14, weight: .regular)
+        branchNameField.isBordered = true
+        branchNameField.bezelStyle = .roundedBezel
+        branchNameField.focusRingType = .none
+        branchNameField.delegate = self
+        branchNameField.target = self
+        branchNameField.action = #selector(branchNameAction(_:))
+        containerView.addSubview(branchNameField)
+    }
+
+    // MARK: - Toolbar Row
+
+    private func setupToolbarRow() {
+        toolbarContainer.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(toolbarContainer)
+
+        // Project popup
+        projectPopup.translatesAutoresizingMaskIntoConstraints = false
+        projectPopup.controlSize = .small
+        projectPopup.font = .systemFont(ofSize: 12)
+        projectPopup.isBordered = false
+        projectPopup.target = self
+        projectPopup.action = #selector(projectChanged(_:))
+        toolbarContainer.addSubview(projectPopup)
+
+        // Base branch popup
+        baseBranchPopup.translatesAutoresizingMaskIntoConstraints = false
+        baseBranchPopup.controlSize = .small
+        baseBranchPopup.font = .systemFont(ofSize: 12)
+        baseBranchPopup.isBordered = false
+        baseBranchPopup.target = self
+        baseBranchPopup.action = #selector(baseBranchChanged(_:))
+        toolbarContainer.addSubview(baseBranchPopup)
+
+        // Create hint label
+        createHintLabel.translatesAutoresizingMaskIntoConstraints = false
+        createHintLabel.stringValue = "\u{2318}\u{23CE} to create"
+        createHintLabel.font = .systemFont(ofSize: 10, weight: .regular)
+        createHintLabel.textColor = .tertiaryLabelColor
+        createHintLabel.isEditable = false
+        createHintLabel.isBordered = false
+        createHintLabel.backgroundColor = .clear
+        toolbarContainer.addSubview(createHintLabel)
+
+        // Separator
+        toolbarSeparator.translatesAutoresizingMaskIntoConstraints = false
+        toolbarSeparator.boxType = .custom
+        toolbarSeparator.fillColor = .separatorColor
+        containerView.addSubview(toolbarSeparator)
+
+        NSLayoutConstraint.activate([
+            projectPopup.leadingAnchor.constraint(equalTo: toolbarContainer.leadingAnchor, constant: Layout.panelPaddingH),
+            projectPopup.centerYAnchor.constraint(equalTo: toolbarContainer.centerYAnchor),
+
+            baseBranchPopup.leadingAnchor.constraint(equalTo: projectPopup.trailingAnchor, constant: 8),
+            baseBranchPopup.centerYAnchor.constraint(equalTo: toolbarContainer.centerYAnchor),
+
+            createHintLabel.trailingAnchor.constraint(equalTo: toolbarContainer.trailingAnchor, constant: -Layout.panelPaddingH),
+            createHintLabel.centerYAnchor.constraint(equalTo: toolbarContainer.centerYAnchor),
+        ])
+    }
+
+    // MARK: - Filter Tabs
+
+    private func setupFilterTabs() {
+        filterTabsContainer.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(filterTabsContainer)
+
+        filterSegment.translatesAutoresizingMaskIntoConstraints = false
+        filterSegment.segmentCount = 2
+        filterSegment.setLabel("All 0", forSegment: 0)
+        filterSegment.setLabel("Worktrees 0", forSegment: 1)
+        filterSegment.setTag(FilterTab.all.rawValue, forSegment: 0)
+        filterSegment.setTag(FilterTab.worktrees.rawValue, forSegment: 1)
+        filterSegment.segmentStyle = .automatic
+        filterSegment.font = .systemFont(ofSize: 12)
+        filterSegment.selectSegment(withTag: FilterTab.all.rawValue)
+        filterSegment.target = self
+        filterSegment.action = #selector(filterTabChanged(_:))
+        filterTabsContainer.addSubview(filterSegment)
+
+        filterSeparator.translatesAutoresizingMaskIntoConstraints = false
+        filterSeparator.boxType = .custom
+        filterSeparator.fillColor = .separatorColor
+        containerView.addSubview(filterSeparator)
+
+        NSLayoutConstraint.activate([
+            filterSegment.leadingAnchor.constraint(equalTo: filterTabsContainer.leadingAnchor, constant: Layout.panelPaddingH),
+            filterSegment.centerYAnchor.constraint(equalTo: filterTabsContainer.centerYAnchor),
+        ])
+    }
+
+    // MARK: - Search Field
+
     private func setupSearchField() {
+        searchFieldContainer.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(searchFieldContainer)
+
         searchField.translatesAutoresizingMaskIntoConstraints = false
-        searchField.placeholderString = .localized("Branch name...")
-        searchField.font = .monospacedSystemFont(ofSize: Layout.searchFontSize, weight: .medium)
+        searchField.placeholderString = .localized("Search branches...")
+        searchField.font = .systemFont(ofSize: 12, weight: .regular)
         searchField.isBordered = false
         searchField.focusRingType = .none
-        searchField.bezelStyle = .roundedBezel
-        searchField.isBezeled = false
-        searchField.drawsBackground = false
         searchField.delegate = self
-        searchField.target = self
-        searchField.action = #selector(searchFieldAction(_:))
+        searchFieldContainer.addSubview(searchField)
 
-        // Placeholder font styling
-        let placeholderAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: Layout.searchFontSize, weight: .regular),
-            .foregroundColor: NSColor.placeholderTextColor,
-        ]
-        searchField.placeholderAttributedString = NSAttributedString(
-            string: .localized("Branch name..."),
-            attributes: placeholderAttrs
-        )
+        searchSeparator.translatesAutoresizingMaskIntoConstraints = false
+        searchSeparator.boxType = .custom
+        searchSeparator.fillColor = .separatorColor
+        containerView.addSubview(searchSeparator)
 
-        // Search field background
-        searchFieldBackground.translatesAutoresizingMaskIntoConstraints = false
-        searchFieldBackground.wantsLayer = true
-        searchFieldBackground.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-        searchFieldBackground.layer?.cornerRadius = Layout.searchFieldCornerRadius
-        containerView.addSubview(searchFieldBackground)
-        containerView.addSubview(searchField)
-
-        // Hint label below search field
-        hintLabel.translatesAutoresizingMaskIntoConstraints = false
-        hintLabel.stringValue = "\u{23CE} to create \u{00B7} \u{2191}\u{2193} to select"
-        hintLabel.font = .systemFont(ofSize: 10, weight: .regular)
-        hintLabel.textColor = .tertiaryLabelColor
-        hintLabel.isEditable = false
-        hintLabel.isBordered = false
-        hintLabel.backgroundColor = .clear
-        containerView.addSubview(hintLabel)
+        NSLayoutConstraint.activate([
+            searchField.leadingAnchor.constraint(equalTo: searchFieldContainer.leadingAnchor, constant: Layout.panelPaddingH),
+            searchField.trailingAnchor.constraint(equalTo: searchFieldContainer.trailingAnchor, constant: -Layout.panelPaddingH),
+            searchField.centerYAnchor.constraint(equalTo: searchFieldContainer.centerYAnchor),
+            searchField.heightAnchor.constraint(equalToConstant: Layout.searchFieldHeight),
+        ])
     }
+
+    // MARK: - Table View
 
     private func setupTableView() {
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("branches"))
         column.title = ""
-        column.width = Layout.panelWidth - Layout.panelPaddingH * 2
+        column.width = Layout.panelWidth
         tableView.addTableColumn(column)
         tableView.headerView = nil
         tableView.delegate = self
@@ -314,53 +457,17 @@ final class WorktreeCreationController: NSWindowController {
         containerView.addSubview(scrollView)
     }
 
+    // MARK: - Footer
+
     private func setupFooter() {
         footerContainer.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(footerContainer)
 
-        // Top divider
         footerSeparator.translatesAutoresizingMaskIntoConstraints = false
         footerSeparator.boxType = .custom
         footerSeparator.fillColor = .separatorColor
         footerContainer.addSubview(footerSeparator)
 
-        // "Base:" label
-        baseLabel.translatesAutoresizingMaskIntoConstraints = false
-        baseLabel.stringValue = "Base:"
-        baseLabel.font = .systemFont(ofSize: 11, weight: .regular)
-        baseLabel.textColor = .tertiaryLabelColor
-        baseLabel.isEditable = false
-        baseLabel.isBordered = false
-        baseLabel.backgroundColor = .clear
-        footerContainer.addSubview(baseLabel)
-
-        // Base branch editable field
-        baseBranchField.translatesAutoresizingMaskIntoConstraints = false
-        baseBranchField.placeholderString = "main"
-        baseBranchField.font = .systemFont(ofSize: 11, weight: .regular)
-        baseBranchField.textColor = .labelColor
-        baseBranchField.isBordered = false
-        baseBranchField.bezelStyle = .roundedBezel
-        baseBranchField.isBezeled = false
-        baseBranchField.drawsBackground = false
-        baseBranchField.focusRingType = .none
-        baseBranchField.delegate = self
-        footerContainer.addSubview(baseBranchField)
-
-        // Template popup
-        templatePopup.translatesAutoresizingMaskIntoConstraints = false
-        templatePopup.font = .systemFont(ofSize: 11)
-        templatePopup.removeAllItems()
-        for template in TemplateRegistry.all {
-            templatePopup.addItem(withTitle: "Template: \(template.name.capitalized)")
-        }
-        templatePopup.controlSize = .small
-        templatePopup.isBordered = false
-        templatePopup.target = self
-        templatePopup.action = #selector(templateChanged(_:))
-        footerContainer.addSubview(templatePopup)
-
-        // Path preview
         pathLabel.translatesAutoresizingMaskIntoConstraints = false
         pathLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         pathLabel.textColor = .tertiaryLabelColor
@@ -376,68 +483,74 @@ final class WorktreeCreationController: NSWindowController {
             footerSeparator.trailingAnchor.constraint(equalTo: footerContainer.trailingAnchor),
             footerSeparator.heightAnchor.constraint(equalToConstant: 1),
 
-            baseLabel.leadingAnchor.constraint(equalTo: footerContainer.leadingAnchor, constant: Layout.panelPaddingH),
-            baseLabel.centerYAnchor.constraint(equalTo: footerContainer.centerYAnchor),
-
-            baseBranchField.leadingAnchor.constraint(equalTo: baseLabel.trailingAnchor, constant: 4),
-            baseBranchField.centerYAnchor.constraint(equalTo: footerContainer.centerYAnchor),
-            baseBranchField.widthAnchor.constraint(equalToConstant: 80),
-
-            templatePopup.leadingAnchor.constraint(equalTo: baseBranchField.trailingAnchor, constant: 12),
-            templatePopup.centerYAnchor.constraint(equalTo: footerContainer.centerYAnchor),
-
-            pathLabel.leadingAnchor.constraint(greaterThanOrEqualTo: templatePopup.trailingAnchor, constant: 12),
+            pathLabel.leadingAnchor.constraint(equalTo: footerContainer.leadingAnchor, constant: Layout.panelPaddingH),
             pathLabel.trailingAnchor.constraint(equalTo: footerContainer.trailingAnchor, constant: -Layout.panelPaddingH),
             pathLabel.centerYAnchor.constraint(equalTo: footerContainer.centerYAnchor),
-
-            footerContainer.heightAnchor.constraint(equalToConstant: Layout.footerHeight),
         ])
-
         pathLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     }
 
-    private func layoutViews() {
-        tableSeparator.translatesAutoresizingMaskIntoConstraints = false
-        tableSeparator.boxType = .custom
-        tableSeparator.fillColor = .separatorColor
-        containerView.addSubview(tableSeparator)
+    // MARK: - Layout
 
-        let searchBg = searchFieldBackground
+    private func layoutViews() {
+        let scrollHeight = scrollView.heightAnchor.constraint(equalToConstant: Layout.rowHeight)
+        self.scrollHeightConstraint = scrollHeight
 
         NSLayoutConstraint.activate([
-            // Search field background
-            searchBg.topAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.panelTopPadding),
-            searchBg.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.panelPaddingH),
-            searchBg.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.panelPaddingH),
-            searchBg.heightAnchor.constraint(equalToConstant: Layout.searchFieldHeight),
+            // Branch name field
+            branchNameField.topAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.branchNameTopPadding),
+            branchNameField.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.panelPaddingH),
+            branchNameField.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.panelPaddingH),
+            branchNameField.heightAnchor.constraint(equalToConstant: Layout.branchNameHeight),
 
-            // Search field (inside background)
-            searchField.leadingAnchor.constraint(equalTo: searchBg.leadingAnchor, constant: 10),
-            searchField.trailingAnchor.constraint(equalTo: searchBg.trailingAnchor, constant: -10),
-            searchField.centerYAnchor.constraint(equalTo: searchBg.centerYAnchor),
-            searchField.heightAnchor.constraint(equalToConstant: Layout.searchFieldHeight - 4),
+            // Toolbar container
+            toolbarContainer.topAnchor.constraint(equalTo: branchNameField.bottomAnchor, constant: Layout.branchNameBottomGap),
+            toolbarContainer.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            toolbarContainer.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            toolbarContainer.heightAnchor.constraint(equalToConstant: Layout.toolbarHeight),
 
-            // Hint label
-            hintLabel.topAnchor.constraint(equalTo: searchBg.bottomAnchor, constant: Layout.hintGap),
-            hintLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.panelPaddingH + 10),
-            hintLabel.heightAnchor.constraint(equalToConstant: Layout.hintHeight),
+            // Toolbar separator
+            toolbarSeparator.topAnchor.constraint(equalTo: toolbarContainer.bottomAnchor),
+            toolbarSeparator.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            toolbarSeparator.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            toolbarSeparator.heightAnchor.constraint(equalToConstant: Layout.toolbarSepHeight),
 
-            // Separator
-            tableSeparator.topAnchor.constraint(equalTo: hintLabel.bottomAnchor, constant: Layout.listGap),
-            tableSeparator.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            tableSeparator.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            tableSeparator.heightAnchor.constraint(equalToConstant: 1),
+            // Filter tabs container
+            filterTabsContainer.topAnchor.constraint(equalTo: toolbarSeparator.bottomAnchor),
+            filterTabsContainer.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            filterTabsContainer.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            filterTabsContainer.heightAnchor.constraint(equalToConstant: Layout.filterTabsHeight),
+
+            // Filter separator
+            filterSeparator.topAnchor.constraint(equalTo: filterTabsContainer.bottomAnchor),
+            filterSeparator.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            filterSeparator.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            filterSeparator.heightAnchor.constraint(equalToConstant: Layout.filterSepHeight),
+
+            // Search field container
+            searchFieldContainer.topAnchor.constraint(equalTo: filterSeparator.bottomAnchor),
+            searchFieldContainer.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            searchFieldContainer.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            searchFieldContainer.heightAnchor.constraint(equalToConstant: Layout.searchPaddingV + Layout.searchFieldHeight + Layout.searchPaddingV),
+
+            // Search separator
+            searchSeparator.topAnchor.constraint(equalTo: searchFieldContainer.bottomAnchor),
+            searchSeparator.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            searchSeparator.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            searchSeparator.heightAnchor.constraint(equalToConstant: Layout.searchSepHeight),
 
             // Scroll view
-            scrollView.topAnchor.constraint(equalTo: tableSeparator.bottomAnchor),
+            scrollView.topAnchor.constraint(equalTo: searchSeparator.bottomAnchor),
             scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            scrollHeight,
 
             // Footer
             footerContainer.topAnchor.constraint(equalTo: scrollView.bottomAnchor),
             footerContainer.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             footerContainer.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
             footerContainer.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+            footerContainer.heightAnchor.constraint(equalToConstant: Layout.footerHeight),
         ])
     }
 
@@ -446,49 +559,130 @@ final class WorktreeCreationController: NSWindowController {
     private func positionPanel() {
         guard let panel = window else { return }
 
+        let panelHeight = computePanelHeight()
         if let mainWindow = NSApp.mainWindow ?? NSApp.keyWindow {
             let mainFrame = mainWindow.frame
-            let panelHeight = computePanelHeight()
             let x = mainFrame.midX - Layout.panelWidth / 2
             let y = mainFrame.maxY - panelHeight - Layout.panelTopOffset
             panel.setFrame(NSRect(x: x, y: y, width: Layout.panelWidth, height: panelHeight), display: true)
         } else {
-            let panelHeight = computePanelHeight()
             panel.setFrame(NSRect(x: 0, y: 0, width: Layout.panelWidth, height: panelHeight), display: true)
             panel.center()
         }
     }
 
     private func computePanelHeight() -> CGFloat {
-        let topArea = Layout.panelTopPadding + Layout.searchFieldHeight
-            + Layout.hintGap + Layout.hintHeight + Layout.listGap + 1 // separator
-        let rowCount = rows.isEmpty ? 1 : min(rows.count, Layout.maxVisibleRows)
-        let tableHeight = CGFloat(rowCount) * Layout.rowHeight
-        return topArea + tableHeight + Layout.footerHeight
+        let tableHeight = computeTableHeight()
+        return Layout.fixedOverhead + tableHeight
     }
 
-    // MARK: - Results
+    private func computeTableHeight() -> CGFloat {
+        if rows.isEmpty {
+            return Layout.rowHeight // minimum 1 row
+        }
+        // Calculate height respecting different row heights, capped at maxVisibleRows equivalent
+        var totalHeight: CGFloat = 0
+        var visibleCount = 0
+        for row in rows {
+            let rowH: CGFloat
+            switch row {
+            case .sectionHeader: rowH = Layout.sectionHeaderHeight
+            case .branch: rowH = Layout.rowHeight
+            }
+            if totalHeight + rowH > CGFloat(Layout.maxVisibleRows) * Layout.rowHeight {
+                break
+            }
+            totalHeight += rowH
+            visibleCount += 1
+        }
+        return max(totalHeight, Layout.rowHeight)
+    }
+
+    private func resizePanel() {
+        guard let panel = window else { return }
+        let panelHeight = computePanelHeight()
+        let tableHeight = computeTableHeight()
+
+        // Update scroll height constraint
+        scrollHeightConstraint?.constant = tableHeight
+
+        var frame = panel.frame
+        let heightDiff = panelHeight - frame.height
+        frame.origin.y -= heightDiff
+        frame.size.height = panelHeight
+        panel.setFrame(frame, display: true, animate: false)
+    }
+
+    // MARK: - Populate Popups
+
+    private func populateProjectPopup() {
+        projectPopup.removeAllItems()
+        for project in projects {
+            projectPopup.addItem(withTitle: project.name)
+        }
+        // Select current project
+        if let idx = projects.firstIndex(where: { $0.id == selectedProjectId }) {
+            projectPopup.selectItem(at: idx)
+        }
+    }
+
+    private func populateBaseBranchPopup() {
+        guard let ds = dataSource else { return }
+        baseBranchPopup.removeAllItems()
+        let branchNames = ds.localBranchNames
+        if branchNames.isEmpty {
+            baseBranchPopup.addItem(withTitle: "\u{2387} main")
+        } else {
+            for name in branchNames {
+                baseBranchPopup.addItem(withTitle: "\u{2387} \(name)")
+            }
+            // Select default
+            let defaultBranch = ds.defaultBaseBranch
+            if let idx = branchNames.firstIndex(of: defaultBranch) {
+                baseBranchPopup.selectItem(at: idx)
+            }
+        }
+    }
+
+    // MARK: - Filter & Results
+
+    private func updateFilterCounts() {
+        let totalCount = dataSource?.totalBranchCount ?? 0
+        let worktreeCount = dataSource?.worktreeBranchCount ?? 0
+        filterSegment.setLabel("All \(totalCount)", forSegment: 0)
+        filterSegment.setLabel("Worktrees \(worktreeCount)", forSegment: 1)
+    }
 
     private func updateResults() {
         let query = searchField.stringValue
         let grouped = dataSource?.filteredGrouped(query: query)
             ?? (local: [], remote: [])
 
+        // Apply filter tab
+        let filteredLocal: [BranchSuggestion]
+        let filteredRemote: [BranchSuggestion]
+        switch activeFilterTab {
+        case .all:
+            filteredLocal = grouped.local
+            filteredRemote = grouped.remote
+        case .worktrees:
+            filteredLocal = grouped.local.filter(\.inUse)
+            filteredRemote = grouped.remote.filter(\.inUse)
+        }
+
         // Build flat rows — only show REMOTE header when remote branches present
         var newRows: [PanelRow] = []
-
-        for s in grouped.local {
+        for s in filteredLocal {
             newRows.append(.branch(s))
         }
-        if !grouped.remote.isEmpty {
+        if !filteredRemote.isEmpty {
             newRows.append(.sectionHeader("REMOTE"))
-            for s in grouped.remote {
+            for s in filteredRemote {
                 newRows.append(.branch(s))
             }
         }
 
         rows = newRows
-        suggestions = grouped.local + grouped.remote
 
         // Select first branch row
         selectedIndex = rows.firstIndex(where: { if case .branch = $0 { return true }; return false }) ?? -1
@@ -499,48 +693,55 @@ final class WorktreeCreationController: NSWindowController {
             tableView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
         }
 
-        updateFooter()
+        updatePathPreview()
         resizePanel()
     }
 
-    private func resizePanel() {
-        guard let panel = window else { return }
-        let panelHeight = computePanelHeight()
-        var frame = panel.frame
-        let heightDiff = panelHeight - frame.height
-        frame.origin.y -= heightDiff
-        frame.size.height = panelHeight
-        panel.setFrame(frame, display: true, animate: false)
+    // MARK: - Path Preview
+
+    private func updatePathPreview() {
+        let branchText = branchNameField.stringValue.trimmingCharacters(in: .whitespaces)
+        if branchText.isEmpty {
+            pathLabel.stringValue = ""
+        } else {
+            let projectName = currentProjectName()
+            pathLabel.stringValue = WorktreeCreationDataSource.previewPath(
+                projectName: projectName,
+                branchName: branchText
+            )
+        }
+    }
+
+    private func currentProjectName() -> String {
+        if let id = selectedProjectId,
+           let project = projects.first(where: { $0.id == id }) {
+            return project.name
+        }
+        return ""
     }
 
     // MARK: - Confirm
 
-    /// The main action. Determines whether to use an existing branch or create new.
     private func confirmInput() {
-        let query = searchField.stringValue.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else { return }
+        let branchText = branchNameField.stringValue.trimmingCharacters(in: .whitespaces)
+        guard !branchText.isEmpty else { return }
 
-        let template = selectedTemplate()
+        let template = TemplateRegistry.basic
 
-        // Check: is a suggestion selected (user arrowed down into the list)?
-        if selectedIndex >= 0, selectedIndex < rows.count,
-           case .branch(let suggestion) = rows[selectedIndex] {
-            let info = suggestion.info
-            let matchName = info.isRemote ? info.displayName : info.name
-            if matchName.lowercased() == query.lowercased() {
-                dismiss()
-                onCreateWorktree?(WorktreeCreationRequest(
-                    branchName: info.name,
-                    isNewBranch: false,
-                    baseBranch: nil,
-                    template: template
-                ))
-                return
-            }
+        if isExistingBranch {
+            // Using an existing branch — no base branch needed
+            dismiss()
+            onCreateWorktree?(WorktreeCreationRequest(
+                branchName: branchText,
+                isNewBranch: false,
+                baseBranch: nil,
+                template: template
+            ))
+            return
         }
 
-        // Check: does the typed text exactly match any branch?
-        if let match = dataSource?.exactMatch(for: query) {
+        // Check if typed text exactly matches an existing branch
+        if let match = dataSource?.exactMatch(for: branchText) {
             dismiss()
             onCreateWorktree?(WorktreeCreationRequest(
                 branchName: match.name,
@@ -551,36 +752,38 @@ final class WorktreeCreationController: NSWindowController {
             return
         }
 
-        // No match -- create new branch
-        let baseBranch = baseBranchField.stringValue.isEmpty
-            ? (dataSource?.defaultBaseBranch ?? "main")
-            : baseBranchField.stringValue
+        // New branch — use base branch from popup
+        let baseBranch = selectedBaseBranch()
         dismiss()
         onCreateWorktree?(WorktreeCreationRequest(
-            branchName: query,
+            branchName: branchText,
             isNewBranch: true,
             baseBranch: baseBranch,
             template: template
         ))
     }
 
-    /// When user arrows into a suggestion and presses Enter, use that suggestion directly.
-    private func confirmSuggestion() {
-        guard selectedIndex >= 0, selectedIndex < rows.count,
-              case .branch(let suggestion) = rows[selectedIndex] else {
-            confirmInput()
-            return
-        }
-
-        let template = selectedTemplate()
-        dismiss()
-        onCreateWorktree?(WorktreeCreationRequest(
-            branchName: suggestion.info.name,
-            isNewBranch: false,
-            baseBranch: nil,
-            template: template
-        ))
+    private func selectedBaseBranch() -> String {
+        let title = baseBranchPopup.titleOfSelectedItem ?? ""
+        // Strip the branch icon prefix
+        let stripped = title.hasPrefix("\u{2387} ") ? String(title.dropFirst(2)) : title
+        return stripped.isEmpty ? (dataSource?.defaultBaseBranch ?? "main") : stripped
     }
+
+    /// Fill branch name from a selected suggestion.
+    private func selectBranchFromList(at index: Int) {
+        guard index >= 0, index < rows.count,
+              case .branch(let suggestion) = rows[index] else { return }
+
+        let info = suggestion.info
+        let name = info.isRemote ? info.displayName : info.name
+        branchNameField.stringValue = name
+        isExistingBranch = true
+        baseBranchPopup.isEnabled = false
+        updatePathPreview()
+    }
+
+    // MARK: - Selection Movement
 
     private func moveSelectionUp() {
         guard !rows.isEmpty else { return }
@@ -593,7 +796,6 @@ final class WorktreeCreationController: NSWindowController {
         selectedIndex = candidate
         tableView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
         tableView.scrollRowToVisible(selectedIndex)
-        updateFooter()
     }
 
     private func moveSelectionDown() {
@@ -607,59 +809,38 @@ final class WorktreeCreationController: NSWindowController {
         selectedIndex = candidate
         tableView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
         tableView.scrollRowToVisible(selectedIndex)
-        updateFooter()
-    }
-
-    // MARK: - Footer
-
-    private func updateFooter() {
-        let query = searchField.stringValue.trimmingCharacters(in: .whitespaces)
-        let isExisting = query.isEmpty ? false : dataSource?.exactMatch(for: query) != nil
-
-        // Base label + field: hide when selecting an existing branch
-        baseLabel.isHidden = isExisting
-        baseBranchField.isHidden = isExisting
-
-        // Path preview
-        if query.isEmpty {
-            pathLabel.stringValue = ""
-        } else {
-            let branchForPath: String
-            if let match = dataSource?.exactMatch(for: query) {
-                branchForPath = match.isRemote ? match.displayName : match.name
-            } else {
-                branchForPath = query
-            }
-            pathLabel.stringValue = WorktreeCreationDataSource.previewPath(
-                projectName: projectName,
-                branchName: branchForPath
-            )
-        }
-    }
-
-    private func selectedTemplate() -> SessionTemplate {
-        let index = templatePopup.indexOfSelectedItem
-        guard index >= 0, index < TemplateRegistry.all.count else {
-            return TemplateRegistry.basic
-        }
-        return TemplateRegistry.all[index]
     }
 
     // MARK: - Actions
 
-    @objc private func searchFieldAction(_ sender: NSTextField) {
+    @objc private func branchNameAction(_ sender: NSTextField) {
         confirmInput()
     }
 
-    @objc private func templateChanged(_ sender: NSPopUpButton) {
-        updateFooter()
+    @objc private func projectChanged(_ sender: NSPopUpButton) {
+        let idx = sender.indexOfSelectedItem
+        guard idx >= 0, idx < projects.count else { return }
+        let newProject = projects[idx]
+        guard newProject.id != selectedProjectId else { return }
+        selectedProjectId = newProject.id
+        onProjectChanged?(newProject.id)
+    }
+
+    @objc private func baseBranchChanged(_ sender: NSPopUpButton) {
+        updatePathPreview()
+    }
+
+    @objc private func filterTabChanged(_ sender: NSSegmentedControl) {
+        let tag = sender.selectedTag()
+        activeFilterTab = FilterTab(rawValue: tag) ?? .all
+        updateResults()
     }
 
     @objc private func tableDoubleClicked() {
         let row = tableView.clickedRow
         guard row >= 0, row < rows.count, case .branch = rows[row] else { return }
         selectedIndex = row
-        confirmSuggestion()
+        selectBranchFromList(at: row)
     }
 
     // MARK: - Helpers
@@ -669,44 +850,58 @@ final class WorktreeCreationController: NSWindowController {
         let seconds = Int(interval)
         if seconds < 60 { return .localized("now") }
         let minutes = seconds / 60
-        if minutes < 60 { return String(format: .localized("%dm ago"), minutes) }
+        if minutes < 60 { return String(format: .localized("%dm"), minutes) }
         let hours = minutes / 60
-        if hours < 24 { return String(format: .localized("%dh ago"), hours) }
+        if hours < 24 { return String(format: .localized("%dh"), hours) }
         let days = hours / 24
-        if days < 30 { return String(format: .localized("%dd ago"), days) }
+        if days < 30 { return String(format: .localized("%dd"), days) }
         let months = days / 30
-        if months < 12 { return String(format: .localized("%dmo ago"), months) }
+        if months < 12 { return String(format: .localized("%dmo"), months) }
         let years = days / 365
-        return String(format: .localized("%dy ago"), years)
-    }
-
-    /// Returns the BranchSuggestion for a given row index, or nil if header.
-    private func branchSuggestion(at row: Int) -> BranchSuggestion? {
-        guard row >= 0, row < rows.count else { return nil }
-        if case .branch(let s) = rows[row] { return s }
-        return nil
+        return String(format: .localized("%dy"), years)
     }
 }
 
-// MARK: - NSTextFieldDelegate
+// MARK: - NSTextFieldDelegate + NSSearchFieldDelegate
 
-extension WorktreeCreationController: NSTextFieldDelegate {
+extension WorktreeCreationController: NSSearchFieldDelegate {
 
     func controlTextDidChange(_ notification: Notification) {
         guard let field = notification.object as? NSTextField else { return }
-        if field === searchField {
+        if field === branchNameField {
+            // User typing resets existing branch selection
+            if isExistingBranch {
+                isExistingBranch = false
+                baseBranchPopup.isEnabled = true
+            }
+            updatePathPreview()
+        } else if field === searchField {
             updateResults()
-        } else if field === baseBranchField {
-            updateFooter()
         }
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if control === branchNameField {
+            return handleBranchNameCommand(commandSelector)
+        }
         if control === searchField {
             return handleSearchFieldCommand(commandSelector)
         }
-        if control === baseBranchField {
-            return handleBaseBranchFieldCommand(commandSelector)
+        return false
+    }
+
+    private func handleBranchNameCommand(_ commandSelector: Selector) -> Bool {
+        if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+            confirmInput()
+            return true
+        }
+        if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+            dismiss()
+            return true
+        }
+        if commandSelector == #selector(NSResponder.insertTab(_:)) {
+            window?.makeFirstResponder(searchField)
+            return true
         }
         return false
     }
@@ -725,31 +920,13 @@ extension WorktreeCreationController: NSTextFieldDelegate {
             return true
         }
         if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-            confirmInput()
-            return true
-        }
-        if commandSelector == #selector(NSResponder.insertTab(_:)) {
-            window?.makeFirstResponder(baseBranchField)
-            return true
-        }
-        return false
-    }
-
-    private func handleBaseBranchFieldCommand(_ commandSelector: Selector) -> Bool {
-        if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
-            window?.makeFirstResponder(searchField)
-            return true
-        }
-        if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-            confirmInput()
-            return true
-        }
-        if commandSelector == #selector(NSResponder.insertTab(_:)) {
-            window?.makeFirstResponder(templatePopup)
+            // Enter in search field: select highlighted branch into the name field
+            selectBranchFromList(at: selectedIndex)
+            window?.makeFirstResponder(branchNameField)
             return true
         }
         if commandSelector == #selector(NSResponder.insertBacktab(_:)) {
-            window?.makeFirstResponder(searchField)
+            window?.makeFirstResponder(branchNameField)
             return true
         }
         return false
@@ -803,7 +980,6 @@ extension WorktreeCreationController: NSTableViewDelegate {
         let row = tableView.selectedRow
         if row >= 0, row < rows.count, case .branch = rows[row] {
             selectedIndex = row
-            updateFooter()
         }
     }
 
@@ -813,7 +989,7 @@ extension WorktreeCreationController: NSTableViewDelegate {
         let cell = NSTableCellView()
         let label = NSTextField(labelWithString: title)
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.font = .systemFont(ofSize: 10, weight: .medium)
+        label.font = .systemFont(ofSize: 10, weight: .semibold)
         label.textColor = .tertiaryLabelColor
         cell.addSubview(label)
 
@@ -831,12 +1007,14 @@ extension WorktreeCreationController: NSTableViewDelegate {
         let info = suggestion.info
         let cell = NSTableCellView()
 
-        // Icon — always "arrow.triangle.branch"
+        // Icon
         let imageView = NSImageView()
         imageView.translatesAutoresizingMaskIntoConstraints = false
         imageView.image = NSImage(systemSymbolName: "arrow.triangle.branch", accessibilityDescription: nil)
         imageView.imageScaling = .scaleProportionallyDown
-        imageView.contentTintColor = .secondaryLabelColor
+        imageView.contentTintColor = .tertiaryLabelColor
+        let iconConfig = NSImage.SymbolConfiguration(pointSize: Layout.cellIconSize, weight: .regular)
+        imageView.symbolConfiguration = iconConfig
         cell.addSubview(imageView)
 
         NSLayoutConstraint.activate([
@@ -865,7 +1043,25 @@ extension WorktreeCreationController: NSTableViewDelegate {
         var trailingRef = cell.trailingAnchor
         var trailingConst: CGFloat = -Layout.rowPaddingH
 
-        // Commit age (right-aligned)
+        // In-use checkmark (rightmost)
+        if suggestion.inUse {
+            let checkLabel = NSTextField(labelWithString: "\u{2713}")
+            checkLabel.translatesAutoresizingMaskIntoConstraints = false
+            checkLabel.font = .systemFont(ofSize: 11, weight: .medium)
+            checkLabel.textColor = .tertiaryLabelColor
+            checkLabel.isEditable = false
+            checkLabel.isBordered = false
+            checkLabel.backgroundColor = .clear
+            cell.addSubview(checkLabel)
+            NSLayoutConstraint.activate([
+                checkLabel.trailingAnchor.constraint(equalTo: trailingRef, constant: trailingConst),
+                checkLabel.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            ])
+            trailingRef = checkLabel.leadingAnchor
+            trailingConst = -8
+        }
+
+        // Commit age
         if let commitDate = info.commitDate {
             let timeLabel = NSTextField(labelWithString: relativeTimeString(from: commitDate))
             timeLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -879,24 +1075,6 @@ extension WorktreeCreationController: NSTableViewDelegate {
                 timeLabel.widthAnchor.constraint(equalToConstant: Layout.commitAgeLaneWidth),
             ])
             trailingRef = timeLabel.leadingAnchor
-            trailingConst = -6
-        }
-
-        // In-use checkmark
-        if suggestion.inUse {
-            let checkLabel = NSTextField(labelWithString: "\u{2713}")
-            checkLabel.translatesAutoresizingMaskIntoConstraints = false
-            checkLabel.font = .systemFont(ofSize: 12, weight: .medium)
-            checkLabel.textColor = .tertiaryLabelColor
-            checkLabel.isEditable = false
-            checkLabel.isBordered = false
-            checkLabel.backgroundColor = .clear
-            cell.addSubview(checkLabel)
-            NSLayoutConstraint.activate([
-                checkLabel.trailingAnchor.constraint(equalTo: trailingRef, constant: trailingConst),
-                checkLabel.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-            ])
-            trailingRef = checkLabel.leadingAnchor
             trailingConst = -6
         }
 
@@ -927,7 +1105,7 @@ extension WorktreeCreationController: NSTableViewDelegate {
 
                 badgeContainer.leadingAnchor.constraint(equalTo: nameLabel.trailingAnchor, constant: 6),
                 badgeContainer.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                badgeContainer.heightAnchor.constraint(equalToConstant: 18),
+                badgeContainer.heightAnchor.constraint(equalToConstant: 16),
             ])
             nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingRef, constant: trailingConst - 60).isActive = true
         } else {
