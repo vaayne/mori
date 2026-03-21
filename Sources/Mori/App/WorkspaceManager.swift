@@ -166,6 +166,11 @@ final class WorkspaceManager {
 
         guard let worktree = appState.worktrees.first(where: { $0.id == worktreeId }) else { return }
 
+        // Sync selectedProjectId from the worktree's projectId (enables cross-project selection in task mode)
+        if appState.uiState.selectedProjectId != worktree.projectId {
+            appState.uiState.selectedProjectId = worktree.projectId
+        }
+
         // Ensure tmux session exists, check branch, then switch terminal
         Task {
             await refreshWorktreeBranch(worktreeId: worktreeId)
@@ -563,6 +568,42 @@ final class WorkspaceManager {
         }
     }
 
+    // MARK: - Sidebar Mode
+
+    /// Update the sidebar mode (Tasks / Workspaces) and persist.
+    func setSidebarMode(_ mode: SidebarMode) {
+        appState.uiState.sidebarMode = mode
+        saveUIState()
+    }
+
+    // MARK: - Workflow Status
+
+    /// Update the workflow status for a worktree and persist the change.
+    func setWorkflowStatus(worktreeId: UUID, status: WorkflowStatus) {
+        guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }) else { return }
+        appState.worktrees[index].workflowStatus = status
+        try? worktreeRepo.save(appState.worktrees[index])
+    }
+
+    /// Auto-transition worktrees from `.todo` to `.inProgress` when activity is detected.
+    /// Signals: modified files, staged files, commits ahead of remote, or active agent.
+    private func autoTransitionTodoWorktrees() {
+        for i in appState.worktrees.indices {
+            let wt = appState.worktrees[i]
+            guard wt.workflowStatus == .todo else { continue }
+
+            let hasActivity = wt.modifiedCount > 0
+                || wt.stagedCount > 0
+                || wt.aheadCount > 0
+                || wt.agentState != .none
+
+            if hasActivity {
+                appState.worktrees[i].workflowStatus = .inProgress
+                try? worktreeRepo.save(appState.worktrees[i])
+            }
+        }
+    }
+
     // MARK: - Tmux Integration
 
     /// Check the actual git branch for a worktree and update if it changed.
@@ -701,6 +742,9 @@ final class WorkspaceManager {
 
         // Update worktree fields from git status
         updateWorktreeGitStatus(gitStatuses)
+
+        // Auto-transition worktrees from .todo to .inProgress on first activity
+        autoTransitionTodoWorktrees()
 
         // Roll up unread counts and aggregate badges
         updateUnreadCounts()
