@@ -193,7 +193,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         // Wire session created: apply proxy env vars after tmux server starts
         manager.onSessionCreated = { [weak self] in
-            self?.applyProxyToTmux()
+            guard let tmuxBackend = self?.workspaceManager?.tmuxBackend else { return }
+            let model = ProxySettingsApplicator.load()
+            await ProxySettingsApplicator.apply(model, tmuxBackend: tmuxBackend)
         }
 
         // Restore previously saved UI state (project, worktree, window selection)

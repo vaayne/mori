@@ -32,6 +32,7 @@ enum ProxySettingsApplicator {
 
     static func apply(_ model: ProxySettingsModel, tmuxBackend: TmuxBackend) async {
         for (envName, value) in model.allEntries {
+            guard !Task.isCancelled else { return }
             do {
                 if value.isEmpty {
                     try await tmuxBackend.unsetEnvironment(name: envName)
