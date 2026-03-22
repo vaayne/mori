@@ -46,6 +46,9 @@ final class WorkspaceManager {
     /// Callback invoked when the terminal should detach (session killed / no active session).
     var onTerminalDetach: (() -> Void)?
 
+    /// Callback invoked after a tmux session is created (for post-creation setup like proxy env).
+    var onSessionCreated: (() -> Void)?
+
     /// Background coordinated polling task handle.
     private var pollingTask: Task<Void, Never>?
 
@@ -288,6 +291,7 @@ final class WorkspaceManager {
         // Create tmux session
         Task {
             _ = try? await tmuxBackend.createSession(name: sessionName, cwd: path)
+            onSessionCreated?()
             await tmuxBackend.refreshNow()
         }
 
@@ -375,6 +379,7 @@ final class WorkspaceManager {
         // Step 3: Create tmux session + apply template (partial failure tolerant)
         do {
             _ = try await tmuxBackend.createSession(name: sessionName, cwd: worktreePath)
+            onSessionCreated?()
             let applicator = TemplateApplicator(tmux: tmuxBackend)
             try await applicator.apply(
                 template: template,
@@ -614,6 +619,7 @@ final class WorkspaceManager {
 
         if !exists {
             _ = try? await tmuxBackend.createSession(name: sessionName, cwd: worktree.path)
+            onSessionCreated?()
         }
     }
 
@@ -1367,6 +1373,7 @@ final class WorkspaceManager {
         if !sessionAlive && hadWindows {
             // Session died — auto-recreate and re-attach
             _ = try? await tmuxBackend.createSession(name: sessionName, cwd: worktree.path)
+            onSessionCreated?()
             onTerminalSwitch?(sessionName, worktree.path)
         }
     }

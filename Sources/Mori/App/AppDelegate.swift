@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var worktreeCreationController: WorktreeCreationController?
     private var settingsWindowController: NSWindowController?
     private var configFile: GhosttyConfigFile?
+    private var proxyApplyTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -190,6 +191,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             terminalArea?.detach()
         }
 
+        // Wire session created: apply proxy env vars after tmux server starts
+        manager.onSessionCreated = { [weak self] in
+            self?.applyProxyToTmux()
+        }
+
         // Restore previously saved UI state (project, worktree, window selection)
         manager.restoreState()
 
@@ -228,8 +234,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             }
 
             // Apply proxy environment variables to tmux
-            let proxyModel = ProxySettingsApplicator.load()
-            await ProxySettingsApplicator.apply(proxyModel, tmuxBackend: manager.tmuxBackend)
+            self.applyProxyToTmux()
         }
     }
 
@@ -407,9 +412,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             onProxyChanged: { [weak self] newModel in
                 ProxySettingsApplicator.save(newModel)
-                if let tmuxBackend = self?.workspaceManager?.tmuxBackend {
-                    Task { await ProxySettingsApplicator.apply(newModel, tmuxBackend: tmuxBackend) }
-                }
+                self?.applyProxyToTmux()
             }
         )
 
@@ -498,6 +501,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             Task {
                 await TmuxThemeApplicator.apply(themeInfo: themeInfo, tmuxBackend: tmuxBackend)
             }
+        }
+    }
+
+    // MARK: - Proxy
+
+    /// Apply saved proxy settings to tmux, cancelling any in-flight apply.
+    private func applyProxyToTmux() {
+        proxyApplyTask?.cancel()
+        proxyApplyTask = Task { [weak self] in
+            guard let tmuxBackend = self?.workspaceManager?.tmuxBackend else { return }
+            let model = ProxySettingsApplicator.load()
+            await ProxySettingsApplicator.apply(model, tmuxBackend: tmuxBackend)
         }
     }
 
