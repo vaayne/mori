@@ -114,12 +114,22 @@
 
 /* Network / Proxy Settings */
 "Network" = "网络";
-"Set proxy environment variables for all terminal sessions managed by Mori. Both lowercase and uppercase variants (e.g. http_proxy and HTTP_PROXY) are set automatically." = "为 Mori 管理的所有终端会话设置代理环境变量。小写和大写变量（如 http_proxy 和 HTTP_PROXY）会同时自动设置。";
+"Configure proxy environment variables for all terminal sessions. Both lowercase and uppercase variants (e.g. http_proxy and HTTP_PROXY) are set automatically." = "为所有终端会话配置代理环境变量。小写和大写变量（如 http_proxy 和 HTTP_PROXY）会同时自动设置。";
+"Proxy Mode" = "代理模式";
+"System proxy" = "系统代理";
+"Read proxy settings from macOS system configuration." = "从 macOS 系统配置中读取代理设置。";
+"Manual configuration" = "手动配置";
+"Specify proxy URLs manually." = "手动指定代理地址。";
+"No proxy" = "无代理";
+"Clear all proxy environment variables." = "清除所有代理环境变量。";
 "HTTP proxy URL (e.g. http://127.0.0.1:7890)" = "HTTP 代理地址（如 http://127.0.0.1:7890）";
 "HTTPS proxy URL (e.g. http://127.0.0.1:7890)" = "HTTPS 代理地址（如 http://127.0.0.1:7890）";
+"Same as HTTP" = "与 HTTP 相同";
 "SOCKS proxy URL (e.g. socks5://127.0.0.1:7890)" = "SOCKS 代理地址（如 socks5://127.0.0.1:7890）";
+"Bypass List" = "绕过列表";
 "Comma-separated hosts to bypass proxy (e.g. localhost,127.0.0.1)" = "逗号分隔的免代理主机（如 localhost,127.0.0.1）";
-"Clear All" = "全部清除";
+"Apply" = "应用";
+"Unsaved changes" = "未保存的更改";
 "Changes apply to new terminal tabs and panes." = "更改将应用于新的终端标签页和面板。";
 
 /* Task Mode Sidebar */

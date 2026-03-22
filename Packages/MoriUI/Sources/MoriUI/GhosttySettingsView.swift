@@ -47,33 +47,61 @@ public struct GhosttySettingsModel: Equatable {
 
 // MARK: - Proxy Settings Model
 
+/// Proxy configuration mode.
+public enum ProxyMode: String, Equatable, CaseIterable {
+    case system = "system"
+    case manual = "manual"
+    case none = "none"
+}
+
 /// Represents network proxy environment variables applied to all tmux sessions.
 public struct ProxySettingsModel: Equatable {
+    public var mode: ProxyMode
     public var httpProxy: String
     public var httpsProxy: String
-    public var allProxy: String
+    public var sameForHTTPS: Bool
+    public var socksProxy: String
     public var noProxy: String
 
     public init(
+        mode: ProxyMode = .none,
         httpProxy: String = "",
         httpsProxy: String = "",
-        allProxy: String = "",
+        sameForHTTPS: Bool = true,
+        socksProxy: String = "",
         noProxy: String = ""
     ) {
+        self.mode = mode
         self.httpProxy = httpProxy
         self.httpsProxy = httpsProxy
-        self.allProxy = allProxy
+        self.sameForHTTPS = sameForHTTPS
+        self.socksProxy = socksProxy
         self.noProxy = noProxy
     }
 
-    /// The env var names and their current values, for iteration.
+    /// Resolved HTTPS proxy value (uses HTTP proxy if sameForHTTPS is on).
+    public var resolvedHTTPSProxy: String {
+        sameForHTTPS ? httpProxy : httpsProxy
+    }
+
+    /// The env var names and their resolved values for the current mode.
     public var entries: [(envName: String, value: String)] {
-        [
-            ("http_proxy", httpProxy),
-            ("https_proxy", httpsProxy),
-            ("all_proxy", allProxy),
-            ("no_proxy", noProxy),
-        ]
+        switch mode {
+        case .none:
+            return [
+                ("http_proxy", ""),
+                ("https_proxy", ""),
+                ("all_proxy", ""),
+                ("no_proxy", ""),
+            ]
+        case .system, .manual:
+            return [
+                ("http_proxy", httpProxy),
+                ("https_proxy", resolvedHTTPSProxy),
+                ("all_proxy", socksProxy),
+                ("no_proxy", noProxy),
+            ]
+        }
     }
 
     /// Also set uppercase variants (HTTP_PROXY, HTTPS_PROXY, etc.)
@@ -144,7 +172,8 @@ public struct GhosttySettingsView: View {
     @Binding var agentHooks: AgentHookModel
     var onAgentHookChanged: ((AgentHookModel) -> Void)?
     @Binding var proxySettings: ProxySettingsModel
-    var onProxyChanged: ((ProxySettingsModel) -> Void)?
+    var onProxyApply: ((ProxySettingsModel) -> Void)?
+    var onSystemProxyDetect: (() -> ProxySettingsModel)?
 
     @State private var selectedCategory: SettingsCategory = .general
 
@@ -157,7 +186,8 @@ public struct GhosttySettingsView: View {
         agentHooks: Binding<AgentHookModel> = .constant(AgentHookModel()),
         onAgentHookChanged: ((AgentHookModel) -> Void)? = nil,
         proxySettings: Binding<ProxySettingsModel> = .constant(ProxySettingsModel()),
-        onProxyChanged: ((ProxySettingsModel) -> Void)? = nil
+        onProxyApply: ((ProxySettingsModel) -> Void)? = nil,
+        onSystemProxyDetect: (() -> ProxySettingsModel)? = nil
     ) {
         self._model = model
         self.availableThemes = availableThemes
@@ -167,7 +197,8 @@ public struct GhosttySettingsView: View {
         self._agentHooks = agentHooks
         self.onAgentHookChanged = onAgentHookChanged
         self._proxySettings = proxySettings
-        self.onProxyChanged = onProxyChanged
+        self.onProxyApply = onProxyApply
+        self.onSystemProxyDetect = onSystemProxyDetect
     }
 
     public var body: some View {
@@ -261,7 +292,11 @@ public struct GhosttySettingsView: View {
                     case .keyboard: KeyboardSettingsContent(model: $model, onChanged: onChanged, ghosttyDefaults: ghosttyDefaults)
                     case .mouse: MouseSettingsContent(model: $model, onChanged: onChanged)
                     case .window: WindowSettingsContent(model: $model, onChanged: onChanged)
-                    case .network: NetworkSettingsContent(model: $proxySettings, onChanged: { onProxyChanged?(proxySettings) })
+                    case .network: NetworkSettingsContent(
+                        model: $proxySettings,
+                        onApply: { onProxyApply?(proxySettings) },
+                        onSystemProxyDetect: onSystemProxyDetect
+                    )
                     case .agents: AgentHookSettingsContent(model: $agentHooks, onChanged: { onAgentHookChanged?(agentHooks) })
                     }
                 }
@@ -1111,60 +1146,102 @@ private struct WindowSettingsContent: View {
 
 private struct NetworkSettingsContent: View {
     @Binding var model: ProxySettingsModel
-    let onChanged: () -> Void
+    let onApply: () -> Void
+    var onSystemProxyDetect: (() -> ProxySettingsModel)?
+
+    @State private var hasUnappliedChanges = false
 
     var body: some View {
-        Text(String.localized("Set proxy environment variables for all terminal sessions managed by Mori. Both lowercase and uppercase variants (e.g. http_proxy and HTTP_PROXY) are set automatically."))
+        Text(String.localized("Configure proxy environment variables for all terminal sessions. Both lowercase and uppercase variants (e.g. http_proxy and HTTP_PROXY) are set automatically."))
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
+        // Mode selector
         SettingsCard {
-            SettingRow(
-                title: "http_proxy",
-                description: .localized("HTTP proxy URL (e.g. http://127.0.0.1:7890)")
-            ) {
-                proxyField($model.httpProxy)
-            }
+            VStack(alignment: .leading, spacing: 10) {
+                Text(String.localized("Proxy Mode"))
+                    .font(.system(size: 13, weight: .semibold))
 
-            CardDivider()
-
-            SettingRow(
-                title: "https_proxy",
-                description: .localized("HTTPS proxy URL (e.g. http://127.0.0.1:7890)")
-            ) {
-                proxyField($model.httpsProxy)
-            }
-
-            CardDivider()
-
-            SettingRow(
-                title: "all_proxy",
-                description: .localized("SOCKS proxy URL (e.g. socks5://127.0.0.1:7890)")
-            ) {
-                proxyField($model.allProxy)
-            }
-
-            CardDivider()
-
-            SettingRow(
-                title: "no_proxy",
-                description: .localized("Comma-separated hosts to bypass proxy (e.g. localhost,127.0.0.1)")
-            ) {
-                proxyField($model.noProxy)
+                modeRow(.system,
+                        title: .localized("System proxy"),
+                        description: .localized("Read proxy settings from macOS system configuration."))
+                modeRow(.manual,
+                        title: .localized("Manual configuration"),
+                        description: .localized("Specify proxy URLs manually."))
+                modeRow(.none,
+                        title: .localized("No proxy"),
+                        description: .localized("Clear all proxy environment variables."))
             }
         }
 
+        // Proxy fields (shown for system and manual modes)
+        if model.mode != .none {
+            SettingsCard {
+                SettingRow(
+                    title: "HTTP Proxy",
+                    description: .localized("HTTP proxy URL (e.g. http://127.0.0.1:7890)")
+                ) {
+                    proxyField($model.httpProxy, disabled: model.mode == .system)
+                }
+
+                CardDivider()
+
+                SettingRow(
+                    title: "HTTPS Proxy",
+                    description: .localized("HTTPS proxy URL (e.g. http://127.0.0.1:7890)")
+                ) {
+                    if model.mode == .manual {
+                        VStack(alignment: .trailing, spacing: 4) {
+                            proxyField(
+                                model.sameForHTTPS ? .constant(model.httpProxy) : $model.httpsProxy,
+                                disabled: model.sameForHTTPS
+                            )
+                            Toggle(String.localized("Same as HTTP"), isOn: $model.sameForHTTPS)
+                                .font(.system(size: 11))
+                                .toggleStyle(.checkbox)
+                                .onChange(of: model.sameForHTTPS) { _, _ in hasUnappliedChanges = true }
+                        }
+                    } else {
+                        proxyField($model.httpsProxy, disabled: true)
+                    }
+                }
+
+                CardDivider()
+
+                SettingRow(
+                    title: "SOCKS Proxy",
+                    description: .localized("SOCKS proxy URL (e.g. socks5://127.0.0.1:7890)")
+                ) {
+                    proxyField($model.socksProxy, disabled: model.mode == .system)
+                }
+
+                CardDivider()
+
+                SettingRow(
+                    title: .localized("Bypass List"),
+                    description: .localized("Comma-separated hosts to bypass proxy (e.g. localhost,127.0.0.1)")
+                ) {
+                    proxyField($model.noProxy, disabled: model.mode == .system)
+                }
+            }
+        }
+
+        // Apply bar
         SettingsCard {
             HStack {
-                Button(String.localized("Clear All")) {
-                    model.httpProxy = ""
-                    model.httpsProxy = ""
-                    model.allProxy = ""
-                    model.noProxy = ""
-                    onChanged()
+                Button(String.localized("Apply")) {
+                    onApply()
+                    hasUnappliedChanges = false
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
+                .disabled(!hasUnappliedChanges)
+
+                if hasUnappliedChanges {
+                    Text(String.localized("Unsaved changes"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange)
+                }
 
                 Spacer()
 
@@ -1175,13 +1252,56 @@ private struct NetworkSettingsContent: View {
         }
     }
 
-    private func proxyField(_ value: Binding<String>) -> some View {
+    // MARK: - Components
+
+    private func modeRow(_ mode: ProxyMode, title: String, description: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: model.mode == mode ? "circle.inset.filled" : "circle")
+                .foregroundStyle(model.mode == mode ? Color.accentColor : .secondary)
+                .font(.system(size: 14))
+                .frame(width: 20, height: 20)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: model.mode == mode ? .semibold : .regular))
+                Text(description)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            let previousMode = model.mode
+            model.mode = mode
+            if mode == .system, let detect = onSystemProxyDetect {
+                let system = detect()
+                model.httpProxy = system.httpProxy
+                model.httpsProxy = system.httpsProxy
+                model.socksProxy = system.socksProxy
+                model.noProxy = system.noProxy
+                model.sameForHTTPS = false
+            } else if mode == .none && previousMode != .none {
+                model.httpProxy = ""
+                model.httpsProxy = ""
+                model.socksProxy = ""
+                model.noProxy = ""
+            }
+            hasUnappliedChanges = true
+        }
+    }
+
+    private func proxyField(_ value: Binding<String>, disabled: Bool = false) -> some View {
         TextField("", text: value)
             .textFieldStyle(.roundedBorder)
             .frame(width: 240)
             .font(.system(size: 12, design: .monospaced))
-            .onSubmit { onChanged() }
-            .onChange(of: value.wrappedValue) { _, _ in onChanged() }
+            .disabled(disabled)
+            .opacity(disabled ? 0.6 : 1.0)
+            .onChange(of: value.wrappedValue) { _, _ in
+                if !disabled { hasUnappliedChanges = true }
+            }
     }
 }
 

@@ -412,9 +412,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             onAgentHookChanged: { newModel in
                 Self.applyAgentHookChanges(newModel)
             },
-            onProxyChanged: { [weak self] newModel in
+            onProxyApply: { [weak self] newModel in
                 ProxySettingsApplicator.save(newModel)
                 self?.applyProxyToTmux()
+            },
+            onSystemProxyDetect: {
+                ProxySettingsApplicator.readSystemProxy()
             }
         )
 
@@ -1024,7 +1027,8 @@ private struct SettingsWindowContent: View {
     var onChanged: (GhosttySettingsModel) -> Void
     var onOpenConfigFile: () -> Void
     var onAgentHookChanged: (AgentHookModel) -> Void
-    var onProxyChanged: (ProxySettingsModel) -> Void
+    var onProxyApply: (ProxySettingsModel) -> Void
+    var onSystemProxyDetect: (() -> ProxySettingsModel)?
 
     init(
         initial: GhosttySettingsModel,
@@ -1035,7 +1039,8 @@ private struct SettingsWindowContent: View {
         onChanged: @escaping (GhosttySettingsModel) -> Void,
         onOpenConfigFile: @escaping () -> Void,
         onAgentHookChanged: @escaping (AgentHookModel) -> Void = { _ in },
-        onProxyChanged: @escaping (ProxySettingsModel) -> Void = { _ in }
+        onProxyApply: @escaping (ProxySettingsModel) -> Void = { _ in },
+        onSystemProxyDetect: (() -> ProxySettingsModel)? = nil
     ) {
         self._model = State(initialValue: initial)
         self._agentHooks = State(initialValue: initialAgentHooks)
@@ -1045,7 +1050,8 @@ private struct SettingsWindowContent: View {
         self.onChanged = onChanged
         self.onOpenConfigFile = onOpenConfigFile
         self.onAgentHookChanged = onAgentHookChanged
-        self.onProxyChanged = onProxyChanged
+        self.onProxyApply = onProxyApply
+        self.onSystemProxyDetect = onSystemProxyDetect
     }
 
     var body: some View {
@@ -1058,7 +1064,8 @@ private struct SettingsWindowContent: View {
             agentHooks: $agentHooks,
             onAgentHookChanged: onAgentHookChanged,
             proxySettings: $proxySettings,
-            onProxyChanged: onProxyChanged
+            onProxyApply: onProxyApply,
+            onSystemProxyDetect: onSystemProxyDetect
         )
     }
 }
