@@ -45,6 +45,45 @@ public struct GhosttySettingsModel: Equatable {
     }
 }
 
+// MARK: - Proxy Settings Model
+
+/// Represents network proxy environment variables applied to all tmux sessions.
+public struct ProxySettingsModel: Equatable {
+    public var httpProxy: String
+    public var httpsProxy: String
+    public var allProxy: String
+    public var noProxy: String
+
+    public init(
+        httpProxy: String = "",
+        httpsProxy: String = "",
+        allProxy: String = "",
+        noProxy: String = ""
+    ) {
+        self.httpProxy = httpProxy
+        self.httpsProxy = httpsProxy
+        self.allProxy = allProxy
+        self.noProxy = noProxy
+    }
+
+    /// The env var names and their current values, for iteration.
+    public var entries: [(envName: String, value: String)] {
+        [
+            ("http_proxy", httpProxy),
+            ("https_proxy", httpsProxy),
+            ("all_proxy", allProxy),
+            ("no_proxy", noProxy),
+        ]
+    }
+
+    /// Also set uppercase variants (HTTP_PROXY, HTTPS_PROXY, etc.)
+    public var allEntries: [(envName: String, value: String)] {
+        entries.flatMap { entry in
+            [entry, (entry.envName.uppercased(), entry.value)]
+        }
+    }
+}
+
 // MARK: - Agent Hook Model
 
 /// Represents the enable/disable state of agent hooks.
@@ -70,6 +109,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     case keyboard = "Keyboard"
     case mouse = "Mouse"
     case window = "Window"
+    case network = "Network"
     case agents = "Agent Hooks"
 
     var id: String { rawValue }
@@ -87,6 +127,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .keyboard: return "keyboard"
         case .mouse: return "computermouse"
         case .window: return "macwindow"
+        case .network: return "network"
         case .agents: return "cpu"
         }
     }
@@ -102,6 +143,8 @@ public struct GhosttySettingsView: View {
     var onOpenConfigFile: () -> Void
     @Binding var agentHooks: AgentHookModel
     var onAgentHookChanged: ((AgentHookModel) -> Void)?
+    @Binding var proxySettings: ProxySettingsModel
+    var onProxyChanged: ((ProxySettingsModel) -> Void)?
 
     @State private var selectedCategory: SettingsCategory = .general
 
@@ -112,7 +155,9 @@ public struct GhosttySettingsView: View {
         onChanged: @escaping () -> Void,
         onOpenConfigFile: @escaping () -> Void,
         agentHooks: Binding<AgentHookModel> = .constant(AgentHookModel()),
-        onAgentHookChanged: ((AgentHookModel) -> Void)? = nil
+        onAgentHookChanged: ((AgentHookModel) -> Void)? = nil,
+        proxySettings: Binding<ProxySettingsModel> = .constant(ProxySettingsModel()),
+        onProxyChanged: ((ProxySettingsModel) -> Void)? = nil
     ) {
         self._model = model
         self.availableThemes = availableThemes
@@ -121,6 +166,8 @@ public struct GhosttySettingsView: View {
         self.onOpenConfigFile = onOpenConfigFile
         self._agentHooks = agentHooks
         self.onAgentHookChanged = onAgentHookChanged
+        self._proxySettings = proxySettings
+        self.onProxyChanged = onProxyChanged
     }
 
     public var body: some View {
@@ -214,6 +261,7 @@ public struct GhosttySettingsView: View {
                     case .keyboard: KeyboardSettingsContent(model: $model, onChanged: onChanged, ghosttyDefaults: ghosttyDefaults)
                     case .mouse: MouseSettingsContent(model: $model, onChanged: onChanged)
                     case .window: WindowSettingsContent(model: $model, onChanged: onChanged)
+                    case .network: NetworkSettingsContent(model: $proxySettings, onChanged: { onProxyChanged?(proxySettings) })
                     case .agents: AgentHookSettingsContent(model: $agentHooks, onChanged: { onAgentHookChanged?(agentHooks) })
                     }
                 }
@@ -1056,6 +1104,84 @@ private struct WindowSettingsContent: View {
                     .onChange(of: model.windowPaddingBalance) { _, _ in onChanged() }
             }
         }
+    }
+}
+
+// MARK: - Network Settings
+
+private struct NetworkSettingsContent: View {
+    @Binding var model: ProxySettingsModel
+    let onChanged: () -> Void
+
+    var body: some View {
+        Text(String.localized("Set proxy environment variables for all terminal sessions managed by Mori. Both lowercase and uppercase variants (e.g. http_proxy and HTTP_PROXY) are set automatically."))
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+        SettingsCard {
+            SettingRow(
+                title: "http_proxy",
+                description: .localized("HTTP proxy URL (e.g. http://127.0.0.1:7890)")
+            ) {
+                proxyField($model.httpProxy)
+            }
+
+            CardDivider()
+
+            SettingRow(
+                title: "https_proxy",
+                description: .localized("HTTPS proxy URL (e.g. http://127.0.0.1:7890)")
+            ) {
+                proxyField($model.httpsProxy)
+            }
+
+            CardDivider()
+
+            SettingRow(
+                title: "all_proxy",
+                description: .localized("SOCKS proxy URL (e.g. socks5://127.0.0.1:7890)")
+            ) {
+                proxyField($model.allProxy)
+            }
+
+            CardDivider()
+
+            SettingRow(
+                title: "no_proxy",
+                description: .localized("Comma-separated hosts to bypass proxy (e.g. localhost,127.0.0.1)")
+            ) {
+                proxyField($model.noProxy)
+            }
+        }
+
+        SettingsCard {
+            HStack {
+                Button(String.localized("Clear All")) {
+                    model.httpProxy = ""
+                    model.httpsProxy = ""
+                    model.allProxy = ""
+                    model.noProxy = ""
+                    onChanged()
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Text(String.localized("Changes apply to new terminal tabs and panes."))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func proxyField(_ value: Binding<String>) -> some View {
+        TextField("", text: value)
+            .textFieldStyle(.roundedBorder)
+            .frame(width: 240)
+            .font(.system(size: 12, design: .monospaced))
+            .onSubmit { onChanged() }
+            .onChange(of: value.wrappedValue) { _, _ in onChanged() }
     }
 }
 

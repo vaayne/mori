@@ -226,6 +226,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                     tmuxBackend: manager.tmuxBackend
                 )
             }
+
+            // Apply proxy environment variables to tmux
+            let proxyModel = ProxySettingsApplicator.load()
+            await ProxySettingsApplicator.apply(proxyModel, tmuxBackend: manager.tmuxBackend)
         }
     }
 
@@ -388,6 +392,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 codexEnabled: AgentHookConfigurator.isCodexHookInstalled(),
                 piEnabled: AgentHookConfigurator.isPiExtensionInstalled()
             ),
+            initialProxy: ProxySettingsApplicator.load(),
             onChanged: { [weak self] newModel in
                 guard let self else { return }
                 self.writeSettingsModel(newModel, to: cf)
@@ -399,6 +404,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             onAgentHookChanged: { newModel in
                 Self.applyAgentHookChanges(newModel)
+            },
+            onProxyChanged: { [weak self] newModel in
+                ProxySettingsApplicator.save(newModel)
+                if let tmuxBackend = self?.workspaceManager?.tmuxBackend {
+                    Task { await ProxySettingsApplicator.apply(newModel, tmuxBackend: tmuxBackend) }
+                }
             }
         )
 
@@ -990,28 +1001,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 private struct SettingsWindowContent: View {
     @State var model: GhosttySettingsModel
     @State var agentHooks: AgentHookModel
+    @State var proxySettings: ProxySettingsModel
     let availableThemes: [String]
     let ghosttyDefaults: [String]
     var onChanged: (GhosttySettingsModel) -> Void
     var onOpenConfigFile: () -> Void
     var onAgentHookChanged: (AgentHookModel) -> Void
+    var onProxyChanged: (ProxySettingsModel) -> Void
 
     init(
         initial: GhosttySettingsModel,
         availableThemes: [String],
         ghosttyDefaults: [String] = [],
         initialAgentHooks: AgentHookModel = AgentHookModel(),
+        initialProxy: ProxySettingsModel = ProxySettingsModel(),
         onChanged: @escaping (GhosttySettingsModel) -> Void,
         onOpenConfigFile: @escaping () -> Void,
-        onAgentHookChanged: @escaping (AgentHookModel) -> Void = { _ in }
+        onAgentHookChanged: @escaping (AgentHookModel) -> Void = { _ in },
+        onProxyChanged: @escaping (ProxySettingsModel) -> Void = { _ in }
     ) {
         self._model = State(initialValue: initial)
         self._agentHooks = State(initialValue: initialAgentHooks)
+        self._proxySettings = State(initialValue: initialProxy)
         self.availableThemes = availableThemes
         self.ghosttyDefaults = ghosttyDefaults
         self.onChanged = onChanged
         self.onOpenConfigFile = onOpenConfigFile
         self.onAgentHookChanged = onAgentHookChanged
+        self.onProxyChanged = onProxyChanged
     }
 
     var body: some View {
@@ -1022,7 +1039,9 @@ private struct SettingsWindowContent: View {
             onChanged: { onChanged(model) },
             onOpenConfigFile: onOpenConfigFile,
             agentHooks: $agentHooks,
-            onAgentHookChanged: onAgentHookChanged
+            onAgentHookChanged: onAgentHookChanged,
+            proxySettings: $proxySettings,
+            onProxyChanged: onProxyChanged
         )
     }
 }

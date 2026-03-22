@@ -264,6 +264,14 @@ public actor TmuxBackend: TmuxControlling {
         _ = try await runner.run("select-layout", "-t", sessionId, "tiled")
     }
 
+    public func setEnvironment(name: String, value: String) async throws {
+        _ = try await runner.run("set-environment", "-g", name, value)
+    }
+
+    public func unsetEnvironment(name: String) async throws {
+        _ = try await runner.run("set-environment", "-gu", name)
+    }
+
     public func refreshClients() async throws {
         // List all connected clients and refresh each one.
         // Bare `refresh-client` with no target only works from inside a tmux session.

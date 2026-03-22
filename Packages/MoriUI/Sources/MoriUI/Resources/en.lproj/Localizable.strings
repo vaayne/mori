@@ -112,6 +112,16 @@
 "Window" = "Window";
 "Window %lld" = "Window %lld";
 
+/* Network / Proxy Settings */
+"Network" = "Network";
+"Set proxy environment variables for all terminal sessions managed by Mori. Both lowercase and uppercase variants (e.g. http_proxy and HTTP_PROXY) are set automatically." = "Set proxy environment variables for all terminal sessions managed by Mori. Both lowercase and uppercase variants (e.g. http_proxy and HTTP_PROXY) are set automatically.";
+"HTTP proxy URL (e.g. http://127.0.0.1:7890)" = "HTTP proxy URL (e.g. http://127.0.0.1:7890)";
+"HTTPS proxy URL (e.g. http://127.0.0.1:7890)" = "HTTPS proxy URL (e.g. http://127.0.0.1:7890)";
+"SOCKS proxy URL (e.g. socks5://127.0.0.1:7890)" = "SOCKS proxy URL (e.g. socks5://127.0.0.1:7890)";
+"Comma-separated hosts to bypass proxy (e.g. localhost,127.0.0.1)" = "Comma-separated hosts to bypass proxy (e.g. localhost,127.0.0.1)";
+"Clear All" = "Clear All";
+"Changes apply to new terminal tabs and panes." = "Changes apply to new terminal tabs and panes.";
+
 /* Task Mode Sidebar */
 "Tasks" = "Tasks";
 "Workspaces" = "Workspaces";
