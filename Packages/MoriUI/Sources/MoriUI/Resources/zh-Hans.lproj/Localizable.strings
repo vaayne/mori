@@ -130,7 +130,7 @@
 "Comma-separated hosts to bypass proxy (e.g. localhost,127.0.0.1)" = "逗号分隔的免代理主机（如 localhost,127.0.0.1）";
 "Apply" = "应用";
 "Unsaved changes" = "未保存的更改";
-"Changes apply to new terminal tabs and panes." = "更改将应用于新的终端标签页和面板。";
+"Proxy changes only affect new tabs and panes. Existing shells keep their current environment." = "代理更改仅影响新的标签页和面板。已有的 shell 会保留当前环境变量。";
 
 /* Task Mode Sidebar */
 "Tasks" = "任务";

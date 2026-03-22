@@ -1245,7 +1245,7 @@ private struct NetworkSettingsContent: View {
 
                 Spacer()
 
-                Text(String.localized("Changes apply to new terminal tabs and panes."))
+                Text(String.localized("Proxy changes only affect new tabs and panes. Existing shells keep their current environment."))
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             }

@@ -130,7 +130,7 @@
 "Comma-separated hosts to bypass proxy (e.g. localhost,127.0.0.1)" = "Comma-separated hosts to bypass proxy (e.g. localhost,127.0.0.1)";
 "Apply" = "Apply";
 "Unsaved changes" = "Unsaved changes";
-"Changes apply to new terminal tabs and panes." = "Changes apply to new terminal tabs and panes.";
+"Proxy changes only affect new tabs and panes. Existing shells keep their current environment." = "Proxy changes only affect new tabs and panes. Existing shells keep their current environment.";
 
 /* Task Mode Sidebar */
 "Tasks" = "Tasks";
