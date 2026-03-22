@@ -51,6 +51,44 @@ run = "cd Packages/MoriIPC && swift run MoriIPCTests"
 description = "Build GhosttyKit XCFramework from source"
 run = "bash scripts/build-ghostty.sh"
 
+[tasks."ghostty:sync"]
+description = "Sync ghostty fork with upstream and update submodule commit"
+run = '''
+set -euo pipefail
+
+cd vendor/ghostty
+
+# Ensure remotes are set up
+if ! git remote get-url upstream &>/dev/null; then
+  echo "Adding upstream remote..."
+  git remote add upstream https://github.com/ghostty-org/ghostty.git
+fi
+
+BRANCH=$(git branch --show-current)
+if [ -z "$BRANCH" ]; then
+  echo "Error: ghostty submodule is in detached HEAD state."
+  echo "Check out your working branch first: cd vendor/ghostty && git checkout mori/remote-backend"
+  exit 1
+fi
+
+echo "On branch: $BRANCH"
+echo "Fetching upstream..."
+git fetch upstream
+
+echo "Rebasing $BRANCH onto upstream/main..."
+git rebase upstream/main
+
+echo "Pushing to fork..."
+git push origin "$BRANCH" --force-with-lease
+
+cd ../..
+echo "Updating submodule commit in mori..."
+git add vendor/ghostty
+echo ""
+echo "Done. ghostty synced to latest upstream."
+echo "Run 'git commit' to record the submodule update."
+'''
+
 [tasks.bundle]
 description = "Build release and create Mori.app bundle"
 run = "bash scripts/bundle.sh"
