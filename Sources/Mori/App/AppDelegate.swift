@@ -196,6 +196,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             guard let tmuxBackend = self?.workspaceManager?.tmuxBackend else { return }
             let model = ProxySettingsApplicator.load()
             await ProxySettingsApplicator.apply(model, tmuxBackend: tmuxBackend)
+
+            // Apply theme (including status bar off) to the newly created session
+            if let terminalArea = self?.terminalAreaController {
+                await TmuxThemeApplicator.apply(
+                    themeInfo: terminalArea.themeInfo,
+                    tmuxBackend: tmuxBackend
+                )
+            }
         }
 
         // Restore previously saved UI state (project, worktree, window selection)
