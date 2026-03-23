@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mori send` / `mori new-window` now route to the selected worktree's endpoint backend and use raw tmux target IDs
 - Persisted selected window IDs now migrate from legacy raw tmux IDs (e.g. `@1`) to endpoint-namespaced IDs on first restore
 - Remote tmux commands now augment PATH (`/opt/homebrew/bin`, `/usr/local/bin`) to support non-default remote installs
+- Added `Update Remote Credentials…` action in project menus so SSH auth can be corrected without re-adding the project
 
 ## [0.1.0] - 2026-03-20
 

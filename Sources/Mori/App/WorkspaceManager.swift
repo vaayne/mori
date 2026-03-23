@@ -8,6 +8,7 @@ import MoriTmux
 /// Errors specific to WorkspaceManager operations.
 enum WorkspaceError: Error, LocalizedError {
     case projectNotFound
+    case projectNotRemote
     case branchNameEmpty
     case branchNameInvalid(String)
     case remoteHostEmpty
@@ -20,6 +21,8 @@ enum WorkspaceError: Error, LocalizedError {
         switch self {
         case .projectNotFound:
             return "Project not found."
+        case .projectNotRemote:
+            return "Project is not configured as a remote SSH project."
         case .branchNameEmpty:
             return "Branch name cannot be empty."
         case .branchNameInvalid(let name):
@@ -175,12 +178,22 @@ final class WorkspaceManager {
         return worktree.resolvedLocation
     }
 
+    private func backendCacheKey(for ssh: SSHWorkspaceLocation) -> String {
+        "ssh:\(ssh.endpointKey):\(ssh.authMethod.rawValue)"
+    }
+
+    private func invalidateRemoteBackends(for ssh: SSHWorkspaceLocation) {
+        let key = backendCacheKey(for: ssh)
+        remoteTmuxBackends.removeValue(forKey: key)
+        remoteGitBackends.removeValue(forKey: key)
+    }
+
     private func tmuxBackend(for location: WorkspaceLocation) -> TmuxBackend {
         switch location {
         case .local:
             return tmuxBackend
         case .ssh(let ssh):
-            let key = "ssh:\(ssh.endpointKey):\(ssh.authMethod.rawValue)"
+            let key = backendCacheKey(for: ssh)
             if let cached = remoteTmuxBackends[key] {
                 return cached
             }
@@ -212,7 +225,7 @@ final class WorkspaceManager {
         case .local:
             return gitBackend
         case .ssh(let ssh):
-            let key = "ssh:\(ssh.endpointKey):\(ssh.authMethod.rawValue)"
+            let key = backendCacheKey(for: ssh)
             if let cached = remoteGitBackends[key] {
                 return cached
             }
@@ -514,6 +527,67 @@ final class WorkspaceManager {
             path: trimmedPath,
             location: location
         )
+    }
+
+    /// Update authentication settings for an existing remote project.
+    /// Supports switching between public key and password auth without re-adding the project.
+    func updateRemoteAuth(
+        projectId: UUID,
+        authMethod: SSHAuthMethod,
+        password: String? = nil
+    ) async throws {
+        guard let projectIndex = appState.projects.firstIndex(where: { $0.id == projectId }) else {
+            throw WorkspaceError.projectNotFound
+        }
+        let project = appState.projects[projectIndex]
+        guard case .ssh(let currentSSH) = location(for: project) else {
+            throw WorkspaceError.projectNotRemote
+        }
+
+        if authMethod == .password, (password?.isEmpty ?? true) {
+            throw WorkspaceError.remotePasswordEmpty
+        }
+
+        var updatedSSH = currentSSH
+        updatedSSH.authMethod = authMethod
+
+        // Prime/validate credentials before applying model changes.
+        if authMethod == .password {
+            try await SSHBootstrapper.bootstrapPasswordSession(
+                ssh: updatedSSH,
+                password: password
+            )
+            do {
+                try SSHCredentialStore.savePassword(password ?? "", for: updatedSSH)
+            } catch {
+                throw WorkspaceError.remotePasswordPersistFailed(error.localizedDescription)
+            }
+        } else {
+            SSHCredentialStore.deletePassword(for: currentSSH)
+        }
+
+        // Invalidate both old and new backend cache entries so future operations
+        // pick up fresh auth options/password providers.
+        invalidateRemoteBackends(for: currentSSH)
+        invalidateRemoteBackends(for: updatedSSH)
+
+        let updatedLocation = WorkspaceLocation.ssh(updatedSSH)
+
+        // Persist project location
+        appState.projects[projectIndex].location = updatedLocation
+        try projectRepo.save(appState.projects[projectIndex])
+
+        // Persist all worktrees under this project to keep endpoint auth consistent.
+        for i in appState.worktrees.indices where appState.worktrees[i].projectId == projectId {
+            appState.worktrees[i].location = updatedLocation
+            try worktreeRepo.save(appState.worktrees[i])
+        }
+
+        // Reconnect selected worktree if it belongs to this project so terminal
+        // immediately uses the updated credentials.
+        if let selected = selectedWorktree, selected.projectId == projectId {
+            await reconnectCurrentSession()
+        }
     }
 
     // MARK: - Create Worktree

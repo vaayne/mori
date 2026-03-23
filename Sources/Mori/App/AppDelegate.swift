@@ -132,6 +132,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                     await manager.removeProject(projectId: projectId)
                 }
             },
+            onEditRemoteProject: { [weak self] projectId in
+                self?.showEditRemoteCredentialsPanel(projectId: projectId)
+            },
             onCloseWindow: { [weak manager] windowId in
                 guard let manager else { return }
                 Task { @MainActor in
@@ -370,6 +373,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 let alert = NSAlert()
                 alert.alertStyle = .warning
                 alert.messageText = .localized("Failed to add project")
+                alert.informativeText = error.localizedDescription
+                alert.runModal()
+            }
+        }
+    }
+
+    private func showEditRemoteCredentialsPanel(projectId: UUID) {
+        guard let state = appState,
+              let project = state.projects.first(where: { $0.id == projectId }),
+              case .ssh(let ssh) = project.resolvedLocation,
+              let window = mainWindowController?.window else { return }
+
+        let methodAlert = NSAlert()
+        methodAlert.alertStyle = .informational
+        methodAlert.messageText = .localized("Update Remote Credentials")
+        methodAlert.informativeText = .localized("Host: \(ssh.target)")
+        methodAlert.addButton(withTitle: .localized("SSH Key / Agent"))
+        methodAlert.addButton(withTitle: .localized("Password"))
+        methodAlert.addButton(withTitle: .localized("Cancel"))
+
+        methodAlert.beginSheetModal(for: window) { [weak self] response in
+            guard let self else { return }
+            switch response {
+            case .alertFirstButtonReturn:
+                self.applyRemoteAuthUpdate(projectId: projectId, authMethod: .publicKey, password: nil)
+            case .alertSecondButtonReturn:
+                self.promptForRemotePassword(projectId: projectId, hostDisplay: ssh.target)
+            default:
+                break
+            }
+        }
+    }
+
+    private func promptForRemotePassword(projectId: UUID, hostDisplay: String) {
+        guard let window = mainWindowController?.window else { return }
+
+        let passwordField = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        passwordField.placeholderString = .localized("Password")
+
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = .localized("Password Authentication")
+        alert.informativeText = .localized("Enter SSH password for \(hostDisplay)")
+        alert.accessoryView = passwordField
+        alert.addButton(withTitle: .localized("Save & Reconnect"))
+        alert.addButton(withTitle: .localized("Cancel"))
+
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn else { return }
+            let password = passwordField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            self?.applyRemoteAuthUpdate(projectId: projectId, authMethod: .password, password: password)
+        }
+    }
+
+    private func applyRemoteAuthUpdate(
+        projectId: UUID,
+        authMethod: SSHAuthMethod,
+        password: String?
+    ) {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in
+            do {
+                try await manager.updateRemoteAuth(
+                    projectId: projectId,
+                    authMethod: authMethod,
+                    password: password
+                )
+            } catch {
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = .localized("Failed to update remote credentials")
                 alert.informativeText = error.localizedDescription
                 alert.runModal()
             }
