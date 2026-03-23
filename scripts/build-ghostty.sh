@@ -2,7 +2,10 @@
 # Build GhosttyKit XCFramework from Ghostty source.
 # Requires: zig 0.15.2 (installed via mise)
 #
-# Usage: bash scripts/build-ghostty.sh [--clean]
+# Usage: bash scripts/build-ghostty.sh [--clean] [--native]
+#
+# By default, builds a universal XCFramework (macOS + iOS + iOS Simulator).
+# Use --native to build macOS-only (when iphoneos SDK is unavailable).
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -18,10 +21,27 @@ has_valid_xcframework() {
     [[ -n "$static_lib" ]]
 }
 
-# Clean mode: remove built artifacts
-if [[ "${1:-}" == "--clean" ]]; then
-    echo "Cleaning Ghostty build artifacts..."
-    rm -rf "$XCFRAMEWORK" "$RESOURCES_DIR"
+# Parse arguments
+BUILD_TARGET="universal"
+for arg in "$@"; do
+    case "$arg" in
+        --clean)
+            echo "Cleaning Ghostty build artifacts..."
+            rm -rf "$XCFRAMEWORK" "$RESOURCES_DIR"
+            ;;
+        --native)
+            BUILD_TARGET="native"
+            ;;
+    esac
+done
+
+# Auto-detect: fall back to native if iphoneos SDK is missing
+if [[ "$BUILD_TARGET" == "universal" ]]; then
+    if ! xcrun -sdk iphoneos --show-sdk-path &>/dev/null; then
+        echo "Warning: iphoneos SDK not found. Falling back to native (macOS-only) build."
+        echo "Install Xcode.app with iOS platform support for universal builds."
+        BUILD_TARGET="native"
+    fi
 fi
 
 # Check submodule is initialized
@@ -58,21 +78,22 @@ if ! xcrun -sdk macosx --find metal >/dev/null 2>&1; then
     xcodebuild -downloadComponent MetalToolchain
 fi
 
-# Patch: skip iOS/iOS Simulator builds when using native target.
-# Ghostty's GhosttyXCFramework.zig eagerly initializes iOS targets even
-# when xcframework-target=native. This fails without Xcode.app (needs iphoneos SDK).
-# The patch moves iOS init inside the universal branch only.
+# Patch GhosttyXCFramework.zig for native-only builds.
+# When building universal, the upstream file works as-is (it already handles both targets).
+# When building native, we apply a patch that skips iOS target initialization
+# (which fails without iphoneos SDK).
 XCFW_ZIG="$GHOSTTY_DIR/src/build/GhosttyXCFramework.zig"
-restore_native_patch() {
+restore_patch() {
     if grep -q "MORI_PATCHED" "$XCFW_ZIG" 2>/dev/null; then
         git -C "$GHOSTTY_DIR" checkout -- src/build/GhosttyXCFramework.zig >/dev/null 2>&1 || true
     fi
 }
-trap restore_native_patch EXIT
+trap restore_patch EXIT
 
-if ! grep -q "MORI_PATCHED" "$XCFW_ZIG" 2>/dev/null; then
-    echo "Applying native-only build patch..."
-    cat > "$XCFW_ZIG" << 'ZIGEOF'
+if [[ "$BUILD_TARGET" == "native" ]]; then
+    if ! grep -q "MORI_PATCHED" "$XCFW_ZIG" 2>/dev/null; then
+        echo "Applying native-only build patch..."
+        cat > "$XCFW_ZIG" << 'ZIGEOF'
 // MORI_PATCHED: skip iOS builds for native-only target
 const GhosttyXCFramework = @This();
 
@@ -170,18 +191,18 @@ pub fn addStepDependencies(
     other_step.dependOn(self.xcframework.step);
 }
 ZIGEOF
-    echo "Patch applied."
+        echo "Patch applied."
+    fi
 fi
 
-# Clear zig build cache to pick up patched file
+# Clear zig build cache to ensure clean build
 rm -rf "$GHOSTTY_DIR/.zig-cache"
 
-# Build XCFramework (native macOS only)
-echo "Building GhosttyKit XCFramework (this may take a few minutes)..."
+echo "Building GhosttyKit XCFramework ($BUILD_TARGET) — this may take a few minutes..."
 zig build \
     -Demit-xcframework=true \
     -Demit-macos-app=false \
-    -Dxcframework-target=native \
+    -Dxcframework-target="$BUILD_TARGET" \
     -Dapp-runtime=none \
     -Doptimize=ReleaseFast
 
@@ -205,8 +226,14 @@ rm -rf "$XCFRAMEWORK"
 cp -R "$BUILD_OUTPUT" "$XCFRAMEWORK"
 
 echo "GhosttyKit.xcframework built successfully at $XCFRAMEWORK"
-# Show module map to confirm structure
-find "$XCFRAMEWORK" -name "module.modulemap" -exec echo "Module map:" \; -exec cat {} \; 2>/dev/null || true
+
+# Verify slices
+SLICE_COUNT=$(find "$XCFRAMEWORK" -type f -name "*.a" | wc -l | tr -d ' ')
+echo "  slices: $SLICE_COUNT"
+if [[ "$BUILD_TARGET" == "universal" && "$SLICE_COUNT" -lt 3 ]]; then
+    echo "Warning: expected 3 slices (macOS, iOS, iOS Simulator) but found $SLICE_COUNT"
+fi
+find "$XCFRAMEWORK" -type f -name "*.a" -exec echo "    {}" \;
 
 # Copy resources (terminfo + themes + shell-integration) for app bundling
 SHARE_DIR="$GHOSTTY_DIR/zig-out/share"
