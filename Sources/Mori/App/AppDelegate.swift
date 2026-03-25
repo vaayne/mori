@@ -578,30 +578,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if isEnabled {
             let relayURL = state.relayURL
 
+            // Fetch pairing token synchronously (quick HTTP call) so QR shows immediately
+            let token: String
+            do {
+                token = try Self.requestPairingTokenSync(relayURL: relayURL)
+            } catch {
+                state.status = .error(error.localizedDescription)
+                return RemoteAccessModel(
+                    relayURL: relayURL,
+                    isEnabled: false,
+                    statusText: "Failed to get pairing token: \(error.localizedDescription)",
+                    pairingURI: nil,
+                    qrCodePNGData: nil,
+                    isConnected: false
+                )
+            }
+
+            let uri = RemoteAccessManager.pairingURI(relayURL: relayURL, token: token)
+            let qrData = RemoteAccessManager.generateQRCodePNG(from: uri)
+
+            state.pairingToken = token
+            state.pairingURI = uri
+            state.qrCodePNGData = qrData
             state.status = .connecting
             state.isEnabled = true
 
-            // Request a pairing token from the relay, then connect
+            // Start relay connection asynchronously
             Task {
                 do {
-                    let token = try await Self.requestPairingToken(relayURL: relayURL)
-                    let uri = RemoteAccessManager.pairingURI(relayURL: relayURL, token: token)
-                    let qrData = RemoteAccessManager.generateQRCodePNG(from: uri)
-
-                    await MainActor.run {
-                        state.pairingToken = token
-                        state.pairingURI = uri
-                        state.qrCodePNGData = qrData
-                    }
-
                     try await manager.start(relayURL: relayURL, token: token)
                 } catch {
                     await MainActor.run {
                         state.status = .error(error.localizedDescription)
                         state.isEnabled = false
-                        state.pairingToken = nil
-                        state.pairingURI = nil
-                        state.qrCodePNGData = nil
                     }
                 }
             }
@@ -610,8 +619,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 relayURL: relayURL,
                 isEnabled: true,
                 statusText: RemoteStatus.connecting.displayText,
-                pairingURI: nil,
-                qrCodePNGData: nil,
+                pairingURI: uri,
+                qrCodePNGData: qrData,
                 isConnected: false
             )
         } else {
@@ -633,6 +642,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 qrCodePNGData: nil,
                 isConnected: false
             )
+        }
+    }
+
+    /// Request a pairing token synchronously from the relay's POST /pair endpoint.
+    private static func requestPairingTokenSync(relayURL: String) throws -> String {
+        guard var components = URLComponents(string: relayURL) else {
+            throw RemoteAccessError.invalidURL(relayURL)
+        }
+        components.scheme = components.scheme == "wss" ? "https" : "http"
+        components.path = "/pair"
+        components.queryItems = nil
+
+        guard let url = components.url else {
+            throw RemoteAccessError.invalidURL(relayURL)
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 5
+
+        var result: Result<String, Error>?
+        let semaphore = DispatchSemaphore(value: 0)
+
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error {
+                result = .failure(error)
+            } else if let data,
+                      let httpResponse = response as? HTTPURLResponse,
+                      httpResponse.statusCode == 200 {
+                struct PairResponse: Decodable { let token: String }
+                do {
+                    let parsed = try JSONDecoder().decode(PairResponse.self, from: data)
+                    result = .success(parsed.token)
+                } catch {
+                    result = .failure(error)
+                }
+            } else {
+                result = .failure(RemoteAccessError.pairingFailed("Relay returned error"))
+            }
+            semaphore.signal()
+        }
+        task.resume()
+        semaphore.wait()
+
+        switch result {
+        case .success(let token): return token
+        case .failure(let error): throw error
+        case .none: throw RemoteAccessError.pairingFailed("No response")
         }
     }
 
