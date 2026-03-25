@@ -2,17 +2,17 @@
 
 ## Phase 1: Fork Ghostty + Universal Build + iOS Proof-of-Life
 
-- [ ] 1.1 Fork `ghostty-org/ghostty` on GitHub
-- [ ] 1.2 Update `.gitmodules` to point to fork
-- [ ] 1.3 Add `upstream` remote in submodule pointing to `ghostty-org/ghostty`
-- [ ] 1.4 Create `mori/remote-backend` branch from current commit (`c9e1006`)
-- [ ] 1.5 Verify `ghostty:sync` mise task works with the fork (already added)
-- [ ] 1.6 Add iphoneos SDK check to `scripts/build-ghostty.sh`
-- [ ] 1.7 Change `-Dxcframework-target=native` to `universal` (line 184, keep existing patch)
-- [ ] 1.8 Build and verify XCFramework contains macOS, iOS device, and iOS Simulator slices
-- [ ] 1.9 Verify Mori macOS still builds and runs with universal framework
-- [ ] 1.10 Create minimal iOS shell app (`MoriRemote/`) with ghostty_init() + empty surface render
-- [ ] 1.11 Document the build change
+- [x] 1.1 Fork `ghostty-org/ghostty` on GitHub
+- [x] 1.2 Update `.gitmodules` to point to fork
+- [x] 1.3 Add `upstream` remote in submodule pointing to `ghostty-org/ghostty`
+- [x] 1.4 Create `mori/remote-backend` branch from current commit
+- [x] 1.5 Verify `ghostty:sync` mise task works with the fork (already added)
+- [x] 1.6 Add iphoneos SDK check to `scripts/build-ghostty.sh`
+- [x] 1.7 Change `-Dxcframework-target=native` to `universal` (default, with --native fallback)
+- [x] 1.8 Build and verify XCFramework contains macOS, iOS device, and iOS Simulator slices
+- [x] 1.9 Verify Mori macOS still builds and runs with universal framework
+- [x] 1.10 Create minimal iOS shell app (`MoriRemote/`) with ghostty_init() + empty surface render
+- [x] 1.11 Document the build change
 
 ## Phase 2: Remote termio Backend (Zig) + Protocol + Local Harness
 
