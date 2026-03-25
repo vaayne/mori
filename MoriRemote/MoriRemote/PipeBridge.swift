@@ -35,7 +35,7 @@ actor PipeBridge {
     // MARK: - State
 
     private var isRunning = false
-    private var readTask: Task<Void, Never>?
+    private var readSource: DispatchSourceRead?
 
     /// Callback invoked on the bridge actor when ghostty writes user input.
     /// Set via `setOnInputFromGhostty(_:)` to forward data to WebSocket.
@@ -90,45 +90,51 @@ actor PipeBridge {
     // MARK: - Lifecycle
 
     /// Start the read loop that monitors ghostty's output (user input from the terminal).
+    /// Uses a DispatchSource to efficiently wait for data instead of polling.
     func start() {
         guard !isRunning else { return }
         isRunning = true
 
         let readFD = self.readFromGhostty
-        readTask = Task.detached { [weak self] in
+        let source = DispatchSource.makeReadSource(fileDescriptor: readFD, queue: .global(qos: .userInteractive))
+        self.readSource = source
+
+        source.setEventHandler { [weak self] in
             let bufferSize = 4096
             let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
             defer { buffer.deallocate() }
 
-            while !Task.isCancelled {
-                let bytesRead = read(readFD, buffer, bufferSize)
-                if bytesRead > 0 {
-                    let data = Data(bytes: buffer, count: bytesRead)
-                    if let self {
+            let bytesRead = read(readFD, buffer, bufferSize)
+            if bytesRead > 0 {
+                let data = Data(bytes: buffer, count: bytesRead)
+                if let self {
+                    Task {
                         let callback = await self.onInputFromGhostty
                         try? await callback?(data)
                     }
-                } else if bytesRead == 0 {
-                    // EOF — pipe closed
-                    break
-                } else {
-                    // EAGAIN/EWOULDBLOCK means no data available yet (non-blocking)
-                    if errno == EAGAIN || errno == EWOULDBLOCK {
-                        try? await Task.sleep(for: .milliseconds(10))
-                        continue
-                    }
-                    // Real error
-                    break
                 }
+            } else if bytesRead == 0 {
+                // EOF — pipe closed
+                source.cancel()
             }
+            // EAGAIN is fine — DispatchSource will re-fire when data arrives
         }
+
+        source.setCancelHandler { [weak self] in
+            Task { await self?.stop() }
+        }
+
+        source.resume()
     }
 
     /// Stop the read loop and clean up.
     func stop() {
+        guard isRunning else { return }
         isRunning = false
-        readTask?.cancel()
-        readTask = nil
+        if let source = readSource {
+            source.cancel()
+            readSource = nil
+        }
     }
 
     // MARK: - Writing terminal output to ghostty
