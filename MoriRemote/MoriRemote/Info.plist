@@ -20,6 +20,8 @@
     <string>0.1.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Mori Remote uses the camera to scan QR codes for pairing with your Mac.</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>UILaunchScreen</key>
