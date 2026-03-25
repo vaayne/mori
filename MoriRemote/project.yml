@@ -10,6 +10,10 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
 
+packages:
+  MoriRemoteProtocol:
+    path: ../Packages/MoriRemoteProtocol
+
 targets:
   MoriRemote:
     type: application
@@ -21,6 +25,7 @@ targets:
           - "*-Bridging-Header.h"
     dependencies:
       - framework: ../Frameworks/GhosttyKit.xcframework
+      - package: MoriRemoteProtocol
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.vaayne.mori.remote
