@@ -8,8 +8,8 @@ struct MoriRemoteApp: App {
     @State private var errorMessage: String?
     @Environment(\.scenePhase) private var scenePhase
 
-    /// Shared relay client for the app lifetime.
-    @State private var relayClient = RelayClient()
+    /// Central view model managing navigation, relay, and state.
+    @State private var viewModel = AppViewModel()
 
     /// Track whether we were connected before backgrounding.
     @State private var wasConnectedBeforeBackground = false
@@ -26,7 +26,7 @@ struct MoriRemoteApp: App {
     var body: some Scene {
         WindowGroup {
             if ghosttyReady {
-                TerminalView(relayClient: relayClient)
+                contentView
                     .preferredColorScheme(.dark)
                     .statusBarHidden(true)
             } else {
@@ -47,29 +47,70 @@ struct MoriRemoteApp: App {
             switch newPhase {
             case .active:
                 GhosttyAppContext.shared.tick()
-                // Reconnect if we were connected before backgrounding
                 if wasConnectedBeforeBackground {
                     wasConnectedBeforeBackground = false
-                    Task {
-                        await relayClient.reconnect()
-                    }
+                    viewModel.attemptReconnect()
                 }
             case .background:
-                // Immediately detach and close WebSocket — no background keep-alive
-                Task {
-                    let currentState = await relayClient.state
-                    if case .disconnected = currentState {
-                        wasConnectedBeforeBackground = false
-                    } else {
-                        wasConnectedBeforeBackground = true
-                        await relayClient.disconnect(reason: "app backgrounded")
-                    }
+                let status = viewModel.connectionStatus
+                if status != .disconnected {
+                    wasConnectedBeforeBackground = true
+                    viewModel.disconnectForBackground()
+                } else {
+                    wasConnectedBeforeBackground = false
                 }
             case .inactive:
                 break
             @unknown default:
                 break
             }
+        }
+    }
+
+    @ViewBuilder
+    private var contentView: some View {
+        ZStack {
+            switch viewModel.currentScreen {
+            case .scanner:
+                QRScannerView { url in
+                    viewModel.handleScannedURL(url)
+                }
+
+            case .sessionList:
+                SessionListView(
+                    sessions: viewModel.sessions,
+                    connectionStatus: viewModel.connectionStatus,
+                    onAttach: { session in
+                        viewModel.attachSession(session)
+                    },
+                    onRefresh: {
+                        viewModel.requestSessionList()
+                    },
+                    onForgetDevice: {
+                        viewModel.forgetDevice()
+                    }
+                )
+
+            case .terminal(let sessionName):
+                TerminalView(
+                    relayClient: viewModel.relayClient,
+                    sessionName: sessionName,
+                    mode: viewModel.currentMode,
+                    onToggleMode: { viewModel.toggleMode() },
+                    onDetach: { viewModel.detachSession() },
+                    onResize: { cols, rows in
+                        viewModel.sendResize(cols: cols, rows: rows)
+                    }
+                )
+            }
+
+            // Connection status overlay
+            VStack {
+                ConnectionStatusView(status: viewModel.connectionStatus)
+                    .padding(.top, 8)
+                Spacer()
+            }
+            .animation(.easeInOut(duration: 0.3), value: viewModel.connectionStatus)
         }
     }
 }
