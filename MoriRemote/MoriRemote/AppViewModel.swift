@@ -196,12 +196,10 @@ final class AppViewModel {
         }
     }
 
-    func disconnectForBackground() {
-        Task {
-            let state = await relayClient.state
-            if case .disconnected = state { return }
-            await relayClient.disconnect(reason: "app backgrounded")
-        }
+    func disconnectForBackground() async {
+        let state = await relayClient.state
+        if case .disconnected = state { return }
+        await relayClient.disconnect(reason: "app backgrounded")
     }
 
     // MARK: - Callbacks

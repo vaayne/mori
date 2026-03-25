@@ -55,7 +55,13 @@ struct MoriRemoteApp: App {
                 let status = viewModel.connectionStatus
                 if status != .disconnected {
                     wasConnectedBeforeBackground = true
-                    viewModel.disconnectForBackground()
+                    let taskID = UIApplication.shared.beginBackgroundTask {
+                        // Expiration handler — iOS will suspend regardless
+                    }
+                    Task {
+                        await viewModel.disconnectForBackground()
+                        UIApplication.shared.endBackgroundTask(taskID)
+                    }
                 } else {
                     wasConnectedBeforeBackground = false
                 }
