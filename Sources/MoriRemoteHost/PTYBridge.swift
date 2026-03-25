@@ -38,8 +38,9 @@ final class PTYBridge: @unchecked Sendable {
 
         if pid == 0 {
             // Child process — exec the command
+            // Note: no defer needed here. On success, execvp replaces the process image
+            // (defer never runs). On failure, _exit(127) terminates immediately.
             let cArgs = command.map { strdup($0) } + [nil]
-            defer { cArgs.compactMap { $0 }.forEach { free($0) } }
             execvp(command[0], cArgs)
             // If execvp returns, it failed
             _exit(127)
@@ -117,6 +118,10 @@ final class PTYBridge: @unchecked Sendable {
     }
 
     /// Terminate the child process and close the pty.
+    ///
+    /// Sends SIGHUP to request graceful exit, then closes the master fd.
+    /// The background `monitorChildExit()` thread handles reaping via `waitpid`.
+    /// If the child doesn't exit promptly, `monitorChildExit` will still collect it.
     func terminate() {
         lock.lock()
         guard isAlive else {
@@ -128,22 +133,19 @@ final class PTYBridge: @unchecked Sendable {
         let pid = childPID
         lock.unlock()
 
-        // Send SIGHUP then SIGKILL
+        // Send SIGHUP to request graceful exit
         kill(pid, SIGHUP)
 
-        // Give the child a moment to exit gracefully
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
-            var status: Int32 = 0
-            let result = waitpid(pid, &status, WNOHANG)
-            if result == 0 {
-                // Still running, force kill
-                kill(pid, SIGKILL)
-                waitpid(pid, &status, 0)
-            }
-        }
-
+        // Close the master fd — this unblocks any pending reads and
+        // signals EOF to the child's pty slave side.
         if fd >= 0 {
             close(fd)
+        }
+
+        // Schedule a forced kill in case SIGHUP wasn't enough.
+        // monitorChildExit() handles the actual waitpid reaping.
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
+            kill(pid, SIGKILL)
         }
     }
 
