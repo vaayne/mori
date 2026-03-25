@@ -83,3 +83,46 @@ See [plan.md](plan.md) for full details.
 - PTYBridge demonstrates the forkpty pattern that the iOS side mirrors with pipe fd pairs (read/write instead of pty)
 - SessionInfo type from MoriRemoteProtocol is used consistently between host and iOS for session display
 - The relay protocol is JSON text frames for control + binary frames for terminal data (already implemented in RelayConnector)
+
+### Phase 5A: iOS App — ghostty Rendering + Pipe Bridge (2026-03-25)
+
+**Status**: COMPLETE (8/8 tasks)
+
+**What was done**:
+- Updated `project.yml` to add MoriRemoteProtocol SPM dependency
+- Enhanced `MoriRemoteApp.swift` with scenePhase lifecycle observer, dark color scheme, status bar hidden
+- Created `GhosttyRemoteSurface.swift` — UIView subclass that configures ghostty surface with `remote_read_fd`/`remote_write_fd` for the Remote termio backend
+- Created `PipeBridge.swift` — actor managing two `pipe()` fd pairs for bidirectional data flow between ghostty and external sources (future WebSocket)
+- Rewrote `TerminalView.swift` to use `GhosttyRemoteSurfaceView` with PipeBridge, safe area handling (ignores top + keyboard), canned VT byte test
+- Created `InputAccessoryBar.swift` — UIKit accessory view with Esc, Ctrl (toggle), Tab, pipe, tilde, dash, slash, arrow keys
+- Built universal XCFramework (macOS + iOS + iOS Sim) and verified both iOS simulator and macOS builds pass
+- Zero Swift compilation errors in MoriRemote code (GhosttyKit umbrella header warnings are upstream)
+
+**Files changed**:
+- `MoriRemote/project.yml` — added MoriRemoteProtocol package dependency
+- `MoriRemote/MoriRemote/MoriRemoteApp.swift` — lifecycle + MoriRemoteProtocol import
+- `MoriRemote/MoriRemote/GhosttyRemoteSurface.swift` — new: Remote backend surface view
+- `MoriRemote/MoriRemote/PipeBridge.swift` — new: bidirectional pipe bridge actor
+- `MoriRemote/MoriRemote/TerminalView.swift` — rewritten: Remote backend + safe areas
+- `MoriRemote/MoriRemote/InputAccessoryBar.swift` — new: terminal key accessory bar
+
+**Commits**:
+- `67be726` — 5A.1+5A.2: Link MoriRemoteProtocol + enhance iOS app lifecycle
+- `5b40c68` — 5A.4: GhosttyRemoteSurface UIView with pipe fd pair
+- `a57ae2c` — 5A.5: PipeBridge for bidirectional ghostty <-> network data flow
+- `4beb13d` — 5A.6: Terminal view with Remote backend + safe area handling
+- `2d1879f` — 5A.7: Terminal input accessory bar (Ctrl, Esc, Tab, arrows)
+
+**Key learnings**:
+- `pipe()` syscall works in iOS sandbox — creates fd pairs within the same process
+- ghostty Remote backend activated when `remote_read_fd >= 0` in surface config
+- Universal XCFramework slice path is `macos-arm64_x86_64` (not `macos-arm64`) — SPM resolves automatically but cached `.build` may need cleaning
+- PipeBridge uses non-blocking I/O on read end + async polling for Swift 6 concurrency compatibility
+- Input accessory bar needs UIScrollView for horizontal key list to work across device sizes
+
+**Context for next phase** (Phase 5B: iOS App — WebSocket Client + Reconnect):
+- PipeBridge has `onInputFromGhostty` callback ready for WebSocket forwarding
+- PipeBridge.writeToTerminal() accepts Data for writing to ghostty's read pipe
+- MoriRemoteProtocol is linked and importable — ControlMessage types ready for WebSocket framing
+- scenePhase observer in MoriRemoteApp ready for background detach / foreground reconnect
+- InputAccessoryBar.onKeyPress sends raw bytes — needs to be wired to PipeBridge in terminal view

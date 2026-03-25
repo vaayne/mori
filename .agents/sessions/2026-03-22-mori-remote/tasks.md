@@ -58,14 +58,14 @@
 
 ## Phase 5A: iOS App — ghostty Rendering + Pipe Bridge
 
-- [ ] 5A.1 Expand MoriRemote into full project (iOS 17+, SwiftUI)
-- [ ] 5A.2 Link GhosttyKit.xcframework + MoriRemoteProtocol
-- [ ] 5A.3 Reuse vendored ghostty iOS wrappers (SurfaceView_UIKit, SurfaceConfiguration)
-- [ ] 5A.4 Create `GhosttyRemoteSurface` (UIViewRepresentable, pipe fd pair)
-- [ ] 5A.5 Bidirectional bridge: WebSocket -> read_fd AND write_fd -> WebSocket
-- [ ] 5A.6 Terminal view with safe area handling
-- [ ] 5A.7 Input accessory bar (Ctrl, Esc, Tab, arrows)
-- [ ] 5A.8 Test on simulator and device
+- [x] 5A.1 Expand MoriRemote into full project (iOS 17+, SwiftUI)
+- [x] 5A.2 Link GhosttyKit.xcframework + MoriRemoteProtocol
+- [x] 5A.3 Reuse vendored ghostty iOS wrappers (SurfaceView_UIKit, SurfaceConfiguration)
+- [x] 5A.4 Create `GhosttyRemoteSurface` (UIViewRepresentable, pipe fd pair)
+- [x] 5A.5 Bidirectional bridge: WebSocket -> read_fd AND write_fd -> WebSocket
+- [x] 5A.6 Terminal view with safe area handling
+- [x] 5A.7 Input accessory bar (Ctrl, Esc, Tab, arrows)
+- [x] 5A.8 Test on simulator and device
 
 ## Phase 5B: iOS App — WebSocket Client + Reconnect
 
