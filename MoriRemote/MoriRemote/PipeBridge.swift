@@ -38,8 +38,13 @@ actor PipeBridge {
     private var readTask: Task<Void, Never>?
 
     /// Callback invoked on the bridge actor when ghostty writes user input.
-    /// In Phase 5B this will forward to WebSocket; for now it's a hook for testing.
-    var onInputFromGhostty: (@Sendable (Data) -> Void)?
+    /// Set via `setOnInputFromGhostty(_:)` to forward data to WebSocket.
+    private(set) var onInputFromGhostty: (@Sendable (Data) async throws -> Void)?
+
+    /// Set the callback for user input from ghostty (e.g., to forward to WebSocket).
+    func setOnInputFromGhostty(_ callback: (@Sendable (Data) async throws -> Void)?) {
+        self.onInputFromGhostty = callback
+    }
 
     // MARK: - Init
 
@@ -101,7 +106,7 @@ actor PipeBridge {
                     let data = Data(bytes: buffer, count: bytesRead)
                     if let self {
                         let callback = await self.onInputFromGhostty
-                        callback?(data)
+                        try? await callback?(data)
                     }
                 } else if bytesRead == 0 {
                     // EOF — pipe closed

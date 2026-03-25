@@ -1,11 +1,13 @@
 import SwiftUI
 import GhosttyKit
+import MoriRemoteProtocol
 
 /// Full-screen terminal view using ghostty's Remote backend.
-/// Handles safe areas and integrates the input accessory bar.
+/// Integrates PipeBridge for ghostty rendering with RelayClient for WebSocket data.
 struct TerminalView: View {
     @State private var pipeBridge: PipeBridge?
     @State private var errorMessage: String?
+    let relayClient: RelayClient
 
     var body: some View {
         ZStack {
@@ -38,12 +40,19 @@ struct TerminalView: View {
     private func initializePipeBridge() async {
         do {
             let bridge = try PipeBridge()
-            await bridge.start()
 
-            // For Phase 5A testing: feed some canned VT bytes to prove rendering works
-            await bridge.writeToTerminal(Data(
-                "Mori Remote Terminal\r\n\u{1B}[32mPipe bridge active.\u{1B}[0m\r\n$ ".utf8
-            ))
+            // Wire PipeBridge -> RelayClient: user input from ghostty sent to relay
+            let client = relayClient
+            await bridge.setOnInputFromGhostty { data in
+                try? await client.sendTerminalData(data)
+            }
+
+            // Wire RelayClient -> PipeBridge: terminal data from relay written to ghostty
+            await client.setOnTerminalData { data in
+                await bridge.writeToTerminal(data)
+            }
+
+            await bridge.start()
 
             self.pipeBridge = bridge
         } catch {
