@@ -121,13 +121,25 @@ final class TerminalInputAccessoryView: UIView {
         switch action {
         case .bytes(let data):
             if isCtrlActive {
-                // Send Ctrl+key: for printable ASCII, Ctrl turns letter into control char
-                // e.g., Ctrl+C = 0x03, Ctrl+D = 0x04
-                // For non-letter keys, just send the bytes as-is
                 isCtrlActive = false
                 updateCtrlAppearance()
+
+                // For single printable ASCII bytes, send the Ctrl-modified character
+                if data.count == 1, let byte = data.first {
+                    let upper = byte & 0xDF // force uppercase
+                    if upper >= 0x40 && upper <= 0x5F {
+                        // Ctrl+letter/symbol: e.g. Ctrl+C = 0x03
+                        onKeyPress?(Data([upper - 0x40]))
+                        return
+                    }
+                }
+
+                // For escape sequences (arrows) and other multi-byte keys,
+                // send the bytes unmodified — Ctrl does not apply.
+                onKeyPress?(data)
+            } else {
+                onKeyPress?(data)
             }
-            onKeyPress?(data)
         case .toggle:
             break // handled by toggleCtrl
         }
