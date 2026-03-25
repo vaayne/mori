@@ -403,11 +403,13 @@ extension RemoteAccessManager {
 enum RemoteAccessError: Error, LocalizedError {
     case invalidURL(String)
     case encodingFailed
+    case pairingFailed(String)
 
     var errorDescription: String? {
         switch self {
         case .invalidURL(let url): "Invalid relay URL: \(url)"
         case .encodingFailed: "Failed to encode control message"
+        case .pairingFailed(let reason): "Pairing failed: \(reason)"
         }
     }
 }

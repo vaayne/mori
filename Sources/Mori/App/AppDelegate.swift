@@ -3,6 +3,7 @@ import MoriCore
 import MoriGit
 import MoriIPC
 import MoriPersistence
+import MoriRemoteProtocol
 import MoriTerminal
 import MoriTmux
 import MoriUI
@@ -26,6 +27,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var settingsWindowController: NSWindowController?
     private var configFile: GhosttyConfigFile?
     private var proxyApplyTask: Task<Void, Never>?
+    private var remoteAccessState: RemoteAccessState?
+    private var remoteAccessManager: RemoteAccessManager?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -218,6 +221,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Start IPC server for mori CLI communication
         startIPCServer(manager: manager)
 
+        // Initialize remote access state
+        let remoteState = RemoteAccessState()
+        self.remoteAccessState = remoteState
+        self.remoteAccessManager = RemoteAccessManager(
+            onStateChange: { [weak remoteState] status in
+                Task { @MainActor in
+                    guard let remoteState else { return }
+                    remoteState.status = status
+                    remoteState.isEnabled = status.isActive
+                    remoteState.lastError = if case .error(let msg) = status { msg } else { nil }
+                }
+            }
+        )
+
         // Update window title from current project
         updateWindowTitle()
 
@@ -262,6 +279,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Stop IPC server
         if let server = ipcServer {
             Task { await server.stop() }
+        }
+
+        // Stop remote access
+        if let manager = remoteAccessManager {
+            Task { await manager.stop() }
         }
 
         // Stop coordinated polling
@@ -398,6 +420,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let ghosttyDefaults = GhosttyConfigFile.defaultKeybinds()
         let themeInfo = terminalAreaController?.themeInfo ?? .fallback
 
+        let initialRemote = RemoteAccessModel(
+            relayURL: remoteAccessState?.relayURL ?? RemoteAccessState.defaultRelayURL,
+            isEnabled: remoteAccessState?.isEnabled ?? false,
+            statusText: remoteAccessState?.status.displayText ?? "Disconnected",
+            pairingURI: remoteAccessState?.pairingURI,
+            qrCodePNGData: remoteAccessState?.qrCodePNGData,
+            isConnected: remoteAccessState?.status == .viewerConnected
+        )
+
         let settingsView = SettingsWindowContent(
             initial: readSettingsModel(from: cf),
             availableThemes: themes,
@@ -408,6 +439,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 piEnabled: AgentHookConfigurator.isPiExtensionInstalled()
             ),
             initialProxy: ProxySettingsApplicator.load(),
+            initialRemote: initialRemote,
             onChanged: { [weak self] newModel in
                 guard let self else { return }
                 self.writeSettingsModel(newModel, to: cf)
@@ -426,6 +458,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             onSystemProxyDetect: {
                 ProxySettingsApplicator.readSystemProxy()
+            },
+            onRemoteToggle: { [weak self] isEnabled in
+                self?.handleRemoteToggle(isEnabled)
+            },
+            onRemoteURLChanged: { [weak self] url in
+                self?.remoteAccessState?.relayURL = url
             }
         )
 
@@ -529,6 +567,104 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
+    // MARK: - Remote Access
+
+    /// Handle remote access toggle. Returns an updated model synchronously
+    /// for the UI to apply (QR code, pairing URI), then starts/stops
+    /// the relay connection asynchronously.
+    private func handleRemoteToggle(_ isEnabled: Bool) -> RemoteAccessModel? {
+        guard let manager = remoteAccessManager, let state = remoteAccessState else { return nil }
+
+        if isEnabled {
+            let relayURL = state.relayURL
+
+            state.status = .connecting
+            state.isEnabled = true
+
+            // Request a pairing token from the relay, then connect
+            Task {
+                do {
+                    let token = try await Self.requestPairingToken(relayURL: relayURL)
+                    let uri = RemoteAccessManager.pairingURI(relayURL: relayURL, token: token)
+                    let qrData = RemoteAccessManager.generateQRCodePNG(from: uri)
+
+                    await MainActor.run {
+                        state.pairingToken = token
+                        state.pairingURI = uri
+                        state.qrCodePNGData = qrData
+                    }
+
+                    try await manager.start(relayURL: relayURL, token: token)
+                } catch {
+                    await MainActor.run {
+                        state.status = .error(error.localizedDescription)
+                        state.isEnabled = false
+                        state.pairingToken = nil
+                        state.pairingURI = nil
+                        state.qrCodePNGData = nil
+                    }
+                }
+            }
+
+            return RemoteAccessModel(
+                relayURL: relayURL,
+                isEnabled: true,
+                statusText: RemoteStatus.connecting.displayText,
+                pairingURI: nil,
+                qrCodePNGData: nil,
+                isConnected: false
+            )
+        } else {
+            state.pairingToken = nil
+            state.pairingURI = nil
+            state.qrCodePNGData = nil
+            state.status = .disconnected
+            state.isEnabled = false
+
+            Task {
+                await manager.stop()
+            }
+
+            return RemoteAccessModel(
+                relayURL: state.relayURL,
+                isEnabled: false,
+                statusText: RemoteStatus.disconnected.displayText,
+                pairingURI: nil,
+                qrCodePNGData: nil,
+                isConnected: false
+            )
+        }
+    }
+
+    /// Request a pairing token from the relay's POST /pair endpoint.
+    private static func requestPairingToken(relayURL: String) async throws -> String {
+        // Convert ws(s)://host:port/ws to http(s)://host:port/pair
+        guard var components = URLComponents(string: relayURL) else {
+            throw RemoteAccessError.invalidURL(relayURL)
+        }
+        components.scheme = components.scheme == "wss" ? "https" : "http"
+        components.path = "/pair"
+        components.queryItems = nil
+
+        guard let url = components.url else {
+            throw RemoteAccessError.invalidURL(relayURL)
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 10
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw RemoteAccessError.pairingFailed("Relay returned non-200 status")
+        }
+
+        struct PairResponse: Decodable { let token: String }
+        let pairResponse = try JSONDecoder().decode(PairResponse.self, from: data)
+        return pairResponse.token
+    }
+
     // MARK: - Main Menu (Task 5.4)
 
     private func setupMainMenu() {
@@ -543,6 +679,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         appMenu.addItem(.separator())
         appMenu.addItem(menuItem(.localized("Settings…"), action: #selector(showSettingsMenuAction), key: ","))
         appMenu.addItem(menuItem(.localized("Reload Settings"), action: #selector(reloadSettingsMenuAction), key: ",", mods: [.command, .shift]))
+        appMenu.addItem(.separator())
+        appMenu.addItem(menuItem(.localized("Share Terminal…"), action: #selector(shareTerminalMenuAction), key: "r", mods: [.command, .shift]))
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: .localized("Hide Mori"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(menuItem(.localized("Hide Others"), action: #selector(NSApplication.hideOtherApplications(_:)), key: "h", mods: [.command, .option]))
@@ -904,6 +1042,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         case "action.open-project":
             showAddProjectPanel()
 
+        case "action.toggle-remote":
+            if let state = remoteAccessState {
+                _ = handleRemoteToggle(!state.isEnabled)
+            }
+
         default:
             // Handle "action.status-<rawValue>" patterns
             if actionId.hasPrefix("action.status-") {
@@ -953,6 +1096,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     @objc private func reloadSettingsMenuAction() {
         terminalAreaController?.reloadConfig()
+    }
+
+    @objc private func shareTerminalMenuAction() {
+        showSettingsWindow()
+        // After the window is open, switch to the Remote tab
+        // The settings view uses @State selectedCategory, which initializes to .general.
+        // Opening settings with the remote tab pre-selected requires the view to exist first.
+        // For now, open settings — user navigates to Remote tab.
     }
 
     // MARK: - Agent Hook Settings
@@ -1026,10 +1177,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
 /// Thin wrapper that gives SwiftUI `@State` ownership of the settings value
 /// so all controls update in sync.
-private struct SettingsWindowContent: View {
+struct SettingsWindowContent: View {
     @State var model: GhosttySettingsModel
     @State var agentHooks: AgentHookModel
     @State var proxySettings: ProxySettingsModel
+    @State var remoteAccess: RemoteAccessModel
     let availableThemes: [String]
     let ghosttyDefaults: [String]
     var onChanged: (GhosttySettingsModel) -> Void
@@ -1037,6 +1189,8 @@ private struct SettingsWindowContent: View {
     var onAgentHookChanged: (AgentHookModel) -> Void
     var onProxyApply: (ProxySettingsModel) -> Void
     var onSystemProxyDetect: (() -> ProxySettingsModel)?
+    var onRemoteToggle: ((Bool) -> RemoteAccessModel?)?
+    var onRemoteURLChanged: ((String) -> Void)?
 
     init(
         initial: GhosttySettingsModel,
@@ -1044,15 +1198,19 @@ private struct SettingsWindowContent: View {
         ghosttyDefaults: [String] = [],
         initialAgentHooks: AgentHookModel = AgentHookModel(),
         initialProxy: ProxySettingsModel = ProxySettingsModel(),
+        initialRemote: RemoteAccessModel = RemoteAccessModel(),
         onChanged: @escaping (GhosttySettingsModel) -> Void,
         onOpenConfigFile: @escaping () -> Void,
         onAgentHookChanged: @escaping (AgentHookModel) -> Void = { _ in },
         onProxyApply: @escaping (ProxySettingsModel) -> Void = { _ in },
-        onSystemProxyDetect: (() -> ProxySettingsModel)? = nil
+        onSystemProxyDetect: (() -> ProxySettingsModel)? = nil,
+        onRemoteToggle: ((Bool) -> RemoteAccessModel?)? = nil,
+        onRemoteURLChanged: ((String) -> Void)? = nil
     ) {
         self._model = State(initialValue: initial)
         self._agentHooks = State(initialValue: initialAgentHooks)
         self._proxySettings = State(initialValue: initialProxy)
+        self._remoteAccess = State(initialValue: initialRemote)
         self.availableThemes = availableThemes
         self.ghosttyDefaults = ghosttyDefaults
         self.onChanged = onChanged
@@ -1060,6 +1218,8 @@ private struct SettingsWindowContent: View {
         self.onAgentHookChanged = onAgentHookChanged
         self.onProxyApply = onProxyApply
         self.onSystemProxyDetect = onSystemProxyDetect
+        self.onRemoteToggle = onRemoteToggle
+        self.onRemoteURLChanged = onRemoteURLChanged
     }
 
     var body: some View {
@@ -1073,7 +1233,10 @@ private struct SettingsWindowContent: View {
             onAgentHookChanged: onAgentHookChanged,
             proxySettings: $proxySettings,
             onProxyApply: onProxyApply,
-            onSystemProxyDetect: onSystemProxyDetect
+            onSystemProxyDetect: onSystemProxyDetect,
+            remoteAccess: $remoteAccess,
+            onRemoteToggle: onRemoteToggle,
+            onRemoteURLChanged: onRemoteURLChanged
         )
     }
 }
