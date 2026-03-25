@@ -207,7 +207,16 @@ actor RelayConnector {
             let message = try decodeMessage(data)
             switch message {
             case .attach(let attach):
-                try await attachSession(name: attach.sessionName, mode: attach.mode)
+                do {
+                    try await attachSession(name: attach.sessionName, mode: attach.mode)
+                } catch {
+                    print("[RelayConnector] Failed to attach session '\(attach.sessionName)': \(error)")
+                    let errMsg = ControlMessage.error(ControlMessage.ErrorMessage(
+                        code: .sessionNotFound,
+                        message: "Failed to attach session '\(attach.sessionName)': \(error.localizedDescription)"
+                    ))
+                    try? await sendControlMessage(errMsg)
+                }
 
             case .detach:
                 await detachCurrentSession()
@@ -217,8 +226,17 @@ actor RelayConnector {
 
             case .modeChange(let modeChange):
                 if let sessionName = currentSessionName {
-                    await detachCurrentSession()
-                    try await attachSession(name: sessionName, mode: modeChange.mode)
+                    do {
+                        await detachCurrentSession()
+                        try await attachSession(name: sessionName, mode: modeChange.mode)
+                    } catch {
+                        print("[RelayConnector] Failed to change mode to \(modeChange.mode.rawValue): \(error)")
+                        let errMsg = ControlMessage.error(ControlMessage.ErrorMessage(
+                            code: .internalError,
+                            message: "Failed to change mode to \(modeChange.mode.rawValue): \(error.localizedDescription)"
+                        ))
+                        try? await sendControlMessage(errMsg)
+                    }
                 }
 
             case .sessionList:
