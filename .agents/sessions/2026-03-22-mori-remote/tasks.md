@@ -47,14 +47,14 @@
 
 ## Phase 4: Mac Relay Connector (MoriRemoteHost)
 
-- [ ] 4.1 New Swift executable target `MoriRemoteHost` (separate process)
-- [ ] 4.2 Implement `RelayConnector` actor (WSS connect, forkpty, bidirectional pipe)
-- [ ] 4.3 Session listing using `SessionNaming.parse()` for display-friendly names
-- [ ] 4.4 Grouped session support for interactive mode (`new-session -t`)
-- [ ] 4.5 Grouped session cleanup on viewer disconnect + periodic GC
-- [ ] 4.6 QR code generation and display (Mori app launches/controls MoriRemoteHost)
-- [ ] 4.7 Reconnection with exponential backoff + session ID reuse
-- [ ] 4.8 Relay-free loopback harness: connector -> local stub -> iOS client e2e
+- [x] 4.1 New Swift executable target `MoriRemoteHost` (separate process)
+- [x] 4.2 Implement `RelayConnector` actor (WSS connect, forkpty, bidirectional pipe)
+- [x] 4.3 Session listing using `SessionNaming.parse()` for display-friendly names
+- [x] 4.4 Grouped session support for interactive mode (`new-session -t`)
+- [x] 4.5 Grouped session cleanup on viewer disconnect + periodic GC
+- [x] 4.6 QR code generation and display (Mori app launches/controls MoriRemoteHost)
+- [x] 4.7 Reconnection with exponential backoff + session ID reuse
+- [x] 4.8 Relay-free loopback harness: connector -> local stub -> iOS client e2e
 
 ## Phase 5A: iOS App — ghostty Rendering + Pipe Bridge
 
