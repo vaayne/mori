@@ -27,7 +27,11 @@ struct QRCode: AsyncParsableCommand {
             pairingToken = try await requestPairingToken(relayURL: relayURL)
         }
 
-        let pairingURL = "mori-relay://\(relayURL.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: ""))/\(pairingToken)"
+        guard let components = URLComponents(string: relayURL), let host = components.host else {
+            throw ValidationError("Cannot parse relay URL: \(relayURL)")
+        }
+        let authority = host + (components.port.map { ":\($0)" } ?? "")
+        let pairingURL = "mori-relay://\(authority)/\(pairingToken)"
 
         if png {
             guard let pngData = QRCodeGenerator.generatePNG(from: pairingURL) else {
