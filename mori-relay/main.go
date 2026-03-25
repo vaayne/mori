@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -11,9 +12,16 @@ import (
 )
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	addr := flag.String("addr", "", "listen address (e.g. :19820)")
+	flag.Parse()
+
+	listenAddr := *addr
+	if listenAddr == "" {
+		if port := os.Getenv("PORT"); port != "" {
+			listenAddr = ":" + port
+		} else {
+			listenAddr = ":19820"
+		}
 	}
 
 	relay := NewRelay()
@@ -27,14 +35,14 @@ func main() {
 	})
 
 	srv := &http.Server{
-		Addr:         ":" + port,
+		Addr:         listenAddr,
 		Handler:      mux,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
 
 	go func() {
-		log.Printf("relay listening on :%s", port)
+		log.Printf("relay listening on %s", listenAddr)
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			log.Fatalf("listen: %v", err)
 		}
