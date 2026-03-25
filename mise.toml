@@ -47,6 +47,10 @@ run = "cd Packages/MoriTmux && swift run MoriTmuxTests"
 [tasks."test:ipc"]
 run = "cd Packages/MoriIPC && swift run MoriIPCTests"
 
+[tasks."test:protocol"]
+description = "Run MoriRemoteProtocol tests"
+run = "cd Packages/MoriRemoteProtocol && swift run TestMoriRemoteProtocol"
+
 [tasks."build:ghostty"]
 description = "Build GhosttyKit XCFramework from source"
 run = "bash scripts/build-ghostty.sh"
@@ -96,6 +100,45 @@ run = "bash scripts/bundle.sh"
 [tasks.clean]
 description = "Clean build artifacts"
 run = "swift package clean && rm -rf .build .derived-data Mori.app"
+
+# ─── iOS (Mori Remote) ──────────────────────────────────────────
+
+[tasks."ios:build"]
+description = "Build MoriRemote iOS app for simulator"
+depends = ["build:ghostty"]
+run = '''
+set -euo pipefail
+cd MoriRemote
+xcodegen generate
+xcodebuild \
+  -project MoriRemote.xcodeproj \
+  -scheme MoriRemote \
+  -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' \
+  build 2>&1 | xcbeautify
+'''
+
+[tasks."ios:test"]
+description = "Run MoriRemoteProtocol tests (iOS-relevant protocol layer)"
+depends = ["test:protocol"]
+
+# ─── Relay ───────────────────────────────────────────────────────
+
+[tasks."relay:dev"]
+description = "Run Go relay service locally"
+run = '''
+set -euo pipefail
+cd mori-relay
+go run . -addr :8080
+'''
+
+[tasks."relay:deploy"]
+description = "Deploy Go relay to Fly.io"
+run = '''
+set -euo pipefail
+cd mori-relay
+fly deploy
+'''
 
 # ─── Xcode ───────────────────────────────────────────────────────
 
