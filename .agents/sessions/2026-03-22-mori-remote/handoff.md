@@ -188,3 +188,63 @@ See [plan.md](plan.md) for full details.
 - KeychainStore.loadSessionID() returns stored session for automatic reconnection
 - Phase 6 needs: QR scanner (AVCaptureSession), session list view, mode toggle, connection status UI
 - RelayClient.invalidateSession() clears Keychain + saved URLs for "Forget this device" flow
+
+### Phase 6: iOS App — Session List + QR Pairing + Mode Toggle (2026-03-25)
+
+**Status**: COMPLETE (6/6 tasks)
+
+**What was done**:
+- Created `QRScannerView`: AVCaptureSession camera view scanning for `mori-relay://<host>/<token>` URLs
+  - Camera permission request via Info.plist `NSCameraUsageDescription`
+  - Manual URL entry fallback for simulator testing (no camera)
+  - Haptic feedback on scan, duplicate scan prevention
+  - SendableAVCaptureSession wrapper for Swift 6 concurrency safety
+- Created `SessionListView`: displays tmux sessions from relay with display-friendly names
+  - SessionRow shows display name, window count, attached status indicator
+  - Pull-to-refresh support, empty state with refresh prompt
+  - "Forget This Device" menu action for device revocation
+- Created `ModeToggleButton`: floating capsule overlay to toggle read-only vs interactive
+  - Sends ControlMessage.modeChange to relay -> host changes tmux attach mode
+  - Visual icons: eye (read-only) / keyboard (interactive)
+- Created `ConnectionStatusView`: small overlay showing connected/disconnected/reconnecting
+  - Auto-hides when connected, animated transitions
+- Updated `TerminalView`: GeometryReader detects orientation/size changes -> sends ControlMessage.resize
+  - Floating controls: session name label, detach button, mode toggle
+  - Estimates cols/rows from pixel size (8x16 cell approximation)
+- Created `AppViewModel`: @Observable central coordinator managing navigation, relay, and state
+  - Navigation flow: QR scanner -> session list -> terminal (with back navigation)
+  - `parseRelayURL()` extracts host + token from `mori-relay://` URLs
+  - `forgetDevice()` clears Keychain, disconnects, returns to scanner
+  - Background/foreground lifecycle: disconnect on background, reconnect on foreground
+  - Auto-reconnect using stored session ID on return visits
+- Updated `MoriRemoteApp`: uses AppViewModel for screen management and lifecycle
+
+**Files created/changed**:
+- `MoriRemote/MoriRemote/QRScannerView.swift` — new: QR scanner with AVCaptureSession
+- `MoriRemote/MoriRemote/SessionListView.swift` — new: session list with tap-to-attach
+- `MoriRemote/MoriRemote/ModeToggleButton.swift` — new: floating mode toggle
+- `MoriRemote/MoriRemote/ConnectionStatusView.swift` — new: connection status overlay
+- `MoriRemote/MoriRemote/AppViewModel.swift` — new: @Observable navigation/state coordinator
+- `MoriRemote/MoriRemote/MoriRemoteApp.swift` — updated: AppViewModel integration
+- `MoriRemote/MoriRemote/TerminalView.swift` — updated: resize, mode toggle, detach
+- `MoriRemote/MoriRemote/Info.plist` — updated: NSCameraUsageDescription
+
+**Commits**:
+- `2405e66` — 6.1: QR scanner view with AVCaptureSession + camera permission
+- `48dc9ff` — 6.2: Session list view with display names and tap-to-attach
+- `79be6c5` — 6.3: Mode toggle button for read-only vs interactive
+- `1bd9def` — 6.4: Connection status indicator overlay
+- `0af67d6` — 6.5: Orientation change sends Resize message to relay
+- `8a79e1b` — 6.6: Device revocation + AppViewModel navigation flow
+
+**Key learnings**:
+- AVCaptureSession.startRunning() must be called off the main thread; Swift 6 strict concurrency requires `@unchecked Sendable` wrapper to cross isolation boundaries
+- AVCaptureMetadataOutput delegate callback is `nonisolated` — dispatch back to main actor for state updates
+- GeometryReader.onChange(of: geometry.size) fires on orientation changes, providing a clean hook for resize messages
+- @Observable works well for the app-wide view model pattern on iOS 17+ with SwiftUI
+
+**Context for next phase** (Phase 7: Polish + Docs):
+- All iOS UI views are implemented: QR scanner, session list, terminal with mode toggle, connection status
+- App flow is complete: first launch -> QR scan -> connect -> session list -> terminal; return visits auto-reconnect
+- "Forget This Device" clears all stored state and returns to scanner
+- Remaining: localization, documentation updates, mise tasks, real-device testing

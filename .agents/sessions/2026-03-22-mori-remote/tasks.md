@@ -77,12 +77,12 @@
 
 ## Phase 6: iOS App — Session List + QR Pairing + Mode Toggle
 
-- [ ] 6.1 QR scanner view (AVCaptureSession, camera permission)
-- [ ] 6.2 Session list view (control channel, SessionNaming display names, tap to attach)
-- [ ] 6.3 Mode toggle (read-only vs interactive)
-- [ ] 6.4 Connection status indicator
-- [ ] 6.5 Orientation change -> Resize message
-- [ ] 6.6 Device revocation: "Forget this device" from Mac side
+- [x] 6.1 QR scanner view (AVCaptureSession, camera permission)
+- [x] 6.2 Session list view (control channel, SessionNaming display names, tap to attach)
+- [x] 6.3 Mode toggle (read-only vs interactive)
+- [x] 6.4 Connection status indicator
+- [x] 6.5 Orientation change -> Resize message
+- [x] 6.6 Device revocation: "Forget this device" from Mac side
 
 ## Phase 7: Polish + Docs
 
