@@ -120,10 +120,6 @@ actor PipeBridge {
             // EAGAIN is fine — DispatchSource will re-fire when data arrives
         }
 
-        source.setCancelHandler { [weak self] in
-            Task { await self?.stop() }
-        }
-
         source.resume()
     }
 
