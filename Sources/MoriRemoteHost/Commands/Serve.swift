@@ -13,15 +13,20 @@ struct Serve: AsyncParsableCommand {
     @Option(name: .long, help: "Pairing token from relay /pair endpoint")
     var token: String
 
-    @Option(name: .long, help: "Session ID for reconnection (reuse from previous connection)")
+    @Option(name: .long, help: "Session ID for reconnection (overrides stored ID)")
     var sessionID: String?
 
     func run() async throws {
         let connector = RelayConnector()
 
-        // Install signal handlers for clean shutdown
         // Set up signal handling for clean shutdown
         signal(SIGINT, SIG_DFL)
+
+        // Resolve session ID: CLI flag > stored > none
+        let effectiveSessionID = sessionID ?? SessionIDStore.load()
+        if let effectiveSessionID {
+            print("[MoriRemoteHost] Using session ID: \(effectiveSessionID)")
+        }
 
         print("[MoriRemoteHost] Connecting to relay: \(relayURL)")
 
@@ -29,8 +34,13 @@ struct Serve: AsyncParsableCommand {
             try await connector.connect(
                 relayURL: relayURL,
                 token: token,
-                sessionID: sessionID
+                sessionID: effectiveSessionID
             )
+
+            // Persist session ID for reconnection across restarts
+            if let newSessionID = await connector.getSessionID() {
+                SessionIDStore.save(newSessionID)
+            }
 
             // Run until cancelled or disconnected
             try await connector.runUntilDisconnected()
