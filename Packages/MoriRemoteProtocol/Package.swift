@@ -16,5 +16,10 @@ let package = Package(
             name: "MoriRemoteProtocol",
             path: "Sources/MoriRemoteProtocol"
         ),
+        .executableTarget(
+            name: "TestMoriRemoteProtocol",
+            dependencies: ["MoriRemoteProtocol"],
+            path: "Tests/TestMoriRemoteProtocol"
+        ),
     ]
 )
