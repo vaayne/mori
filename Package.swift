@@ -11,6 +11,7 @@ let package = Package(
     products: [
         .executable(name: "Mori", targets: ["Mori"]),
         .executable(name: "mori", targets: ["MoriCLI"]),
+        .executable(name: "mori-remote-host", targets: ["MoriRemoteHost"]),
     ],
     dependencies: [
         .package(path: "Packages/MoriCore"),
@@ -20,6 +21,7 @@ let package = Package(
         .package(path: "Packages/MoriGit"),
         .package(path: "Packages/MoriUI"),
         .package(path: "Packages/MoriIPC"),
+        .package(path: "Packages/MoriRemoteProtocol"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
     ],
     targets: [
@@ -54,6 +56,15 @@ let package = Package(
             resources: [
                 .process("Resources"),
             ]
+        ),
+        .executableTarget(
+            name: "MoriRemoteHost",
+            dependencies: [
+                "MoriTmux",
+                "MoriRemoteProtocol",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            path: "Sources/MoriRemoteHost"
         ),
     ]
 )
