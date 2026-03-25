@@ -90,7 +90,7 @@ actor RelayConnector {
         }
 
         // Notify the state change
-        state = .attached(sessionName: name)
+        transitionState(to: .attached(sessionName: name))
         print("[RelayConnector] Attached to session: \(name) (mode: \(mode.rawValue))")
     }
 
@@ -107,7 +107,7 @@ actor RelayConnector {
         }
 
         currentSessionName = nil
-        state = .detached
+        transitionState(to: .detached)
         print("[RelayConnector] Detached from session")
     }
 
@@ -155,7 +155,7 @@ actor RelayConnector {
 
         self.urlSession = session
         self.webSocketTask = task
-        self.state = .pairing
+        transitionState(to: .pairing)
 
         // Send handshake
         let handshake = ControlMessage.handshake(
@@ -163,7 +163,7 @@ actor RelayConnector {
         )
         try await sendControlMessage(handshake)
 
-        self.state = .connected
+        transitionState(to: .connected)
         self.reconnectAttempt = 0
 
         print("[RelayConnector] Connected to relay")
@@ -292,7 +292,7 @@ actor RelayConnector {
     // MARK: - Disconnect & Reconnect
 
     private func handleDisconnect(error: (any Error)?) async {
-        state = .disconnected
+        transitionState(to: .disconnected)
         webSocketTask = nil
 
         // Clean up pty
@@ -322,6 +322,16 @@ actor RelayConnector {
         // Signal runUntilDisconnected to return
         disconnectContinuation?.resume(returning: ())
         disconnectContinuation = nil
+    }
+
+    // MARK: - State Machine
+
+    private func transitionState(to newState: ConnectionState) {
+        if let valid = state.transition(to: newState) {
+            state = valid
+        } else {
+            print("[RelayConnector] Invalid state transition: \(state) -> \(newState)")
+        }
     }
 
     /// Exponential backoff with jitter.
