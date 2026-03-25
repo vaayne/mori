@@ -248,3 +248,43 @@ See [plan.md](plan.md) for full details.
 - App flow is complete: first launch -> QR scan -> connect -> session list -> terminal; return visits auto-reconnect
 - "Forget This Device" clears all stored state and returns to scanner
 - Remaining: localization, documentation updates, mise tasks, real-device testing
+
+### Phase 7: Polish + Docs (2026-03-25)
+
+**Status**: COMPLETE (5/5 tasks)
+
+**What was done**:
+- **7.1 Localization**: Added English + zh-Hans Localizable.strings for MoriRemoteHost CLI (24 strings) and MoriRemote iOS (25 strings). MoriRemoteHost follows MoriCLI's `.localized()` pattern with Bundle.module. iOS computed strings use `String(localized:)`, SwiftUI Text literals auto-localize.
+- **7.2 Documentation**: Updated README.md with Mori Remote section (architecture diagram, features, quick start). Updated CHANGELOG.md with all Mori Remote features under [Unreleased]. Updated AGENTS.md with new build tasks, iOS 17+ convention, universal build note, and new localization file locations.
+- **7.3 mise tasks**: Added `ios:build` (xcodegen + xcodebuild for simulator), `ios:test` (delegates to test:protocol), `test:protocol` (MoriRemoteProtocol tests), `relay:dev` (local Go relay), `relay:deploy` (Fly.io deploy).
+- **7.4 + 7.5 Test plans**: Created comprehensive test plan document with 7 suspend/resume scenarios (iOS 17.x + 18.x), 9 end-to-end test scenarios (Mac + Fly.io + iOS), and RTT measurement approach (timestamp echo + screen recording analysis).
+
+**Files created/changed**:
+- `Sources/MoriRemoteHost/Localization.swift` — new: .localized() helper (same pattern as MoriCLI)
+- `Sources/MoriRemoteHost/Resources/en.lproj/Localizable.strings` — new: English strings
+- `Sources/MoriRemoteHost/Resources/zh-Hans.lproj/Localizable.strings` — new: Chinese strings
+- `MoriRemote/MoriRemote/Resources/en.lproj/Localizable.strings` — new: English strings
+- `MoriRemote/MoriRemote/Resources/zh-Hans.lproj/Localizable.strings` — new: Chinese strings
+- `MoriRemote/MoriRemote/ConnectionStatusView.swift` — updated: String(localized:) for computed strings
+- `MoriRemote/MoriRemote/ModeToggleButton.swift` — updated: String(localized:) for computed strings
+- `MoriRemote/MoriRemote/SessionListView.swift` — updated: String(localized:) for computed strings
+- `MoriRemote/project.yml` — updated: added resources path
+- `Package.swift` — updated: added resources to MoriRemoteHost target
+- `Sources/MoriRemoteHost/MoriRemoteHost.swift` — updated: .localized() for abstract
+- `Sources/MoriRemoteHost/Commands/*.swift` — updated: .localized() for all CLI help text
+- `README.md` — updated: Mori Remote section
+- `CHANGELOG.md` — updated: Mori Remote features under [Unreleased]
+- `AGENTS.md` — updated: new tasks, conventions, localization paths
+- `mise.toml` — updated: 5 new tasks
+- `.agents/sessions/2026-03-22-mori-remote/test-plan.md` — new: test plan document
+
+**Commits**:
+- `a7daa60` — 7.1: Localize MoriRemoteHost CLI + MoriRemote iOS strings
+- `2e09610` — 7.2: Update README, CHANGELOG, AGENTS.md
+- `440fe94` — 7.3: Add mise tasks for iOS build, protocol tests, relay
+- `a26326c` — 7.4+7.5: Add real-device and end-to-end test plan
+
+**Verification**:
+- macOS build: passes (swift build)
+- Protocol tests: 61/61 assertions pass
+- iOS simulator build: passes (xcodebuild BUILD SUCCEEDED)

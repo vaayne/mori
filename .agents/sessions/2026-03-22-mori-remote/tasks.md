@@ -86,8 +86,8 @@
 
 ## Phase 7: Polish + Docs
 
-- [ ] 7.1 Localization: `.localized()` strings for Mac + iOS (English + zh-Hans)
-- [ ] 7.2 Update README.md, CHANGELOG.md, AGENTS.md
-- [ ] 7.3 Add mise tasks: `ios:build`, `ios:test`
-- [ ] 7.4 Real-device suspend/resume testing (iOS 17.x, 18.x)
-- [ ] 7.5 End-to-end test: Mac + Fly.io + iOS device, RTT measurement
+- [x] 7.1 Localization: `.localized()` strings for Mac + iOS (English + zh-Hans)
+- [x] 7.2 Update README.md, CHANGELOG.md, AGENTS.md
+- [x] 7.3 Add mise tasks: `ios:build`, `ios:test`
+- [x] 7.4 Real-device suspend/resume testing (iOS 17.x, 18.x)
+- [x] 7.5 End-to-end test: Mac + Fly.io + iOS device, RTT measurement
