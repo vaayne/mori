@@ -110,12 +110,42 @@ run = '''
 set -euo pipefail
 cd MoriRemote
 xcodegen generate
+UDID=$(xcrun simctl list devices available -j | jq -r '.devices[][] | select(.name=="iPhone 16" and .isAvailable==true) | .udid' | head -1)
+DEST="platform=iOS Simulator,id=${UDID:-generic/platform=iOS Simulator}"
 xcodebuild \
   -project MoriRemote.xcodeproj \
   -scheme MoriRemote \
   -sdk iphonesimulator \
-  -destination 'generic/platform=iOS Simulator' \
+  -destination "$DEST" \
   build 2>&1 | xcbeautify
+'''
+
+[tasks."ios:run"]
+description = "Build and run MoriRemote on iOS Simulator (iPhone 16)"
+depends = ["ios:build"]
+run = '''
+set -euo pipefail
+DEVICE="iPhone 16"
+UDID=$(xcrun simctl list devices available -j | jq -r --arg name "$DEVICE" '.devices[][] | select(.name==$name and .isAvailable==true) | .udid' | head -1)
+if [ -z "$UDID" ]; then
+  echo "Error: No available simulator found for '$DEVICE'"
+  exit 1
+fi
+echo "Booting $DEVICE ($UDID)..."
+xcrun simctl boot "$UDID" 2>/dev/null || true
+open -a Simulator
+
+APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -path "*/Build/Products/Debug-iphonesimulator/MoriRemote.app" -maxdepth 5 2>/dev/null | head -1)
+if [ -z "$APP_PATH" ]; then
+  echo "Error: MoriRemote.app not found in DerivedData. Run 'mise run ios:build' first."
+  exit 1
+fi
+
+echo "Installing MoriRemote..."
+xcrun simctl install "$UDID" "$APP_PATH"
+echo "Launching MoriRemote..."
+xcrun simctl launch "$UDID" com.vaayne.mori.remote
+echo "MoriRemote running on $DEVICE"
 '''
 
 [tasks."ios:test"]
