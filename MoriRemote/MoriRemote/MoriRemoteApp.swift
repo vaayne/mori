@@ -8,6 +8,12 @@ struct MoriRemoteApp: App {
     @State private var errorMessage: String?
     @Environment(\.scenePhase) private var scenePhase
 
+    /// Shared relay client for the app lifetime.
+    @State private var relayClient = RelayClient()
+
+    /// Track whether we were connected before backgrounding.
+    @State private var wasConnectedBeforeBackground = false
+
     init() {
         let result = ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv)
         if result == GHOSTTY_SUCCESS {
@@ -20,7 +26,7 @@ struct MoriRemoteApp: App {
     var body: some Scene {
         WindowGroup {
             if ghosttyReady {
-                TerminalView()
+                TerminalView(relayClient: relayClient)
                     .preferredColorScheme(.dark)
                     .statusBarHidden(true)
             } else {
@@ -40,11 +46,25 @@ struct MoriRemoteApp: App {
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
             case .active:
-                // App foregrounded — future: reconnect WebSocket
                 GhosttyAppContext.shared.tick()
+                // Reconnect if we were connected before backgrounding
+                if wasConnectedBeforeBackground {
+                    wasConnectedBeforeBackground = false
+                    Task {
+                        await relayClient.reconnect()
+                    }
+                }
             case .background:
-                // App backgrounded — future: detach and close WebSocket
-                break
+                // Immediately detach and close WebSocket — no background keep-alive
+                Task {
+                    let currentState = await relayClient.state
+                    if case .disconnected = currentState {
+                        wasConnectedBeforeBackground = false
+                    } else {
+                        wasConnectedBeforeBackground = true
+                        await relayClient.disconnect(reason: "app backgrounded")
+                    }
+                }
             case .inactive:
                 break
             @unknown default:
