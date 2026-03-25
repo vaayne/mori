@@ -4,19 +4,33 @@ import MoriRemoteProtocol
 
 /// Full-screen terminal view using ghostty's Remote backend.
 /// Integrates PipeBridge for ghostty rendering with RelayClient for WebSocket data.
+/// Includes mode toggle, detach button, and orientation-driven resize.
 struct TerminalView: View {
     @State private var pipeBridge: PipeBridge?
     @State private var errorMessage: String?
     let relayClient: RelayClient
+    let sessionName: String
+    let mode: SessionMode
+    let onToggleMode: () -> Void
+    let onDetach: () -> Void
+    let onResize: (UInt16, UInt16) -> Void
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
             if let pipeBridge {
-                RemoteTerminalRepresentable(pipeBridge: pipeBridge)
-                    .ignoresSafeArea(.container, edges: .top)
-                    .ignoresSafeArea(.keyboard)
+                GeometryReader { geometry in
+                    RemoteTerminalRepresentable(pipeBridge: pipeBridge)
+                        .ignoresSafeArea(.container, edges: .top)
+                        .ignoresSafeArea(.keyboard)
+                        .onChange(of: geometry.size) { _, newSize in
+                            handleSizeChange(newSize)
+                        }
+                        .onAppear {
+                            handleSizeChange(geometry.size)
+                        }
+                }
             } else if let errorMessage {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle")
@@ -31,11 +45,65 @@ struct TerminalView: View {
                 ProgressView("Initializing terminal...")
                     .foregroundStyle(.white)
             }
+
+            // Floating controls overlay
+            VStack {
+                // Top bar: session name + detach
+                HStack {
+                    Text(sessionName)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.black.opacity(0.5))
+                        .clipShape(Capsule())
+
+                    Spacer()
+
+                    Button {
+                        onDetach()
+                    } label: {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .padding(8)
+                            .background(.black.opacity(0.5))
+                            .clipShape(Circle())
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
+                Spacer()
+
+                // Bottom: mode toggle
+                HStack {
+                    Spacer()
+                    ModeToggleButton(mode: mode, onToggle: onToggleMode)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 60) // Above input accessory bar
+            }
         }
         .task {
             await initializePipeBridge()
         }
     }
+
+    // MARK: - Size -> Resize
+
+    /// Estimate terminal cols/rows from pixel size.
+    /// Uses approximate character cell size (8pt wide, 16pt tall at 1x).
+    private func handleSizeChange(_ size: CGSize) {
+        guard size.width > 0, size.height > 0 else { return }
+        let cellWidth: CGFloat = 8.0
+        let cellHeight: CGFloat = 16.0
+        let cols = UInt16(max(size.width / cellWidth, 10))
+        let rows = UInt16(max(size.height / cellHeight, 5))
+        onResize(cols, rows)
+    }
+
+    // MARK: - Pipe Bridge Setup
 
     private func initializePipeBridge() async {
         do {
