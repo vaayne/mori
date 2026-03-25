@@ -4,16 +4,16 @@ import Foundation
 /// Connect to a relay and bridge local tmux sessions.
 struct Serve: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "Connect to relay and bridge tmux sessions via WebSocket."
+        abstract: .localized("Connect to relay and bridge tmux sessions via WebSocket.")
     )
 
-    @Option(name: .long, help: "Relay server URL (e.g., wss://relay.example.com/ws)")
+    @Option(name: .long, help: ArgumentHelp(.localized("Relay server URL (e.g., wss://relay.example.com/ws)")))
     var relayURL: String
 
-    @Option(name: .long, help: "Pairing token from relay /pair endpoint")
+    @Option(name: .long, help: ArgumentHelp(.localized("Pairing token from relay /pair endpoint")))
     var token: String
 
-    @Option(name: .long, help: "Session ID for reconnection (overrides stored ID)")
+    @Option(name: .long, help: ArgumentHelp(.localized("Session ID for reconnection (overrides stored ID)")))
     var sessionID: String?
 
     func run() async throws {

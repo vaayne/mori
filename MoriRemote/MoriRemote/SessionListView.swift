@@ -127,7 +127,7 @@ private struct SessionRow: View {
                 Spacer()
 
                 if session.attached {
-                    Text("active")
+                    Text(String(localized: "active"))
                         .font(.caption2)
                         .foregroundStyle(.green)
                         .padding(.horizontal, 6)

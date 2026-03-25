@@ -1,0 +1,34 @@
+/* MoriRemote iOS App Strings */
+
+/* QR Scanner */
+"Scan QR Code" = "Scan QR Code";
+"Scan the QR code shown on your Mac\nto pair with Mori Remote" = "Scan the QR code shown on your Mac\nto pair with Mori Remote";
+"Camera Access Required" = "Camera Access Required";
+"Open Settings to allow camera access\nfor QR code scanning" = "Open Settings to allow camera access\nfor QR code scanning";
+"Open Settings" = "Open Settings";
+"Enter URL Manually" = "Enter URL Manually";
+"Enter Relay URL" = "Enter Relay URL";
+"Format: mori-relay://host/token" = "Format: mori-relay://host/token";
+"Connect" = "Connect";
+"Cancel" = "Cancel";
+
+/* Session List */
+"Sessions" = "Sessions";
+"Refresh" = "Refresh";
+"Forget This Device" = "Forget This Device";
+"No Sessions" = "No Sessions";
+"No tmux sessions found on the host.\nCreate a session on your Mac first." = "No tmux sessions found on the host.\nCreate a session on your Mac first.";
+"active" = "active";
+
+/* Mode Toggle */
+"Read-Only" = "Read-Only";
+"Interactive" = "Interactive";
+
+/* Connection Status */
+"Disconnected" = "Disconnected";
+"Connecting..." = "Connecting...";
+"Connected" = "Connected";
+"Reconnecting..." = "Reconnecting...";
+
+/* Terminal View */
+"Initializing terminal..." = "Initializing terminal...";

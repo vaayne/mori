@@ -23,6 +23,8 @@ targets:
         excludes:
           - "*.modulemap"
           - "*-Bridging-Header.h"
+    resources:
+      - path: MoriRemote/Resources
     dependencies:
       - framework: ../Frameworks/GhosttyKit.xcframework
       - package: MoriRemoteProtocol

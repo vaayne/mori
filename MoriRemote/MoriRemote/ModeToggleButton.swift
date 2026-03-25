@@ -12,7 +12,7 @@ struct ModeToggleButton: View {
             HStack(spacing: 6) {
                 Image(systemName: mode == .readOnly ? "eye" : "keyboard")
                     .font(.system(size: 14, weight: .medium))
-                Text(mode == .readOnly ? "Read-Only" : "Interactive")
+                Text(mode == .readOnly ? String(localized: "Read-Only") : String(localized: "Interactive"))
                     .font(.system(size: 13, weight: .medium))
             }
             .foregroundStyle(mode == .readOnly ? .orange : .green)

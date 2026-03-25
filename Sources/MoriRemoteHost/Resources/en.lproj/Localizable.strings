@@ -1,0 +1,31 @@
+/* MoriRemoteHost CLI Strings */
+
+/* Main command */
+"Mori Remote Host — bridges local tmux sessions to a cloud relay via WebSocket." = "Mori Remote Host — bridges local tmux sessions to a cloud relay via WebSocket.";
+
+/* Serve subcommand */
+"Connect to relay and bridge tmux sessions via WebSocket." = "Connect to relay and bridge tmux sessions via WebSocket.";
+"Relay server URL (e.g., wss://relay.example.com/ws)" = "Relay server URL (e.g., wss://relay.example.com/ws)";
+"Pairing token from relay /pair endpoint" = "Pairing token from relay /pair endpoint";
+"Session ID for reconnection (overrides stored ID)" = "Session ID for reconnection (overrides stored ID)";
+
+/* Sessions subcommand */
+"List local tmux sessions with display-friendly names." = "List local tmux sessions with display-friendly names.";
+"Output as JSON" = "Output as JSON";
+"No tmux sessions found." = "No tmux sessions found.";
+" (attached)" = " (attached)";
+"1 window" = "1 window";
+"%lld windows" = "%lld windows";
+
+/* QRCode subcommand */
+"Generate a QR code for iOS pairing." = "Generate a QR code for iOS pairing.";
+"Relay server base URL (e.g., https://relay.example.com)" = "Relay server base URL (e.g., https://relay.example.com)";
+"Pre-generated token (skips /pair request if provided)" = "Pre-generated token (skips /pair request if provided)";
+"Output QR code as PNG data to stdout instead of terminal ASCII" = "Output QR code as PNG data to stdout instead of terminal ASCII";
+"Scan this QR code with Mori Remote on your iOS device:" = "Scan this QR code with Mori Remote on your iOS device:";
+"Failed to generate QR code PNG" = "Failed to generate QR code PNG";
+"Failed to generate QR code. Pairing URL: %@" = "Failed to generate QR code. Pairing URL: %@";
+
+/* Loopback subcommand */
+"Run relay-free loopback harness for end-to-end testing." = "Run relay-free loopback harness for end-to-end testing.";
+"Port for the loopback relay (default: 9876)" = "Port for the loopback relay (default: 9876)";

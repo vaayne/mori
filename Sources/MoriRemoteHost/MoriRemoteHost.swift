@@ -5,7 +5,7 @@ import Foundation
 struct MoriRemoteHost: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "mori-remote-host",
-        abstract: "Mori Remote Host — bridges local tmux sessions to a cloud relay via WebSocket.",
+        abstract: .localized("Mori Remote Host — bridges local tmux sessions to a cloud relay via WebSocket."),
         subcommands: [
             Serve.self,
             Sessions.self,

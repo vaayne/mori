@@ -1,0 +1,31 @@
+/* MoriRemoteHost CLI Strings */
+
+/* Main command */
+"Mori Remote Host — bridges local tmux sessions to a cloud relay via WebSocket." = "Mori Remote Host — 通过 WebSocket 将本地 tmux 会话桥接到云端中继。";
+
+/* Serve subcommand */
+"Connect to relay and bridge tmux sessions via WebSocket." = "连接到中继并通过 WebSocket 桥接 tmux 会话。";
+"Relay server URL (e.g., wss://relay.example.com/ws)" = "中继服务器 URL（例如 wss://relay.example.com/ws）";
+"Pairing token from relay /pair endpoint" = "来自中继 /pair 端点的配对令牌";
+"Session ID for reconnection (overrides stored ID)" = "用于重连的会话 ID（覆盖已存储的 ID）";
+
+/* Sessions subcommand */
+"List local tmux sessions with display-friendly names." = "列出本地 tmux 会话（显示友好名称）。";
+"Output as JSON" = "以 JSON 格式输出";
+"No tmux sessions found." = "未找到 tmux 会话。";
+" (attached)" = "（已连接）";
+"1 window" = "1 个窗口";
+"%lld windows" = "%lld 个窗口";
+
+/* QRCode subcommand */
+"Generate a QR code for iOS pairing." = "生成用于 iOS 配对的二维码。";
+"Relay server base URL (e.g., https://relay.example.com)" = "中继服务器基础 URL（例如 https://relay.example.com）";
+"Pre-generated token (skips /pair request if provided)" = "预生成的令牌（提供时跳过 /pair 请求）";
+"Output QR code as PNG data to stdout instead of terminal ASCII" = "将二维码以 PNG 数据输出到标准输出，而非终端 ASCII";
+"Scan this QR code with Mori Remote on your iOS device:" = "使用 iOS 设备上的 Mori Remote 扫描此二维码：";
+"Failed to generate QR code PNG" = "生成二维码 PNG 失败";
+"Failed to generate QR code. Pairing URL: %@" = "生成二维码失败。配对 URL：%@";
+
+/* Loopback subcommand */
+"Run relay-free loopback harness for end-to-end testing." = "运行无中继回环测试工具进行端到端测试。";
+"Port for the loopback relay (default: 9876)" = "回环中继端口（默认：9876）";

@@ -43,10 +43,10 @@ struct ConnectionStatusView: View {
 
     private var statusText: String {
         switch status {
-        case .disconnected: "Disconnected"
-        case .connecting: "Connecting..."
-        case .connected: "Connected"
-        case .reconnecting: "Reconnecting..."
+        case .disconnected: String(localized: "Disconnected")
+        case .connecting: String(localized: "Connecting...")
+        case .connected: String(localized: "Connected")
+        case .reconnecting: String(localized: "Reconnecting...")
         }
     }
 }

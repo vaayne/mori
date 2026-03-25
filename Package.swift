@@ -64,7 +64,10 @@ let package = Package(
                 "MoriRemoteProtocol",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
-            path: "Sources/MoriRemoteHost"
+            path: "Sources/MoriRemoteHost",
+            resources: [
+                .process("Resources"),
+            ]
         ),
     ]
 )

@@ -1,0 +1,34 @@
+/* MoriRemote iOS App Strings */
+
+/* QR Scanner */
+"Scan QR Code" = "扫描二维码";
+"Scan the QR code shown on your Mac\nto pair with Mori Remote" = "扫描 Mac 上显示的二维码\n与 Mori Remote 配对";
+"Camera Access Required" = "需要相机权限";
+"Open Settings to allow camera access\nfor QR code scanning" = "请在设置中允许相机访问\n以扫描二维码";
+"Open Settings" = "打开设置";
+"Enter URL Manually" = "手动输入 URL";
+"Enter Relay URL" = "输入中继 URL";
+"Format: mori-relay://host/token" = "格式：mori-relay://host/token";
+"Connect" = "连接";
+"Cancel" = "取消";
+
+/* Session List */
+"Sessions" = "会话";
+"Refresh" = "刷新";
+"Forget This Device" = "忘记此设备";
+"No Sessions" = "无会话";
+"No tmux sessions found on the host.\nCreate a session on your Mac first." = "未在主机上找到 tmux 会话。\n请先在 Mac 上创建会话。";
+"active" = "活跃";
+
+/* Mode Toggle */
+"Read-Only" = "只读";
+"Interactive" = "交互";
+
+/* Connection Status */
+"Disconnected" = "已断开";
+"Connecting..." = "连接中...";
+"Connected" = "已连接";
+"Reconnecting..." = "重连中...";
+
+/* Terminal View */
+"Initializing terminal..." = "正在初始化终端...";

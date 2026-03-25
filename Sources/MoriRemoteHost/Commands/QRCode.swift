@@ -5,16 +5,16 @@ import Foundation
 struct QRCode: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "qrcode",
-        abstract: "Generate a QR code for iOS pairing."
+        abstract: .localized("Generate a QR code for iOS pairing.")
     )
 
-    @Option(name: .long, help: "Relay server base URL (e.g., https://relay.example.com)")
+    @Option(name: .long, help: ArgumentHelp(.localized("Relay server base URL (e.g., https://relay.example.com)")))
     var relayURL: String
 
-    @Option(name: .long, help: "Pre-generated token (skips /pair request if provided)")
+    @Option(name: .long, help: ArgumentHelp(.localized("Pre-generated token (skips /pair request if provided)")))
     var token: String?
 
-    @Flag(name: .long, help: "Output QR code as PNG data to stdout instead of terminal ASCII")
+    @Flag(name: .long, help: ArgumentHelp(.localized("Output QR code as PNG data to stdout instead of terminal ASCII")))
     var png: Bool = false
 
     func run() async throws {
@@ -31,20 +31,20 @@ struct QRCode: AsyncParsableCommand {
 
         if png {
             guard let pngData = QRCodeGenerator.generatePNG(from: pairingURL) else {
-                print("Failed to generate QR code PNG")
+                print(String.localized("Failed to generate QR code PNG"))
                 throw ExitCode.failure
             }
             FileHandle.standardOutput.write(pngData)
         } else {
             let ascii = QRCodeGenerator.generateASCII(from: pairingURL)
             if let ascii {
-                print("Scan this QR code with Mori Remote on your iOS device:")
+                print(String.localized("Scan this QR code with Mori Remote on your iOS device:"))
                 print()
                 print(ascii)
                 print()
                 print("Pairing URL: \(pairingURL)")
             } else {
-                print("Failed to generate QR code. Pairing URL: \(pairingURL)")
+                print(String.localized("Failed to generate QR code. Pairing URL: \(pairingURL)"))
             }
         }
     }
