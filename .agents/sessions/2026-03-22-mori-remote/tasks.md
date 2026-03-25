@@ -69,11 +69,11 @@
 
 ## Phase 5B: iOS App — WebSocket Client + Reconnect
 
-- [ ] 5B.1 Create `RelayClient` (URLSessionWebSocketTask, MoriRemoteProtocol state machine)
-- [ ] 5B.2 iOS lifecycle: detach on background, reconnect on foreground (no background keep-alive)
-- [ ] 5B.3 Session ID storage in iOS Keychain with invalidation
-- [ ] 5B.4 Heartbeat response to relay pings
-- [ ] 5B.5 Reconnect state machine tests (disconnect, background, session expiry, re-pair)
+- [x] 5B.1 Create `RelayClient` (URLSessionWebSocketTask, MoriRemoteProtocol state machine)
+- [x] 5B.2 iOS lifecycle: detach on background, reconnect on foreground (no background keep-alive)
+- [x] 5B.3 Session ID storage in iOS Keychain with invalidation
+- [x] 5B.4 Heartbeat response to relay pings
+- [x] 5B.5 Reconnect state machine tests (disconnect, background, session expiry, re-pair)
 
 ## Phase 6: iOS App — Session List + QR Pairing + Mode Toggle
 

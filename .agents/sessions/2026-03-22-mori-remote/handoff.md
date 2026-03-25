@@ -126,3 +126,65 @@ See [plan.md](plan.md) for full details.
 - MoriRemoteProtocol is linked and importable — ControlMessage types ready for WebSocket framing
 - scenePhase observer in MoriRemoteApp ready for background detach / foreground reconnect
 - InputAccessoryBar.onKeyPress sends raw bytes — needs to be wired to PipeBridge in terminal view
+
+### Phase 5B: iOS App — WebSocket Client + Reconnect (2026-03-25)
+
+**Status**: COMPLETE (5/5 tasks)
+
+**What was done**:
+- Created `RelayClient` actor: URLSessionWebSocketTask-based WebSocket client connecting to relay as viewer role
+  - Implements MoriRemoteProtocol state machine (disconnected -> pairing -> connected -> attached -> detached)
+  - Binary frames for terminal data, JSON text frames for control messages
+  - Automatic reconnection with exponential backoff (1s base, 30s max, 10 attempts, jitter)
+  - Session ID extraction from handshake capabilities (same pattern as MoriRemoteHost RelayConnector)
+  - Heartbeat response: echoes relay ping timestamps back as pong
+  - Handles token_expired/token_invalid errors by invalidating session and requiring re-pair
+- Updated `MoriRemoteApp.swift` with iOS lifecycle handling:
+  - scenePhase .background: immediately disconnects relay (no background keep-alive)
+  - scenePhase .active: reconnects using stored session ID if was previously connected
+  - Tracks `wasConnectedBeforeBackground` state for clean lifecycle transitions
+- Created `KeychainStore`: Security.framework wrapper for session ID persistence
+  - `kSecAttrAccessibleAfterFirstUnlock` for availability during foreground reconnect
+  - save/load/delete operations for session lifecycle
+  - Invalidation clears credential, forcing re-pairing
+- Updated `TerminalView` to wire PipeBridge <-> RelayClient bidirectionally:
+  - Relay binary data -> PipeBridge.writeToTerminal() -> ghostty renders
+  - PipeBridge.onInputFromGhostty -> RelayClient.sendTerminalData() -> relay
+- Updated `PipeBridge` callback to `async throws` for WebSocket forwarding compatibility
+- Created reconnect state machine tests (61 assertions):
+  - Valid/invalid ConnectionState transitions
+  - Disconnect + reconnect scenario
+  - Background/foreground lifecycle (detach -> disconnect -> reconnect -> re-attach)
+  - Session expiry + re-pair from scratch
+  - Detach and switch session flow
+  - ControlMessage serialization round-trip for all 8 message types
+  - Heartbeat timestamp preservation, ErrorCode round-trip
+
+**Files created/changed**:
+- `MoriRemote/MoriRemote/RelayClient.swift` — new: WebSocket client actor
+- `MoriRemote/MoriRemote/KeychainStore.swift` — new: Keychain wrapper
+- `MoriRemote/MoriRemote/MoriRemoteApp.swift` — updated: lifecycle + RelayClient integration
+- `MoriRemote/MoriRemote/TerminalView.swift` — updated: RelayClient + PipeBridge wiring
+- `MoriRemote/MoriRemote/PipeBridge.swift` — updated: async throws callback
+- `Packages/MoriRemoteProtocol/Package.swift` — added test target
+- `Packages/MoriRemoteProtocol/Tests/TestMoriRemoteProtocol/` — new: 61-assertion test suite
+
+**Commits**:
+- `f31d976` — 5B.1: RelayClient WebSocket actor with MoriRemoteProtocol state machine
+- `5d31f96` — 5B.2: iOS lifecycle handling (detach on background, reconnect on foreground)
+- `2b1b1f1` — 5B.3: KeychainStore for session ID persistence with invalidation
+- `ba3fe37` — 5B.4+5B.5: Heartbeat response + reconnect state machine tests (61 assertions)
+
+**Key learnings**:
+- URLSessionWebSocketTask handles WebSocket ping/pong at the transport level automatically; application-level heartbeat is a separate JSON control message
+- PipeBridge callback needs to be `async throws` (not just `@Sendable (Data) -> Void`) because WebSocket sends are async and can fail
+- KeychainStore uses `kSecAttrAccessibleAfterFirstUnlock` (not `kSecAttrAccessibleWhenUnlocked`) so it's available during the brief foreground transition period
+- ConnectionState.transition(to:) returns nil for invalid transitions — RelayClient logs but doesn't crash
+
+**Context for next phase** (Phase 6: iOS App — Session List + QR Pairing + Mode Toggle):
+- RelayClient is fully functional with connect/reconnect/disconnect/sendControlMessage/sendTerminalData
+- RelayClient.onControlMessage callback delivers parsed ControlMessage to the UI layer
+- RelayClient.onStateChange callback delivers ConnectionState changes for status indicators
+- KeychainStore.loadSessionID() returns stored session for automatic reconnection
+- Phase 6 needs: QR scanner (AVCaptureSession), session list view, mode toggle, connection status UI
+- RelayClient.invalidateSession() clears Keychain + saved URLs for "Forget this device" flow
