@@ -133,11 +133,11 @@ go run . -addr :8080
 '''
 
 [tasks."relay:deploy"]
-description = "Deploy Go relay to Fly.io"
+description = "Deploy Go relay to Railway"
 run = '''
 set -euo pipefail
 cd mori-relay
-fly deploy
+railway up --detach
 '''
 
 # ─── Xcode ───────────────────────────────────────────────────────
