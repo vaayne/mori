@@ -108,7 +108,12 @@ final class AppViewModel {
 
         let host = String(parts[0])
         let token = String(parts[1])
-        let wsURL = "wss://\(host)/ws"
+
+        // Use ws:// for localhost/LAN, wss:// for public hosts
+        let isLocal = host.hasPrefix("localhost") || host.hasPrefix("127.0.0.1")
+            || host.hasPrefix("192.168.") || host.hasPrefix("10.")
+        let scheme = isLocal ? "ws" : "wss"
+        let wsURL = "\(scheme)://\(host)/ws"
 
         return (host: host, token: token, wsURL: wsURL)
     }
