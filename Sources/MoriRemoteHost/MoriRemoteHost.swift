@@ -10,6 +10,7 @@ struct MoriRemoteHost: AsyncParsableCommand {
             Serve.self,
             Sessions.self,
             QRCode.self,
+            Loopback.self,
         ],
         defaultSubcommand: Serve.self
     )
