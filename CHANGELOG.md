@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Features
 
+- **Mori Remote**: iOS companion app + cloud relay for remote tmux terminal access from anywhere
+  - **MoriRemoteHost**: Standalone Mac process bridging local tmux sessions to a WebSocket relay
+  - **Go Relay Service**: Cloud relay on Fly.io with token-based pairing, binary byte streaming, heartbeat, and rate limiting
+  - **MoriRemoteProtocol**: Cross-platform Swift package with control message types, connection state machine, and wire format
+  - **iOS App (Mori Remote)**: SwiftUI app with libghostty Metal terminal rendering, QR-code pairing, session list, read-only/interactive mode toggle
+  - **GhosttyKit Universal Build**: XCFramework now includes macOS, iOS device, and iOS Simulator slices
+  - **Ghostty Remote backend**: New Zig termio backend reading/writing over fd pairs instead of pty (enables iOS rendering)
+  - Session ID persistence in iOS Keychain with automatic reconnection on app resume
+  - Grouped tmux sessions for interactive mode (prevents iOS from constraining Mac terminal size)
+  - Localized in English and Simplified Chinese (both Mac CLI and iOS UI)
 - **Task Mode Sidebar**: Alternative sidebar view that groups all worktrees across projects by workflow status (To Do, In Progress, Needs Review, Done, Cancelled) instead of project hierarchy ([#14](https://github.com/vaayne/mori/issues/14))
   - Toggle between Tasks and Workspaces views via segmented control at sidebar top
   - Manual status changes via context menu, command palette, or `mori status` CLI command
