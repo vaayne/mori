@@ -29,6 +29,7 @@ enum TmuxThemeApplicator {
             ("status", "off"),
             ("status-style", "fg=\(fg),bg=\(statusBg)"),
             ("message-style", "fg=\(fg),bg=\(statusBg)"),
+            ("allow-passthrough", "on"),
         ]
 
         // Window-level options (set-option -gw)
@@ -39,6 +40,28 @@ enum TmuxThemeApplicator {
             ("pane-active-border-style", "fg=\(activeBorderFg)"),
         ]
 
+        // Global compatibility for image protocols in tmux (affects all sessions,
+        // including non-Mori sessions attached from remote hosts).
+        try? await tmuxBackend.setOption(sessionId: nil, option: "allow-passthrough", value: "on")
+        let globalUpdateEnv = (try? await tmuxBackend.optionValues(
+            sessionId: nil,
+            option: "update-environment"
+        )) ?? []
+        if !globalUpdateEnv.contains("TERM") {
+            try? await tmuxBackend.appendOptionValue(
+                sessionId: nil,
+                option: "update-environment",
+                value: "TERM"
+            )
+        }
+        if !globalUpdateEnv.contains("TERM_PROGRAM") {
+            try? await tmuxBackend.appendOptionValue(
+                sessionId: nil,
+                option: "update-environment",
+                value: "TERM_PROGRAM"
+            )
+        }
+
         // Apply only to Mori-managed sessions (those matching <project>/<branch> naming).
         // Non-Mori sessions are left untouched so they inherit the user's tmux.conf.
         do {
@@ -47,6 +70,28 @@ enum TmuxThemeApplicator {
                 for (option, value) in sessionOptions {
                     try? await tmuxBackend.setOption(sessionId: session.id, option: option, value: value)
                 }
+
+                // Yazi image preview in tmux requires TERM/TERM_PROGRAM to be
+                // propagated from the attached client environment.
+                let updateEnv = (try? await tmuxBackend.optionValues(
+                    sessionId: session.id,
+                    option: "update-environment"
+                )) ?? []
+                if !updateEnv.contains("TERM") {
+                    try? await tmuxBackend.appendOptionValue(
+                        sessionId: session.id,
+                        option: "update-environment",
+                        value: "TERM"
+                    )
+                }
+                if !updateEnv.contains("TERM_PROGRAM") {
+                    try? await tmuxBackend.appendOptionValue(
+                        sessionId: session.id,
+                        option: "update-environment",
+                        value: "TERM_PROGRAM"
+                    )
+                }
+
                 for (option, value) in windowOptions {
                     try? await tmuxBackend.setWindowOption(global: false, target: session.id, option: option, value: value)
                 }
@@ -54,6 +99,10 @@ enum TmuxThemeApplicator {
         } catch {
             print("[TmuxThemeApplicator] Failed to list sessions for per-session theme: \(error)")
         }
+
+        // Help terminal-aware apps (e.g. Yazi) detect Ghostty capabilities,
+        // especially across SSH+tmux where TERM_PROGRAM may be missing.
+        try? await tmuxBackend.setEnvironment(name: "TERM_PROGRAM", value: "ghostty")
 
         // Force all attached clients to redraw
         do {

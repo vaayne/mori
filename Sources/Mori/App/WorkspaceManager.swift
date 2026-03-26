@@ -81,9 +81,9 @@ final class WorkspaceManager {
     /// Callback invoked when the terminal should detach (session killed / no active session).
     var onTerminalDetach: (() -> Void)?
 
-    /// Callback invoked after a tmux session is created (for post-creation setup like proxy env).
-    /// Async so callers can await setup completion before proceeding (e.g. template apply).
-    var onSessionCreated: (() async -> Void)?
+    /// Callback invoked when a tmux backend should be (re)configured for runtime
+    /// options (theme/proxy/terminal capabilities).
+    var onSessionCreated: ((TmuxBackend) async -> Void)?
 
     /// Background coordinated polling task handle.
     private var pollingTask: Task<Void, Never>?
@@ -449,6 +449,9 @@ final class WorkspaceManager {
         Task {
             await refreshWorktreeBranch(worktreeId: worktreeId)
             let sessionReady = await ensureTmuxSession(for: worktree, showErrors: true)
+            if sessionReady {
+                await onSessionCreated?(tmuxBackend(for: worktree))
+            }
             await refreshRuntimeState()
 
             // Notify terminal to switch to this worktree's session
@@ -579,7 +582,7 @@ final class WorkspaceManager {
         // Create tmux session
         Task {
             _ = try? await tmux.createSession(name: sessionName, cwd: path)
-            await onSessionCreated?()
+            await onSessionCreated?(tmux)
             await tmux.refreshNow()
         }
 
@@ -639,6 +642,18 @@ final class WorkspaceManager {
             path: trimmedPath,
             location: location
         )
+    }
+
+    /// List branches for a project using the correct backend for its location.
+    /// `repoPathHint` is kept for UI callsites already passing repo path; the
+    /// persisted project path remains the source of truth.
+    func listBranches(projectId: UUID, repoPathHint: String? = nil) async throws -> [GitBranchInfo] {
+        guard let project = appState.projects.first(where: { $0.id == projectId }) else {
+            throw WorkspaceError.projectNotFound
+        }
+        let git = gitBackend(for: location(for: project))
+        let repoPath = project.repoRootPath.isEmpty ? (repoPathHint ?? "") : project.repoRootPath
+        return try await git.listBranches(repoPath: repoPath)
     }
 
     /// Update authentication settings for an existing remote project.
@@ -829,22 +844,38 @@ final class WorkspaceManager {
         }
         let worktreePath = (projectDir as NSString).appendingPathComponent(branchSlug)
 
-        // Ensure directory tree exists
-        if projectLocation == .local {
-            try FileManager.default.createDirectory(
-                atPath: projectDir,
-                withIntermediateDirectories: true
-            )
-        }
+        // Step 1: Prepare workspace path.
+        // Ensure the parent container exists before any git worktree operation.
+        // This is required for first-time remote usage where `<parent>/.mori/<project>`
+        // has not been created yet.
+        try await git.ensureDirectory(path: projectDir)
 
-        // Step 1: git worktree add (if this fails, nothing else happens)
-        try await git.addWorktree(
-            repoPath: project.repoRootPath,
-            path: worktreePath,
-            branch: trimmed,
-            createBranch: createBranch,
-            baseBranch: baseBranch
-        )
+        // Git repos use `git worktree add`; non-git projects fall back to creating
+        // a plain directory so remote/local "workspace" creation still works.
+        let isGitRepo = try await git.isGitRepo(path: project.repoRootPath)
+        if isGitRepo {
+            do {
+                try await git.addWorktree(
+                    repoPath: project.repoRootPath,
+                    path: worktreePath,
+                    branch: trimmed,
+                    createBranch: createBranch,
+                    baseBranch: baseBranch
+                )
+            } catch let gitError as GitError where createBranch && isBranchAlreadyExistsError(gitError, branch: trimmed) {
+                // User typed an existing branch but branch metadata was stale/unavailable.
+                // Retry as "use existing branch" to keep worksheet creation smooth.
+                try await git.addWorktree(
+                    repoPath: project.repoRootPath,
+                    path: worktreePath,
+                    branch: trimmed,
+                    createBranch: false,
+                    baseBranch: nil
+                )
+            }
+        } else {
+            try await git.ensureDirectory(path: worktreePath)
+        }
 
         // Step 2: Create Worktree model and save to DB
         let sessionName = SessionNaming.sessionName(projectShortName: project.shortName, worktree: trimmed)
@@ -863,7 +894,7 @@ final class WorkspaceManager {
         // Step 3: Create tmux session + apply template (partial failure tolerant)
         do {
             _ = try await tmux.createSession(name: sessionName, cwd: worktreePath)
-            await onSessionCreated?()
+            await onSessionCreated?(tmux)
             let applicator = TemplateApplicator(tmux: tmux)
             try await applicator.apply(
                 template: template,
@@ -882,6 +913,16 @@ final class WorkspaceManager {
         fireHook(event: .onWorktreeCreate, worktreeId: worktree.id)
 
         return worktree
+    }
+
+    private func isBranchAlreadyExistsError(_ error: GitError, branch: String) -> Bool {
+        guard case .executionFailed(_, _, let stderr) = error else { return false }
+        let message = stderr.lowercased()
+        if message.contains("already exists") && message.contains("branch") {
+            return true
+        }
+        // Handle outputs that include branch name but omit explicit "branch" token.
+        return message.contains("already exists") && message.contains(branch.lowercased())
     }
 
     /// Handle create worktree from the creation panel — extracts parameters from the
@@ -1150,7 +1191,7 @@ final class WorkspaceManager {
         if !sessionNames.contains(sessionName) {
             do {
                 _ = try await tmux.createSession(name: sessionName, cwd: worktree.path)
-                await onSessionCreated?()
+                await onSessionCreated?(tmux)
                 return true
             } catch {
                 if showErrors {
@@ -2026,7 +2067,7 @@ final class WorkspaceManager {
             guard recreated else { continue }
 
             recoveredAny = true
-            await onSessionCreated?()
+            await onSessionCreated?(tmux)
 
             if worktree.id == appState.uiState.selectedWorktreeId {
                 // Force new terminal process; same session key can otherwise

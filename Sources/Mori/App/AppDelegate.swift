@@ -201,8 +201,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
 
         // Wire session created: apply proxy env vars after tmux server starts
-        manager.onSessionCreated = { [weak self] in
-            guard let tmuxBackend = self?.workspaceManager?.tmuxBackend else { return }
+        manager.onSessionCreated = { [weak self] tmuxBackend in
+            guard self != nil else { return }
             let model = ProxySettingsApplicator.load()
             await ProxySettingsApplicator.apply(model, tmuxBackend: tmuxBackend)
 
@@ -424,9 +424,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         for name in sessionNames {
             popup.addItem(withTitle: name)
         }
-        if popup.numberOfItems > 2 {
-            popup.selectItem(at: 2)
-        }
 
         let alert = NSAlert()
         alert.alertStyle = .informational
@@ -558,9 +555,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if worktreeCreationController == nil {
             let controller = WorktreeCreationController()
 
-            controller.fetchBranches = { [weak manager] repoPath in
+            controller.fetchBranches = { [weak manager] projectId, repoPath in
                 guard let manager else { return [] }
-                return try await manager.gitBackend.listBranches(repoPath: repoPath)
+                return try await manager.listBranches(projectId: projectId, repoPathHint: repoPath)
             }
 
             controller.onCreateWorktree = { [weak manager] request in

@@ -180,6 +180,77 @@ public actor GitCommandRunner {
         try await run(["-C", directory] + arguments)
     }
 
+    /// Ensure a directory exists on the execution host.
+    /// Local: `FileManager.createDirectory`.
+    /// Remote: `ssh ... "mkdir -p <path>"`.
+    public func ensureDirectory(path: String) async throws {
+        if let sshConfig {
+            let remoteCommand = "mkdir -p \(SSHCommandSupport.shellEscape(path))"
+            var sshArguments: [String] = SSHCommandSupport.connectivityOptions()
+            sshArguments += sshConfig.sshOptions
+            if let port = sshConfig.port {
+                sshArguments += ["-p", "\(port)"]
+            }
+            sshArguments += [sshConfig.target, remoteCommand]
+
+            var output: String
+            var exitCode: Int32
+            do {
+                (output, exitCode) = try await runProcess(
+                    executablePath: "/usr/bin/ssh",
+                    arguments: sshArguments,
+                    timeoutSeconds: SSHCommandSupport.remoteCommandTimeoutSeconds
+                )
+            } catch ProcessExecutionError.timedOut(let seconds) {
+                let cmd = "ssh \(sshConfig.target) \(remoteCommand)"
+                throw GitError.executionFailed(
+                    command: cmd,
+                    exitCode: 124,
+                    stderr: "SSH command timed out after \(seconds)s."
+                )
+            }
+
+            if exitCode == 255,
+               let password = sshConfig.askpassPassword,
+               !password.isEmpty {
+                try await bootstrapPasswordControlMaster(sshConfig: sshConfig, password: password)
+                do {
+                    (output, exitCode) = try await runProcess(
+                        executablePath: "/usr/bin/ssh",
+                        arguments: sshArguments,
+                        timeoutSeconds: SSHCommandSupport.remoteCommandTimeoutSeconds
+                    )
+                } catch ProcessExecutionError.timedOut(let seconds) {
+                    let cmd = "ssh \(sshConfig.target) \(remoteCommand)"
+                    throw GitError.executionFailed(
+                        command: cmd,
+                        exitCode: 124,
+                        stderr: "SSH command timed out after \(seconds)s."
+                    )
+                }
+            }
+
+            if exitCode != 0 {
+                let cmd = "ssh \(sshConfig.target) \(remoteCommand)"
+                throw GitError.executionFailed(command: cmd, exitCode: exitCode, stderr: output)
+            }
+            return
+        }
+
+        do {
+            try FileManager.default.createDirectory(
+                atPath: path,
+                withIntermediateDirectories: true
+            )
+        } catch {
+            throw GitError.executionFailed(
+                command: "mkdir -p \(path)",
+                exitCode: 1,
+                stderr: error.localizedDescription
+            )
+        }
+    }
+
     // MARK: - Private
 
     private func runProcess(

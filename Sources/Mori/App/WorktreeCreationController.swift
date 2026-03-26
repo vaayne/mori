@@ -22,7 +22,7 @@ final class WorktreeCreationController: NSWindowController {
     var onCreateWorktree: ((WorktreeCreationRequest) -> Void)?
 
     /// Called to fetch branches asynchronously.
-    var fetchBranches: ((_ repoPath: String) async throws -> [GitBranchInfo])?
+    var fetchBranches: ((_ projectId: UUID, _ repoPath: String) async throws -> [GitBranchInfo])?
 
     /// Called when the user switches projects in the popup.
     var onProjectChanged: ((UUID) -> Void)?
@@ -323,7 +323,11 @@ final class WorktreeCreationController: NSWindowController {
             guard let self else { return }
             let branches: [GitBranchInfo]
             do {
-                branches = try await self.fetchBranches?(repoPath) ?? []
+                if let projectId = self.selectedProjectId {
+                    branches = try await self.fetchBranches?(projectId, repoPath) ?? []
+                } else {
+                    branches = []
+                }
             } catch {
                 branches = []
             }

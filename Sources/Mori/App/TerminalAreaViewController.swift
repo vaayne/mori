@@ -109,8 +109,9 @@ final class TerminalAreaViewController: NSViewController {
             command = "tmux has-session -t \(escaped) 2>/dev/null && tmux attach-session -t \(escaped) || tmux new-session -s \(escaped)"
             effectiveWorkingDirectory = workingDirectory
         case .ssh(let ssh):
+            let termProgram = ProcessInfo.processInfo.environment["TERM_PROGRAM"] ?? "ghostty"
             let remoteTmuxCore = "tmux has-session -t \(escaped) 2>/dev/null && tmux attach-session -t \(escaped) || tmux new-session -s \(escaped)"
-            let remoteTmux = "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/snap/bin:$PATH\"; \(remoteTmuxCore)"
+            let remoteTmux = "export TERM_PROGRAM=\(shellEscape(termProgram)); export COLORTERM=truecolor; export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/snap/bin:$PATH\"; \(remoteTmuxCore)"
             var sshCommand = "ssh -tt"
             for option in sshOptionsForInteractiveTerminal(ssh) {
                 sshCommand += " \(shellEscape(option))"
