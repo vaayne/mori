@@ -69,6 +69,15 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 </plist>
 EOF
 
+# Sign if SIGNING_IDENTITY is set
+if [[ -n "${SIGNING_IDENTITY:-}" ]]; then
+    SIGN_ARGS=()
+    if [[ -n "${KEYCHAIN_PROFILE:-}" ]]; then
+        SIGN_ARGS+=(--notarize)
+    fi
+    bash scripts/sign.sh "${SIGN_ARGS[@]}"
+fi
+
 # In CI, keep the bundle in the working directory for archiving
 if [[ -z "${CI:-}" ]]; then
     # Quit the app if it's running
