@@ -51,6 +51,15 @@ App (AppKit shell + SwiftUI sidebar views)
 - [mise](https://mise.jdx.dev/) (task runner)
 - Zig 0.15.2 + Xcode (for building libghostty)
 
+## Install
+
+```bash
+brew tap vaayne/tap
+brew install --cask mori
+```
+
+The Homebrew tap installs `Mori.app`. Release bundles also embed the `mori` CLI for Homebrew-based installs, and the cask declares `tmux` as a dependency.
+
 ## Build & Run
 
 ```bash

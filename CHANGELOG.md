@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- Release app bundles now embed the `mori` CLI to support Homebrew cask installs
+
+### 🐛 Bug Fixes
+
+- Tagged releases now stamp Mori.app with the actual release version instead of a hardcoded app version
+
+### 📝 Documentation
+
+- Added Homebrew tap install instructions to the English and Chinese READMEs
+
 ## [0.1.1] - 2026-03-27
 
 ### ✨ Features
