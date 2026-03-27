@@ -265,6 +265,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
 
         // Stop IPC server
+        IPCServer.removeSocketFile()
         if let server = ipcServer {
             Task { await server.stop() }
         }
