@@ -7,7 +7,7 @@ import Cocoa
 extension UpdateDriver: SPUUpdaterDelegate {
 
     func feedURLString(for updater: SPUUpdater) -> String? {
-        "https://vaayne.github.io/mori/appcast.xml"
+        "https://raw.githubusercontent.com/vaayne/homebrew-tap/main/mori-appcast.xml"
     }
 
     /// Called when an update is scheduled to install silently on quit.

@@ -122,7 +122,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
     <key>SUPublicEDKey</key>
     <string>AtuACa7YzgLmnQGVd76Ly7D3hg04TFIxZaH8m5kIkmQ=</string>
     <key>SUFeedURL</key>
-    <string>https://vaayne.github.io/mori/appcast.xml</string>
+    <string>https://raw.githubusercontent.com/vaayne/homebrew-tap/main/mori-appcast.xml</string>
 </dict>
 </plist>
 EOF

@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
 
 jobs:
   ghosttykit:
@@ -117,9 +116,10 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: appcast
-          path: appcast.xml
+          path: mori-appcast.xml
 
       - name: Create GitHub Release
+
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -177,12 +177,21 @@ jobs:
           SHA256: ${{ env.SHA256 }}
           TAP_DIR: homebrew-tap
 
-      - name: Commit and push tap update
+      - name: Download appcast artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: appcast
+
+      - name: Commit and push tap + appcast update
         run: |
           set -euo pipefail
           git -C homebrew-tap config user.name "github-actions[bot]"
           git -C homebrew-tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C homebrew-tap add Casks/mori.rb
+
+          # Copy mori-appcast.xml into tap repo
+          cp mori-appcast.xml homebrew-tap/mori-appcast.xml
+
+          git -C homebrew-tap add Casks/mori.rb mori-appcast.xml
 
           if git -C homebrew-tap diff --cached --quiet; then
             echo "No tap changes to commit."
@@ -191,31 +200,3 @@ jobs:
 
           git -C homebrew-tap commit -m "mori ${VERSION}"
           git -C homebrew-tap push
-
-  publish-appcast:
-    needs: release
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout gh-pages
-        uses: actions/checkout@v5
-        with:
-          ref: gh-pages
-
-      - name: Download appcast artifact
-        uses: actions/download-artifact@v5
-        with:
-          name: appcast
-
-      - name: Commit and push appcast.xml
-        run: |
-          set -euo pipefail
-          if ! git diff --quiet appcast.xml 2>/dev/null; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add appcast.xml
-            git commit -m "Update appcast.xml for ${GITHUB_REF_NAME}"
-            git push
-          else
-            echo "appcast.xml unchanged, skipping push."
-          fi
