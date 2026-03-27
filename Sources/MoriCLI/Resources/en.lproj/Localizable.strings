@@ -5,6 +5,8 @@
 "Focus a project and worktree" = "Focus a project and worktree";
 "Keys to send" = "Keys to send";
 "List all projects" = "List all projects";
+"Mori app is not accepting CLI connections. Quit and relaunch Mori, then try again." = "Mori app is not accepting CLI connections. Quit and relaunch Mori, then try again.";
+"Mori app is not running. Launch Mori and try again." = "Mori app is not running. Launch Mori and try again.";
 "Mori workspace CLI — communicate with the running Mori app." = "Mori workspace CLI — communicate with the running Mori app.";
 "Open a project from a path" = "Open a project from a path";
 "Path to project directory" = "Path to project directory";

@@ -32,6 +32,14 @@ public actor IPCServer {
         self.handler = handler
     }
 
+    /// Remove the Unix domain socket file synchronously.
+    /// Useful during app termination, where async actor cleanup may not finish
+    /// before the process exits.
+    public static func removeSocketFile(at path: String? = nil) {
+        let socketPath = path ?? Self.defaultSocketPath
+        try? FileManager.default.removeItem(atPath: socketPath)
+    }
+
     /// Start listening for connections.
     public func start() throws {
         // Ensure parent directory exists
@@ -184,6 +192,6 @@ public actor IPCServer {
     // MARK: - Helpers
 
     private nonisolated func removeSocketFile() {
-        try? FileManager.default.removeItem(atPath: socketPath)
+        Self.removeSocketFile(at: socketPath)
     }
 }

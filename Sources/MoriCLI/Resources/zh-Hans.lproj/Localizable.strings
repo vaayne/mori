@@ -5,6 +5,8 @@
 "Focus a project and worktree" = "聚焦到项目和工作树";
 "Keys to send" = "要发送的按键";
 "List all projects" = "列出所有项目";
+"Mori app is not accepting CLI connections. Quit and relaunch Mori, then try again." = "Mori 应用当前未接受 CLI 连接。请退出并重新启动 Mori 后重试。";
+"Mori app is not running. Launch Mori and try again." = "Mori 应用未运行。请先启动 Mori 后重试。";
 "Mori workspace CLI — communicate with the running Mori app." = "Mori 工作区 CLI — 与运行中的 Mori 应用通信。";
 "Open a project from a path" = "从路径打开项目";
 "Path to project directory" = "项目目录路径";

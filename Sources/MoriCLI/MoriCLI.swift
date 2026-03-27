@@ -1,4 +1,5 @@
 import ArgumentParser
+import Darwin
 import Foundation
 import MoriIPC
 
@@ -23,6 +24,19 @@ struct MoriCLI: ParsableCommand {
 
 /// Send an IPC request and print the result as JSON.
 func runIPCRequest(_ command: IPCCommand) throws {
+    switch diagnoseIPCSocket(at: IPCServer.defaultSocketPath) {
+    case .missing:
+        let message = String.localized("Mori app is not running. Launch Mori and try again.")
+        FileHandle.standardError.write(Data(String.localized("Error: \(message)").utf8))
+        throw ExitCode.failure
+    case .stale:
+        let message = String.localized("Mori app is not accepting CLI connections. Quit and relaunch Mori, then try again.")
+        FileHandle.standardError.write(Data(String.localized("Error: \(message)").utf8))
+        throw ExitCode.failure
+    case .ready, .indeterminate:
+        break
+    }
+
     let client = IPCClient()
     let request = IPCRequest(command: command, requestId: UUID().uuidString)
     let envelope = try client.sendSync(request)
@@ -38,6 +52,61 @@ func runIPCRequest(_ command: IPCCommand) throws {
         let errorMessage = String.localized("Error: \(message)")
         FileHandle.standardError.write(Data(errorMessage.utf8))
         throw ExitCode.failure
+    }
+}
+
+private enum IPCSocketStatus {
+    case ready
+    case missing
+    case stale
+    case indeterminate
+}
+
+private func diagnoseIPCSocket(at path: String) -> IPCSocketStatus {
+    guard FileManager.default.fileExists(atPath: path) else {
+        return .missing
+    }
+
+    let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+    guard fd >= 0 else {
+        return .indeterminate
+    }
+    defer { close(fd) }
+
+    var address = sockaddr_un()
+    address.sun_len = UInt8(MemoryLayout<sockaddr_un>.stride)
+    address.sun_family = sa_family_t(AF_UNIX)
+
+    let maxPathLength = MemoryLayout.size(ofValue: address.sun_path)
+    let pathBytes = Array(path.utf8)
+    guard pathBytes.count < maxPathLength else {
+        return .indeterminate
+    }
+
+    withUnsafeMutableBytes(of: &address.sun_path) { buffer in
+        buffer.initializeMemory(as: UInt8.self, repeating: 0)
+        _ = pathBytes.withUnsafeBytes { src in
+            memcpy(buffer.baseAddress, src.baseAddress, src.count)
+        }
+    }
+
+    let didConnect = withUnsafePointer(to: &address) { pointer in
+        pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
+            connect(fd, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_un>.stride))
+        }
+    }
+
+    if didConnect == 0 {
+        return .ready
+    }
+
+    switch errno {
+    case ENOENT:
+        return .missing
+    case ECONNREFUSED:
+        return .stale
+    default:
+        return .indeterminate
     }
 }
 
