@@ -120,7 +120,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>SUPublicEDKey</key>
-    <string>PLACEHOLDER_EDDSA_PUBLIC_KEY</string>
+    <string>AtuACa7YzgLmnQGVd76Ly7D3hg04TFIxZaH8m5kIkmQ=</string>
     <key>SUFeedURL</key>
     <string>https://vaayne.github.io/mori/appcast.xml</string>
 </dict>
