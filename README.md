@@ -53,10 +53,19 @@ App (AppKit shell + SwiftUI sidebar views)
 
 ## Install
 
+### Homebrew
+
 ```bash
 brew tap vaayne/tap
 brew install --cask mori
 ```
+
+### GitHub Releases
+
+Download the latest release from [GitHub Releases](https://github.com/vaayne/mori/releases).
+
+- `.dmg`: Open the disk image and move `Mori.app` into `/Applications`
+- `.zip`: Extract the archive and move `Mori.app` into `/Applications`
 
 The Homebrew tap installs `Mori.app`. Release bundles also embed the `mori` CLI for Homebrew-based installs, and the cask declares `tmux` as a dependency.
 
