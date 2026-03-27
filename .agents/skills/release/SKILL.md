@@ -19,7 +19,32 @@ Use semantic versioning with `v` prefix: `v0.1.0`, `v1.0.0`, `v1.2.3-rc.1`.
 2. Commit: `📝 docs: update CHANGELOG for vX.Y.Z`
 3. Tag: `git tag vX.Y.Z`
 4. Push: `git push origin main --tags`
-5. CI triggers `.github/workflows/release.yml` → builds Mori.app + creates GitHub Release
+5. CI triggers `.github/workflows/release.yml` → builds, signs, notarizes, and publishes the GitHub Release
+6. CI updates `vaayne/homebrew-tap` with the new `mori` cask version and SHA-256
+
+## Required Secrets
+
+The release workflow requires:
+
+- `APPLE_CERTIFICATE_P12`
+- `APPLE_CERTIFICATE_PASSWORD`
+- `APPLE_ID`
+- `APPLE_TEAM_ID`
+- `APPLE_APP_PASSWORD`
+- `APPLE_DEVELOPER_NAME`
+- `HOMEBREW_TAP_TOKEN` — personal access token with write access to `vaayne/homebrew-tap`
+
+## Homebrew Tap
+
+Homebrew does not automatically update a third-party tap from GitHub Releases. Mori's release workflow is responsible for updating `vaayne/homebrew-tap`.
+
+The tap update flow:
+
+1. Read the uploaded ZIP asset digest from the just-created GitHub Release
+2. Rewrite `Casks/mori.rb` in `vaayne/homebrew-tap`
+3. Commit and push the cask update to the tap's default branch
+
+The generated cask installs `Mori.app`, depends on `tmux`, and exposes the embedded `mori` CLI via a `binary` stanza.
 
 ## Update Changelog
 
@@ -42,5 +67,7 @@ Apply to `CHANGELOG.md`:
 
 ## Artifacts
 
-- **macOS app**: `Mori-X.Y.Z-macos-arm64.zip` (unsigned, built via `scripts/bundle.sh`)
+- **macOS app ZIP**: `Mori-X.Y.Z-macos-arm64.zip` (signed and notarized)
+- **macOS app DMG**: `Mori-X.Y.Z-macos-arm64.dmg` (signed and notarized)
 - **GitHub Release**: Auto-created by `release.yml` workflow on tag push
+- **Homebrew tap**: `vaayne/homebrew-tap` updated automatically after a successful release

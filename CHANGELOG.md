@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added Homebrew tap install instructions to the English and Chinese READMEs
 
+### 🔧 CI/CD
+
+- Release automation now updates `vaayne/homebrew-tap` with the new Homebrew cask version and SHA-256 after publishing a tagged release
+
 ## [0.1.1] - 2026-03-27
 
 ### ✨ Features

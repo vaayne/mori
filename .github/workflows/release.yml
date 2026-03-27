@@ -117,3 +117,62 @@ jobs:
         run: |
           KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
           security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+
+  update-homebrew-tap:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Mori
+        uses: actions/checkout@v5
+
+      - name: Checkout tap repo
+        uses: actions/checkout@v5
+        with:
+          repository: vaayne/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Resolve release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          ZIP_NAME="Mori-${VERSION}-macos-arm64.zip"
+          SHA256="$(gh release view "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --json assets \
+            --jq '.assets[] | select(.name == "'"${ZIP_NAME}"'") | (.digest // "") | sub("^sha256:"; "")')"
+
+          if [[ -z "${SHA256}" ]]; then
+            echo "Failed to resolve SHA256 for ${ZIP_NAME}" >&2
+            exit 1
+          fi
+
+          {
+            echo "VERSION=${VERSION}"
+            echo "SHA256=${SHA256}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Update tap cask
+        run: bash scripts/update-homebrew-tap.sh
+        env:
+          VERSION: ${{ env.VERSION }}
+          SHA256: ${{ env.SHA256 }}
+          TAP_DIR: homebrew-tap
+
+      - name: Commit and push tap update
+        run: |
+          set -euo pipefail
+          git -C homebrew-tap config user.name "github-actions[bot]"
+          git -C homebrew-tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C homebrew-tap add Casks/mori.rb
+
+          if git -C homebrew-tap diff --cached --quiet; then
+            echo "No tap changes to commit."
+            exit 0
+          fi
+
+          git -C homebrew-tap commit -m "mori ${VERSION}"
+          git -C homebrew-tap push
