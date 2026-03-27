@@ -40,7 +40,7 @@ struct UpdatePopoverView: View {
                 InstallingView(installing: installing, dismiss: dismiss)
 
             case .notFound(let notFound):
-                NotFoundView(notFound: notFound, dismiss: dismiss)
+                NotFoundView(model: model, notFound: notFound, dismiss: dismiss)
 
             case .error(let error):
                 UpdateErrorView(error: error, dismiss: dismiss)
@@ -328,6 +328,7 @@ private struct InstallingView: View {
 // MARK: - Not Found
 
 private struct NotFoundView: View {
+    @ObservedObject var model: UpdateViewModel
     let notFound: UpdateState.NotFound
     let dismiss: DismissAction
 
@@ -346,6 +347,7 @@ private struct NotFoundView: View {
             HStack {
                 Spacer()
                 Button(String.localized("OK")) {
+                    model.state = .idle
                     notFound.acknowledgement()
                     dismiss()
                 }
