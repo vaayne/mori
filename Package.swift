@@ -21,6 +21,7 @@ let package = Package(
         .package(path: "Packages/MoriUI"),
         .package(path: "Packages/MoriIPC"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.7.0"),
     ],
     targets: [
         .executableTarget(
@@ -33,6 +34,7 @@ let package = Package(
                 "MoriGit",
                 "MoriUI",
                 "MoriIPC",
+                .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "Sources/Mori",
             resources: [
