@@ -38,7 +38,7 @@
 
 ## Phase 6: Localization & Polish
 
-- [ ] 6.1: Add new strings to en + zh-Hans Localizable.strings
-- [ ] 6.2: Apply .localized() to all computed strings in update UI
-- [ ] 6.3: Build and verify zero warnings (Swift 6 strict concurrency)
-- [ ] 6.4: Update CHANGELOG.md
+- [x] 6.1: Add new strings to en + zh-Hans Localizable.strings
+- [x] 6.2: Apply .localized() to all computed strings in update UI
+- [x] 6.3: Build and verify zero warnings (Swift 6 strict concurrency)
+- [x] 6.4: Update CHANGELOG.md

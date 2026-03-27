@@ -163,3 +163,33 @@
 - All Phase 5 scripts are robust (`set -euo pipefail`) with proper cleanup traps for temp files/secrets
 - No scripts were executed — they require CI environment with secrets and signing infrastructure
 - Phase 6 (Localization & Polish) is next: localize all update UI strings, verify zero warnings, update CHANGELOG
+
+## Phase 6: Localization & Polish
+
+**Status:** complete
+
+**Tasks completed:**
+- 6.1: Added 42 new auto-update strings to both `en.lproj/Localizable.strings` and `zh-Hans.lproj/Localizable.strings` covering all update UI states (permission request, checking, available, downloading, extracting, installing, not found, error), button labels, field labels (Version/Size/Released), and descriptions.
+- 6.2: Applied `.localized()` to all computed strings in `UpdateViewModel.swift` (text, maxWidthText, description properties), `UpdatePopoverView.swift` (all Text/Button labels across 8 subviews), and `UpdateState.swift` (release notes label). Used `String.localized()` pattern consistent with the rest of the codebase (custom bundle via `Bundle.preferredLocalization`).
+- 6.3: Build verified with zero warnings under Swift 6 strict concurrency (`swift build --product Mori`).
+- 6.4: Added "Sparkle Auto-Update" entry under `[Unreleased]` in `CHANGELOG.md` with feature summary.
+
+**Files changed:**
+- `Sources/Mori/Resources/en.lproj/Localizable.strings` — 42 new auto-update string entries
+- `Sources/Mori/Resources/zh-Hans.lproj/Localizable.strings` — 42 new zh-Hans translations
+- `Sources/Mori/Update/UpdateViewModel.swift` — `.localized()` on text, maxWidthText, description
+- `Sources/Mori/Update/UpdatePopoverView.swift` — `.localized()` on all Text/Button labels
+- `Sources/Mori/Update/UpdateState.swift` — `.localized()` on ReleaseNotes.label
+- `CHANGELOG.md` — New auto-update feature entry
+
+**Commits:**
+- `e6b5639` — 🌐 i18n: add auto-update strings to en + zh-Hans Localizable.strings
+- `3a4fd45` — 🌐 i18n: apply .localized() to all computed strings in update UI
+- `ba618b1` — 📝 docs: add Sparkle auto-update entry to CHANGELOG
+
+**Decisions & context:**
+- Used `String.localized()` (not SwiftUI auto-localization) because Mori uses a custom `Bundle.preferredLocalization` that SwiftUI's `Text("literal")` does not pick up automatically
+- Format strings like `"Downloading: %.0f%%"` use `.localized()` on the format template, then `String(format:)` for interpolation
+- `error.localizedDescription` is NOT localized via Mori strings — it comes from Sparkle/system and is already localized by the framework
+- Percentage display strings in the popover (e.g., `"%.0f%%"`) are not localized since they are purely numeric
+- All 6 phases of the Sparkle auto-update system are now complete
