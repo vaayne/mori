@@ -63,6 +63,12 @@ final class MainWindowController: NSWindowController {
         onShowCreateWorktreePanel?()
     }
 
+    /// Adds the update pill as a trailing titlebar accessory.
+    func addUpdateAccessory(viewModel: UpdateViewModel) {
+        let accessory = UpdateAccessoryView(model: viewModel)
+        window?.addTitlebarAccessoryViewController(accessory)
+    }
+
     func updateTitle(projectName: String?, worktreeName: String? = nil) {
         var parts: [String] = []
         if let worktreeName { parts.append(worktreeName) }
