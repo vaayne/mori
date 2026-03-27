@@ -53,6 +53,16 @@ if [[ -d "$APP_BUNDLE/Contents/Frameworks" ]]; then
     done
 fi
 
+# Sign XPC services (inside-out — must be signed before the main app)
+if [[ -d "$APP_BUNDLE/Contents/XPCServices" ]]; then
+    find "$APP_BUNDLE/Contents/XPCServices" -name "*.xpc" -type d -print0 | while IFS= read -r -d '' item; do
+        echo "   Signing XPC service: $(basename "$item")"
+        codesign --force --options runtime --timestamp \
+            --sign "$SIGNING_IDENTITY" \
+            "$item"
+    done
+fi
+
 # Sign resource bundles (inside-out — must be signed before the main app)
 find "$APP_BUNDLE/Contents" -name "*.bundle" -type d -print0 | while IFS= read -r -d '' item; do
     echo "   Signing bundle: $(basename "$item")"
