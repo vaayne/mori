@@ -175,7 +175,7 @@ enum UpdateState: Equatable {
 
         var label: String {
             switch self {
-            case .tagged: return "View Release Notes"
+            case .tagged: return .localized("View Release Notes")
             }
         }
     }

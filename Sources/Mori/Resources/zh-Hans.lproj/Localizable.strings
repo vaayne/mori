@@ -166,4 +166,7 @@
 “Update Failed” = “更新失败”;
 “View Release Notes” = “查看发行说明”;
 “You are running the latest version” = “您正在使用最新版本”;
+“Version:” = “版本：”;
+“Size:” = “大小：”;
+“Released:” = “发布日期：”;
 “You're already running the latest version.” = “您已经在使用最新版本。”;

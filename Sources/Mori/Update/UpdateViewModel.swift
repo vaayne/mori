@@ -15,27 +15,27 @@ class UpdateViewModel: ObservableObject {
         case .idle:
             return ""
         case .permissionRequest:
-            return "Enable Automatic Updates?"
+            return .localized("Enable Automatic Updates?")
         case .checking:
-            return "Checking for Updates\u{2026}"
+            return .localized("Checking for updates\u{2026}")
         case .updateAvailable(let update):
             let version = update.appcastItem.displayVersionString
             if !version.isEmpty {
-                return "Update Available: \(version)"
+                return String(format: .localized("Update Available: %@"), version)
             }
-            return "Update Available"
+            return .localized("Update Available")
         case .downloading(let download):
             if let expectedLength = download.expectedLength, expectedLength > 0 {
                 let progress = Double(download.progress) / Double(expectedLength)
-                return String(format: "Downloading: %.0f%%", progress * 100)
+                return String(format: .localized("Downloading: %.0f%%"), progress * 100)
             }
-            return "Downloading\u{2026}"
+            return .localized("Downloading\u{2026}")
         case .extracting(let extracting):
-            return String(format: "Preparing: %.0f%%", extracting.progress * 100)
+            return String(format: .localized("Preparing: %.0f%%"), extracting.progress * 100)
         case .installing(let install):
-            return install.isAutoUpdate ? "Restart to Complete Update" : "Installing\u{2026}"
+            return install.isAutoUpdate ? .localized("Restart to Complete Update") : .localized("Installing\u{2026}")
         case .notFound:
-            return "No Updates Available"
+            return .localized("No Updates Available")
         case .error(let err):
             return err.error.localizedDescription
         }
@@ -46,9 +46,9 @@ class UpdateViewModel: ObservableObject {
     var maxWidthText: String {
         switch state {
         case .downloading:
-            return "Downloading: 100%"
+            return .localized("Downloading: 100%%")
         case .extracting:
-            return "Preparing: 100%"
+            return .localized("Preparing: 100%%")
         default:
             return text
         }
@@ -84,21 +84,21 @@ class UpdateViewModel: ObservableObject {
         case .idle:
             return ""
         case .permissionRequest:
-            return "Configure automatic update preferences"
+            return .localized("Configure automatic update preferences")
         case .checking:
-            return "Please wait while we check for available updates"
+            return .localized("Please wait while we check for available updates")
         case .updateAvailable(let update):
-            return update.releaseNotes?.label ?? "Download and install the latest version"
+            return update.releaseNotes?.label ?? .localized("Download and install the latest version")
         case .downloading:
-            return "Downloading the update package"
+            return .localized("Downloading the update package")
         case .extracting:
-            return "Extracting and preparing the update"
+            return .localized("Extracting and preparing the update")
         case .installing(let install):
-            return install.isAutoUpdate ? "Restart to Complete Update" : "Installing update and preparing to restart"
+            return install.isAutoUpdate ? .localized("Restart to Complete Update") : .localized("Installing update and preparing to restart")
         case .notFound:
-            return "You are running the latest version"
+            return .localized("You are running the latest version")
         case .error:
-            return "An error occurred during the update process"
+            return .localized("An error occurred during the update process")
         }
     }
 

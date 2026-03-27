@@ -166,4 +166,7 @@
 "Update Failed" = "Update Failed";
 "View Release Notes" = "View Release Notes";
 "You are running the latest version" = "You are running the latest version";
+"Version:" = "Version:";
+"Size:" = "Size:";
+"Released:" = "Released:";
 "You're already running the latest version." = "You're already running the latest version.";
