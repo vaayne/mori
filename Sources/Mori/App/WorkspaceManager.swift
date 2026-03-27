@@ -8,17 +8,50 @@ import MoriTmux
 /// Errors specific to WorkspaceManager operations.
 enum WorkspaceError: Error, LocalizedError {
     case projectNotFound
+    case projectNotRemote
     case branchNameEmpty
     case branchNameInvalid(String)
+    case remoteHostEmpty
+    case remotePathEmpty
+    case remoteTmuxUnavailable(String)
+    case remotePasswordEmpty
+    case remotePasswordPersistFailed(String)
+    case remoteSessionNameEmpty
+    case remoteSessionNotFound(String)
+    case remoteSessionAlreadyAttached(String)
 
     var errorDescription: String? {
         switch self {
         case .projectNotFound:
             return "Project not found."
+        case .projectNotRemote:
+            return "Project is not configured as a remote SSH project."
         case .branchNameEmpty:
             return "Branch name cannot be empty."
         case .branchNameInvalid(let name):
             return "Invalid branch name: \"\(name)\"."
+        case .remoteHostEmpty:
+            return "Remote host cannot be empty."
+        case .remotePathEmpty:
+            return "Remote repository path cannot be empty."
+        case .remoteTmuxUnavailable(let host):
+            return "tmux is not available on remote host \"\(host)\"."
+        case .remotePasswordEmpty:
+            return "Password is required for password authentication."
+        case .remotePasswordPersistFailed(let message):
+            return "Failed to persist SSH password: \(message)"
+        case .remoteSessionNameEmpty:
+            return .localized("Remote tmux session name cannot be empty.")
+        case .remoteSessionNotFound(let name):
+            return String(
+                format: .localized("tmux session \"%@\" was not found on the remote host."),
+                name
+            )
+        case .remoteSessionAlreadyAttached(let name):
+            return String(
+                format: .localized("tmux session \"%@\" is already attached to another workspace. Choose a different session or create a new one."),
+                name
+            )
         }
     }
 }
@@ -33,22 +66,24 @@ final class WorkspaceManager {
     let projectRepo: ProjectRepository
     let worktreeRepo: WorktreeRepository
     let uiStateRepo: UIStateRepository
+    /// Local tmux backend.
     let tmuxBackend: TmuxBackend
+    /// Local git backend.
     let gitBackend: GitBackend
     let gitStatusCoordinator: GitStatusCoordinator
     let unreadTracker: UnreadTracker
     let notificationManager: NotificationManager
     let hookRunner: HookRunner
     /// Callback invoked when the terminal should switch to a different session.
-    /// Parameters: (sessionName, workingDirectory)
-    var onTerminalSwitch: ((String, String) -> Void)?
+    /// Parameters: (sessionName, workingDirectory, location)
+    var onTerminalSwitch: ((String, String, WorkspaceLocation) -> Void)?
 
     /// Callback invoked when the terminal should detach (session killed / no active session).
     var onTerminalDetach: (() -> Void)?
 
-    /// Callback invoked after a tmux session is created (for post-creation setup like proxy env).
-    /// Async so callers can await setup completion before proceeding (e.g. template apply).
-    var onSessionCreated: (() async -> Void)?
+    /// Callback invoked when a tmux backend should be (re)configured for runtime
+    /// options (theme/proxy/terminal capabilities).
+    var onSessionCreated: ((TmuxBackend) async -> Void)?
 
     /// Background coordinated polling task handle.
     private var pollingTask: Task<Void, Never>?
@@ -56,9 +91,15 @@ final class WorkspaceManager {
     /// Polling interval in nanoseconds (5 seconds).
     private let pollingInterval: UInt64 = 5_000_000_000
 
-    /// Cache of the latest tmux sessions from the most recent poll.
-    /// Used by selectWindow to look up current pane activity timestamps.
-    private var latestSessions: [TmuxSession] = []
+    /// Remote endpoint backend caches keyed by `WorkspaceLocation.endpointKey`.
+    private var remoteTmuxBackends: [String: TmuxBackend] = [:]
+    private var remoteGitBackends: [String: GitBackend] = [:]
+
+    /// Cache of latest sessions by endpoint key from the most recent poll.
+    private var latestSessionsByEndpoint: [String: [TmuxSession]] = [:]
+
+    /// Avoid repeatedly showing the same Keychain access alert.
+    private var keychainAccessAlertedEndpoints: Set<String> = []
 
     /// Previous badge state per window ID — used to detect transitions for notifications.
     private var previousBadges: [String: WindowBadge] = [:]
@@ -80,7 +121,7 @@ final class WorkspaceManager {
         self.uiStateRepo = uiStateRepo
         self.tmuxBackend = tmuxBackend
         self.gitBackend = gitBackend
-        self.gitStatusCoordinator = GitStatusCoordinator(gitBackend: gitBackend)
+        self.gitStatusCoordinator = GitStatusCoordinator()
         self.unreadTracker = UnreadTracker()
         self.notificationManager = NotificationManager()
         self.hookRunner = HookRunner(tmuxBackend: tmuxBackend)
@@ -104,14 +145,78 @@ final class WorkspaceManager {
         appState.worktrees = allWorktrees
         appState.uiState = try uiStateRepo.fetch()
 
+        // Backfill missing tmux session names from legacy data so every
+        // worktree can be mapped to a stable tmux session.
+        backfillWorktreeSessionNamesIfNeeded()
+        normalizeConflictingSessionBindingsIfNeeded()
+
         // Validate project paths — mark unavailable if path no longer exists
         validateProjectPaths()
+    }
+
+    private func backfillWorktreeSessionNamesIfNeeded() {
+        for i in appState.worktrees.indices {
+            let existing = appState.worktrees[i].tmuxSessionName?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard existing?.isEmpty != false else { continue }
+            guard let project = appState.projects.first(where: { $0.id == appState.worktrees[i].projectId }) else {
+                continue
+            }
+            let worktreeName = appState.worktrees[i].branch ?? appState.worktrees[i].name
+            let sessionName = SessionNaming.sessionName(
+                projectShortName: project.shortName,
+                worktree: worktreeName
+            )
+            appState.worktrees[i].tmuxSessionName = sessionName
+            try? worktreeRepo.save(appState.worktrees[i])
+        }
+    }
+
+    /// Ensure session bindings are unique per endpoint to prevent collisions
+    /// where two worktrees point to the same remote tmux session.
+    private func normalizeConflictingSessionBindingsIfNeeded() {
+        var seenKeys = Set<String>()
+        for i in appState.worktrees.indices {
+            guard let sessionName = appState.worktrees[i].tmuxSessionName?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                !sessionName.isEmpty else {
+                continue
+            }
+
+            let endpoint = endpointKey(for: appState.worktrees[i])
+            let key = "\(endpoint)|\(sessionName)"
+            if seenKeys.insert(key).inserted {
+                continue
+            }
+
+            guard let project = projectForWorktree(appState.worktrees[i]) else { continue }
+            let worktreeName = appState.worktrees[i].branch ?? appState.worktrees[i].name
+            let canonicalBase = SessionNaming.sessionName(
+                projectShortName: project.shortName,
+                worktree: worktreeName
+            )
+
+            var candidate = canonicalBase
+            var suffix = 2
+            while seenKeys.contains("\(endpoint)|\(candidate)") {
+                candidate = "\(canonicalBase)-\(suffix)"
+                suffix += 1
+            }
+
+            appState.worktrees[i].tmuxSessionName = candidate
+            seenKeys.insert("\(endpoint)|\(candidate)")
+            try? worktreeRepo.save(appState.worktrees[i])
+        }
     }
 
     /// Check each worktree path and mark as unavailable if the directory is gone.
     private func validateProjectPaths() {
         let fm = FileManager.default
         for i in appState.worktrees.indices {
+            // Remote worktrees are validated via SSH git/tmux operations, not local filesystem checks.
+            if appState.worktrees[i].resolvedLocation != .local {
+                continue
+            }
             var isDir: ObjCBool = false
             let exists = fm.fileExists(atPath: appState.worktrees[i].path, isDirectory: &isDir)
             if !exists || !isDir.boolValue {
@@ -128,9 +233,174 @@ final class WorkspaceManager {
 
     /// Check tmux availability. Returns true if tmux is found.
     func checkTmuxAvailability() async -> Bool {
+        // If there are no local worktrees, local tmux isn't required at startup.
+        let hasLocalWorktree = appState.worktrees.contains { $0.resolvedLocation == .local }
+        guard hasLocalWorktree else {
+            isTmuxAvailable = true
+            return true
+        }
+
         let available = await tmuxBackend.isAvailable()
         isTmuxAvailable = available
         return available
+    }
+
+    private func location(for project: Project) -> WorkspaceLocation {
+        project.resolvedLocation
+    }
+
+    private func location(for worktree: Worktree) -> WorkspaceLocation {
+        // Single source of truth for endpoint resolution:
+        // worktree endpoint overrides project only when explicitly persisted.
+        if let project = appState.projects.first(where: { $0.id == worktree.projectId }) {
+            return worktree.location ?? project.resolvedLocation
+        }
+        return worktree.resolvedLocation
+    }
+
+    private func backendCacheKey(for ssh: SSHWorkspaceLocation) -> String {
+        "ssh:\(ssh.endpointKey):\(ssh.authMethod.rawValue)"
+    }
+
+    private func invalidateRemoteBackends(for ssh: SSHWorkspaceLocation) {
+        let key = backendCacheKey(for: ssh)
+        remoteTmuxBackends.removeValue(forKey: key)
+        remoteGitBackends.removeValue(forKey: key)
+    }
+
+    private func tmuxBackend(for location: WorkspaceLocation) -> TmuxBackend {
+        switch location {
+        case .local:
+            return tmuxBackend
+        case .ssh(let ssh):
+            let key = backendCacheKey(for: ssh)
+            if let cached = remoteTmuxBackends[key] {
+                return cached
+            }
+            let password = ssh.authMethod == .password
+                ? loadStoredPassword(for: ssh)
+                : nil
+            let backend = TmuxBackend(
+                runner: TmuxCommandRunner(
+                    sshConfig: TmuxSSHConfig(
+                        host: ssh.host,
+                        user: ssh.user,
+                        port: ssh.port,
+                        sshOptions: SSHControlOptions.sshOptions(for: ssh),
+                        askpassPassword: password
+                    )
+                )
+            )
+            remoteTmuxBackends[key] = backend
+            return backend
+        }
+    }
+
+    private func tmuxBackend(for worktree: Worktree) -> TmuxBackend {
+        tmuxBackend(for: location(for: worktree))
+    }
+
+    private func gitBackend(for location: WorkspaceLocation) -> GitBackend {
+        switch location {
+        case .local:
+            return gitBackend
+        case .ssh(let ssh):
+            let key = backendCacheKey(for: ssh)
+            if let cached = remoteGitBackends[key] {
+                return cached
+            }
+            let password = ssh.authMethod == .password
+                ? loadStoredPassword(for: ssh)
+                : nil
+            let backend = GitBackend(
+                runner: GitCommandRunner(
+                    sshConfig: GitSSHConfig(
+                        host: ssh.host,
+                        user: ssh.user,
+                        port: ssh.port,
+                        sshOptions: SSHControlOptions.sshOptions(for: ssh),
+                        askpassPassword: password
+                    )
+                )
+            )
+            remoteGitBackends[key] = backend
+            return backend
+        }
+    }
+
+    private func gitBackend(for worktree: Worktree) -> GitBackend {
+        gitBackend(for: location(for: worktree))
+    }
+
+    private func loadStoredPassword(for ssh: SSHWorkspaceLocation) -> String? {
+        do {
+            let password = try SSHCredentialStore.password(for: ssh)
+            if password != nil {
+                keychainAccessAlertedEndpoints.remove(ssh.endpointKey)
+            }
+            return password
+        } catch {
+            let endpointKey = ssh.endpointKey
+            if !keychainAccessAlertedEndpoints.contains(endpointKey) {
+                keychainAccessAlertedEndpoints.insert(endpointKey)
+                presentKeychainAccessError(error, for: ssh)
+            }
+            return nil
+        }
+    }
+
+    private func presentKeychainAccessError(_ error: Error, for ssh: SSHWorkspaceLocation) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = .localized("Failed to access SSH password from Keychain")
+        alert.informativeText = String(
+            format: .localized("Mori could not read credentials for \"%@\". Re-enter credentials or unlock Keychain.\n\n%@"),
+            ssh.target,
+            error.localizedDescription
+        )
+        alert.addButton(withTitle: .localized("OK"))
+        alert.runModal()
+    }
+
+    private func projectForWorktree(_ worktree: Worktree) -> Project? {
+        appState.projects.first(where: { $0.id == worktree.projectId })
+    }
+
+    private func namespacedWindowId(rawWindowId: String, worktree: Worktree) -> String {
+        WorkspaceEndpoint.namespacedWindowId(rawWindowId: rawWindowId, location: location(for: worktree))
+    }
+
+    private func rawWindowId(from runtimeWindow: RuntimeWindow) -> String {
+        runtimeWindow.tmuxWindowRawId ?? runtimeWindow.tmuxWindowId
+    }
+
+    func tmuxBackendForWorktree(_ worktree: Worktree) -> TmuxBackend {
+        tmuxBackend(for: worktree)
+    }
+
+    func rawTmuxWindowId(from runtimeWindow: RuntimeWindow) -> String {
+        rawWindowId(from: runtimeWindow)
+    }
+
+    private func endpointKey(for worktree: Worktree) -> String {
+        location(for: worktree).endpointKey
+    }
+
+    private func sessionsForEndpoint(of worktree: Worktree) -> [TmuxSession] {
+        latestSessionsByEndpoint[endpointKey(for: worktree)] ?? []
+    }
+
+    private func scanSessionsByEndpoint() async -> [String: [TmuxSession]] {
+        let locations = Set(appState.worktrees.map { location(for: $0) })
+        guard !locations.isEmpty else { return [:] }
+
+        var sessionsByEndpoint: [String: [TmuxSession]] = [:]
+        for loc in locations {
+            let tmux = tmuxBackend(for: loc)
+            let sessions = (try? await tmux.scanAll()) ?? []
+            sessionsByEndpoint[loc.endpointKey] = sessions
+        }
+        return sessionsByEndpoint
     }
 
     // MARK: - Select Project
@@ -178,12 +448,17 @@ final class WorkspaceManager {
         // Ensure tmux session exists, check branch, then switch terminal
         Task {
             await refreshWorktreeBranch(worktreeId: worktreeId)
-            await ensureTmuxSession(for: worktree)
+            let sessionReady = await ensureTmuxSession(for: worktree, showErrors: true)
+            if sessionReady {
+                await onSessionCreated?(tmuxBackend(for: worktree))
+            }
             await refreshRuntimeState()
 
             // Notify terminal to switch to this worktree's session
-            if let sessionName = worktree.tmuxSessionName {
-                onTerminalSwitch?(sessionName, worktree.path)
+            if sessionReady, let sessionName = worktree.tmuxSessionName {
+                onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
+            } else {
+                onTerminalDetach?()
             }
         }
 
@@ -210,14 +485,16 @@ final class WorkspaceManager {
             if appState.uiState.selectedProjectId != worktree.projectId {
                 appState.uiState.selectedProjectId = worktree.projectId
             }
+            let tmux = tmuxBackend(for: worktree)
+            let rawWindowId = rawWindowId(from: window)
             Task {
-                try? await tmuxBackend.selectWindow(sessionId: sessionName, windowId: windowId)
+                try? await tmux.selectWindow(sessionId: sessionName, windowId: rawWindowId)
             }
             // Ensure terminal is attached to the right session and focused
-            onTerminalSwitch?(sessionName, worktree.path)
+            onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
 
             // Clear unread state for this window
-            clearUnread(windowId: windowId, worktreeId: worktree.id)
+            clearUnread(windowId: rawWindowId, worktree: worktree)
 
             // Fire onWindowFocus hook
             fireHook(event: .onWindowFocus, worktreeId: worktree.id, windowName: window.title)
@@ -227,14 +504,22 @@ final class WorkspaceManager {
     }
 
     /// Clear unread output state for a window and recompute aggregates.
-    private func clearUnread(windowId: String, worktreeId: UUID) {
+    private func clearUnread(windowId: String, worktree: Worktree) {
+        let sessions = sessionsForEndpoint(of: worktree)
         // Update the last-seen timestamp in the tracker
-        if let activity = unreadTracker.currentActivity(windowId: windowId, in: latestSessions) {
-            unreadTracker.markSeen(worktreeId: worktreeId, windowId: windowId, activity: activity)
+        if let sessionName = worktree.tmuxSessionName,
+           let activity = unreadTracker.currentActivity(
+               sessionName: sessionName,
+               windowId: windowId,
+               in: sessions
+           ) {
+            unreadTracker.markSeen(worktreeId: worktree.id, windowId: windowId, activity: activity)
         }
 
         // Reset hasUnreadOutput on the RuntimeWindow
-        if let index = appState.runtimeWindows.firstIndex(where: { $0.tmuxWindowId == windowId }) {
+        if let index = appState.runtimeWindows.firstIndex(where: {
+            $0.worktreeId == worktree.id && rawWindowId(from: $0) == windowId
+        }) {
             appState.runtimeWindows[index].hasUnreadOutput = false
             appState.runtimeWindows[index].badge = StatusAggregator.windowBadge(hasUnreadOutput: false)
         }
@@ -249,19 +534,22 @@ final class WorkspaceManager {
 
     /// Add a new project from a directory path. Creates Project, default Worktree,
     /// and tmux session. Returns the new project.
-    /// Validates that the path is a git repo and resolves gitCommonDir.
+    /// Best effort: if path is a git repo, resolve gitCommonDir and branch.
+    /// Non-git paths are allowed and still create a managed tmux session.
     @discardableResult
-    func addProject(path: String) async throws -> Project {
+    func addProject(path: String, location: WorkspaceLocation = .local) async throws -> Project {
         let name = (path as NSString).lastPathComponent
+        let git = gitBackend(for: location)
+        let tmux = tmuxBackend(for: location)
 
-        // Validate git repo and resolve gitCommonDir
-        let isRepo = try await gitBackend.isGitRepo(path: path)
+        // Best effort git detection
+        let isRepo = try await git.isGitRepo(path: path)
         var commonDir = path
         var detectedBranch = "main"
         if isRepo {
-            commonDir = try await gitBackend.gitCommonDir(path: path)
+            commonDir = try await git.gitCommonDir(path: path)
             // Detect the actual current branch
-            let gitStatus = try? await gitBackend.status(worktreePath: path)
+            let gitStatus = try? await git.status(worktreePath: path)
             if let branch = gitStatus?.branch {
                 detectedBranch = branch
             }
@@ -272,7 +560,8 @@ final class WorkspaceManager {
             name: name,
             repoRootPath: path,
             gitCommonDir: commonDir,
-            lastActiveAt: Date()
+            lastActiveAt: Date(),
+            location: location
         )
         try projectRepo.save(project)
 
@@ -285,15 +574,16 @@ final class WorkspaceManager {
             branch: detectedBranch,
             isMainWorktree: true,
             tmuxSessionName: sessionName,
-            status: .active
+            status: .active,
+            location: location
         )
         try worktreeRepo.save(worktree)
 
         // Create tmux session
         Task {
-            _ = try? await tmuxBackend.createSession(name: sessionName, cwd: path)
-            await onSessionCreated?()
-            await tmuxBackend.refreshNow()
+            _ = try? await tmux.createSession(name: sessionName, cwd: path)
+            await onSessionCreated?(tmux)
+            await tmux.refreshNow()
         }
 
         // Refresh state
@@ -303,6 +593,198 @@ final class WorkspaceManager {
         selectProject(project.id)
 
         return project
+    }
+
+    @discardableResult
+    func addRemoteProject(
+        host: String,
+        path: String,
+        user: String? = nil,
+        port: Int? = nil,
+        authMethod: SSHAuthMethod = .publicKey,
+        password: String? = nil
+    ) async throws -> Project {
+        let trimmedHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedHost.isEmpty else { throw WorkspaceError.remoteHostEmpty }
+        guard !trimmedPath.isEmpty else { throw WorkspaceError.remotePathEmpty }
+        if authMethod == .password, (password?.isEmpty ?? true) {
+            throw WorkspaceError.remotePasswordEmpty
+        }
+
+        let sshLocation = SSHWorkspaceLocation(
+            host: trimmedHost,
+            user: user,
+            port: port,
+            authMethod: authMethod
+        )
+        if authMethod == .password {
+            try await SSHBootstrapper.bootstrapPasswordSession(
+                ssh: sshLocation,
+                password: password
+            )
+            do {
+                try SSHCredentialStore.savePassword(password ?? "", for: sshLocation)
+            } catch {
+                throw WorkspaceError.remotePasswordPersistFailed(error.localizedDescription)
+            }
+        }
+
+        let location = WorkspaceLocation.ssh(
+            sshLocation
+        )
+        let tmux = tmuxBackend(for: location)
+        guard await tmux.isAvailable() else {
+            throw WorkspaceError.remoteTmuxUnavailable(trimmedHost)
+        }
+
+        return try await addProject(
+            path: trimmedPath,
+            location: location
+        )
+    }
+
+    /// List branches for a project using the correct backend for its location.
+    /// `repoPathHint` is kept for UI callsites already passing repo path; the
+    /// persisted project path remains the source of truth.
+    func listBranches(projectId: UUID, repoPathHint: String? = nil) async throws -> [GitBranchInfo] {
+        guard let project = appState.projects.first(where: { $0.id == projectId }) else {
+            throw WorkspaceError.projectNotFound
+        }
+        let git = gitBackend(for: location(for: project))
+        let repoPath = project.repoRootPath.isEmpty ? (repoPathHint ?? "") : project.repoRootPath
+        return try await git.listBranches(repoPath: repoPath)
+    }
+
+    /// Update authentication settings for an existing remote project.
+    /// Supports switching between public key and password auth without re-adding the project.
+    func updateRemoteAuth(
+        projectId: UUID,
+        authMethod: SSHAuthMethod,
+        password: String? = nil
+    ) async throws {
+        guard let projectIndex = appState.projects.firstIndex(where: { $0.id == projectId }) else {
+            throw WorkspaceError.projectNotFound
+        }
+        let project = appState.projects[projectIndex]
+        guard case .ssh(let currentSSH) = location(for: project) else {
+            throw WorkspaceError.projectNotRemote
+        }
+
+        if authMethod == .password, (password?.isEmpty ?? true) {
+            throw WorkspaceError.remotePasswordEmpty
+        }
+
+        var updatedSSH = currentSSH
+        updatedSSH.authMethod = authMethod
+
+        // Prime/validate credentials before applying model changes.
+        if authMethod == .password {
+            try await SSHBootstrapper.bootstrapPasswordSession(
+                ssh: updatedSSH,
+                password: password
+            )
+            do {
+                try SSHCredentialStore.savePassword(password ?? "", for: updatedSSH)
+            } catch {
+                throw WorkspaceError.remotePasswordPersistFailed(error.localizedDescription)
+            }
+        }
+
+        // Invalidate both old and new backend cache entries so future operations
+        // pick up fresh auth options/password providers.
+        invalidateRemoteBackends(for: currentSSH)
+        invalidateRemoteBackends(for: updatedSSH)
+
+        let updatedLocation = WorkspaceLocation.ssh(updatedSSH)
+        let updatedTmux = tmuxBackend(for: updatedLocation)
+        guard await updatedTmux.isAvailable() else {
+            throw WorkspaceError.remoteTmuxUnavailable(updatedSSH.target)
+        }
+
+        if authMethod == .publicKey {
+            SSHCredentialStore.deletePassword(for: currentSSH)
+        }
+
+        // Persist project location
+        appState.projects[projectIndex].location = updatedLocation
+        try projectRepo.save(appState.projects[projectIndex])
+
+        // Persist all worktrees under this project to keep endpoint auth consistent.
+        for i in appState.worktrees.indices where appState.worktrees[i].projectId == projectId {
+            appState.worktrees[i].location = updatedLocation
+            try worktreeRepo.save(appState.worktrees[i])
+        }
+
+        // Reconnect selected worktree if it belongs to this project so terminal
+        // immediately uses the updated credentials.
+        if let selected = selectedWorktree, selected.projectId == projectId {
+            _ = await reconnectCurrentSession()
+        }
+    }
+
+    /// List active tmux session names for a remote project.
+    /// Returns an empty list for local projects or on scan failures.
+    func listRemoteSessionNames(projectId: UUID) async -> [String] {
+        guard let project = appState.projects.first(where: { $0.id == projectId }) else {
+            return []
+        }
+        let location = location(for: project)
+        guard case .ssh = location else { return [] }
+
+        let tmux = tmuxBackend(for: location)
+        let names = (try? await tmux.listSessionNames()) ?? []
+        return names.sorted()
+    }
+
+    /// Attach the project's main worktree to an existing remote tmux session.
+    func attachMainWorktreeToRemoteSession(
+        projectId: UUID,
+        sessionName: String
+    ) async throws {
+        guard let project = appState.projects.first(where: { $0.id == projectId }) else {
+            throw WorkspaceError.projectNotFound
+        }
+        let location = location(for: project)
+        guard case .ssh = location else {
+            throw WorkspaceError.projectNotRemote
+        }
+
+        let trimmed = sessionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw WorkspaceError.remoteSessionNameEmpty
+        }
+
+        let tmux = tmuxBackend(for: location)
+        let sessions = try await tmux.scanAll()
+        guard sessions.contains(where: { $0.name == trimmed }) else {
+            throw WorkspaceError.remoteSessionNotFound(trimmed)
+        }
+
+        guard let worktreeIndex = appState.worktrees.firstIndex(where: {
+            $0.projectId == projectId && $0.isMainWorktree
+        }) ?? appState.worktrees.firstIndex(where: { $0.projectId == projectId }) else {
+            throw WorkspaceError.projectNotFound
+        }
+
+        let endpoint = endpointKey(for: appState.worktrees[worktreeIndex])
+        let isAttachedElsewhere = appState.worktrees.contains(where: { worktree in
+            guard worktree.id != appState.worktrees[worktreeIndex].id else { return false }
+            guard let existing = worktree.tmuxSessionName else { return false }
+            return existing == trimmed && endpointKey(for: worktree) == endpoint
+        })
+        if isAttachedElsewhere {
+            throw WorkspaceError.remoteSessionAlreadyAttached(trimmed)
+        }
+
+        appState.worktrees[worktreeIndex].tmuxSessionName = trimmed
+        try worktreeRepo.save(appState.worktrees[worktreeIndex])
+
+        let worktree = appState.worktrees[worktreeIndex]
+        if appState.uiState.selectedProjectId != projectId {
+            appState.uiState.selectedProjectId = projectId
+        }
+        selectWorktree(worktree.id)
     }
 
     // MARK: - Create Worktree
@@ -340,29 +822,60 @@ final class WorkspaceManager {
         guard let project = appState.projects.first(where: { $0.id == projectId }) else {
             throw WorkspaceError.projectNotFound
         }
+        let projectLocation = location(for: project)
+        let git = gitBackend(for: projectLocation)
+        let tmux = tmuxBackend(for: projectLocation)
 
         let projectSlug = SessionNaming.slugify(project.name)
         let branchSlug = SessionNaming.slugify(trimmed)
 
-        // Compute worktree path: ~/.mori/{project-slug}/{branch-slug}
-        let moriDir = (NSHomeDirectory() as NSString).appendingPathComponent(".mori")
-        let projectDir = (moriDir as NSString).appendingPathComponent(projectSlug)
+        // Compute worktree path.
+        // Local: ~/.mori/{project-slug}/{branch-slug}
+        // Remote SSH: <repo parent>/.mori/{project-slug}/{branch-slug}
+        let projectDir: String
+        switch projectLocation {
+        case .local:
+            let moriDir = (NSHomeDirectory() as NSString).appendingPathComponent(".mori")
+            projectDir = (moriDir as NSString).appendingPathComponent(projectSlug)
+        case .ssh:
+            let parentDir = (project.repoRootPath as NSString).deletingLastPathComponent
+            let moriDir = (parentDir as NSString).appendingPathComponent(".mori")
+            projectDir = (moriDir as NSString).appendingPathComponent(projectSlug)
+        }
         let worktreePath = (projectDir as NSString).appendingPathComponent(branchSlug)
 
-        // Ensure directory tree exists
-        try FileManager.default.createDirectory(
-            atPath: projectDir,
-            withIntermediateDirectories: true
-        )
+        // Step 1: Prepare workspace path.
+        // Ensure the parent container exists before any git worktree operation.
+        // This is required for first-time remote usage where `<parent>/.mori/<project>`
+        // has not been created yet.
+        try await git.ensureDirectory(path: projectDir)
 
-        // Step 1: git worktree add (if this fails, nothing else happens)
-        try await gitBackend.addWorktree(
-            repoPath: project.repoRootPath,
-            path: worktreePath,
-            branch: trimmed,
-            createBranch: createBranch,
-            baseBranch: baseBranch
-        )
+        // Git repos use `git worktree add`; non-git projects fall back to creating
+        // a plain directory so remote/local "workspace" creation still works.
+        let isGitRepo = try await git.isGitRepo(path: project.repoRootPath)
+        if isGitRepo {
+            do {
+                try await git.addWorktree(
+                    repoPath: project.repoRootPath,
+                    path: worktreePath,
+                    branch: trimmed,
+                    createBranch: createBranch,
+                    baseBranch: baseBranch
+                )
+            } catch let gitError as GitError where createBranch && isBranchAlreadyExistsError(gitError, branch: trimmed) {
+                // User typed an existing branch but branch metadata was stale/unavailable.
+                // Retry as "use existing branch" to keep worksheet creation smooth.
+                try await git.addWorktree(
+                    repoPath: project.repoRootPath,
+                    path: worktreePath,
+                    branch: trimmed,
+                    createBranch: false,
+                    baseBranch: nil
+                )
+            }
+        } else {
+            try await git.ensureDirectory(path: worktreePath)
+        }
 
         // Step 2: Create Worktree model and save to DB
         let sessionName = SessionNaming.sessionName(projectShortName: project.shortName, worktree: trimmed)
@@ -373,15 +886,16 @@ final class WorkspaceManager {
             branch: trimmed,
             isMainWorktree: false,
             tmuxSessionName: sessionName,
-            status: .active
+            status: .active,
+            location: projectLocation
         )
         try worktreeRepo.save(worktree)
 
         // Step 3: Create tmux session + apply template (partial failure tolerant)
         do {
-            _ = try await tmuxBackend.createSession(name: sessionName, cwd: worktreePath)
-            await onSessionCreated?()
-            let applicator = TemplateApplicator(tmux: tmuxBackend)
+            _ = try await tmux.createSession(name: sessionName, cwd: worktreePath)
+            await onSessionCreated?(tmux)
+            let applicator = TemplateApplicator(tmux: tmux)
             try await applicator.apply(
                 template: template,
                 sessionId: sessionName,
@@ -399,6 +913,16 @@ final class WorkspaceManager {
         fireHook(event: .onWorktreeCreate, worktreeId: worktree.id)
 
         return worktree
+    }
+
+    private func isBranchAlreadyExistsError(_ error: GitError, branch: String) -> Bool {
+        guard case .executionFailed(_, _, let stderr) = error else { return false }
+        let message = stderr.lowercased()
+        if message.contains("already exists") && message.contains("branch") {
+            return true
+        }
+        // Handle outputs that include branch name but omit explicit "branch" token.
+        return message.contains("already exists") && message.contains(branch.lowercased())
     }
 
     /// Handle create worktree from the creation panel — extracts parameters from the
@@ -482,8 +1006,9 @@ final class WorkspaceManager {
             // Hard delete — git worktree remove + soft delete
             softDeleteWorktree(at: index)
             if let project = appState.projects.first(where: { $0.id == worktree.projectId }) {
+                let git = gitBackend(for: location(for: project))
                 do {
-                    try await gitBackend.removeWorktree(
+                    try await git.removeWorktree(
                         repoPath: project.repoRootPath,
                         path: worktree.path,
                         force: false
@@ -500,7 +1025,7 @@ final class WorkspaceManager {
 
             // Kill tmux session if exists
             if let sessionName = worktree.tmuxSessionName {
-                try? await tmuxBackend.killSession(id: sessionName)
+                try? await tmuxBackend(for: worktree).killSession(id: sessionName)
             }
 
         default:
@@ -529,7 +1054,7 @@ final class WorkspaceManager {
         // Kill tmux sessions for all worktrees
         for worktree in projectWorktrees {
             if let sessionName = worktree.tmuxSessionName {
-                try? await tmuxBackend.killSession(id: sessionName)
+                try? await tmuxBackend(for: worktree).killSession(id: sessionName)
             }
         }
 
@@ -602,7 +1127,8 @@ final class WorkspaceManager {
         guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }) else { return }
         let worktree = appState.worktrees[index]
 
-        guard let gitStatus = try? await gitBackend.status(worktreePath: worktree.path),
+        let git = gitBackend(for: worktree)
+        guard let gitStatus = try? await git.status(worktreePath: worktree.path),
               let branch = gitStatus.branch,
               branch != worktree.branch else { return }
 
@@ -611,46 +1137,126 @@ final class WorkspaceManager {
         try? worktreeRepo.save(appState.worktrees[index])
     }
 
-    /// Ensure a tmux session exists for the given worktree, creating one if needed.
-    private func ensureTmuxSession(for worktree: Worktree) async {
-        guard let sessionName = worktree.tmuxSessionName else { return }
-
-        let sessions = (try? await tmuxBackend.scanAll()) ?? []
-        let exists = sessions.contains { $0.name == sessionName }
-
-        if !exists {
-            _ = try? await tmuxBackend.createSession(name: sessionName, cwd: worktree.path)
-            await onSessionCreated?()
+    /// Best-effort classification for missing tmux failures.
+    private func isTmuxUnavailableError(_ error: any Error) -> Bool {
+        guard let tmuxError = error as? TmuxError else { return false }
+        switch tmuxError {
+        case .binaryNotFound:
+            return true
+        case .executionFailed(_, let exitCode, let stderr):
+            return exitCode == 127 && stderr.contains("tmux: command not found")
+        default:
+            return false
         }
+    }
+
+    private func tmuxUnavailableMessage(for worktree: Worktree) -> String {
+        switch location(for: worktree) {
+        case .local:
+            return .localized("Mori requires tmux to manage terminal sessions. Please install tmux and relaunch the app.\n\nInstall via Homebrew:\n  brew install tmux\n\nOr via MacPorts:\n  sudo port install tmux")
+        case .ssh(let ssh):
+            return WorkspaceError.remoteTmuxUnavailable(ssh.target).localizedDescription
+        }
+    }
+
+    private func showTmuxOperationError(
+        title: String,
+        error: any Error,
+        worktree: Worktree
+    ) {
+        if isTmuxUnavailableError(error) {
+            showErrorAlert(title: .localized("Terminal Error"), message: tmuxUnavailableMessage(for: worktree))
+            return
+        }
+        showErrorAlert(title: title, message: error.localizedDescription)
+    }
+
+    /// Ensure a tmux session exists for the given worktree, creating one if needed.
+    /// Returns false if session scan/create failed.
+    @discardableResult
+    private func ensureTmuxSession(for worktree: Worktree, showErrors: Bool = false) async -> Bool {
+        guard let sessionName = worktree.tmuxSessionName else { return false }
+        let tmux = tmuxBackend(for: worktree)
+
+        let sessionNames: [String]
+        do {
+            sessionNames = try await tmux.listSessionNames()
+        } catch {
+            if showErrors {
+                showTmuxOperationError(title: .localized("Terminal Error"), error: error, worktree: worktree)
+            }
+            return false
+        }
+
+        if !sessionNames.contains(sessionName) {
+            do {
+                _ = try await tmux.createSession(name: sessionName, cwd: worktree.path)
+                await onSessionCreated?(tmux)
+                return true
+            } catch {
+                if showErrors {
+                    showTmuxOperationError(title: .localized("Terminal Error"), error: error, worktree: worktree)
+                }
+                return false
+            }
+        }
+
+        // Keep at least one live window in the target session.
+        let windowCount: Int
+        do {
+            windowCount = try await tmux.windowCount(sessionName: sessionName)
+        } catch {
+            if showErrors {
+                showTmuxOperationError(title: .localized("Terminal Error"), error: error, worktree: worktree)
+            }
+            return false
+        }
+        if windowCount == 0 {
+            do {
+                _ = try await tmux.createWindow(sessionId: sessionName, name: nil, cwd: worktree.path)
+            } catch {
+                if showErrors {
+                    showTmuxOperationError(title: .localized("Terminal Error"), error: error, worktree: worktree)
+                }
+                return false
+            }
+        }
+        return true
     }
 
     /// Refresh runtime windows/panes from tmux into AppState.
     func refreshRuntimeState() async {
-        guard let sessions = try? await tmuxBackend.scanAll() else { return }
+        let sessionsByEndpoint = await scanSessionsByEndpoint()
+        latestSessionsByEndpoint = sessionsByEndpoint
 
         // Build lookup of existing tags to preserve
         let previousTags: [String: WindowTag?] = Dictionary(
-            uniqueKeysWithValues: appState.runtimeWindows.map { ($0.tmuxWindowId, $0.tag) }
+            appState.runtimeWindows.map { ($0.tmuxWindowId, $0.tag) },
+            uniquingKeysWith: { first, _ in first }
         )
 
         var runtimeWindows: [RuntimeWindow] = []
+        var seenWindowIDs = Set<String>()
 
-        for session in sessions {
-            // Find matching worktree
-            guard let worktree = appState.worktrees.first(where: {
-                $0.tmuxSessionName == session.name
-            }) else { continue }
+        for worktree in appState.worktrees {
+            guard let sessionName = worktree.tmuxSessionName else { continue }
+            let endpointKey = endpointKey(for: worktree)
+            let sessions = sessionsByEndpoint[endpointKey] ?? []
+            guard let session = sessions.first(where: { $0.name == sessionName }) else { continue }
 
             for tmuxWindow in session.windows {
+                let namespacedId = namespacedWindowId(rawWindowId: tmuxWindow.windowId, worktree: worktree)
+                guard seenWindowIDs.insert(namespacedId).inserted else { continue }
                 // Preserve existing tag or infer from window name
-                let tag: WindowTag? = if let existing = previousTags[tmuxWindow.windowId] {
+                let tag: WindowTag? = if let existing = previousTags[namespacedId] {
                     existing
                 } else {
                     WindowTag.infer(from: tmuxWindow.name)
                 }
 
                 let rw = RuntimeWindow(
-                    tmuxWindowId: tmuxWindow.windowId,
+                    tmuxWindowId: namespacedId,
+                    tmuxWindowRawId: tmuxWindow.windowId,
                     worktreeId: worktree.id,
                     tmuxWindowIndex: tmuxWindow.windowIndex,
                     title: tmuxWindow.name,
@@ -702,34 +1308,55 @@ final class WorkspaceManager {
     /// Perform a single coordinated poll: tmux scan + git status concurrently.
     func coordinatedPoll() async {
         // Run tmux scan and git status concurrently
-        async let tmuxResult: [TmuxSession]? = {
-            try? await self.tmuxBackend.scanAll()
-        }()
+        async let tmuxResult: [String: [TmuxSession]] = self.scanSessionsByEndpoint()
         async let gitResult: [UUID: GitStatusInfo] = {
-            await self.gitStatusCoordinator.pollAll(worktrees: self.appState.worktrees)
+            await self.gitStatusCoordinator.pollAll(
+                worktrees: self.appState.worktrees,
+                backendForWorktree: { worktree in
+                    self.gitBackend(for: worktree)
+                }
+            )
         }()
 
-        let sessions = await tmuxResult
+        var sessionsByEndpoint = await tmuxResult
         let gitStatuses = await gitResult
 
         // Update runtime state from tmux
-        if let sessions {
+        if !sessionsByEndpoint.isEmpty {
             // Detect dead sessions and auto-recreate before updating state
-            await detectAndRecoverDeadSessions(sessions: sessions)
+            let recovered = await detectAndRecoverDeadSessions(sessionsByEndpoint: sessionsByEndpoint)
+            if recovered {
+                sessionsByEndpoint = await scanSessionsByEndpoint()
+            }
 
-            latestSessions = sessions
+            latestSessionsByEndpoint = sessionsByEndpoint
 
             // Detect unread activity before updating runtime state
-            let unreadWindowIds = unreadTracker.processActivity(
-                sessions: sessions,
-                worktrees: appState.worktrees,
-                selectedWindowId: appState.uiState.selectedWindowId
-            )
+            var unreadWindowKeys: Set<String> = []
+            let selectedWindow = appState.runtimeWindows.first(where: {
+                $0.tmuxWindowId == appState.uiState.selectedWindowId
+            })
+            for worktree in appState.worktrees {
+                let endpointKey = endpointKey(for: worktree)
+                let sessions = sessionsByEndpoint[endpointKey] ?? []
+                let selectedRawWindowId: String? = if selectedWindow?.worktreeId == worktree.id {
+                    selectedWindow.map(rawWindowId)
+                } else {
+                    nil
+                }
+                unreadWindowKeys.formUnion(
+                    unreadTracker.processActivity(
+                        sessions: sessions,
+                        worktrees: [worktree],
+                        selectedWindowId: selectedRawWindowId
+                    )
+                )
+            }
 
-            updateRuntimeState(from: sessions, unreadWindowIds: unreadWindowIds)
+            updateRuntimeState(from: sessionsByEndpoint, unreadWindowKeys: unreadWindowKeys)
 
             // Detect agent state for agent-tagged windows
-            await detectAgentStates(sessions: sessions)
+            await detectAgentStates(sessionsByEndpoint: sessionsByEndpoint)
         }
 
         // Update worktree fields from git status
@@ -749,37 +1376,48 @@ final class WorkspaceManager {
     /// Update runtime windows from tmux session data.
     /// Preserves existing `hasUnreadOutput` state and merges newly detected unread windows.
     /// Preserves existing tags or infers them from window names.
-    private func updateRuntimeState(from sessions: [TmuxSession], unreadWindowIds: Set<String> = []) {
+    private func updateRuntimeState(
+        from sessionsByEndpoint: [String: [TmuxSession]],
+        unreadWindowKeys: Set<String> = []
+    ) {
         // Build lookup of existing unread state and tags
         let previousUnread: [String: Bool] = Dictionary(
-            uniqueKeysWithValues: appState.runtimeWindows.map { ($0.tmuxWindowId, $0.hasUnreadOutput) }
+            appState.runtimeWindows.map { ($0.tmuxWindowId, $0.hasUnreadOutput) },
+            uniquingKeysWith: { first, _ in first }
         )
         let previousTags: [String: WindowTag?] = Dictionary(
-            uniqueKeysWithValues: appState.runtimeWindows.map { ($0.tmuxWindowId, $0.tag) }
+            appState.runtimeWindows.map { ($0.tmuxWindowId, $0.tag) },
+            uniquingKeysWith: { first, _ in first }
         )
 
         var runtimeWindows: [RuntimeWindow] = []
+        var seenWindowIDs = Set<String>()
 
-        for session in sessions {
-            guard let worktree = appState.worktrees.first(where: {
-                $0.tmuxSessionName == session.name
-            }) else { continue }
+        for worktree in appState.worktrees {
+            guard let sessionName = worktree.tmuxSessionName else { continue }
+            let endpointKey = endpointKey(for: worktree)
+            let sessions = sessionsByEndpoint[endpointKey] ?? []
+            guard let session = sessions.first(where: { $0.name == sessionName }) else { continue }
 
             for tmuxWindow in session.windows {
+                let namespacedId = namespacedWindowId(rawWindowId: tmuxWindow.windowId, worktree: worktree)
+                guard seenWindowIDs.insert(namespacedId).inserted else { continue }
+                let unreadKey = "\(worktree.id):\(tmuxWindow.windowId)"
                 // Window is unread if: newly detected OR was previously unread
-                let isUnread = unreadWindowIds.contains(tmuxWindow.windowId)
-                    || (previousUnread[tmuxWindow.windowId] ?? false)
+                let isUnread = unreadWindowKeys.contains(unreadKey)
+                    || (previousUnread[namespacedId] ?? false)
                 let badge = StatusAggregator.windowBadge(hasUnreadOutput: isUnread)
 
                 // Preserve existing tag or infer from window name
-                let tag: WindowTag? = if let existing = previousTags[tmuxWindow.windowId] {
+                let tag: WindowTag? = if let existing = previousTags[namespacedId] {
                     existing
                 } else {
                     WindowTag.infer(from: tmuxWindow.name)
                 }
 
                 let rw = RuntimeWindow(
-                    tmuxWindowId: tmuxWindow.windowId,
+                    tmuxWindowId: namespacedId,
+                    tmuxWindowRawId: tmuxWindow.windowId,
                     worktreeId: worktree.id,
                     tmuxWindowIndex: tmuxWindow.windowIndex,
                     title: tmuxWindow.name,
@@ -800,7 +1438,7 @@ final class WorkspaceManager {
     /// Read agent state from tmux pane options (set by Mori hook scripts).
     /// No capture-pane or process scanning — hooks report state directly.
     /// Also cleans up stale agent state when the agent has exited.
-    private func detectAgentStates(sessions: [TmuxSession]) async {
+    private func detectAgentStates(sessionsByEndpoint: [String: [TmuxSession]]) async {
         let now = Date().timeIntervalSince1970
 
         // Reset worktree agentState before re-aggregating from windows
@@ -810,9 +1448,13 @@ final class WorkspaceManager {
 
         for i in appState.runtimeWindows.indices {
             let rw = appState.runtimeWindows[i]
+            guard let worktree = appState.worktrees.first(where: { $0.id == rw.worktreeId }) else { continue }
+            let endpointKey = endpointKey(for: worktree)
+            let sessions = sessionsByEndpoint[endpointKey] ?? []
+            let rawWindowId = rawWindowId(from: rw)
 
             guard let (_, tmuxWindow) = findTmuxWindow(
-                windowId: rw.tmuxWindowId,
+                windowId: rawWindowId,
                 in: sessions
             ) else { continue }
 
@@ -846,7 +1488,7 @@ final class WorkspaceManager {
 
                     if isShell {
                         // Agent exited — clean up stale options after processing
-                        await clearStaleAgentState(paneId: pane.paneId)
+                        await clearStaleAgentState(worktree: worktree, paneId: pane.paneId)
                     }
                 }
             }
@@ -902,14 +1544,15 @@ final class WorkspaceManager {
 
     /// Clear stale pane options when agent has exited (pane returned to shell).
     /// Re-enables automatic-rename so tmux picks up the current process name.
-    private func clearStaleAgentState(paneId: String) async {
+    private func clearStaleAgentState(worktree: Worktree, paneId: String) async {
+        let tmux = tmuxBackend(for: worktree)
         // Unset state and name concurrently (independent operations)
-        async let _ = try? tmuxBackend.unsetPaneOption(paneId: paneId, option: "@mori-agent-state")
-        async let _ = try? tmuxBackend.unsetPaneOption(paneId: paneId, option: "@mori-agent-name")
+        async let _ = try? tmux.unsetPaneOption(paneId: paneId, option: "@mori-agent-state")
+        async let _ = try? tmux.unsetPaneOption(paneId: paneId, option: "@mori-agent-name")
 
         // Re-enable automatic-rename so tmux sets the window name
         // to the current process (e.g. zsh) instead of the stale agent name.
-        try? await tmuxBackend.setWindowOption(paneId: paneId, option: "automatic-rename", value: "on")
+        try? await tmux.setWindowOption(paneId: paneId, option: "automatic-rename", value: "on")
     }
 
     /// Update a worktree's agentState to the highest-priority agent state.
@@ -1071,17 +1714,23 @@ final class WorkspaceManager {
     func createNewWindow() async {
         guard let worktree = selectedWorktree,
               let sessionName = worktree.tmuxSessionName else { return }
+        let tmux = tmuxBackend(for: worktree)
         do {
-            await ensureTmuxSession(for: worktree)
-            _ = try await tmuxBackend.createWindow(sessionId: sessionName, name: nil, cwd: worktree.path)
+            let sessionReady = await ensureTmuxSession(for: worktree, showErrors: true)
+            guard sessionReady else { return }
+            _ = try await tmux.createWindow(sessionId: sessionName, name: nil, cwd: worktree.path)
             await refreshRuntimeState()
             // Re-attach terminal to the (possibly recreated) session
-            onTerminalSwitch?(sessionName, worktree.path)
+            onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
 
             // Fire onWindowCreate hook
             fireHook(event: .onWindowCreate, worktreeId: worktree.id)
         } catch {
-            showErrorAlert(title: .localized("Failed to create window"), message: error.localizedDescription)
+            showTmuxOperationError(
+                title: .localized("Failed to create window"),
+                error: error,
+                worktree: worktree
+            )
         }
     }
 
@@ -1089,11 +1738,14 @@ final class WorkspaceManager {
     func splitCurrentPane(horizontal: Bool) async {
         guard let worktree = selectedWorktree,
               let sessionName = worktree.tmuxSessionName else { return }
+        let tmux = tmuxBackend(for: worktree)
 
         do {
+            let sessionReady = await ensureTmuxSession(for: worktree, showErrors: true)
+            guard sessionReady else { return }
             // Target the session — tmux splits whatever pane is currently active.
             // Don't use cached findActivePaneId which can be stale between polls.
-            _ = try await tmuxBackend.splitPane(
+            _ = try await tmux.splitPane(
                 sessionId: sessionName,
                 paneId: "",
                 horizontal: horizontal,
@@ -1101,7 +1753,11 @@ final class WorkspaceManager {
             )
             await refreshRuntimeState()
         } catch {
-            showErrorAlert(title: .localized("Failed to split pane"), message: error.localizedDescription)
+            showTmuxOperationError(
+                title: .localized("Failed to split pane"),
+                error: error,
+                worktree: worktree
+            )
         }
     }
 
@@ -1120,11 +1776,20 @@ final class WorkspaceManager {
     func closeCurrentPane() async {
         guard let worktree = selectedWorktree,
               let sessionName = worktree.tmuxSessionName else { return }
+        let tmux = tmuxBackend(for: worktree)
+        let windowsInSession = appState.runtimeWindows.filter { $0.worktreeId == worktree.id }
+        let activeWindow = windowsInSession.first(where: { $0.tmuxWindowId == appState.uiState.selectedWindowId })
+            ?? windowsInSession.first
+
+        // Keep at least one pane alive per worktree session.
+        if windowsInSession.count <= 1, (activeWindow?.paneCount ?? 1) <= 1 {
+            return
+        }
 
         do {
             // Target the session — tmux kills whatever pane is currently active.
             // Don't use cached findActivePaneId which can be stale between polls.
-            try await tmuxBackend.killPane(sessionId: sessionName, paneId: sessionName)
+            try await tmux.killPane(sessionId: sessionName, paneId: sessionName)
             await refreshRuntimeState()
 
             // If the session was killed (last pane in last window), detach
@@ -1144,8 +1809,14 @@ final class WorkspaceManager {
         guard let worktree = selectedWorktree,
               let sessionName = worktree.tmuxSessionName,
               let windowId = appState.uiState.selectedWindowId else { return }
+        let tmux = tmuxBackend(for: worktree)
 
-        let windowsInSession = appState.runtimeWindows.filter { $0.worktreeId == worktree.id }
+        let cachedWindowsInSession = appState.runtimeWindows.filter { $0.worktreeId == worktree.id }
+        let liveWindowCount = await actualWindowCount(for: worktree, sessionName: sessionName)
+        let windowCount = liveWindowCount ?? cachedWindowsInSession.count
+        if windowCount <= 1 {
+            return
+        }
 
         // Fire onWindowClose hook before kill
         let windowTitle = appState.runtimeWindows
@@ -1153,20 +1824,13 @@ final class WorkspaceManager {
         fireHook(event: .onWindowClose, worktreeId: worktree.id, windowName: windowTitle)
 
         do {
-            if windowsInSession.count <= 1 {
-                // Last window — kill the entire session and detach terminal
-                try await tmuxBackend.killSession(id: sessionName)
-                appState.uiState.selectedWindowId = nil
-                appState.runtimeWindows.removeAll { $0.worktreeId == worktree.id }
-                onTerminalDetach?()
-            } else {
-                try await tmuxBackend.killWindow(sessionId: sessionName, windowId: windowId)
-                appState.uiState.selectedWindowId = nil
-                await refreshRuntimeState()
-                // Auto-select the first remaining window
-                if let first = appState.runtimeWindows.first(where: { $0.worktreeId == worktree.id }) {
-                    selectWindow(first.tmuxWindowId)
-                }
+            let rawWindowId = WorkspaceEndpoint.rawWindowId(from: windowId)
+            try await tmux.killWindow(sessionId: sessionName, windowId: rawWindowId)
+            appState.uiState.selectedWindowId = nil
+            await refreshRuntimeState()
+            // Auto-select the first remaining window
+            if let first = appState.runtimeWindows.first(where: { $0.worktreeId == worktree.id }) {
+                selectWindow(first.tmuxWindowId)
             }
         } catch {
             showErrorAlert(title: .localized("Failed to close window"), message: error.localizedDescription)
@@ -1178,27 +1842,25 @@ final class WorkspaceManager {
         guard let rw = appState.runtimeWindows.first(where: { $0.tmuxWindowId == windowId }),
               let worktree = appState.worktrees.first(where: { $0.id == rw.worktreeId }),
               let sessionName = worktree.tmuxSessionName else { return }
+        let tmux = tmuxBackend(for: worktree)
+        let rawWindowId = rawWindowId(from: rw)
 
-        let windowsInSession = appState.runtimeWindows.filter { $0.worktreeId == worktree.id }
+        let cachedWindowsInSession = appState.runtimeWindows.filter { $0.worktreeId == worktree.id }
+        let liveWindowCount = await actualWindowCount(for: worktree, sessionName: sessionName)
+        let windowCount = liveWindowCount ?? cachedWindowsInSession.count
+        if windowCount <= 1 {
+            return
+        }
 
         fireHook(event: .onWindowClose, worktreeId: worktree.id, windowName: rw.title)
 
         do {
-            if windowsInSession.count <= 1 {
-                try await tmuxBackend.killSession(id: sessionName)
-                appState.runtimeWindows.removeAll { $0.worktreeId == worktree.id }
-                if worktree.id == appState.uiState.selectedWorktreeId {
-                    appState.uiState.selectedWindowId = nil
-                    onTerminalDetach?()
-                }
-            } else {
-                try await tmuxBackend.killWindow(sessionId: sessionName, windowId: windowId)
-                await refreshRuntimeState()
-                if windowId == appState.uiState.selectedWindowId {
-                    appState.uiState.selectedWindowId = nil
-                    if let first = appState.runtimeWindows.first(where: { $0.worktreeId == worktree.id }) {
-                        selectWindow(first.tmuxWindowId)
-                    }
+            try await tmux.killWindow(sessionId: sessionName, windowId: rawWindowId)
+            await refreshRuntimeState()
+            if windowId == appState.uiState.selectedWindowId {
+                appState.uiState.selectedWindowId = nil
+                if let first = appState.runtimeWindows.first(where: { $0.worktreeId == worktree.id }) {
+                    selectWindow(first.tmuxWindowId)
                 }
             }
         } catch {
@@ -1219,13 +1881,20 @@ final class WorkspaceManager {
     }
 
     /// Recreate the tmux session for the current worktree and re-attach the terminal.
-    func reconnectCurrentSession() async {
-        guard let worktree = selectedWorktree else { return }
-        await ensureTmuxSession(for: worktree)
+    /// Returns true when re-attach succeeded.
+    @discardableResult
+    func reconnectCurrentSession(showErrors: Bool = true) async -> Bool {
+        guard let worktree = selectedWorktree else { return false }
+        let sessionReady = await ensureTmuxSession(for: worktree, showErrors: showErrors)
+        guard sessionReady else {
+            onTerminalDetach?()
+            return false
+        }
         await refreshRuntimeState()
         if let sessionName = worktree.tmuxSessionName {
-            onTerminalSwitch?(sessionName, worktree.path)
+            onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
         }
+        return true
     }
 
     private func navigateWindow(offset: Int) {
@@ -1241,7 +1910,9 @@ final class WorkspaceManager {
     }
 
     private func findActivePaneId(sessionName: String) -> String? {
-        guard let session = latestSessions.first(where: { $0.name == sessionName }) else { return nil }
+        guard let worktree = selectedWorktree else { return nil }
+        let sessions = sessionsForEndpoint(of: worktree)
+        guard let session = sessions.first(where: { $0.name == sessionName }) else { return nil }
         for window in session.windows {
             if let pane = window.panes.first(where: { $0.isActive }) {
                 return pane.paneId
@@ -1250,23 +1921,36 @@ final class WorkspaceManager {
         return session.windows.first?.panes.first?.paneId
     }
 
+    /// Fetch live window count for a session from tmux to avoid stale UI races.
+    private func actualWindowCount(for worktree: Worktree, sessionName: String) async -> Int? {
+        let tmux = tmuxBackend(for: worktree)
+        let sessions = try? await tmux.scanAll()
+        return sessions?.first(where: { $0.name == sessionName })?.windows.count
+    }
+
     /// Open a CLI tool (e.g. lazygit, yazi) in a new tmux window at the active pane's cwd.
     /// The window auto-names after the tool and closes when the tool exits.
     func openToolWindow(command: String) async {
         guard let worktree = selectedWorktree,
               let sessionName = worktree.tmuxSessionName else { return }
+        let tmux = tmuxBackend(for: worktree)
 
         // Resolve cwd from the active pane, falling back to worktree path
         let cwd = activePaneCwd() ?? worktree.path
 
         do {
-            await ensureTmuxSession(for: worktree)
-            let window = try await tmuxBackend.createWindow(sessionId: sessionName, name: command, cwd: cwd)
-            try await tmuxBackend.sendKeys(sessionId: sessionName, paneId: window.windowId, keys: command)
+            let sessionReady = await ensureTmuxSession(for: worktree, showErrors: true)
+            guard sessionReady else { return }
+            let window = try await tmux.createWindow(sessionId: sessionName, name: command, cwd: cwd)
+            try await tmux.sendKeys(sessionId: sessionName, paneId: window.windowId, keys: command)
             await refreshRuntimeState()
-            onTerminalSwitch?(sessionName, worktree.path)
+            onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
         } catch {
-            showErrorAlert(title: .localized("Failed to open \(command)"), message: error.localizedDescription)
+            showTmuxOperationError(
+                title: .localized("Failed to open \(command)"),
+                error: error,
+                worktree: worktree
+            )
         }
     }
 
@@ -1283,8 +1967,9 @@ final class WorkspaceManager {
     func navigatePane(direction: PaneDirection) async {
         guard let worktree = selectedWorktree,
               let sessionName = worktree.tmuxSessionName else { return }
+        let tmux = tmuxBackend(for: worktree)
         do {
-            try await tmuxBackend.navigatePane(sessionId: sessionName, direction: direction)
+            try await tmux.navigatePane(sessionId: sessionName, direction: direction)
         } catch {
             // Non-fatal — pane may not exist in that direction
         }
@@ -1294,8 +1979,9 @@ final class WorkspaceManager {
     func resizePane(direction: PaneDirection, amount: Int = 10) async {
         guard let worktree = selectedWorktree,
               let sessionName = worktree.tmuxSessionName else { return }
+        let tmux = tmuxBackend(for: worktree)
         do {
-            try await tmuxBackend.resizePane(sessionId: sessionName, direction: direction, amount: amount)
+            try await tmux.resizePane(sessionId: sessionName, direction: direction, amount: amount)
         } catch {
             // Non-fatal
         }
@@ -1305,8 +1991,9 @@ final class WorkspaceManager {
     func togglePaneZoom() async {
         guard let worktree = selectedWorktree,
               let sessionName = worktree.tmuxSessionName else { return }
+        let tmux = tmuxBackend(for: worktree)
         do {
-            try await tmuxBackend.togglePaneZoom(sessionId: sessionName)
+            try await tmux.togglePaneZoom(sessionId: sessionName)
         } catch {
             // Non-fatal
         }
@@ -1316,8 +2003,9 @@ final class WorkspaceManager {
     func equalizePanes() async {
         guard let worktree = selectedWorktree,
               let sessionName = worktree.tmuxSessionName else { return }
+        let tmux = tmuxBackend(for: worktree)
         do {
-            try await tmuxBackend.equalizePanes(sessionId: sessionName)
+            try await tmux.equalizePanes(sessionId: sessionName)
         } catch {
             // Non-fatal
         }
@@ -1362,21 +2050,34 @@ final class WorkspaceManager {
 
     // MARK: - Session Death Detection
 
-    /// Called during polling to detect and handle dead sessions for active worktrees.
-    /// Auto-recreates sessions and re-attaches if the selected worktree's session died.
-    func detectAndRecoverDeadSessions(sessions: [TmuxSession]) async {
-        guard let worktree = appState.selectedWorktree,
-              let sessionName = worktree.tmuxSessionName else { return }
+    /// Called during polling to detect and recover missing sessions for active worktrees.
+    /// Returns true when any session was recreated, so caller can rescan immediately.
+    func detectAndRecoverDeadSessions(sessionsByEndpoint: [String: [TmuxSession]]) async -> Bool {
+        var recoveredAny = false
 
-        let sessionAlive = sessions.contains { $0.name == sessionName }
-        let hadWindows = appState.runtimeWindows.contains { $0.worktreeId == worktree.id }
+        for worktree in appState.worktrees where worktree.status == .active {
+            guard let sessionName = worktree.tmuxSessionName else { continue }
+            let endpointKey = endpointKey(for: worktree)
+            let sessions = sessionsByEndpoint[endpointKey] ?? []
+            let sessionAlive = sessions.contains { $0.name == sessionName }
+            guard !sessionAlive else { continue }
 
-        if !sessionAlive && hadWindows {
-            // Session died — auto-recreate and re-attach
-            _ = try? await tmuxBackend.createSession(name: sessionName, cwd: worktree.path)
-            await onSessionCreated?()
-            onTerminalSwitch?(sessionName, worktree.path)
+            let tmux = tmuxBackend(for: worktree)
+            let recreated = (try? await tmux.createSession(name: sessionName, cwd: worktree.path)) != nil
+            guard recreated else { continue }
+
+            recoveredAny = true
+            await onSessionCreated?(tmux)
+
+            if worktree.id == appState.uiState.selectedWorktreeId {
+                // Force new terminal process; same session key can otherwise
+                // keep a dead surface cached after remote shell exit.
+                onTerminalDetach?()
+                onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
+            }
         }
+
+        return recoveredAny
     }
 
     // MARK: - Launch Restoration (Task 5.2)
@@ -1414,25 +2115,59 @@ final class WorkspaceManager {
         // Ensure tmux session exists and connect terminal
         if let worktree = appState.worktrees.first(where: { $0.id == worktreeId }) {
             Task {
-                await ensureTmuxSession(for: worktree)
+                let sessionReady = await ensureTmuxSession(for: worktree, showErrors: true)
                 await refreshRuntimeState()
 
                 // Notify terminal to attach
-                if let sessionName = worktree.tmuxSessionName {
-                    onTerminalSwitch?(sessionName, worktree.path)
+                if sessionReady, let sessionName = worktree.tmuxSessionName {
+                    onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
+                } else {
+                    onTerminalDetach?()
                 }
 
                 // 3. Restore selected window (after runtime state is loaded)
-                if let windowId = uiState.selectedWindowId,
-                   appState.runtimeWindows.contains(where: { $0.tmuxWindowId == windowId }) {
-                    appState.uiState.selectedWindowId = windowId
-                    // Switch tmux to the saved window
-                    if let sessionName = worktree.tmuxSessionName {
-                        try? await tmuxBackend.selectWindow(sessionId: sessionName, windowId: windowId)
+                if let savedWindowId = uiState.selectedWindowId {
+                    let migratedWindowId = migratedWindowIdIfNeeded(
+                        savedWindowId: savedWindowId,
+                        worktree: worktree
+                    )
+                    if let windowId = migratedWindowId,
+                       let runtimeWindow = appState.runtimeWindows.first(where: { $0.tmuxWindowId == windowId }) {
+                        appState.uiState.selectedWindowId = windowId
+                        if windowId != savedWindowId {
+                            saveUIState()
+                        }
+                        // Switch tmux to the saved window
+                        if let sessionName = worktree.tmuxSessionName {
+                            let rawWindowId = rawWindowId(from: runtimeWindow)
+                            let tmux = tmuxBackend(for: worktree)
+                            try? await tmux.selectWindow(sessionId: sessionName, windowId: rawWindowId)
+                        }
                     }
                 }
             }
         }
+    }
+
+    /// Migrate pre-remote-namespace persisted IDs (e.g. "@1") to endpoint-scoped IDs
+    /// (e.g. "local|@1" or "ssh:user@host|@1") during first restore after upgrade.
+    private func migratedWindowIdIfNeeded(
+        savedWindowId: String,
+        worktree: Worktree
+    ) -> String? {
+        if appState.runtimeWindows.contains(where: { $0.tmuxWindowId == savedWindowId }) {
+            return savedWindowId
+        }
+
+        guard !savedWindowId.contains(WorkspaceEndpoint.separator) else {
+            return nil
+        }
+
+        let candidate = namespacedWindowId(rawWindowId: savedWindowId, worktree: worktree)
+        if appState.runtimeWindows.contains(where: { $0.tmuxWindowId == candidate }) {
+            return candidate
+        }
+        return nil
     }
 
     // MARK: - Hook Helpers

@@ -13,6 +13,7 @@ Instead of managing loose terminal tabs, Mori treats your git repositories as fi
 ## Why Mori
 
 - **Project-first navigation** — switch between repos and branches, not anonymous tabs
+- **Local + remote projects** — add local folders or SSH-hosted repositories from one Add flow
 - **Persistent sessions** — close the app, reopen later, everything is still running in tmux
 - **Native macOS experience** — sidebar, command palette, notifications, keyboard shortcuts
 - **GPU-rendered terminal** — libghostty (Ghostty's rendering engine) with Metal acceleration

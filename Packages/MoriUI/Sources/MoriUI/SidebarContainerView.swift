@@ -22,6 +22,7 @@ public struct SidebarContainerView: View {
     private let onShowCreatePanel: (() -> Void)?
     private let onRemoveWorktree: ((UUID) -> Void)?
     private let onRemoveProject: ((UUID) -> Void)?
+    private let onEditRemoteProject: ((UUID) -> Void)?
     private let onCloseWindow: ((String) -> Void)?
     private let onToggleCollapse: ((UUID) -> Void)?
     private let onAddProject: (() -> Void)?
@@ -44,6 +45,7 @@ public struct SidebarContainerView: View {
         onShowCreatePanel: (() -> Void)? = nil,
         onRemoveWorktree: ((UUID) -> Void)? = nil,
         onRemoveProject: ((UUID) -> Void)? = nil,
+        onEditRemoteProject: ((UUID) -> Void)? = nil,
         onCloseWindow: ((String) -> Void)? = nil,
         onToggleCollapse: ((UUID) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
@@ -65,6 +67,7 @@ public struct SidebarContainerView: View {
         self.onShowCreatePanel = onShowCreatePanel
         self.onRemoveWorktree = onRemoveWorktree
         self.onRemoveProject = onRemoveProject
+        self.onEditRemoteProject = onEditRemoteProject
         self.onCloseWindow = onCloseWindow
         self.onToggleCollapse = onToggleCollapse
         self.onAddProject = onAddProject
@@ -122,6 +125,7 @@ public struct SidebarContainerView: View {
                     onShowCreatePanel: onShowCreatePanel,
                     onRemoveWorktree: onRemoveWorktree,
                     onRemoveProject: onRemoveProject,
+                    onEditRemoteProject: onEditRemoteProject,
                     onCloseWindow: onCloseWindow,
                     onToggleCollapse: onToggleCollapse,
                     onAddProject: onAddProject,

@@ -18,6 +18,15 @@ has_valid_xcframework() {
     [[ -n "$static_lib" ]]
 }
 
+# Strip archive debug symbols to avoid dsymutil warnings caused by duplicate
+# object basenames inside libghostty-fat.a (e.g. multiple ext.o members).
+strip_archive_debug_symbols() {
+    local xcframework_path="$1"
+    while IFS= read -r -d '' archive; do
+        /usr/bin/strip -S "$archive" 2>/dev/null || true
+    done < <(find "$xcframework_path" -type f -name "*.a" -print0)
+}
+
 # Clean mode: remove built artifacts
 if [[ "${1:-}" == "--clean" ]]; then
     echo "Cleaning Ghostty build artifacts..."
@@ -32,6 +41,7 @@ fi
 
 # Skip if already built
 if has_valid_xcframework && [[ -d "$RESOURCES_DIR" ]]; then
+    strip_archive_debug_symbols "$XCFRAMEWORK"
     echo "GhosttyKit.xcframework and resources already exist at $FRAMEWORK_DIR"
     echo "Run with --clean to rebuild."
     exit 0
@@ -203,6 +213,7 @@ fi
 mkdir -p "$FRAMEWORK_DIR"
 rm -rf "$XCFRAMEWORK"
 cp -R "$BUILD_OUTPUT" "$XCFRAMEWORK"
+strip_archive_debug_symbols "$XCFRAMEWORK"
 
 echo "GhosttyKit.xcframework built successfully at $XCFRAMEWORK"
 # Show module map to confirm structure

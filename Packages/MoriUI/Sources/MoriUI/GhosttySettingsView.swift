@@ -231,7 +231,7 @@ public struct GhosttySettingsView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "doc.text")
                         .font(.system(size: 13))
-                    Text("Open Config File")
+                    Text("Open Ghostty Config in Editor")
                         .font(.system(size: 12))
                 }
                 .foregroundStyle(.secondary)

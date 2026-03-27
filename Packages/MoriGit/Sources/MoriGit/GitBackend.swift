@@ -101,4 +101,9 @@ public actor GitBackend: GitControlling {
         }
         return (path as NSString).appendingPathComponent(result)
     }
+
+    /// Ensure a directory exists on the same host as this backend.
+    public func ensureDirectory(path: String) async throws {
+        try await runner.ensureDirectory(path: path)
+    }
 }

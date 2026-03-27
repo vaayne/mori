@@ -119,10 +119,11 @@ final class IPCHandler {
         }
 
         // Find the active pane in this window (use the window's first pane)
-        let paneId = runtimeWindow.tmuxWindowId
+        let paneId = manager.rawTmuxWindowId(from: runtimeWindow)
+        let tmux = manager.tmuxBackendForWorktree(worktree)
 
         do {
-            try await manager.tmuxBackend.sendKeys(sessionId: sessionName, paneId: paneId, keys: keys)
+            try await tmux.sendKeys(sessionId: sessionName, paneId: paneId, keys: keys)
             return .success(payload: nil)
         } catch {
             return .error(message: "Failed to send keys: \(error.localizedDescription)")
@@ -146,8 +147,9 @@ final class IPCHandler {
             return .error(message: "Worktree has no tmux session")
         }
 
+        let tmux = manager.tmuxBackendForWorktree(worktree)
         do {
-            _ = try await manager.tmuxBackend.createWindow(
+            _ = try await tmux.createWindow(
                 sessionId: sessionName,
                 name: windowName,
                 cwd: worktree.path

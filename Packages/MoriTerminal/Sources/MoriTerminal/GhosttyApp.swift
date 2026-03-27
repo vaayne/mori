@@ -1,6 +1,10 @@
 import AppKit
 import GhosttyKit
 
+public extension Notification.Name {
+    static let ghosttySurfaceDidClose = Notification.Name("MoriTerminal.GhosttySurfaceDidClose")
+}
+
 /// Actions that Mori intercepts from ghostty keybindings.
 /// Ghostty maps keys to these intents; Mori provides the tmux implementation.
 public enum GhosttyAppAction: Sendable {
@@ -348,6 +352,18 @@ final class GhosttyApp {
         _ userdata: UnsafeMutableRawPointer?,
         processAlive: Bool
     ) {
-        // Surface close requested by ghostty (e.g., shell exited).
+        guard let userdata else { return }
+        let rawUserdata = UInt(bitPattern: userdata)
+
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: .ghosttySurfaceDidClose,
+                object: nil,
+                userInfo: [
+                    "userdata": rawUserdata,
+                    "processAlive": processAlive,
+                ]
+            )
+        }
     }
 }

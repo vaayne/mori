@@ -9,6 +9,28 @@ public final class GhosttyConfigFile {
         NSHomeDirectory() + "/.config/ghostty/config"
     }()
 
+    /// Ensure the ghostty config file exists on disk.
+    public static func ensureConfigFileExists() {
+        let fm = FileManager.default
+        let dir = (configPath as NSString).deletingLastPathComponent
+        try? fm.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        if !fm.fileExists(atPath: configPath) {
+            fm.createFile(atPath: configPath, contents: Data())
+        }
+    }
+
+    /// Remove executable permission bits so the config is always treated as text.
+    public static func normalizePermissions() {
+        let fm = FileManager.default
+        guard let attrs = try? fm.attributesOfItem(atPath: configPath),
+              let mode = attrs[.posixPermissions] as? NSNumber else { return }
+        let current = mode.intValue
+        let normalized = current & ~0o111
+        if normalized != current {
+            try? fm.setAttributes([.posixPermissions: normalized], ofItemAtPath: configPath)
+        }
+    }
+
     /// Parsed line from the config file.
     private enum Line {
         case comment(String)       // "# comment" or blank line
@@ -103,8 +125,7 @@ public final class GhosttyConfigFile {
 
     /// Save to disk, preserving structure.
     public func save() {
-        let dir = (Self.configPath as NSString).deletingLastPathComponent
-        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        Self.ensureConfigFileExists()
 
         let content = lines.map { line in
             switch line {
@@ -114,6 +135,7 @@ public final class GhosttyConfigFile {
         }.joined(separator: "\n")
 
         try? content.write(toFile: Self.configPath, atomically: true, encoding: .utf8)
+        Self.normalizePermissions()
     }
 
     /// Set all values for a repeatable key, replacing all existing entries.

@@ -16,6 +16,8 @@
 "Add Project" = "添加项目";
 "Add Project..." = "添加项目…";
 "Add a project folder to Mori" = "添加项目文件夹到 Mori";
+"Attach Existing tmux Session" = "接入已有 tmux 会话";
+"Attach Session" = "接入会话";
 "Agent Waiting for Input" = "代理等待输入";
 "Branch: %@" = "分支：%@";
 "CREATE NEW BRANCH" = "创建新分支";
@@ -27,6 +29,7 @@
 "Command Finished" = "命令已完成";
 "Copy" = "拷贝";
 "Create" = "创建";
+"Create New Managed Session" = "创建新的托管会话";
 "Create Worktree" = "创建工作树";
 "Create a new git worktree and tmux session" = "创建新的 Git 工作树和 tmux 会话";
 "Cut" = "剪切";
@@ -36,6 +39,7 @@
 "Failed to Create Worktree" = "创建工作树失败";
 "from:" = "来自：";
 "Failed to add project" = "添加项目失败";
+"Failed to attach session" = "接入会话失败";
 "Failed to close pane" = "关闭窗格失败";
 "Failed to close window" = "关闭窗口失败";
 "Failed to create window" = "创建窗口失败";
@@ -69,6 +73,7 @@
 "Quit Mori" = "退出 Mori";
 "REMOTE" = "远程";
 "Reconnect" = "重新连接";
+"Reconnecting session" = "正在重连会话";
 "Redo" = "重做";
 "Refresh" = "刷新";
 "Reload Settings" = "重新加载设置";
@@ -94,6 +99,7 @@
 "Terminal Error" = "终端错误";
 "The main worktree is tied to the project's root directory and cannot be removed." = "主工作树与项目的根目录绑定，无法移除。";
 "The terminal session has exited" = "终端会话已退出";
+"Trying to restore remote session..." = "正在尝试恢复远端会话...";
 "This will remove the project and all its worktrees from Mori. Git repositories on disk will not be deleted." = "此操作将从 Mori 移除该项目及其所有工作树。磁盘上的 Git 仓库不会被删除。";
 "This worktree is at %@" = "此工作树位于 %@";
 "Tmux" = "Tmux";
@@ -107,9 +113,16 @@
 "Worktree" = "工作树";
 "Zoom" = "缩放";
 "tmux not found" = "未找到 tmux";
-"to create" = "创建";
+“tmux session \”%@\” was not found on the remote host.” = “远端主机上未找到 tmux 会话”%@”。”;
+“tmux session \”%@\” is already attached to another workspace. Choose a different session or create a new one.” = “tmux 会话”%@”已绑定到另一个工作区。请选择其他会话或创建新会话。”;
+“to create” = “创建”;
 
 /* Task Mode - Command Palette */
-"Status: %@" = "状态：%@";
-"Current status for %@" = "%@ 的当前状态";
-"Set %@ to %@" = "将 %@ 设为 %@";
+“Status: %@” = “状态：%@”;
+“Current status for %@” = “%@ 的当前状态”;
+“Set %@ to %@” = “将 %@ 设为 %@”;
+“Remote host has active tmux sessions. Choose one to attach for \”%@\”.” = “远端主机存在活跃 tmux 会话。请选择要接入到”%@”的会话。”;
+“Remote tmux session name cannot be empty.” = “远端 tmux 会话名不能为空。”;
+“Failed to access SSH password from Keychain” = “无法从钥匙串读取 SSH 密码”;
+“Mori could not read credentials for \”%@\”. Re-enter credentials or unlock Keychain.\n\n%@” = “Mori 无法读取”%@”的凭据。请重新输入凭据或解锁钥匙串。\n\n%@”;
+“Skip” = “跳过”;

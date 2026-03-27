@@ -3,6 +3,8 @@ import Foundation
 public struct RuntimeWindow: Identifiable, Codable, Equatable, Sendable {
     public var id: String { tmuxWindowId }
     public let tmuxWindowId: String
+    /// Raw tmux window ID returned by tmux (e.g. "@1"), without endpoint namespacing.
+    public var tmuxWindowRawId: String?
     public let worktreeId: UUID
     public var tmuxWindowIndex: Int
     public var title: String
@@ -23,6 +25,7 @@ public struct RuntimeWindow: Identifiable, Codable, Equatable, Sendable {
 
     public init(
         tmuxWindowId: String,
+        tmuxWindowRawId: String? = nil,
         worktreeId: UUID,
         tmuxWindowIndex: Int = 0,
         title: String = "",
@@ -41,6 +44,7 @@ public struct RuntimeWindow: Identifiable, Codable, Equatable, Sendable {
         detectedAgent: String? = nil
     ) {
         self.tmuxWindowId = tmuxWindowId
+        self.tmuxWindowRawId = tmuxWindowRawId
         self.worktreeId = worktreeId
         self.tmuxWindowIndex = tmuxWindowIndex
         self.title = title

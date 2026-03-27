@@ -14,6 +14,12 @@ public struct Project: Identifiable, Codable, Equatable, Sendable {
     public var lastActiveAt: Date?
     public var aggregateUnreadCount: Int
     public var aggregateAlertState: AlertState
+    /// Where this project's git/tmux operations execute.
+    /// nil is treated as `.local` for backward compatibility.
+    /// Invariant: `WorkspaceManager` is the single synchronization point that keeps
+    /// project/worktree endpoint locations aligned unless a worktree is intentionally
+    /// assigned a different endpoint in a dedicated migration.
+    public var location: WorkspaceLocation?
 
     public init(
         id: UUID = UUID(),
@@ -27,7 +33,8 @@ public struct Project: Identifiable, Codable, Equatable, Sendable {
         isCollapsed: Bool = false,
         lastActiveAt: Date? = nil,
         aggregateUnreadCount: Int = 0,
-        aggregateAlertState: AlertState = .none
+        aggregateAlertState: AlertState = .none,
+        location: WorkspaceLocation? = nil
     ) {
         self.id = id
         self.name = name
@@ -41,6 +48,7 @@ public struct Project: Identifiable, Codable, Equatable, Sendable {
         self.lastActiveAt = lastActiveAt
         self.aggregateUnreadCount = aggregateUnreadCount
         self.aggregateAlertState = aggregateAlertState
+        self.location = location
     }
 
     /// Auto-generate a short name from the project name.

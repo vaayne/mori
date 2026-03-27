@@ -6,9 +6,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### ✨ Features
+
+- **Task Mode Sidebar**: Alternative sidebar view that groups all worktrees across projects by workflow status (To Do, In Progress, Needs Review, Done, Cancelled) instead of project hierarchy ([#14](https://github.com/vaayne/mori/issues/14))
+  - Toggle between Tasks and Workspaces views via segmented control at sidebar top
+  - Manual status changes via context menu, command palette, or `mori status` CLI command
+  - Auto-transition from To Do to In Progress on first git activity or agent usage
+  - Cancelled items hidden by default with reveal toggle; Done group collapsed by default
+  - Cross-project worktree selection syncs project context automatically
+  - Full localization support (English + Simplified Chinese)
+
+- Add Project now prompts `Local Folder` vs `Remote Project (SSH)`
+- Added SSH-backed remote project support so git/tmux operations can run on remote hosts while keeping Mori UI local
+- Added a VS Code-style top input wizard for remote host connection (`[user@]host[:port]`, auth mode, path)
+- Added command palette action `Remote: Connect to Host...`
+- Remote add now allows non-git directories (git integration is best-effort, tmux workflow still works)
+- Remote connect now detects active tmux sessions and lets you attach the project to an existing session so sidebar tabs/panes reflect that live workspace
 
 ### 🐛 Bug Fixes
 
+- `mise run build`/`build:release` now auto-bootstrap GhosttyKit via `build:ghostty` to avoid missing XCFramework errors on fresh clones
+- `scripts/build-ghostty.sh` now validates XCFramework contents and rebuilds invalid artifacts instead of treating empty directories as valid
+- `scripts/build-ghostty.sh` now auto-installs the Metal Toolchain when `xcrun metal` is unavailable
+- Settings `Open Config` now forces text-editor open and normalizes config file permissions to non-executable
+- Remote terminal attach now reuses SSH control options for more reliable remote tmux session handling
+- Password-auth SSH projects now persist credentials in macOS Keychain and automatically re-authenticate after app restarts
+- Terminal surface caching now namespaces by endpoint so local and remote sessions with the same tmux name no longer collide
+- `mori send` / `mori new-window` now route to the selected worktree's endpoint backend and use raw tmux target IDs
+- Persisted selected window IDs now migrate from legacy raw tmux IDs (e.g. `@1`) to endpoint-namespaced IDs on first restore
+- Remote tmux commands now augment PATH (`/opt/homebrew/bin`, `/usr/local/bin`) to support non-default remote installs
+- Added `Update Remote Credentials…` action in project menus so SSH auth can be corrected without re-adding the project
+- Worktree sessions now keep a minimum of one tmux window/pane per branch, and legacy worktrees without `tmuxSessionName` are auto-backfilled
+- Remote session ensure/create/split now surface explicit "tmux unavailable" errors and avoid keeping stale terminal attachments when session bootstrap fails
+- Remote tmux command PATH bootstrap now includes standard Linux/macOS system paths, reducing false negatives on non-login SSH shells
+- Ghostty surface close events now trigger automatic session recovery so "Process exited" remote terminals reconnect instead of staying stuck
+- Window-close safety now checks live tmux session window counts (not only cached sidebar state) to avoid races that accidentally kill the last remote window/session
+- Remote terminal now performs automatic reconnect retries with a dedicated "Reconnecting session" state to provide a mosh-like continuity experience on transient SSH drops
+- Remote session discovery/ensure now uses lightweight tmux queries (`list-sessions` / targeted `list-windows`) instead of deep full-tree scans, preventing false "no session" failures from unrelated pane/window scan errors
+- Remote terminal SSH attach now forces `BatchMode=no` for interactive surfaces so password-auth sessions can recover instead of exiting immediately when no control master is active
+- Runtime window indexing now tolerates duplicate window IDs safely and de-duplicates collisions, preventing startup/IPC crashes from stale overlapping session mappings
+- Startup now auto-normalizes conflicting tmux session bindings per endpoint, and remote attach now blocks binding a session already used by another workspace
+- SSH password bootstrap no longer injects secrets into inherited process environments; askpass now uses a minimal env and securely permissioned temp scripts
+- SSH control socket paths now use fixed-length hashed names with `/tmp` fallback to avoid macOS Unix socket length failures
+- Remote SSH command paths now include server keepalive options and hard execution timeouts to prevent hung git/tmux calls
+- Keychain credential read failures are now surfaced to users with actionable alerts instead of silently falling back as "password not found"
+- Ghostty config save now avoids redundant directory creation by relying on `ensureConfigFileExists()`
+- Added unit tests for shared SSH helper behaviors (control path length, option filtering, shell escaping, askpass environment hardening)
 - Mori app termination now removes the IPC socket synchronously, and the `mori` CLI now reports missing or stale app sockets directly instead of timing out
 
 ## [0.1.2] - 2026-03-27

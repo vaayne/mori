@@ -66,6 +66,8 @@ enum CommandPaletteItem: Sendable {
                 return "arrow.clockwise"
             case "action.open-project":
                 return "folder.badge.plus"
+            case "action.remote-connect":
+                return "network"
             default:
                 return "command"
             }

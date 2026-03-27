@@ -11,9 +11,13 @@ let package = Package(
     products: [
         .library(name: "MoriTmux", targets: ["MoriTmux"]),
     ],
+    dependencies: [
+        .package(path: "../MoriCore"),
+    ],
     targets: [
         .target(
             name: "MoriTmux",
+            dependencies: ["MoriCore"],
             path: "Sources/MoriTmux"
         ),
         .executableTarget(

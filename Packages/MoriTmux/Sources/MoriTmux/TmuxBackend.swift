@@ -108,6 +108,25 @@ public actor TmuxBackend: TmuxControlling {
         return sessions
     }
 
+    /// List tmux session names without deep window/pane scans.
+    /// This is more resilient than `scanAll()` for connect-time checks.
+    public func listSessionNames() async throws -> [String] {
+        let output = try await runner.run(
+            "list-sessions", "-F", "#{session_name}"
+        )
+        return output
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map { String($0) }
+    }
+
+    /// Return the number of windows in a specific session.
+    public func windowCount(sessionName: String) async throws -> Int {
+        let output = try await runner.run(
+            "display-message", "-p", "-t", sessionName, "#{session_windows}"
+        )
+        return Int(output.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+    }
+
     public func createSession(name: String, cwd: String) async throws -> TmuxSession {
         // Create a detached session with the given name and start directory
         let output = try await runner.run(
@@ -217,6 +236,29 @@ public actor TmuxBackend: TmuxControlling {
         } else {
             // Global default (affects new sessions)
             _ = try await runner.run("set-option", "-g", option, value)
+        }
+    }
+
+    /// Read an option's value lines (array options return one line per item).
+    public func optionValues(sessionId: String?, option: String) async throws -> [String] {
+        var args: [String] = ["show-options", "-v"]
+        if let sessionId {
+            args += ["-t", sessionId]
+        }
+        args.append(option)
+        let output = try await runner.run(args)
+        return output
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    /// Append an item to a tmux array/string option (`set-option -ag`).
+    public func appendOptionValue(sessionId: String?, option: String, value: String) async throws {
+        if let sessionId {
+            _ = try await runner.run("set-option", "-ag", "-t", sessionId, option, value)
+        } else {
+            _ = try await runner.run("set-option", "-ag", option, value)
         }
     }
 

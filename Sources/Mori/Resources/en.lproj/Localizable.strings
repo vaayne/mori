@@ -16,6 +16,8 @@
 "Add Project" = "Add Project";
 "Add Project..." = "Add Project...";
 "Add a project folder to Mori" = "Add a project folder to Mori";
+"Attach Existing tmux Session" = "Attach Existing tmux Session";
+"Attach Session" = "Attach Session";
 "Agent Waiting for Input" = "Agent Waiting for Input";
 "Branch: %@" = "Branch: %@";
 "CREATE NEW BRANCH" = "CREATE NEW BRANCH";
@@ -27,6 +29,7 @@
 "Command Finished" = "Command Finished";
 "Copy" = "Copy";
 "Create" = "Create";
+"Create New Managed Session" = "Create New Managed Session";
 "Create Worktree" = "Create Worktree";
 "Create a new git worktree and tmux session" = "Create a new git worktree and tmux session";
 "Cut" = "Cut";
@@ -36,6 +39,7 @@
 "Failed to Create Worktree" = "Failed to Create Worktree";
 "from:" = "from:";
 "Failed to add project" = "Failed to add project";
+"Failed to attach session" = "Failed to attach session";
 "Failed to close pane" = "Failed to close pane";
 "Failed to close window" = "Failed to close window";
 "Failed to create window" = "Failed to create window";
@@ -69,6 +73,7 @@
 "Quit Mori" = "Quit Mori";
 "REMOTE" = "REMOTE";
 "Reconnect" = "Reconnect";
+"Reconnecting session" = "Reconnecting session";
 "Redo" = "Redo";
 "Refresh" = "Refresh";
 "Reload Settings" = "Reload Settings";
@@ -94,6 +99,7 @@
 "Terminal Error" = "Terminal Error";
 "The main worktree is tied to the project's root directory and cannot be removed." = "The main worktree is tied to the project's root directory and cannot be removed.";
 "The terminal session has exited" = "The terminal session has exited";
+"Trying to restore remote session..." = "Trying to restore remote session...";
 "This will remove the project and all its worktrees from Mori. Git repositories on disk will not be deleted." = "This will remove the project and all its worktrees from Mori. Git repositories on disk will not be deleted.";
 "This worktree is at %@" = "This worktree is at %@";
 "Tmux" = "Tmux";
@@ -107,9 +113,16 @@
 "Worktree" = "Worktree";
 "Zoom" = "Zoom";
 "tmux not found" = "tmux not found";
+"tmux session \"%@\" was not found on the remote host." = "tmux session \"%@\" was not found on the remote host.";
+"tmux session \"%@\" is already attached to another workspace. Choose a different session or create a new one." = "tmux session \"%@\" is already attached to another workspace. Choose a different session or create a new one.";
 "to create" = "to create";
 
 /* Task Mode - Command Palette */
 "Status: %@" = "Status: %@";
 "Current status for %@" = "Current status for %@";
 "Set %@ to %@" = "Set %@ to %@";
+"Remote host has active tmux sessions. Choose one to attach for \"%@\"." = "Remote host has active tmux sessions. Choose one to attach for \"%@\".";
+"Remote tmux session name cannot be empty." = "Remote tmux session name cannot be empty.";
+"Failed to access SSH password from Keychain" = "Failed to access SSH password from Keychain";
+"Mori could not read credentials for \"%@\". Re-enter credentials or unlock Keychain.\n\n%@" = "Mori could not read credentials for \"%@\". Re-enter credentials or unlock Keychain.\n\n%@";
+"Skip" = "Skip";

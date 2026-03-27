@@ -56,6 +56,26 @@ final class CommandPaletteDataSource {
             title: .localized("Open Project"),
             subtitle: .localized("Add a project folder to Mori")
         ))
+        items.append(.action(
+            id: "action.remote-connect",
+            title: "Remote: Connect to Host...",
+            subtitle: "Add a remote SSH project"
+        ))
+
+        // "Set Worktree Status" actions — only when a worktree is selected
+        if let selectedWorktree = appState.selectedWorktree {
+            for status in WorkflowStatus.allCases {
+                let isCurrent = selectedWorktree.workflowStatus == status
+                let subtitle: String = isCurrent
+                    ? String.localized("Current status for \(selectedWorktree.name)")
+                    : String.localized("Set \(selectedWorktree.name) to \(status.displayName)")
+                items.append(.action(
+                    id: "action.status-\(status.rawValue)",
+                    title: .localized("Status: \(status.displayName)"),
+                    subtitle: subtitle
+                ))
+            }
+        }
 
         // "Set Worktree Status" actions — only when a worktree is selected
         if let selectedWorktree = appState.selectedWorktree {

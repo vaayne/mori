@@ -11,9 +11,13 @@ let package = Package(
     products: [
         .library(name: "MoriGit", targets: ["MoriGit"]),
     ],
+    dependencies: [
+        .package(path: "../MoriCore"),
+    ],
     targets: [
         .target(
             name: "MoriGit",
+            dependencies: ["MoriCore"],
             path: "Sources/MoriGit"
         ),
         .executableTarget(

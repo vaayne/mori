@@ -26,6 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var settingsWindowController: NSWindowController?
     private var configFile: GhosttyConfigFile?
     private var proxyApplyTask: Task<Void, Never>?
+    private var reconnectTask: Task<Void, Never>?
+    private var remoteConnectWizardController: RemoteConnectWizardController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -78,8 +80,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         terminalArea.onCreateSession = { [weak self] in
             guard let self else { return }
             if let manager = self.workspaceManager, manager.hasSelectedWorktree {
-                // Worktree exists but session died — recreate it
-                Task { await manager.reconnectCurrentSession() }
+                // Worktree exists but session died — auto-retry reconnect.
+                self.startAutoReconnect()
             } else {
                 self.showAddProjectPanel()
             }
@@ -131,6 +133,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                     await manager.removeProject(projectId: projectId)
                 }
             },
+            onEditRemoteProject: { [weak self] projectId in
+                self?.showEditRemoteCredentialsPanel(projectId: projectId)
+            },
             onCloseWindow: { [weak manager] windowId in
                 guard let manager else { return }
                 Task { @MainActor in
@@ -181,8 +186,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         NSApp.activate(ignoringOtherApps: true)
 
         // Wire terminal switch: when worktree selection changes, attach terminal
-        manager.onTerminalSwitch = { [weak terminalArea] sessionName, workingDirectory in
-            terminalArea?.attachToSession(sessionName: sessionName, workingDirectory: workingDirectory)
+        manager.onTerminalSwitch = { [weak terminalArea] sessionName, workingDirectory, location in
+            terminalArea?.attachToSession(
+                sessionName: sessionName,
+                workingDirectory: workingDirectory,
+                location: location
+            )
         }
 
         // Wire terminal detach: when session is killed, show empty state
@@ -192,8 +201,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
 
         // Wire session created: apply proxy env vars after tmux server starts
-        manager.onSessionCreated = { [weak self] in
-            guard let tmuxBackend = self?.workspaceManager?.tmuxBackend else { return }
+        manager.onSessionCreated = { [weak self] tmuxBackend in
+            guard self != nil else { return }
             let model = ProxySettingsApplicator.load()
             await ProxySettingsApplicator.apply(model, tmuxBackend: tmuxBackend)
 
@@ -272,6 +281,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         // Stop coordinated polling
         workspaceManager?.stopPolling()
+        reconnectTask?.cancel()
+        reconnectTask = nil
 
         // Persist UI state before exit
         workspaceManager?.saveUIStateOnTerminate()
@@ -291,6 +302,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     // MARK: - Add Project (Task 3.6)
 
     private func showAddProjectPanel() {
+        guard let window = mainWindowController?.window else { return }
+        let choiceAlert = NSAlert()
+        choiceAlert.alertStyle = .informational
+        choiceAlert.messageText = "Add Project"
+        choiceAlert.informativeText = "Choose where to add the project from."
+        choiceAlert.addButton(withTitle: "Local Folder")
+        choiceAlert.addButton(withTitle: "Remote Project (SSH)")
+        choiceAlert.addButton(withTitle: "Cancel")
+
+        choiceAlert.beginSheetModal(for: window) { [weak self] response in
+            switch response {
+            case .alertFirstButtonReturn:
+                self?.showLocalProjectPanel()
+            case .alertSecondButtonReturn:
+                self?.showRemoteConnectWizard()
+            default:
+                break
+            }
+        }
+    }
+
+    private func showLocalProjectPanel() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -306,6 +339,122 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
+    private func showRemoteConnectWizard() {
+        let wizard = RemoteConnectWizardController()
+        wizard.onSubmit = { [weak self] (input: RemoteConnectInput) async -> Result<Void, any Error> in
+            guard let self else {
+                return .failure(NSError(domain: "Mori", code: 1, userInfo: [
+                    NSLocalizedDescriptionKey: "Window closed.",
+                ]))
+            }
+            guard let manager = self.workspaceManager else {
+                return .failure(NSError(domain: "Mori", code: 2, userInfo: [
+                    NSLocalizedDescriptionKey: "Workspace manager unavailable.",
+                ]))
+            }
+
+            do {
+                let project = try await manager.addRemoteProject(
+                    host: input.host,
+                    path: input.path,
+                    user: input.user,
+                    port: input.port,
+                    authMethod: input.authMethod,
+                    password: input.password
+                )
+                self.mainWindowController?.updateTitle(projectName: project.name)
+                self.scheduleAttachExistingRemoteSessionPrompt(projectId: project.id)
+                return .success(())
+            } catch {
+                return .failure(error)
+            }
+        }
+        remoteConnectWizardController = wizard
+        wizard.present(over: mainWindowController?.window)
+    }
+
+    private func scheduleAttachExistingRemoteSessionPrompt(projectId: UUID) {
+        Task { @MainActor [weak self] in
+            guard let self,
+                  let window = self.mainWindowController?.window else { return }
+
+            // Wait until the remote-connect wizard sheet has been dismissed.
+            var attempts = 0
+            while window.attachedSheet != nil, attempts < 40 {
+                attempts += 1
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+
+            await self.offerAttachToExistingRemoteSessionIfNeeded(projectId: projectId)
+        }
+    }
+
+    private func offerAttachToExistingRemoteSessionIfNeeded(projectId: UUID) async {
+        guard let manager = workspaceManager,
+              let state = appState,
+              let project = state.projects.first(where: { $0.id == projectId }),
+              case .ssh = project.resolvedLocation else { return }
+
+        let sessionNames = await manager.listRemoteSessionNames(projectId: projectId)
+        guard !sessionNames.isEmpty else { return }
+
+        guard let chosen = await promptForRemoteSessionAttachment(
+            projectName: project.name,
+            sessionNames: sessionNames
+        ) else { return }
+
+        do {
+            try await manager.attachMainWorktreeToRemoteSession(
+                projectId: projectId,
+                sessionName: chosen
+            )
+        } catch {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = .localized("Failed to attach session")
+            alert.informativeText = error.localizedDescription
+            alert.runModal()
+        }
+    }
+
+    private func promptForRemoteSessionAttachment(
+        projectName: String,
+        sessionNames: [String]
+    ) async -> String? {
+        guard let window = mainWindowController?.window else { return nil }
+
+        let createNewOption = String.localized("Create New Managed Session")
+        let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 320, height: 26), pullsDown: false)
+        popup.addItem(withTitle: createNewOption)
+        popup.menu?.addItem(.separator())
+        for name in sessionNames {
+            popup.addItem(withTitle: name)
+        }
+
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = .localized("Attach Existing tmux Session")
+        alert.informativeText = String(
+            format: .localized("Remote host has active tmux sessions. Choose one to attach for \"%@\"."),
+            projectName
+        )
+        alert.accessoryView = popup
+        alert.addButton(withTitle: .localized("Attach Session"))
+        alert.addButton(withTitle: .localized("Skip"))
+
+        return await withCheckedContinuation { continuation in
+            alert.beginSheetModal(for: window) { response in
+                guard response == .alertFirstButtonReturn,
+                      let selected = popup.selectedItem?.title,
+                      selected != createNewOption else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: selected)
+            }
+        }
+    }
+
     private func handleAddProject(path: String) {
         guard let manager = workspaceManager else { return }
         Task { @MainActor in
@@ -316,6 +465,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 let alert = NSAlert()
                 alert.alertStyle = .warning
                 alert.messageText = .localized("Failed to add project")
+                alert.informativeText = error.localizedDescription
+                alert.runModal()
+            }
+        }
+    }
+
+    private func showEditRemoteCredentialsPanel(projectId: UUID) {
+        guard let state = appState,
+              let project = state.projects.first(where: { $0.id == projectId }),
+              case .ssh(let ssh) = project.resolvedLocation,
+              let window = mainWindowController?.window else { return }
+
+        let methodAlert = NSAlert()
+        methodAlert.alertStyle = .informational
+        methodAlert.messageText = .localized("Update Remote Credentials")
+        methodAlert.informativeText = .localized("Host: \(ssh.target)")
+        methodAlert.addButton(withTitle: .localized("SSH Key / Agent"))
+        methodAlert.addButton(withTitle: .localized("Password"))
+        methodAlert.addButton(withTitle: .localized("Cancel"))
+
+        methodAlert.beginSheetModal(for: window) { [weak self] response in
+            guard let self else { return }
+            switch response {
+            case .alertFirstButtonReturn:
+                self.applyRemoteAuthUpdate(projectId: projectId, authMethod: .publicKey, password: nil)
+            case .alertSecondButtonReturn:
+                self.promptForRemotePassword(projectId: projectId, hostDisplay: ssh.target)
+            default:
+                break
+            }
+        }
+    }
+
+    private func promptForRemotePassword(projectId: UUID, hostDisplay: String) {
+        guard let window = mainWindowController?.window else { return }
+
+        let passwordField = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        passwordField.placeholderString = .localized("Password")
+
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = .localized("Password Authentication")
+        alert.informativeText = .localized("Enter SSH password for \(hostDisplay)")
+        alert.accessoryView = passwordField
+        alert.addButton(withTitle: .localized("Save & Reconnect"))
+        alert.addButton(withTitle: .localized("Cancel"))
+
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn else { return }
+            let password = passwordField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            self?.applyRemoteAuthUpdate(projectId: projectId, authMethod: .password, password: password)
+        }
+    }
+
+    private func applyRemoteAuthUpdate(
+        projectId: UUID,
+        authMethod: SSHAuthMethod,
+        password: String?
+    ) {
+        guard let manager = workspaceManager else { return }
+        Task { @MainActor in
+            do {
+                try await manager.updateRemoteAuth(
+                    projectId: projectId,
+                    authMethod: authMethod,
+                    password: password
+                )
+            } catch {
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = .localized("Failed to update remote credentials")
                 alert.informativeText = error.localizedDescription
                 alert.runModal()
             }
@@ -341,9 +561,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if worktreeCreationController == nil {
             let controller = WorktreeCreationController()
 
-            controller.fetchBranches = { [weak manager] repoPath in
+            controller.fetchBranches = { [weak manager] projectId, repoPath in
                 guard let manager else { return [] }
-                return try await manager.gitBackend.listBranches(repoPath: repoPath)
+                return try await manager.listBranches(projectId: projectId, repoPathHint: repoPath)
             }
 
             controller.onCreateWorktree = { [weak manager] request in
@@ -387,7 +607,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             repoPath: project.repoRootPath
         )
     }
-
     // MARK: - Settings Window
 
     private func showSettingsWindow() {
@@ -421,7 +640,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 self.reloadGhosttyConfig()
             },
             onOpenConfigFile: {
-                NSWorkspace.shared.open(URL(fileURLWithPath: GhosttyConfigFile.configPath))
+                GhosttyConfigFile.ensureConfigFileExists()
+                GhosttyConfigFile.normalizePermissions()
+                let configURL = URL(fileURLWithPath: GhosttyConfigFile.configPath)
+                if let textEditURL = NSWorkspace.shared.urlForApplication(
+                    withBundleIdentifier: "com.apple.TextEdit"
+                ) {
+                    NSWorkspace.shared.open(
+                        [configURL],
+                        withApplicationAt: textEditURL,
+                        configuration: NSWorkspace.OpenConfiguration()
+                    ) { _, _ in }
+                } else {
+                    NSWorkspace.shared.open(configURL)
+                }
             },
             onAgentHookChanged: { newModel in
                 Self.applyAgentHookChanges(newModel)
@@ -909,6 +1141,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         case "action.open-project":
             showAddProjectPanel()
+        case "action.remote-connect":
+            showRemoteConnectWizard()
 
         default:
             // Handle "action.status-<rawValue>" patterns
@@ -949,6 +1183,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             projectName: appState?.selectedProject?.name,
             worktreeName: appState?.selectedWorktree?.branch ?? appState?.selectedWorktree?.name
         )
+    }
+
+    private func startAutoReconnect() {
+        reconnectTask?.cancel()
+        guard let manager = workspaceManager,
+              manager.hasSelectedWorktree else { return }
+        terminalAreaController?.beginAutoReconnect()
+
+        reconnectTask = Task { [weak self, weak manager] in
+            guard let self, let manager else { return }
+
+            let maxAttempts = 8
+            for attempt in 0..<maxAttempts {
+                if Task.isCancelled { return }
+                let showErrors = (attempt == maxAttempts - 1)
+                let ok = await manager.reconnectCurrentSession(showErrors: showErrors)
+                if ok {
+                    self.terminalAreaController?.endAutoReconnect()
+                    self.reconnectTask = nil
+                    return
+                }
+
+                let delaySeconds = min(1 << min(attempt, 3), 8)
+                try? await Task.sleep(nanoseconds: UInt64(delaySeconds) * 500_000_000)
+            }
+
+            self.terminalAreaController?.endAutoReconnect()
+            self.reconnectTask = nil
+        }
     }
 
     // MARK: - Settings (Cmd+,)

@@ -23,6 +23,11 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
     public var agentState: AgentState
     public var status: WorktreeStatus
     public var workflowStatus: WorkflowStatus
+    /// Where this worktree's git/tmux operations execute.
+    /// nil is treated as `.local` for backward compatibility.
+    /// Invariant: default behavior inherits the project endpoint; writes are
+    /// coordinated by `WorkspaceManager` to avoid drift between project/worktree.
+    public var location: WorkspaceLocation?
 
     public init(
         id: UUID = UUID(),
@@ -46,7 +51,8 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
         unreadCount: Int = 0,
         agentState: AgentState = .none,
         status: WorktreeStatus = .active,
-        workflowStatus: WorkflowStatus = .todo
+        workflowStatus: WorkflowStatus = .todo,
+        location: WorkspaceLocation? = nil
     ) {
         self.id = id
         self.projectId = projectId
@@ -70,10 +76,11 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
         self.agentState = agentState
         self.status = status
         self.workflowStatus = workflowStatus
+        self.location = location
     }
 
     // Custom Codable init for backwards compatibility with existing JSON
-    // that may not contain the new stagedCount/modifiedCount/untrackedCount fields.
+    // that may not contain newer fields.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -98,5 +105,6 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
         agentState = try container.decode(AgentState.self, forKey: .agentState)
         status = try container.decode(WorktreeStatus.self, forKey: .status)
         workflowStatus = try container.decodeIfPresent(WorkflowStatus.self, forKey: .workflowStatus) ?? .todo
+        location = try container.decodeIfPresent(WorkspaceLocation.self, forKey: .location)
     }
 }

@@ -11,7 +11,7 @@ final class UnreadTracker {
     private var lastSeen: [String: TimeInterval] = [:]
 
     /// Process tmux sessions and detect windows with new activity.
-    /// Returns the set of tmux window IDs that have new unread output.
+    /// Returns composite keys (`worktreeId:windowId`) that have new unread output.
     ///
     /// For each Mori session matched to a worktree:
     /// - For each window, compute the max pane_activity across panes
@@ -23,7 +23,7 @@ final class UnreadTracker {
         worktrees: [Worktree],
         selectedWindowId: String?
     ) -> Set<String> {
-        var unreadWindowIds: Set<String> = []
+        var unreadWindowKeys: Set<String> = []
 
         for session in sessions where session.isMoriSession {
             // Match session to worktree
@@ -46,7 +46,7 @@ final class UnreadTracker {
                     if maxActivity > previousActivity {
                         // Skip the currently selected window (user is looking at it)
                         if tmuxWindow.windowId != selectedWindowId {
-                            unreadWindowIds.insert(tmuxWindow.windowId)
+                            unreadWindowKeys.insert(key)
                         }
                         lastSeen[key] = maxActivity
                     }
@@ -57,7 +57,7 @@ final class UnreadTracker {
             }
         }
 
-        return unreadWindowIds
+        return unreadWindowKeys
     }
 
     /// Mark a window as "seen" (user selected it).
@@ -70,10 +70,11 @@ final class UnreadTracker {
     /// Get the current max pane activity for a window from session data.
     /// Useful when clearing unread on selection.
     func currentActivity(
+        sessionName: String,
         windowId: String,
         in sessions: [TmuxSession]
     ) -> TimeInterval? {
-        for session in sessions {
+        for session in sessions where session.name == sessionName {
             for window in session.windows where window.windowId == windowId {
                 return window.panes
                     .compactMap { $0.lastActivity }

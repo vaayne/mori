@@ -1415,6 +1415,13 @@ testSidebarModeNewValuesRoundTrip()
 testSidebarModeBackwardsCompatWorktrees()
 testSidebarModeBackwardsCompatSearch()
 
+testSSHControlSocketPathLengthLimit()
+testSSHExecutionConfigTargetFormatting()
+testSSHRemovingBatchMode()
+testSSHShellEscape()
+testSSHAskPassEnvironmentIsMinimal()
+testSSHCreateAskPassScriptHasSecurePermissions()
+
 printResults()
 
 if failCount > 0 {

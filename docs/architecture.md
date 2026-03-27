@@ -29,6 +29,10 @@ User action → WorkspaceManager → AppState (@Observable) → SwiftUI re-rende
 
 **TmuxBackend** (actor) polls tmux every 5 seconds via CLI (`tmux list-sessions/windows/panes -F`), parses with tab-delimited format strings, and notifies WorkspaceManager of changes.
 
+Projects can execute in two locations:
+- `local` — git/tmux run on the host machine
+- `ssh` — git/tmux run on a remote host via SSH while UI remains local
+
 ## UI Structure
 
 AppKit shell with SwiftUI leaf views:
