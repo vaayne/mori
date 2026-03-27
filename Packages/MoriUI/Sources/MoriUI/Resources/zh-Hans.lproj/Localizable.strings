@@ -111,3 +111,39 @@
 "Whether the cursor blinks when idle." = "空闲时光标是否闪烁。";
 "Window" = "窗口";
 "Window %lld" = "窗口 %lld";
+
+/* Network / Proxy Settings */
+"Network" = "网络";
+"Configure proxy environment variables for all terminal sessions. Both lowercase and uppercase variants (e.g. http_proxy and HTTP_PROXY) are set automatically." = "为所有终端会话配置代理环境变量。小写和大写变量（如 http_proxy 和 HTTP_PROXY）会同时自动设置。";
+"Proxy Mode" = "代理模式";
+"System proxy" = "系统代理";
+"Read proxy settings from macOS system configuration." = "从 macOS 系统配置中读取代理设置。";
+"Manual configuration" = "手动配置";
+"Specify proxy URLs manually." = "手动指定代理地址。";
+"No proxy" = "无代理";
+"Clear all proxy environment variables." = "清除所有代理环境变量。";
+"HTTP proxy URL (e.g. http://127.0.0.1:7890)" = "HTTP 代理地址（如 http://127.0.0.1:7890）";
+"HTTPS proxy URL (e.g. http://127.0.0.1:7890)" = "HTTPS 代理地址（如 http://127.0.0.1:7890）";
+"Same as HTTP" = "与 HTTP 相同";
+"SOCKS proxy URL (e.g. socks5://127.0.0.1:7890)" = "SOCKS 代理地址（如 socks5://127.0.0.1:7890）";
+"Bypass List" = "绕过列表";
+"Comma-separated hosts to bypass proxy (e.g. localhost,127.0.0.1)" = "逗号分隔的免代理主机（如 localhost,127.0.0.1）";
+"Apply" = "应用";
+"Unsaved changes" = "未保存的更改";
+"Proxy changes only affect new tabs and panes. Existing shells keep their current environment." = "代理更改仅影响新的标签页和面板。已有的 shell 会保留当前环境变量。";
+
+/* Task Mode Sidebar */
+"Tasks" = "任务";
+"Workspaces" = "工作区";
+"Set Status" = "设置状态";
+"To Do" = "待办";
+"In Progress" = "进行中";
+"Needs Review" = "待审查";
+"Done" = "已完成";
+"Cancelled" = "已取消";
+"Show Cancelled (%lld)" = "显示已取消 (%lld)";
+"Hide Cancelled" = "隐藏已取消";
+"just now" = "刚刚";
+"%lldm ago" = "%lld分钟前";
+"%lldh ago" = "%lld小时前";
+"%lldd ago" = "%lld天前";

@@ -6,7 +6,7 @@ import MoriUI
 
 // MARK: - Sidebar Hosting (unified: project picker + worktrees + actions)
 
-/// Wraps WorktreeSidebarView in an NSHostingController, observing AppState.
+/// Wraps SidebarContainerView in an NSHostingController, observing AppState.
 @MainActor
 final class SidebarHostingController: NSHostingController<SidebarContentView> {
 
@@ -17,14 +17,16 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         onSelectProject: @escaping (UUID) -> Void,
         onSelectWorktree: @escaping (UUID) -> Void,
         onSelectWindow: @escaping (String) -> Void,
-        onCreateWorktree: ((String) -> Void)? = nil,
+        onShowCreatePanel: (() -> Void)? = nil,
         onRemoveWorktree: ((UUID) -> Void)? = nil,
         onRemoveProject: ((UUID) -> Void)? = nil,
         onCloseWindow: ((String) -> Void)? = nil,
         onToggleCollapse: ((UUID) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
-        onOpenCommandPalette: (() -> Void)? = nil
+        onOpenCommandPalette: (() -> Void)? = nil,
+        onToggleSidebarMode: ((SidebarMode) -> Void)? = nil,
+        onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)? = nil
     ) {
         self.appState = appState
         let rootView = SidebarContentView(
@@ -32,14 +34,16 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
             onSelectProject: onSelectProject,
             onSelectWorktree: onSelectWorktree,
             onSelectWindow: onSelectWindow,
-            onCreateWorktree: onCreateWorktree,
+            onShowCreatePanel: onShowCreatePanel,
             onRemoveWorktree: onRemoveWorktree,
             onRemoveProject: onRemoveProject,
             onCloseWindow: onCloseWindow,
             onToggleCollapse: onToggleCollapse,
             onAddProject: onAddProject,
             onOpenSettings: onOpenSettings,
-            onOpenCommandPalette: onOpenCommandPalette
+            onOpenCommandPalette: onOpenCommandPalette,
+            onToggleSidebarMode: onToggleSidebarMode,
+            onSetWorkflowStatus: onSetWorkflowStatus
         )
         super.init(rootView: rootView)
         // Prevent SwiftUI's layout from dictating the view size.
@@ -61,13 +65,13 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
     }
 }
 
-/// Bindable wrapper that reads AppState observables into WorktreeSidebarView.
+/// Bindable wrapper that reads AppState observables into SidebarContainerView.
 struct SidebarContentView: View {
     @Bindable var appState: AppState
     let onSelectProject: (UUID) -> Void
     let onSelectWorktree: (UUID) -> Void
     let onSelectWindow: (String) -> Void
-    let onCreateWorktree: ((String) -> Void)?
+    let onShowCreatePanel: (() -> Void)?
     let onRemoveWorktree: ((UUID) -> Void)?
     let onRemoveProject: ((UUID) -> Void)?
     let onCloseWindow: ((String) -> Void)?
@@ -75,9 +79,15 @@ struct SidebarContentView: View {
     let onAddProject: (() -> Void)?
     let onOpenSettings: (() -> Void)?
     let onOpenCommandPalette: (() -> Void)?
+    let onToggleSidebarMode: ((SidebarMode) -> Void)?
+    let onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)?
 
     var body: some View {
-        WorktreeSidebarView(
+        SidebarContainerView(
+            sidebarMode: appState.uiState.sidebarMode,
+            onToggleSidebarMode: { mode in
+                onToggleSidebarMode?(mode)
+            },
             projects: appState.projects,
             selectedProjectId: appState.uiState.selectedProjectId,
             worktrees: appState.worktrees,
@@ -87,14 +97,15 @@ struct SidebarContentView: View {
             onSelectProject: onSelectProject,
             onSelectWorktree: onSelectWorktree,
             onSelectWindow: onSelectWindow,
-            onCreateWorktree: onCreateWorktree,
+            onShowCreatePanel: onShowCreatePanel,
             onRemoveWorktree: onRemoveWorktree,
             onRemoveProject: onRemoveProject,
             onCloseWindow: onCloseWindow,
             onToggleCollapse: onToggleCollapse,
             onAddProject: onAddProject,
             onOpenSettings: onOpenSettings,
-            onOpenCommandPalette: onOpenCommandPalette
+            onOpenCommandPalette: onOpenCommandPalette,
+            onSetWorkflowStatus: onSetWorkflowStatus
         )
     }
 }

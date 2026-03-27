@@ -13,7 +13,9 @@ public protocol GitControlling: Sendable {
     ///   - path: Destination path for the new worktree.
     ///   - branch: Branch name to check out.
     ///   - createBranch: If true, creates a new branch (`-b`).
-    func addWorktree(repoPath: String, path: String, branch: String, createBranch: Bool) async throws
+    ///   - baseBranch: When `createBranch` is true, the branch to base the new branch on.
+    ///     When nil, the new branch is based on HEAD. Ignored when `createBranch` is false.
+    func addWorktree(repoPath: String, path: String, branch: String, createBranch: Bool, baseBranch: String?) async throws
 
     /// Remove a worktree.
     /// - Parameters:
@@ -31,4 +33,7 @@ public protocol GitControlling: Sendable {
     /// Return the git common directory for the given path (resolves via `git rev-parse --git-common-dir`).
     /// For a main worktree this is typically `<repo>/.git`; for linked worktrees it points to the shared `.git` dir.
     func gitCommonDir(path: String) async throws -> String
+
+    /// List all branches (local and remote) for a git repository, sorted by most recent commit.
+    func listBranches(repoPath: String) async throws -> [GitBranchInfo]
 }

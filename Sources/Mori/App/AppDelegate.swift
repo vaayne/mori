@@ -22,8 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var sidebarController: SidebarHostingController?
     private var ipcServer: IPCServer?
     private var ipcHandler: IPCHandler?
+    private var worktreeCreationController: WorktreeCreationController?
     private var settingsWindowController: NSWindowController?
     private var configFile: GhosttyConfigFile?
+    private var proxyApplyTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -114,11 +116,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 manager?.selectWindow(windowId)
                 self?.updateWindowTitle()
             },
-            onCreateWorktree: { [weak manager] branchName in
-                guard let manager else { return }
-                Task { @MainActor in
-                    await manager.handleCreateWorktree(branchName: branchName)
-                }
+            onShowCreatePanel: { [weak self] in
+                self?.showCreateWorktreePanel()
             },
             onRemoveWorktree: { [weak manager] worktreeId in
                 guard let manager else { return }
@@ -149,6 +148,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             onOpenCommandPalette: { [weak self] in
                 self?.commandPaletteController?.toggle()
+            },
+            onToggleSidebarMode: { [weak manager] mode in
+                manager?.setSidebarMode(mode)
+            },
+            onSetWorkflowStatus: { [weak manager] worktreeId, status in
+                manager?.setWorkflowStatus(worktreeId: worktreeId, status: status)
             }
         )
 
@@ -163,6 +168,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         windowController.onToggleSidebar = { [weak splitVC] in
             splitVC?.toggleSidebar()
+        }
+
+        windowController.onShowCreateWorktreePanel = { [weak self] in
+            self?.showCreateWorktreePanel()
         }
 
         windowController.contentViewController = splitVC
@@ -180,6 +189,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         manager.onTerminalDetach = { [weak terminalArea, weak manager] in
             terminalArea?.hasSelectedWorktree = manager?.hasSelectedWorktree ?? false
             terminalArea?.detach()
+        }
+
+        // Wire session created: apply proxy env vars after tmux server starts
+        manager.onSessionCreated = { [weak self] in
+            guard let tmuxBackend = self?.workspaceManager?.tmuxBackend else { return }
+            let model = ProxySettingsApplicator.load()
+            await ProxySettingsApplicator.apply(model, tmuxBackend: tmuxBackend)
+
+            // Apply theme (including status bar off) to the newly created session
+            if let terminalArea = self?.terminalAreaController {
+                await TmuxThemeApplicator.apply(
+                    themeInfo: terminalArea.themeInfo,
+                    tmuxBackend: tmuxBackend
+                )
+            }
         }
 
         // Restore previously saved UI state (project, worktree, window selection)
@@ -205,6 +229,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 return
             }
 
+            if let terminalArea = self.terminalAreaController,
+               let tmuxPath = try? await manager.tmuxBackend.resolvedBinaryPath() {
+                terminalArea.tmuxBinaryPath = tmuxPath
+            }
+
             // Initial runtime state load
             await manager.refreshRuntimeState()
 
@@ -218,6 +247,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                     tmuxBackend: manager.tmuxBackend
                 )
             }
+
+            // Apply proxy environment variables to tmux
+            self.applyProxyToTmux()
         }
     }
 
@@ -289,6 +321,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
+    // MARK: - Create Worktree Panel
+
+    private func showCreateWorktreePanel() {
+        guard let manager = workspaceManager, let state = appState else { return }
+
+        guard let projectId = state.uiState.selectedProjectId,
+              let project = state.projects.first(where: { $0.id == projectId }) else {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = .localized("No Project Selected")
+            alert.informativeText = .localized("Please select a project first.")
+            alert.addButton(withTitle: .localized("OK"))
+            alert.runModal()
+            return
+        }
+
+        if worktreeCreationController == nil {
+            let controller = WorktreeCreationController()
+
+            controller.fetchBranches = { [weak manager] repoPath in
+                guard let manager else { return [] }
+                return try await manager.gitBackend.listBranches(repoPath: repoPath)
+            }
+
+            controller.onCreateWorktree = { [weak manager] request in
+                guard let manager else { return }
+                Task { @MainActor in
+                    await manager.handleCreateWorktreeFromPanel(request)
+                }
+            }
+
+            controller.onProjectChanged = { [weak self] newProjectId in
+                guard let self else { return }
+                self.appState?.uiState.selectedProjectId = newProjectId
+                self.workspaceManager?.selectProject(newProjectId)
+                self.refreshCreateWorktreePanel(for: newProjectId)
+            }
+
+            worktreeCreationController = controller
+        }
+
+        let controller = worktreeCreationController!
+
+        let themeInfo = terminalAreaController?.themeInfo ?? .fallback
+        controller.show(
+            projects: state.projects,
+            selectedProjectId: projectId,
+            repoPath: project.repoRootPath,
+            themeInfo: themeInfo
+        )
+    }
+
+    /// Lightweight refresh when the user changes the project dropdown — only
+    /// re-fetches branches for the new project without re-wiring callbacks or
+    /// re-positioning the panel.
+    private func refreshCreateWorktreePanel(for projectId: UUID) {
+        guard let controller = worktreeCreationController,
+              let state = appState,
+              let project = state.projects.first(where: { $0.id == projectId }) else { return }
+        controller.refresh(
+            projects: state.projects,
+            selectedProjectId: projectId,
+            repoPath: project.repoRootPath
+        )
+    }
+
     // MARK: - Settings Window
 
     private func showSettingsWindow() {
@@ -314,6 +412,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 codexEnabled: AgentHookConfigurator.isCodexHookInstalled(),
                 piEnabled: AgentHookConfigurator.isPiExtensionInstalled()
             ),
+            initialProxy: ProxySettingsApplicator.load(),
             onChanged: { [weak self] newModel in
                 guard let self else { return }
                 self.writeSettingsModel(newModel, to: cf)
@@ -325,6 +424,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             onAgentHookChanged: { newModel in
                 Self.applyAgentHookChanges(newModel)
+            },
+            onProxyApply: { [weak self] newModel in
+                ProxySettingsApplicator.save(newModel)
+                self?.applyProxyToTmux()
+            },
+            onSystemProxyDetect: {
+                ProxySettingsApplicator.readSystemProxy()
             }
         )
 
@@ -413,6 +519,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             Task {
                 await TmuxThemeApplicator.apply(themeInfo: themeInfo, tmuxBackend: tmuxBackend)
             }
+        }
+    }
+
+    // MARK: - Proxy
+
+    /// Apply saved proxy settings to tmux, cancelling any in-flight apply.
+    private func applyProxyToTmux() {
+        proxyApplyTask?.cancel()
+        proxyApplyTask = Task { [weak self] in
+            guard let tmuxBackend = self?.workspaceManager?.tmuxBackend else { return }
+            let model = ProxySettingsApplicator.load()
+            await ProxySettingsApplicator.apply(model, tmuxBackend: tmuxBackend)
         }
     }
 
@@ -675,6 +793,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 return nil
             }
 
+            // Cmd+Shift+N: open worktree creation panel
+            if mods == [.command, .shift], key == "N" || key == "n" {
+                self?.showCreateWorktreePanel()
+                return nil
+            }
+
             // Cmd+1–9: select tmux window (tab) by index
             if mods == [.command], let digit = Int(key), digit >= 1, digit <= 9 {
                 self?.workspaceManager?.selectWindowByIndex(digit)
@@ -775,24 +899,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func handlePaletteAction(_ actionId: String, manager: WorkspaceManager) {
         switch actionId {
         case "action.create-worktree":
-            // Prompt for branch name via a simple input dialog
-            let alert = NSAlert()
-            alert.messageText = .localized("Create Worktree")
-            alert.informativeText = .localized("Enter a branch name:")
-            alert.addButton(withTitle: .localized("Create"))
-            alert.addButton(withTitle: .localized("Cancel"))
-
-            let inputField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-            inputField.placeholderString = "feature/my-branch"
-            alert.accessoryView = inputField
-
-            let response = alert.runModal()
-            if response == .alertFirstButtonReturn {
-                let branchName = inputField.stringValue
-                Task { @MainActor in
-                    await manager.handleCreateWorktree(branchName: branchName)
-                }
-            }
+            showCreateWorktreePanel()
 
         case "action.refresh":
             Task { @MainActor in
@@ -803,7 +910,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             showAddProjectPanel()
 
         default:
-            break
+            // Handle "action.status-<rawValue>" patterns
+            if actionId.hasPrefix("action.status-") {
+                let rawValue = String(actionId.dropFirst("action.status-".count))
+                if let status = WorkflowStatus(rawValue: rawValue),
+                   let worktreeId = appState?.uiState.selectedWorktreeId {
+                    manager.setWorkflowStatus(worktreeId: worktreeId, status: status)
+                }
+            }
         }
     }
 
@@ -920,28 +1034,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 private struct SettingsWindowContent: View {
     @State var model: GhosttySettingsModel
     @State var agentHooks: AgentHookModel
+    @State var proxySettings: ProxySettingsModel
     let availableThemes: [String]
     let ghosttyDefaults: [String]
     var onChanged: (GhosttySettingsModel) -> Void
     var onOpenConfigFile: () -> Void
     var onAgentHookChanged: (AgentHookModel) -> Void
+    var onProxyApply: (ProxySettingsModel) -> Void
+    var onSystemProxyDetect: (() -> ProxySettingsModel)?
 
     init(
         initial: GhosttySettingsModel,
         availableThemes: [String],
         ghosttyDefaults: [String] = [],
         initialAgentHooks: AgentHookModel = AgentHookModel(),
+        initialProxy: ProxySettingsModel = ProxySettingsModel(),
         onChanged: @escaping (GhosttySettingsModel) -> Void,
         onOpenConfigFile: @escaping () -> Void,
-        onAgentHookChanged: @escaping (AgentHookModel) -> Void = { _ in }
+        onAgentHookChanged: @escaping (AgentHookModel) -> Void = { _ in },
+        onProxyApply: @escaping (ProxySettingsModel) -> Void = { _ in },
+        onSystemProxyDetect: (() -> ProxySettingsModel)? = nil
     ) {
         self._model = State(initialValue: initial)
         self._agentHooks = State(initialValue: initialAgentHooks)
+        self._proxySettings = State(initialValue: initialProxy)
         self.availableThemes = availableThemes
         self.ghosttyDefaults = ghosttyDefaults
         self.onChanged = onChanged
         self.onOpenConfigFile = onOpenConfigFile
         self.onAgentHookChanged = onAgentHookChanged
+        self.onProxyApply = onProxyApply
+        self.onSystemProxyDetect = onSystemProxyDetect
     }
 
     var body: some View {
@@ -952,7 +1075,10 @@ private struct SettingsWindowContent: View {
             onChanged: { onChanged(model) },
             onOpenConfigFile: onOpenConfigFile,
             agentHooks: $agentHooks,
-            onAgentHookChanged: onAgentHookChanged
+            onAgentHookChanged: onAgentHookChanged,
+            proxySettings: $proxySettings,
+            onProxyApply: onProxyApply,
+            onSystemProxyDetect: onSystemProxyDetect
         )
     }
 }

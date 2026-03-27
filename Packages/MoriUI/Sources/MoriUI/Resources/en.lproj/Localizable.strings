@@ -111,3 +111,39 @@
 "Whether the cursor blinks when idle." = "Whether the cursor blinks when idle.";
 "Window" = "Window";
 "Window %lld" = "Window %lld";
+
+/* Network / Proxy Settings */
+"Network" = "Network";
+"Configure proxy environment variables for all terminal sessions. Both lowercase and uppercase variants (e.g. http_proxy and HTTP_PROXY) are set automatically." = "Configure proxy environment variables for all terminal sessions. Both lowercase and uppercase variants (e.g. http_proxy and HTTP_PROXY) are set automatically.";
+"Proxy Mode" = "Proxy Mode";
+"System proxy" = "System proxy";
+"Read proxy settings from macOS system configuration." = "Read proxy settings from macOS system configuration.";
+"Manual configuration" = "Manual configuration";
+"Specify proxy URLs manually." = "Specify proxy URLs manually.";
+"No proxy" = "No proxy";
+"Clear all proxy environment variables." = "Clear all proxy environment variables.";
+"HTTP proxy URL (e.g. http://127.0.0.1:7890)" = "HTTP proxy URL (e.g. http://127.0.0.1:7890)";
+"HTTPS proxy URL (e.g. http://127.0.0.1:7890)" = "HTTPS proxy URL (e.g. http://127.0.0.1:7890)";
+"Same as HTTP" = "Same as HTTP";
+"SOCKS proxy URL (e.g. socks5://127.0.0.1:7890)" = "SOCKS proxy URL (e.g. socks5://127.0.0.1:7890)";
+"Bypass List" = "Bypass List";
+"Comma-separated hosts to bypass proxy (e.g. localhost,127.0.0.1)" = "Comma-separated hosts to bypass proxy (e.g. localhost,127.0.0.1)";
+"Apply" = "Apply";
+"Unsaved changes" = "Unsaved changes";
+"Proxy changes only affect new tabs and panes. Existing shells keep their current environment." = "Proxy changes only affect new tabs and panes. Existing shells keep their current environment.";
+
+/* Task Mode Sidebar */
+"Tasks" = "Tasks";
+"Workspaces" = "Workspaces";
+"Set Status" = "Set Status";
+"To Do" = "To Do";
+"In Progress" = "In Progress";
+"Needs Review" = "Needs Review";
+"Done" = "Done";
+"Cancelled" = "Cancelled";
+"Show Cancelled (%lld)" = "Show Cancelled (%lld)";
+"Hide Cancelled" = "Hide Cancelled";
+"just now" = "just now";
+"%lldm ago" = "%lldm ago";
+"%lldh ago" = "%lldh ago";
+"%lldd ago" = "%lldd ago";

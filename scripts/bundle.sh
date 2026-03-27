@@ -20,12 +20,24 @@ cp "$BUILD_DIR/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 # Copy app icon
 cp "assets/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
+# Copy SPM resource bundles into Contents/Resources/ so the packaged app and
+# runtime bundle lookup use the same app bundle layout in local and CI builds.
+for bundle in "$BUILD_DIR"/*.bundle; do
+    if [[ -d "$bundle" ]]; then
+        target="$APP_BUNDLE/Contents/Resources/$(basename "$bundle")"
+        rm -rf "$target"
+        ditto --norsrc "$bundle" "$target"
+        find "$target" -name "._*" -delete 2>/dev/null || true
+        echo "   Bundled: $(basename "$bundle")"
+    fi
+done
+
 # Copy ghostty resources (terminfo sentinel + themes) so libghostty can resolve
 # its resources_dir from the app bundle. Ghostty walks up from the executable
 # looking for Contents/Resources/terminfo/78/xterm-ghostty as a sentinel.
 GHOSTTY_RESOURCES="Frameworks/ghostty-resources"
 if [[ -d "$GHOSTTY_RESOURCES" ]]; then
-    cp -R "$GHOSTTY_RESOURCES/"* "$APP_BUNDLE/Contents/Resources/"
+    ditto "$GHOSTTY_RESOURCES" "$APP_BUNDLE/Contents/Resources/"
     echo "   Ghostty resources bundled (themes, terminfo, shell-integration)"
 else
     echo "⚠️  Warning: $GHOSTTY_RESOURCES not found. Run 'mise run build:ghostty' first."
@@ -68,6 +80,15 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 </dict>
 </plist>
 EOF
+
+# Sign if SIGNING_IDENTITY is set
+if [[ -n "${SIGNING_IDENTITY:-}" ]]; then
+    SIGN_ARGS=()
+    if [[ -n "${KEYCHAIN_PROFILE:-}" ]]; then
+        SIGN_ARGS+=(--notarize)
+    fi
+    bash scripts/sign.sh "${SIGN_ARGS[@]}"
+fi
 
 # In CI, keep the bundle in the working directory for archiving
 if [[ -z "${CI:-}" ]]; then

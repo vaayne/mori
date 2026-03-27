@@ -16,6 +16,46 @@ testParseWorktreeMalformedMissingPath()
 testParseWorktreeNoTrailingNewline()
 testBranchNameExtraction()
 
+// GitBranchParser tests
+testParseBranchLocal()
+testParseBranchRemote()
+testParseBranchMultiple()
+testParseBranchEmpty()
+testParseBranchWhitespaceOnly()
+testParseBranchNoDate()
+testParseBranchNoUpstream()
+testParseBranchCustomRemote()
+testParseBranchDetachedHead()
+testParseBranchCommitDate()
+testParseBranchMalformedLine()
+testParseBranchMinimalFields()
+testGitBranchInfoDisplayName()
+testGitBranchInfoRemoteName()
+
+// GitBranchParser edge case tests
+testParseBranchMultipleSlashes()
+testParseBranchRemoteMultipleSlashes()
+testParseBranchNoRemotesAtAll()
+testParseBranchHundreds()
+testParseBranchMalformedMixedWithValid()
+testParseBranchRemoteWithoutLocal()
+
+// GitBranchInfo boundary tests
+testGitBranchInfoDisplayNameDeepNesting()
+testGitBranchInfoEquality()
+testGitBranchInfoCodableRoundTrip()
+testGitBranchInfoLocalWithSlashNotRemote()
+testParseBranchWithPipeInName()
+testParseBranchFiltersBareRemoteName()
+
+// addWorktree command argument tests
+testAddWorktreeArgsExistingBranch()
+testAddWorktreeArgsExistingRemoteBranch()
+testAddWorktreeArgsNewBranchFromHead()
+testAddWorktreeArgsNewBranchFromBase()
+testAddWorktreeArgsNewBranchFromRemoteBase()
+testAddWorktreeArgsBaseBranchIgnoredWhenNotCreating()
+
 // GitStatusParser tests
 testParseStatusClean()
 testParseStatusDirty()

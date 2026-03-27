@@ -1,5 +1,6 @@
 import AppKit
 import MoriTerminal
+import MoriTmux
 
 /// View controller that hosts terminal surfaces, one per tmux session.
 /// Uses a TerminalSurfaceCache to manage an LRU pool of surfaces (max 3).
@@ -18,6 +19,7 @@ final class TerminalAreaViewController: NSViewController {
     private var currentSessionName: String?
     private var currentSurface: NSView?
     private var emptyStateView: NSView?
+    var tmuxBinaryPath: String = TmuxCommandRunner.preferredBinaryPath() ?? "tmux"
 
     /// Callback invoked when the user clicks the empty-state button.
     /// If a worktree is selected (dead session), this should recreate the session.
@@ -92,8 +94,9 @@ final class TerminalAreaViewController: NSViewController {
         // Get or create surface from cache.
         // Use `has-session` to check first, avoiding tmux parsing the session
         // name as session:window when it contains special characters.
-        let escaped = shellEscape(sessionName)
-        let command = "tmux has-session -t \(escaped) 2>/dev/null && tmux attach-session -t \(escaped) || tmux new-session -s \(escaped)"
+        let escapedSession = shellEscape(sessionName)
+        let escapedTmux = shellEscape(tmuxBinaryPath)
+        let command = "\(escapedTmux) has-session -t \(escapedSession) 2>/dev/null && \(escapedTmux) attach-session -t \(escapedSession) || \(escapedTmux) new-session -s \(escapedSession)"
         let surface = surfaceCache.surface(
             forSession: sessionName,
             command: command,

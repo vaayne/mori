@@ -75,6 +75,10 @@ public actor TmuxBackend: TmuxControlling {
         await runner.isAvailable()
     }
 
+    public func resolvedBinaryPath() async throws -> String {
+        try await runner.resolveBinaryPath()
+    }
+
     public func scanAll() async throws -> [TmuxSession] {
         // 1. List all sessions
         let sessionsOutput = try await runner.run(
@@ -262,6 +266,14 @@ public actor TmuxBackend: TmuxControlling {
 
     public func equalizePanes(sessionId: String) async throws {
         _ = try await runner.run("select-layout", "-t", sessionId, "tiled")
+    }
+
+    public func setEnvironment(name: String, value: String) async throws {
+        _ = try await runner.run("set-environment", "-g", name, value)
+    }
+
+    public func unsetEnvironment(name: String) async throws {
+        _ = try await runner.run("set-environment", "-gu", name)
     }
 
     public func refreshClients() async throws {

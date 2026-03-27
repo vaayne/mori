@@ -7,11 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-03-27
+
+### ✨ Features
+
+- Task Mode sidebar groups worktrees by workflow status, supports manual status changes, and keeps project selection in sync across task-focused navigation
+- Worktree creation now uses a dedicated panel with local and remote branch discovery
+- Sidebar worktree rows now show upstream state, relative activity time, and richer git status information
+- Network proxy settings can be applied to tmux sessions from the app
+- macOS release builds now ship as signed, notarized app archives plus DMG installers
+
 ### 🐛 Bug Fixes
 
-- `mise run build`/`build:release` now auto-bootstrap GhosttyKit via `build:ghostty` to avoid missing XCFramework errors on fresh clones
-- `scripts/build-ghostty.sh` now validates XCFramework contents and rebuilds invalid artifacts instead of treating empty directories as valid
-- `scripts/build-ghostty.sh` now auto-installs the Metal Toolchain when `xcrun metal` is unavailable
+- Packaged `.app` bundles now load SwiftPM resources from the app bundle correctly and launch tmux using the resolved absolute binary path
+- Release archives now avoid AppleDouble `._` files across copy, zip, and unzip flows so signatures remain valid after download
+- Release workflow env handling and signing/notarization steps were fixed for CI builds
+- Task sidebar and tmux integration received follow-up fixes for naming, session theme application, and startup behavior
+
+### 📝 Documentation
+
+- Added code signing, network proxy, and worktree guides
+- Updated README, keymaps, and release-related docs to match the current app behavior
+
+### 🔧 CI/CD
+
+- Release automation now builds signed and notarized archives and publishes DMG artifacts
+
+**Full Changelog**: [v0.1.0...v0.1.1](https://github.com/vaayne/mori/compare/v0.1.0...v0.1.1)
 
 ## [0.1.0] - 2026-03-20
 
@@ -63,5 +85,6 @@ Initial release of Mori — a macOS native workspace terminal organized around P
 
 **Full Changelog**: [v0.1.0](https://github.com/vaayne/mori/commits/v0.1.0)
 
-[Unreleased]: https://github.com/vaayne/mori/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/vaayne/mori/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/vaayne/mori/releases/tag/v0.1.1
 [0.1.0]: https://github.com/vaayne/mori/releases/tag/v0.1.0

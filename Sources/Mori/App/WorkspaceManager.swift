@@ -46,6 +46,10 @@ final class WorkspaceManager {
     /// Callback invoked when the terminal should detach (session killed / no active session).
     var onTerminalDetach: (() -> Void)?
 
+    /// Callback invoked after a tmux session is created (for post-creation setup like proxy env).
+    /// Async so callers can await setup completion before proceeding (e.g. template apply).
+    var onSessionCreated: (() async -> Void)?
+
     /// Background coordinated polling task handle.
     private var pollingTask: Task<Void, Never>?
 
@@ -158,7 +162,18 @@ final class WorkspaceManager {
         appState.uiState.selectedWorktreeId = worktreeId
         appState.uiState.selectedWindowId = nil
 
+        // Track last active time
+        if let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }) {
+            appState.worktrees[index].lastActiveAt = Date()
+            try? worktreeRepo.save(appState.worktrees[index])
+        }
+
         guard let worktree = appState.worktrees.first(where: { $0.id == worktreeId }) else { return }
+
+        // Sync selectedProjectId from the worktree's projectId (enables cross-project selection in task mode)
+        if appState.uiState.selectedProjectId != worktree.projectId {
+            appState.uiState.selectedProjectId = worktree.projectId
+        }
 
         // Ensure tmux session exists, check branch, then switch terminal
         Task {
@@ -187,9 +202,13 @@ final class WorkspaceManager {
         if let window = appState.runtimeWindows.first(where: { $0.tmuxWindowId == windowId }),
            let worktree = appState.worktrees.first(where: { $0.id == window.worktreeId }),
            let sessionName = worktree.tmuxSessionName {
-            // Keep worktree selection in sync when selecting a window from a different worktree
+            // Keep worktree and project selection in sync when selecting a window
+            // (important for task mode where windows can span projects)
             if appState.uiState.selectedWorktreeId != worktree.id {
                 appState.uiState.selectedWorktreeId = worktree.id
+            }
+            if appState.uiState.selectedProjectId != worktree.projectId {
+                appState.uiState.selectedProjectId = worktree.projectId
             }
             Task {
                 try? await tmuxBackend.selectWindow(sessionId: sessionName, windowId: windowId)
@@ -273,6 +292,7 @@ final class WorkspaceManager {
         // Create tmux session
         Task {
             _ = try? await tmuxBackend.createSession(name: sessionName, cwd: path)
+            await onSessionCreated?()
             await tmuxBackend.refreshNow()
         }
 
@@ -290,8 +310,21 @@ final class WorkspaceManager {
     /// Create a new worktree for a project: git worktree add, DB save, tmux session, template apply.
     /// Partial failure: if git succeeds but tmux fails, worktree is still saved to DB.
     /// If git fails, no DB write occurs.
+    ///
+    /// - Parameters:
+    ///   - projectId: The project to create the worktree under.
+    ///   - branchName: The branch name (existing or new).
+    ///   - createBranch: Whether to create a new branch (`true`) or use an existing one (`false`).
+    ///   - baseBranch: Base branch for new branch creation (only used when `createBranch` is `true`).
+    ///   - template: Session template to apply after tmux session creation.
     @discardableResult
-    func createWorktree(projectId: UUID, branchName: String) async throws -> Worktree {
+    func createWorktree(
+        projectId: UUID,
+        branchName: String,
+        createBranch: Bool = true,
+        baseBranch: String? = nil,
+        template: SessionTemplate = TemplateRegistry.basic
+    ) async throws -> Worktree {
         // Validate inputs
         let trimmed = branchName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else {
@@ -327,7 +360,8 @@ final class WorkspaceManager {
             repoPath: project.repoRootPath,
             path: worktreePath,
             branch: trimmed,
-            createBranch: true
+            createBranch: createBranch,
+            baseBranch: baseBranch
         )
 
         // Step 2: Create Worktree model and save to DB
@@ -346,9 +380,10 @@ final class WorkspaceManager {
         // Step 3: Create tmux session + apply template (partial failure tolerant)
         do {
             _ = try await tmuxBackend.createSession(name: sessionName, cwd: worktreePath)
+            await onSessionCreated?()
             let applicator = TemplateApplicator(tmux: tmuxBackend)
             try await applicator.apply(
-                template: TemplateRegistry.basic,
+                template: template,
                 sessionId: sessionName,
                 cwd: worktreePath
             )
@@ -366,10 +401,10 @@ final class WorkspaceManager {
         return worktree
     }
 
-    /// Handle create worktree from UI — validates input, calls createWorktree,
-    /// and shows error alerts on failure.
-    func handleCreateWorktree(branchName: String) async {
-        let trimmed = branchName.trimmingCharacters(in: .whitespaces)
+    /// Handle create worktree from the creation panel — extracts parameters from the
+    /// request, calls createWorktree, and shows error alerts on failure.
+    func handleCreateWorktreeFromPanel(_ request: WorktreeCreationRequest) async {
+        let trimmed = request.branchName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else {
             showErrorAlert(title: .localized("Invalid Branch Name"), message: WorkspaceError.branchNameEmpty.localizedDescription)
             return
@@ -381,7 +416,13 @@ final class WorkspaceManager {
         }
 
         do {
-            _ = try await createWorktree(projectId: projectId, branchName: trimmed)
+            _ = try await createWorktree(
+                projectId: projectId,
+                branchName: trimmed,
+                createBranch: request.isNewBranch,
+                baseBranch: request.baseBranch,
+                template: request.template
+            )
             await refreshRuntimeState()
         } catch {
             showErrorAlert(title: .localized("Failed to Create Worktree"), message: error.localizedDescription)
@@ -537,6 +578,23 @@ final class WorkspaceManager {
         }
     }
 
+    // MARK: - Sidebar Mode
+
+    /// Update the sidebar mode (Tasks / Workspaces) and persist.
+    func setSidebarMode(_ mode: SidebarMode) {
+        appState.uiState.sidebarMode = mode
+        saveUIState()
+    }
+
+    // MARK: - Workflow Status
+
+    /// Update the workflow status for a worktree and persist the change.
+    func setWorkflowStatus(worktreeId: UUID, status: WorkflowStatus) {
+        guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }) else { return }
+        appState.worktrees[index].workflowStatus = status
+        try? worktreeRepo.save(appState.worktrees[index])
+    }
+
     // MARK: - Tmux Integration
 
     /// Check the actual git branch for a worktree and update if it changed.
@@ -562,6 +620,7 @@ final class WorkspaceManager {
 
         if !exists {
             _ = try? await tmuxBackend.createSession(name: sessionName, cwd: worktree.path)
+            await onSessionCreated?()
         }
     }
 
@@ -894,11 +953,19 @@ final class WorkspaceManager {
             let changed = wt.hasUncommittedChanges != status.isDirty
                 || wt.aheadCount != status.ahead
                 || wt.behindCount != status.behind
+                || wt.stagedCount != status.stagedCount
+                || wt.modifiedCount != status.modifiedCount
+                || wt.untrackedCount != status.untrackedCount
+                || wt.hasUpstream != (status.upstream != nil)
 
             if changed {
                 appState.worktrees[i].hasUncommittedChanges = status.isDirty
                 appState.worktrees[i].aheadCount = status.ahead
                 appState.worktrees[i].behindCount = status.behind
+                appState.worktrees[i].stagedCount = status.stagedCount
+                appState.worktrees[i].modifiedCount = status.modifiedCount
+                appState.worktrees[i].untrackedCount = status.untrackedCount
+                appState.worktrees[i].hasUpstream = status.upstream != nil
                 // Persist to DB
                 try? worktreeRepo.save(appState.worktrees[i])
             }
@@ -1307,6 +1374,7 @@ final class WorkspaceManager {
         if !sessionAlive && hadWindows {
             // Session died — auto-recreate and re-attach
             _ = try? await tmuxBackend.createSession(name: sessionName, cwd: worktree.path)
+            await onSessionCreated?()
             onTerminalSwitch?(sessionName, worktree.path)
         }
     }

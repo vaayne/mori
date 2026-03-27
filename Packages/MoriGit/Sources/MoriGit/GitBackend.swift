@@ -21,11 +21,15 @@ public actor GitBackend: GitControlling {
         repoPath: String,
         path: String,
         branch: String,
-        createBranch: Bool
+        createBranch: Bool,
+        baseBranch: String? = nil
     ) async throws {
         var args = ["worktree", "add"]
         if createBranch {
             args += ["-b", branch, path]
+            if let baseBranch {
+                args.append(baseBranch)
+            }
         } else {
             args += [path, branch]
         }
@@ -63,6 +67,26 @@ public actor GitBackend: GitControlling {
         } catch {
             return false
         }
+    }
+
+    public func listBranches(repoPath: String) async throws -> [GitBranchInfo] {
+        let format = "%(refname:short)\t%(HEAD)\t%(committerdate:unix)\t%(upstream:short)"
+
+        async let remoteOutput = runner.run(in: repoPath, ["remote"])
+        async let branchOutput = runner.run(
+            in: repoPath,
+            ["branch", "-a", "--sort=-committerdate", "--format=\(format)"]
+        )
+
+        let remoteNames = Set(
+            (try? await remoteOutput)?
+                .components(separatedBy: "\n")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty } ?? []
+        )
+
+        let output = try await branchOutput
+        return GitBranchParser.parse(output, remoteNames: remoteNames.isEmpty ? ["origin"] : remoteNames)
     }
 
     public func gitCommonDir(path: String) async throws -> String {

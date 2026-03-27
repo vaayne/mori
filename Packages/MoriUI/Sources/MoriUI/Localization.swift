@@ -30,10 +30,10 @@ extension String {
 private extension Bundle {
     static let preferredLocalization: Bundle = {
         let lproj = String.moriLanguage.lowercased().hasPrefix("zh") ? "zh-hans" : "en"
-        if let path = Bundle.module.path(forResource: lproj, ofType: "lproj"),
+        if let path = MoriUIResourceBundle.resourceBundle?.path(forResource: lproj, ofType: "lproj"),
            let bundle = Bundle(path: path) {
             return bundle
         }
-        return .module
+        return MoriUIResourceBundle.resourceBundle ?? .main
     }()
 }

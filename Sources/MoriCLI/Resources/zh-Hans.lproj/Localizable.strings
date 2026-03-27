@@ -14,3 +14,8 @@
 "Window name" = "窗口名称";
 "Worktree commands" = "工作树命令";
 "Worktree name" = "工作树名称";
+
+/* Task Mode - Status Command */
+"Set workflow status for a worktree" = "设置工作树的工作流状态";
+"Valid statuses: todo, inProgress, needsReview, done, cancelled" = "有效状态：todo、inProgress、needsReview、done、cancelled";
+"Workflow status (todo, inProgress, needsReview, done, cancelled)" = "工作流状态（todo、inProgress、needsReview、done、cancelled）";

@@ -10,6 +10,7 @@ public enum IPCCommand: Codable, Sendable, Equatable {
     case send(project: String, worktree: String, window: String, keys: String)
     case newWindow(project: String, worktree: String, name: String?)
     case open(path: String)
+    case setWorkflowStatus(project: String, worktree: String, status: String)
 }
 
 // MARK: - IPC Request

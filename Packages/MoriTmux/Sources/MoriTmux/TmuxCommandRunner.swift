@@ -42,6 +42,10 @@ private final class SendableResumeGuard<T>: @unchecked Sendable {
 /// Loads the user's login shell environment on first use so that tools installed
 /// via Homebrew, mise, nix, etc. are discoverable even when launched as a .app bundle.
 public actor TmuxCommandRunner {
+    private static let commonBinaryPaths = [
+        "/opt/homebrew/bin/tmux",
+        "/usr/local/bin/tmux",
+    ]
 
     /// Cached path to the tmux binary, resolved on first use.
     private var resolvedBinaryPath: String?
@@ -102,14 +106,32 @@ public actor TmuxCommandRunner {
 
     /// Quick check: is tmux findable on PATH in the given environment?
     private func hasTmuxOnPath(_ env: [String: String]) -> Bool {
-        let commonPaths = ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux"]
-        for path in commonPaths {
+        for path in Self.commonBinaryPaths {
             if FileManager.default.isExecutableFile(atPath: path) { return true }
         }
         guard let pathVar = env["PATH"] else { return false }
         return pathVar.split(separator: ":").contains { dir in
             FileManager.default.isExecutableFile(atPath: "\(dir)/tmux")
         }
+    }
+
+    /// Best-effort synchronous lookup for UI launch commands before async resolution completes.
+    public static func preferredBinaryPath(in environment: [String: String] = ProcessInfo.processInfo.environment) -> String? {
+        for path in commonBinaryPaths {
+            if FileManager.default.isExecutableFile(atPath: path) {
+                return path
+            }
+        }
+
+        guard let pathVar = environment["PATH"] else { return nil }
+        for dir in pathVar.split(separator: ":") {
+            let candidate = "\(dir)/tmux"
+            if FileManager.default.isExecutableFile(atPath: candidate) {
+                return candidate
+            }
+        }
+
+        return nil
     }
 
     // MARK: - Binary Resolution
@@ -121,12 +143,7 @@ public actor TmuxCommandRunner {
             return cached
         }
 
-        let commonPaths = [
-            "/opt/homebrew/bin/tmux",
-            "/usr/local/bin/tmux",
-        ]
-
-        for path in commonPaths {
+        for path in Self.commonBinaryPaths {
             if FileManager.default.isExecutableFile(atPath: path) {
                 resolvedBinaryPath = path
                 return path

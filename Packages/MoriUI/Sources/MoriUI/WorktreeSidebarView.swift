@@ -13,7 +13,7 @@ public struct WorktreeSidebarView: View {
     private let onSelectProject: ((UUID) -> Void)?
     private let onSelectWorktree: (UUID) -> Void
     private let onSelectWindow: (String) -> Void
-    private let onCreateWorktree: ((String) -> Void)?
+    private let onShowCreatePanel: (() -> Void)?
     private let onRemoveWorktree: ((UUID) -> Void)?
     private let onRemoveProject: ((UUID) -> Void)?
     private let onCloseWindow: ((String) -> Void)?
@@ -21,10 +21,7 @@ public struct WorktreeSidebarView: View {
     private let onAddProject: (() -> Void)?
     private let onOpenSettings: (() -> Void)?
     private let onOpenCommandPalette: (() -> Void)?
-
-    @State private var editingProjectId: UUID?
-    @State private var newBranchName = ""
-    @State private var isSubmitting = false
+    private let onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)?
 
     public init(
         projects: [Project] = [],
@@ -36,14 +33,15 @@ public struct WorktreeSidebarView: View {
         onSelectProject: ((UUID) -> Void)? = nil,
         onSelectWorktree: @escaping (UUID) -> Void,
         onSelectWindow: @escaping (String) -> Void,
-        onCreateWorktree: ((String) -> Void)? = nil,
+        onShowCreatePanel: (() -> Void)? = nil,
         onRemoveWorktree: ((UUID) -> Void)? = nil,
         onRemoveProject: ((UUID) -> Void)? = nil,
         onCloseWindow: ((String) -> Void)? = nil,
         onToggleCollapse: ((UUID) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
-        onOpenCommandPalette: (() -> Void)? = nil
+        onOpenCommandPalette: (() -> Void)? = nil,
+        onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)? = nil
     ) {
         self.projects = projects
         self.selectedProjectId = selectedProjectId
@@ -54,7 +52,7 @@ public struct WorktreeSidebarView: View {
         self.onSelectProject = onSelectProject
         self.onSelectWorktree = onSelectWorktree
         self.onSelectWindow = onSelectWindow
-        self.onCreateWorktree = onCreateWorktree
+        self.onShowCreatePanel = onShowCreatePanel
         self.onRemoveWorktree = onRemoveWorktree
         self.onRemoveProject = onRemoveProject
         self.onCloseWindow = onCloseWindow
@@ -62,6 +60,7 @@ public struct WorktreeSidebarView: View {
         self.onAddProject = onAddProject
         self.onOpenSettings = onOpenSettings
         self.onOpenCommandPalette = onOpenCommandPalette
+        self.onSetWorkflowStatus = onSetWorkflowStatus
     }
 
     public var body: some View {
@@ -107,11 +106,10 @@ public struct WorktreeSidebarView: View {
 
             if hoveredProjectId == project.id {
                 HStack(spacing: MoriTokens.Spacing.sm) {
-                    if !project.isCollapsed, onCreateWorktree != nil {
+                    if !project.isCollapsed, onShowCreatePanel != nil {
                         Button {
                             onSelectProject?(project.id)
-                            editingProjectId = project.id
-                            newBranchName = ""
+                            onShowCreatePanel?()
                         } label: {
                             Image(systemName: "plus")
                                 .font(.system(size: 11, weight: .medium))
@@ -122,11 +120,10 @@ public struct WorktreeSidebarView: View {
                     }
 
                     Menu {
-                        if !project.isCollapsed, onCreateWorktree != nil {
+                        if !project.isCollapsed, onShowCreatePanel != nil {
                             Button {
                                 onSelectProject?(project.id)
-                                editingProjectId = project.id
-                                newBranchName = ""
+                                onShowCreatePanel?()
                             } label: {
                                 Label("New Workspace…", systemImage: "plus")
                             }
@@ -187,11 +184,10 @@ public struct WorktreeSidebarView: View {
             }
         }
         .contextMenu {
-            if onCreateWorktree != nil {
+            if onShowCreatePanel != nil {
                 Button {
                     onSelectProject?(project.id)
-                    editingProjectId = project.id
-                    newBranchName = ""
+                    onShowCreatePanel?()
                 } label: {
                     Label("New Workspace…", systemImage: "plus")
                 }
@@ -228,12 +224,6 @@ public struct WorktreeSidebarView: View {
         }
 
         if !project.isCollapsed {
-            // Branch input (only for the project being edited)
-            if editingProjectId == project.id {
-                branchNameInput
-                    .padding(.horizontal, MoriTokens.Spacing.sm)
-            }
-
             // Worktrees for this project
             let projectWorktrees = worktrees.filter { $0.projectId == project.id && $0.status != .unavailable }
 
@@ -268,6 +258,14 @@ public struct WorktreeSidebarView: View {
                 onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } }
             )
             .contextMenu {
+                if let onSetWorkflowStatus {
+                    WorkflowStatusMenu(
+                        currentStatus: worktree.workflowStatus,
+                        onSetStatus: { status in onSetWorkflowStatus(worktree.id, status) }
+                    )
+                    Divider()
+                }
+
                 let editors = EditorLauncher.installed
                 if !editors.isEmpty {
                     ForEach(editors) { editor in
@@ -319,60 +317,6 @@ public struct WorktreeSidebarView: View {
             }
         }
         .padding(.horizontal, MoriTokens.Spacing.sm)
-    }
-
-    // MARK: - Branch Name Input
-
-    private var branchNameInput: some View {
-        HStack(spacing: MoriTokens.Spacing.sm) {
-            if isSubmitting {
-                ProgressView()
-                    .controlSize(.small)
-            } else {
-                Image(systemName: "arrow.triangle.branch")
-                    .font(MoriTokens.Font.label)
-                    .foregroundStyle(MoriTokens.Color.muted)
-            }
-
-            TextField("Branch name", text: $newBranchName)
-                .textFieldStyle(.plain)
-                .font(.subheadline)
-                .disabled(isSubmitting)
-                .onSubmit { submitBranchName() }
-
-            Button(action: { submitBranchName() }) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(MoriTokens.Color.success)
-            }
-            .buttonStyle(.plain)
-            .disabled(newBranchName.trimmingCharacters(in: .whitespaces).isEmpty || isSubmitting)
-
-            Button(action: { cancelCreation() }) {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(MoriTokens.Color.muted)
-            }
-            .buttonStyle(.plain)
-            .disabled(isSubmitting)
-        }
-        .padding(.horizontal, MoriTokens.Spacing.lg)
-        .padding(.vertical, MoriTokens.Spacing.sm)
-        .background(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
-        .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
-    }
-
-    private func submitBranchName() {
-        let trimmed = newBranchName.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty, !isSubmitting else { return }
-        isSubmitting = true
-        onCreateWorktree?(trimmed)
-        editingProjectId = nil
-        isSubmitting = false
-        newBranchName = ""
-    }
-
-    private func cancelCreation() {
-        editingProjectId = nil
-        newBranchName = ""
     }
 
     // MARK: - Helpers

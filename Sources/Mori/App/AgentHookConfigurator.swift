@@ -184,9 +184,9 @@ enum AgentHookConfigurator {
 
     // MARK: - Bundle Resources
 
-    /// Load a script from the SPM bundle resources (Sources/Mori/Resources/).
+    /// Load a script from Mori's packaged resource bundle.
     private static func loadBundledResource(_ name: String, ext: String) -> String? {
-        guard let url = Bundle.module.url(forResource: name, withExtension: ext) else { return nil }
+        guard let url = MoriAppResourceBundle.resourceBundle?.url(forResource: name, withExtension: ext) else { return nil }
         return try? String(contentsOf: url, encoding: .utf8)
     }
 

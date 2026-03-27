@@ -16,10 +16,10 @@ private extension Bundle {
             lang = system.lowercased().hasPrefix("zh") ? "zh-Hans" : "en"
         }
         let lproj = lang.lowercased().hasPrefix("zh") ? "zh-hans" : "en"
-        if let path = Bundle.module.path(forResource: lproj, ofType: "lproj"),
+        if let path = MoriAppResourceBundle.resourceBundle?.path(forResource: lproj, ofType: "lproj"),
            let bundle = Bundle(path: path) {
             return bundle
         }
-        return .module
+        return MoriAppResourceBundle.resourceBundle ?? .main
     }()
 }

@@ -78,6 +78,13 @@ public protocol TmuxControlling: Sendable {
     ///   - lineCount: Number of lines to capture from the end of the pane buffer.
     /// - Returns: The captured pane output as a string.
     func capturePaneOutput(paneId: String, lineCount: Int) async throws -> String
+
+    /// Set a global environment variable on the tmux server.
+    /// New windows/panes will inherit this variable.
+    func setEnvironment(name: String, value: String) async throws
+
+    /// Unset a global environment variable from the tmux server.
+    func unsetEnvironment(name: String) async throws
 }
 
 // MARK: - Default implementations for future-phase methods
@@ -150,5 +157,13 @@ public extension TmuxControlling {
 
     func equalizePanes(sessionId: String) async throws {
         throw TmuxError.notYetImplemented("equalizePanes")
+    }
+
+    func setEnvironment(name: String, value: String) async throws {
+        throw TmuxError.notYetImplemented("setEnvironment")
+    }
+
+    func unsetEnvironment(name: String) async throws {
+        throw TmuxError.notYetImplemented("unsetEnvironment")
     }
 }
