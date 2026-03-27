@@ -30,6 +30,10 @@ class UpdateDriver: NSObject, SPUUserDriver {
     }
 
     @objc private func handleWindowWillClose(_ notification: Notification) {
+        // Only react when the closing window is Mori's main window.
+        guard let closingWindow = notification.object as? NSWindow,
+              closingWindow.windowController is MainWindowController else { return }
+
         // If we lost the ability to show unobtrusive states, cancel whatever
         // update state we're in. This allows the manual "check for updates"
         // call to initialize the standard driver.
@@ -205,10 +209,10 @@ class UpdateDriver: NSObject, SPUUserDriver {
 
     // MARK: - No-Window Fallback
 
-    /// True if there is a visible window that can render the unobtrusive update badge.
+    /// True if there is a visible main window that can render the unobtrusive update badge.
     var hasUnobtrusiveTarget: Bool {
         NSApp.windows.contains { window in
-            window.isVisible && window.contentViewController != nil
+            window.isVisible && window.windowController is MainWindowController
         }
     }
 }
