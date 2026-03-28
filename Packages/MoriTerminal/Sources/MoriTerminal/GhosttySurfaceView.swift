@@ -22,7 +22,6 @@ private enum GhosttyInputHelpers {
         return nil
     }
 }
-#endif
 
 private extension NSEvent {
     var ghosttyCharacters: String? {
@@ -558,3 +557,4 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
         }
     }
 }
+#endif

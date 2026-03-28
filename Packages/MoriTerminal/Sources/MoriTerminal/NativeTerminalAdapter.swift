@@ -35,7 +35,6 @@ public final class NativeTerminalAdapter: TerminalHost {
     }
 
 }
-#endif
 
 // MARK: - PTYTerminalView
 
@@ -514,3 +513,4 @@ private final class WeakSendableRef<T: AnyObject>: @unchecked Sendable {
     weak var value: T?
     init(_ value: T) { self.value = value }
 }
+#endif

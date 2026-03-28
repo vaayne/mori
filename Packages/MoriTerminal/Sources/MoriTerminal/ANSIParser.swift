@@ -15,7 +15,6 @@ enum ANSISegment {
     case bell
     case setTitle(String)
 }
-#endif
 
 /// Attributes derived from SGR (Select Graphic Rendition) escape codes.
 struct SGRAttributes {
@@ -295,3 +294,4 @@ private extension Character {
         return (v >= 0x30 && v <= 0x3F) // 0-9, :, ;, <, =, >, ?
     }
 }
+#endif

@@ -5,7 +5,6 @@ import GhosttyKit
 public extension Notification.Name {
     static let ghosttySurfaceDidClose = Notification.Name("MoriTerminal.GhosttySurfaceDidClose")
 }
-#endif
 
 /// Actions that Mori intercepts from ghostty keybindings.
 /// Ghostty maps keys to these intents; Mori provides the tmux implementation.
@@ -369,3 +368,4 @@ final class GhosttyApp {
         }
     }
 }
+#endif
