@@ -152,7 +152,7 @@ private final class ExecHandler: ChannelDuplexHandler, @unchecked Sendable {
             terminalRowHeight: 24,
             terminalPixelWidth: 0,
             terminalPixelHeight: 0,
-            terminalModes: .init([:])
+            terminalModes: .init([.ECHO: 0])
         )
         context.triggerUserOutboundEvent(ptyRequest).assumeIsolated().whenFailure { [self] error in
             self.failExec(SSHError.channelError("pty request failed: \(error)"))
