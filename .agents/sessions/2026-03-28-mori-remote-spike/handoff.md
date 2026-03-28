@@ -174,3 +174,6 @@
 - `GhosttyiOSApp` intentionally does not load user config files. It finalizes an empty config so iOS avoids `~/.config` assumptions and starts with the minimal embedded defaults from ghostty itself.
 - `GhosttyiOSRenderer` is intentionally minimal: no keyboard/input, clipboard, IME, or selection support. Phase 5’s coordinator can feed SSH/tmux output in and use `gridSize()` for `refresh-client -C`.
 - A direct `swift build --triple arm64-apple-ios17.0-simulator` attempt from the CLI failed in this environment with `unable to load standard library for target 'arm64-apple-ios17.0-simulator'`, which appears to be host toolchain/sysroot wiring rather than a MoriTerminal source error. The universal xcframework itself built successfully with the iOS slices present.
+
+### Fixes (post-review, pre-reviewer)
+- **Incomplete macOS gating**: Four files (`GhosttyApp.swift`, `GhosttySurfaceView.swift`, `NativeTerminalAdapter.swift`, `ANSIParser.swift`) had `#if os(macOS)` only around imports/initial types — class/struct bodies were exposed. Moved `#endif` to end of each file. (commit `cb0d103`)

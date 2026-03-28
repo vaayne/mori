@@ -18,15 +18,14 @@ public final class GhosttyiOSApp {
         guard !initialized else { return }
         initialized = true
 
-        var argv = ["mori-ios"].map(strdup)
-        defer {
-            for arg in argv {
-                free(arg)
-            }
-        }
+        let cArg = strdup("mori-ios")
+        defer { free(cArg) }
+        var argvStorage: [UnsafeMutablePointer<CChar>?] = [cArg]
 
-        let initResult = argv.withUnsafeMutableBufferPointer { buffer in
-            ghostty_init(UInt(buffer.count), buffer.baseAddress)
+        let initResult = argvStorage.withUnsafeMutableBufferPointer { buffer -> Int32 in
+            // ghostty_init expects (argc, char**) which imports as
+            // UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>
+            ghostty_init(UInt(buffer.count), buffer.baseAddress!)
         }
         guard initResult == GHOSTTY_SUCCESS else {
             NSLog("[GhosttyiOSApp] ghostty_init failed")

@@ -61,12 +61,26 @@ if [[ ! -f "$GHOSTTY_DIR/build.zig" ]]; then
     git -C "$PROJECT_ROOT" submodule update --init vendor/ghostty
 fi
 
-# Skip if already built
+# Skip if already built and has the required slices
 if has_valid_xcframework && [[ -d "$RESOURCES_DIR" ]]; then
-    strip_archive_debug_symbols "$XCFRAMEWORK"
-    echo "GhosttyKit.xcframework and resources already exist at $FRAMEWORK_DIR"
-    echo "Run with --clean to rebuild."
-    exit 0
+    # Validate that cached xcframework has required slices for requested mode
+    local_needs_rebuild=false
+    if [[ "$UNIVERSAL" == true ]]; then
+        for slice in ios-arm64 ios-arm64-simulator; do
+            if [[ ! -d "$XCFRAMEWORK/$slice" ]]; then
+                echo "Cached xcframework missing $slice slice (needed for --universal); rebuilding..."
+                local_needs_rebuild=true
+                break
+            fi
+        done
+    fi
+    if [[ "$local_needs_rebuild" == false ]]; then
+        strip_archive_debug_symbols "$XCFRAMEWORK"
+        echo "GhosttyKit.xcframework and resources already exist at $FRAMEWORK_DIR"
+        echo "Run with --clean to rebuild."
+        exit 0
+    fi
+    rm -rf "$XCFRAMEWORK"
 fi
 
 if [[ -d "$XCFRAMEWORK" ]] && ! has_valid_xcframework; then

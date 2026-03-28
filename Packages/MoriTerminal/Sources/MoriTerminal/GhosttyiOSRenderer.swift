@@ -30,9 +30,14 @@ public final class GhosttyiOSRenderer: UIView {
     }
 
     deinit {
-        displayLink?.invalidate()
-        if let surface {
-            ghostty_surface_free(surface)
+        // Surface and display link cleanup must happen synchronously.
+        // These are main-thread-only objects, and UIView.deinit is
+        // always called on the main thread.
+        MainActor.assumeIsolated {
+            displayLink?.invalidate()
+            if let surface {
+                ghostty_surface_free(surface)
+            }
         }
     }
 
@@ -63,7 +68,7 @@ public final class GhosttyiOSRenderer: UIView {
             ghostty_surface_write_output(
                 surface,
                 baseAddress.assumingMemoryBound(to: CChar.self),
-                bytes.count
+                UInt(bytes.count)
             )
         }
         ghostty_surface_refresh(surface)
