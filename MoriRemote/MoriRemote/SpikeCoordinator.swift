@@ -75,6 +75,9 @@ final class SpikeCoordinator {
     }
 
     func attachSession(name: String, renderer: GhosttyiOSRenderer) async {
+        // Prevent concurrent attach calls
+        guard !isAttachingSession else { return }
+        if case .attached = state { return }
         registerRenderer(renderer)
 
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -101,6 +104,7 @@ final class SpikeCoordinator {
             sshChannel = channel
             tmuxClient = client
             await client.start()
+            await client.waitForReady()
 
             // Buffer output until pane ID is known, then start consumers
             startPaneOutputTask(for: client, buffered: true)
