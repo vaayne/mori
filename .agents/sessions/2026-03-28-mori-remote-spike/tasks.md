@@ -22,12 +22,12 @@
 
 ## Phase 3: Tmux Control-Mode Client
 
-- [ ] 3.1 — Create `TmuxControlLine.swift` — parsed line type enum with `.plainLine` (not `.commandResponse`) (`Packages/MoriTmux/Sources/MoriTmux/TmuxControlLine.swift`)
-- [ ] 3.2 — Create `TmuxNotification.swift` — notification enum with `.unknown` (`Packages/MoriTmux/Sources/MoriTmux/TmuxNotification.swift`)
-- [ ] 3.3 — Create `TmuxControlParser.swift` — stateless line parser with octal unescape, high-bit bytes verbatim (`Packages/MoriTmux/Sources/MoriTmux/TmuxControlParser.swift`)
-- [ ] 3.4 — Create `TmuxTransport.swift` — byte channel protocol (`Packages/MoriTmux/Sources/MoriTmux/TmuxTransport.swift`)
-- [ ] 3.5 — Create `TmuxControlClient.swift` — actor with line buffer, block tracking, serialized command correlation by server command number, EOF cancellation (`Packages/MoriTmux/Sources/MoriTmux/TmuxControlClient.swift`)
-- [ ] 3.6 — Add parser + client tests: octal escapes, high-bit bytes, split chunks, multi-line chunks, EOF cancellation, `%error` (`Packages/MoriTmux/Tests/MoriTmuxTests/TmuxControlParserTests.swift`)
+- [x] 3.1 — Create `TmuxControlLine.swift` — parsed line type enum with `.plainLine` (`Packages/MoriTmux/Sources/MoriTmux/TmuxControlLine.swift`)
+- [x] 3.2 — Create `TmuxNotification.swift` — notification enum with `.unknown` (`Packages/MoriTmux/Sources/MoriTmux/TmuxNotification.swift`)
+- [x] 3.3 — Create `TmuxControlParser.swift` — stateless line parser with octal unescape, high-bit bytes verbatim (`Packages/MoriTmux/Sources/MoriTmux/TmuxControlParser.swift`)
+- [x] 3.4 — Create `TmuxTransport.swift` — byte channel protocol (`Packages/MoriTmux/Sources/MoriTmux/TmuxTransport.swift`)
+- [x] 3.5 — Create `TmuxControlClient.swift` — actor with line buffer, block tracking, serialized command correlation by server command number, EOF cancellation (`Packages/MoriTmux/Sources/MoriTmux/TmuxControlClient.swift`)
+- [x] 3.6 — Add parser + client tests: 42 new assertions (242 total) in `Packages/MoriTmux/Tests/MoriTmuxTests/main.swift`
 
 ## Phase 4: GhosttyKit iOS Build + Terminal Bridge
 

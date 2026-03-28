@@ -82,3 +82,41 @@
 - **Test coverage**: 18 → 32 assertions. Added: SSHChannel inbound stream (single chunk, multi chunk, error propagation), write to inactive channel, close idempotency, publicKey auth rejection, unreachable host connection failure.
 - **SSHChannel.init** made `public` for testability via `EmbeddedChannel`.
 - **Package.swift** test target now depends on `NIOEmbedded`, `NIOCore`, `NIOSSH` for in-memory channel testing.
+
+## Phase 3: Tmux Control-Mode Client
+
+**Status:** complete
+
+**Tasks completed:**
+- 3.1: Created `TmuxControlLine` enum with `.output`, `.begin`, `.end`, `.error`, `.notification`, `.plainLine` cases. `Sendable`.
+- 3.2: Created `TmuxNotification` enum with `sessionsChanged`, `sessionChanged`, `windowAdd`, `windowClose`, `windowRenamed`, `windowPaneChanged`, `layoutChanged`, `exit`, `unknown`. `Sendable` + `Equatable`.
+- 3.3: Created `TmuxControlParser` — stateless line parser. `parse(_:)` maps one line to one `TmuxControlLine`. `unescapeOctal(_:)` handles `\ooo` sequences byte-by-byte; high-bit bytes preserved verbatim; non-octal `\` preserved as-is.
+- 3.4: Created `TmuxTransport` protocol with `inbound: AsyncThrowingStream<Data, Error>`, `write(_:)`, `close()`. `Sendable`.
+- 3.5: Created `TmuxControlClient` actor: line buffering over `Data`, `%begin/%end` block tracking, serialized command correlation via `CheckedContinuation`, EOF → `TmuxControlError.disconnected`. Routes `%output` to `paneOutput` stream and notifications to `notifications` stream.
+- 3.6: Added 42 new test assertions (242 total). Parser tests: octal escapes (`\012`, `\134`), high-bit bytes (`\302\251`), all notification types, unknown lines, malformed blocks. Client tests: command success/error, line split across chunks, multi-line single chunk, EOF cancellation, pane output routing, notification routing, command newline termination.
+
+**Files changed:**
+- `Packages/MoriTmux/Sources/MoriTmux/TmuxControlLine.swift` — new: parsed line type enum
+- `Packages/MoriTmux/Sources/MoriTmux/TmuxNotification.swift` — new: async notification enum
+- `Packages/MoriTmux/Sources/MoriTmux/TmuxControlParser.swift` — new: stateless line parser with octal unescape
+- `Packages/MoriTmux/Sources/MoriTmux/TmuxTransport.swift` — new: byte channel protocol
+- `Packages/MoriTmux/Sources/MoriTmux/TmuxControlClient.swift` — new: control-mode client actor
+- `Packages/MoriTmux/Tests/MoriTmuxTests/main.swift` — 42 new assertions (parser + client tests with MockTransport)
+
+**Commits:**
+- `d00a3ce` — ✨ feat: add TmuxControlLine enum for control-mode line types
+- `2dd2afe` — ✨ feat: add TmuxNotification enum for async server events
+- `a825089` — ✨ feat: add stateless TmuxControlParser with octal unescape
+- `0708673` — ✨ feat: add TmuxTransport protocol for testable byte channel
+- `b6b7519` — ✨ feat: add TmuxControlClient actor with line buffering and command correlation
+- `d08c9ee` — ✅ test: add control-mode parser and client tests (42 new assertions)
+
+**Decisions & context for next phase:**
+- `TmuxControlParser` is a stateless `enum` (no instances) — same pattern as `TmuxParser`. One line in → one `TmuxControlLine` out. Block tracking is entirely in `TmuxControlClient`.
+- `TmuxControlClient` uses `CheckedContinuation<String, any Error>` for command serialization. Only one command in-flight at a time (spike constraint). `pendingCommandNumber` tracks the server-assigned number from `%begin`.
+- `TmuxControlError` is a separate error type from `TmuxError` — `TmuxError` is for Process-based tmux commands, `TmuxControlError` is for control-mode protocol issues.
+- `MockTransport` in tests demonstrates the `TmuxTransport` protocol pattern. Phase 5's `SSHChannelTransport` will adapt `SSHChannel` (from MoriSSH) to this protocol.
+- Tests use `RunLoop.current.run(mode:before:)` spinning with `nonisolated(unsafe) var asyncDone` to await async test code — same pattern established in MoriSSH tests for Swift 6 compatibility.
+- `unescapeOctal` operates on raw UTF-8 bytes (`Array(escaped.utf8)`) so high-bit bytes pass through untouched. Tested with `\302\251` → `0xC2 0xA9` (©).
+- The `paneOutput` stream type is `AsyncStream<(paneId: String, data: Data)>` — a tuple stream. Phase 5's `SpikeCoordinator` will consume this to feed bytes into the terminal renderer.
+- All new files are cross-platform (no `#if os(macOS)` needed) — `TmuxControlClient` works on both macOS and iOS.
