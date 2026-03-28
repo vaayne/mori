@@ -914,6 +914,7 @@ func testClientSendCommandSuccess() {
         let transport = MockTransport()
         let client = TmuxControlClient(transport: transport)
         await client.start()
+        await client.markReady()
 
         Task {
             try? await Task.sleep(nanoseconds: 50_000_000)
@@ -938,6 +939,7 @@ func testClientSendCommandError() {
         let transport = MockTransport()
         let client = TmuxControlClient(transport: transport)
         await client.start()
+        await client.markReady()
 
         Task {
             try? await Task.sleep(nanoseconds: 50_000_000)
@@ -967,6 +969,7 @@ func testClientLineSplitAcrossChunks() {
         let transport = MockTransport()
         let client = TmuxControlClient(transport: transport)
         await client.start()
+        await client.markReady()
 
         Task {
             try? await Task.sleep(nanoseconds: 50_000_000)
@@ -990,6 +993,7 @@ func testClientMultipleLinesInOneChunk() {
         let transport = MockTransport()
         let client = TmuxControlClient(transport: transport)
         await client.start()
+        await client.markReady()
 
         Task {
             try? await Task.sleep(nanoseconds: 50_000_000)
@@ -1011,6 +1015,7 @@ func testClientEOFCancelsPendingCommand() {
         let transport = MockTransport()
         let client = TmuxControlClient(transport: transport)
         await client.start()
+        await client.markReady()
 
         Task {
             try? await Task.sleep(nanoseconds: 50_000_000)
@@ -1039,6 +1044,7 @@ func testClientPaneOutputRouting() {
         let transport = MockTransport()
         let client = TmuxControlClient(transport: transport)
         await client.start()
+        await client.markReady()
 
         transport.feed("%output %0 hello\\012world\n")
 
@@ -1063,6 +1069,7 @@ func testClientNotificationRouting() {
         let transport = MockTransport()
         let client = TmuxControlClient(transport: transport)
         await client.start()
+        await client.markReady()
 
         transport.feed("%sessions-changed\n")
 
@@ -1083,6 +1090,7 @@ func testClientWritesCommandWithNewline() {
         let transport = MockTransport()
         let client = TmuxControlClient(transport: transport)
         await client.start()
+        await client.markReady()
 
         Task {
             try? await Task.sleep(nanoseconds: 50_000_000)
@@ -1110,6 +1118,7 @@ func testClientFastResponseRace() {
         let fastTransport = FastResponseMockTransport()
         let client = TmuxControlClient(transport: fastTransport)
         await client.start()
+        await client.markReady()
 
         do {
             let result = try await client.sendCommand("list-sessions")

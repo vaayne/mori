@@ -26,7 +26,8 @@ public enum TmuxControlError: Error, Sendable, LocalizedError {
 /// - **Block tracking**: tracks `%begin/%end` state. `.plainLine` results
 ///   inside a block are accumulated as command response text.
 /// - **Command serialization**: one command at a time for the spike. Uses
-///   `CheckedContinuation` to bridge the `sendCommand` async call.
+///   an `AsyncStream` to bridge the `sendCommand` async call, avoiding
+///   actor reentrancy races with `CheckedContinuation`.
 /// - **Routing**: `%output` → `paneOutput` stream, notifications → `notifications` stream.
 public actor TmuxControlClient {
 
@@ -48,10 +49,13 @@ public actor TmuxControlClient {
     private let paneOutputContinuation: AsyncStream<(paneId: String, data: Data)>.Continuation
     private let notificationsContinuation: AsyncStream<TmuxNotification>.Continuation
 
-    // Command correlation
-    private var pendingContinuation: CheckedContinuation<String, any Error>?
+    // Command correlation — uses AsyncStream instead of CheckedContinuation
+    // to avoid actor reentrancy races between the read task and sendCommand.
+    private var awaitingResponse = false
+    private var responseContinuation: AsyncStream<Result<String, any Error>>.Continuation?
     private var pendingCommandNumber: Int?
     private var responseLines: [String] = []
+    private var ready = false  // Set after handshake is drained
 
     // MARK: - Init
 
@@ -83,6 +87,19 @@ public actor TmuxControlClient {
         }
     }
 
+    /// Mark the client as ready to accept commands.
+    /// Call after the initial handshake has been drained.
+    public func markReady() {
+        ready = true
+    }
+
+    /// Wait for the initial tmux handshake to complete, then mark ready.
+    /// Call after `start()` and before sending any commands.
+    public func waitForReady() async {
+        try? await Task.sleep(for: .milliseconds(500))
+        markReady()
+    }
+
     /// Stop the client, close the transport, and cancel any in-flight command.
     public func stop() async {
         readTask?.cancel()
@@ -100,24 +117,38 @@ public actor TmuxControlClient {
     /// The command is written newline-terminated. The client waits for a
     /// `%begin` response, accumulates `.plainLine` responses, and resolves
     /// on `%end` (success) or `%error` (failure).
+    ///
+    /// Uses an `AsyncStream` instead of `CheckedContinuation` to avoid
+    /// actor reentrancy: the response state (`awaitingResponse`,
+    /// `responseContinuation`) is set synchronously before the write
+    /// suspends, so the read task can deliver the response at any point.
     public func sendCommand(_ command: String) async throws -> String {
-        guard pendingContinuation == nil else {
+        guard !awaitingResponse else {
             throw TmuxControlError.commandInProgress
         }
+
+        // Set up response channel BEFORE writing so fast responses are caught.
+        let (stream, continuation) = AsyncStream<Result<String, any Error>>.makeStream()
+        awaitingResponse = true
+        responseContinuation = continuation
+        pendingCommandNumber = nil
+        responseLines = []
+
+        // Write the command — the actor suspends here, allowing the read
+        // task to process incoming data and deliver the response.
         let data = Data((command + "\n").utf8)
-        // Register the pending command state BEFORE writing to transport,
-        // so fast %begin/%end responses are correctly correlated.
-        return try await withCheckedThrowingContinuation { continuation in
-            self.pendingContinuation = continuation
-            self.pendingCommandNumber = nil
-            self.responseLines = []
-            // Write to transport in a fire-and-forget manner.
-            // If write fails, the transport will close and EOF handling
-            // will cancel the pending continuation via failPending().
-            Task { [transport] in
-                try? await transport.write(data)
-            }
+        try? await transport.write(data)
+
+        // Await the response from the stream.
+        guard let result = await stream.first(where: { _ in true }) else {
+            awaitingResponse = false
+            responseContinuation = nil
+            throw TmuxControlError.disconnected
         }
+
+        awaitingResponse = false
+        responseContinuation = nil
+        return try result.get()
     }
 
     // MARK: - Receive pipeline
@@ -145,27 +176,27 @@ public actor TmuxControlClient {
 
         switch parsed {
         case .begin(_, let commandNumber, _):
-            // Record the server-assigned command number
+            // Only track begin/end after handshake is drained (ready=true)
+            // AND when a command is awaiting a response.
+            guard ready, awaitingResponse else { return }
             pendingCommandNumber = commandNumber
             responseLines = []
 
         case .end(_, let commandNumber, _):
             guard commandNumber == pendingCommandNumber else { return }
             let result = responseLines.joined(separator: "\n")
-            let cont = pendingContinuation
-            pendingContinuation = nil
             pendingCommandNumber = nil
             responseLines = []
-            cont?.resume(returning: result)
+            responseContinuation?.yield(.success(result))
+            responseContinuation?.finish()
 
         case .error(_, let commandNumber, _):
             guard commandNumber == pendingCommandNumber else { return }
             let errorText = responseLines.joined(separator: "\n")
-            let cont = pendingContinuation
-            pendingContinuation = nil
             pendingCommandNumber = nil
             responseLines = []
-            cont?.resume(throwing: TmuxControlError.commandFailed(errorText))
+            responseContinuation?.yield(.failure(TmuxControlError.commandFailed(errorText)))
+            responseContinuation?.finish()
 
         case .plainLine(let text):
             // Inside a block → accumulate; outside → ignore
@@ -177,7 +208,14 @@ public actor TmuxControlClient {
             paneOutputContinuation.yield((paneId: paneId, data: data))
 
         case .notification(let notif):
-            notificationsContinuation.yield(notif)
+            // Inside a command block, unknown lines starting with %
+            // (like pane IDs "%0", "%1") are parsed as .notification(.unknown).
+            // Treat them as response lines instead.
+            if pendingCommandNumber != nil, case .unknown(let raw) = notif {
+                responseLines.append(raw)
+            } else {
+                notificationsContinuation.yield(notif)
+            }
         }
     }
 
@@ -190,11 +228,13 @@ public actor TmuxControlClient {
     }
 
     private func failPending(_ error: any Error) {
-        if let cont = pendingContinuation {
-            pendingContinuation = nil
+        if awaitingResponse {
+            awaitingResponse = false
             pendingCommandNumber = nil
             responseLines = []
-            cont.resume(throwing: error)
+            responseContinuation?.yield(.failure(error))
+            responseContinuation?.finish()
+            responseContinuation = nil
         }
     }
 }
