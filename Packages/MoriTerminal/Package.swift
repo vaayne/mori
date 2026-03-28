@@ -7,6 +7,7 @@ let package = Package(
     defaultLocalization: "en",
     platforms: [
         .macOS(.v14),
+        .iOS(.v17),
     ],
     products: [
         .library(name: "MoriTerminal", targets: ["MoriTerminal"]),
@@ -17,7 +18,7 @@ let package = Package(
             dependencies: ["GhosttyKit"],
             path: "Sources/MoriTerminal",
             linkerSettings: [
-                .linkedFramework("Carbon"),
+                .linkedFramework("Carbon", .when(platforms: [.macOS])),
                 .linkedLibrary("c++"),
             ]
         ),
