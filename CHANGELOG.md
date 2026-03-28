@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added command palette action `Remote: Connect to Host...`
 - Remote add now allows non-git directories (git integration is best-effort, tmux workflow still works)
 - Remote connect now detects active tmux sessions and lets you attach the project to an existing session so sidebar tabs/panes reflect that live workspace
+- Added a `MoriRemote` iOS spike app target that connects over SSH, attaches to tmux control mode, renders pane output with Ghostty, and sends keyboard input back through tmux
 
 ### 🐛 Bug Fixes
 

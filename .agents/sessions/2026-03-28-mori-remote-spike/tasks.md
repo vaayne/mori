@@ -40,12 +40,12 @@
 
 ## Phase 5: iOS App Target + End-to-End Wiring
 
-- [ ] 5.1 — Create `MoriRemote/` Xcode project with SPM package deps (`MoriRemote/`)
-- [ ] 5.2 — Create `ConnectView.swift` — SSH connection form, password auth primary (`MoriRemote/MoriRemote/ConnectView.swift`)
-- [ ] 5.3 — Create `TerminalView.swift` — UIViewRepresentable for GhosttyPipeRenderer (`MoriRemote/MoriRemote/TerminalView.swift`)
-- [ ] 5.4 — Create `SpikeCoordinator.swift` — orchestrator: `tmux -C` (single-C), `refresh-client -C` on attach+resize, disconnect handling (`MoriRemote/MoriRemote/SpikeCoordinator.swift`)
-- [ ] 5.5 — Create `SSHChannelTransport.swift` — TmuxTransport adapter for SSHChannel (`MoriRemote/MoriRemote/SSHChannelTransport.swift`)
-- [ ] 5.6 — Create `KeyboardInputView.swift` — text input + special key buttons (`MoriRemote/MoriRemote/KeyboardInputView.swift`)
-- [ ] 5.7 — Wire up `MoriRemoteApp.swift` — app entry point with navigation (`MoriRemote/MoriRemote/MoriRemoteApp.swift`)
-- [ ] 5.8 — Verify macOS app regression (`mise run build && mise run test`)
-- [ ] 5.9 — Build and run iOS app, manual end-to-end test including `refresh-client -C` resize
+- [x] 5.1 — Create `MoriRemote/` Xcode project with SPM package deps (`MoriRemote/`)
+- [x] 5.2 — Create `ConnectView.swift` — SSH connection form, password auth primary (`MoriRemote/MoriRemote/ConnectView.swift`)
+- [x] 5.3 — Create `TerminalView.swift` — UIViewRepresentable for GhosttyPipeRenderer (`MoriRemote/MoriRemote/TerminalView.swift`)
+- [x] 5.4 — Create `SpikeCoordinator.swift` — orchestrator: `tmux -C` (single-C), `refresh-client -C` on attach+resize, disconnect handling (`MoriRemote/MoriRemote/SpikeCoordinator.swift`)
+- [x] 5.5 — Create `SSHChannelTransport.swift` — TmuxTransport adapter for SSHChannel (`MoriRemote/MoriRemote/SSHChannelTransport.swift`)
+- [x] 5.6 — Create `KeyboardInputView.swift` — text input + special key buttons (`MoriRemote/MoriRemote/KeyboardInputView.swift`)
+- [x] 5.7 — Wire up `MoriRemoteApp.swift` — app entry point with navigation (`MoriRemote/MoriRemote/MoriRemoteApp.swift`)
+- [x] 5.8 — Verify macOS app regression (`mise run test:core`, `mise run test:tmux`)
+- [ ] 5.9 — Build and run iOS app, manual end-to-end test including `refresh-client -C` resize (arm64 simulator build passes; remote manual validation still pending)

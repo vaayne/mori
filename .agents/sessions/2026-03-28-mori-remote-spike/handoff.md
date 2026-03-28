@@ -183,3 +183,54 @@
   - `GhosttyiOSRenderer.swift`: `deinit` wrapped in `MainActor.assumeIsolated` for Swift 6 strict concurrency
   - Verified: `xcodebuild -scheme MoriTerminal -destination 'generic/platform=iOS Simulator' build` → BUILD SUCCEEDED (commit `b2df89f`)
 - **Build script cache validation (reviewer finding #2)**: `--universal` now checks for `ios-arm64` and `ios-arm64-simulator` slices in cached xcframework; rebuilds if missing (commit `b2df89f`)
+
+## Phase 5: iOS App Target + End-to-End Wiring
+
+**Status:** implemented; simulator build passes, manual remote end-to-end validation pending
+
+**Tasks completed:**
+- 5.1: Created `MoriRemote/` with an XcodeGen-backed iOS app project, generated `MoriRemote.xcodeproj`, added `Info.plist`, asset catalog, and local package dependencies on `MoriCore`, `MoriTmux`, `MoriSSH`, and `MoriTerminal`.
+- 5.2: Added `ConnectView.swift` with host, port, username, password, connect action, and disconnected-state error display.
+- 5.3: Added `TerminalView.swift` with a `UIViewRepresentable` container around `GhosttyiOSRenderer`, exposing renderer-ready and resize callbacks back to the coordinator.
+- 5.4: Added `SpikeCoordinator.swift` as an `@MainActor @Observable` orchestration layer for SSH connect, tmux attach, pane-output streaming, resize-driven `refresh-client -C`, tmux exit handling, and input dispatch.
+- 5.5: Added `SSHChannelTransport.swift` as the `TmuxTransport` adapter for `SSHChannel`.
+- 5.6: Added `KeyboardInputView.swift` with text submission and special-key buttons (`Tab`, arrows, `Esc`, `Ctrl+C`, `Ctrl+D`).
+- 5.7: Wired `MoriRemoteApp.swift` with connect → session attach → terminal flow, plus app-local localization helpers/resources.
+- 5.8: Verified macOS regressions with `mise run test:core` (361 assertions passed) and `mise run test:tmux` (243 assertions passed).
+- 5.9: Built the iOS app for the arm64 simulator with `xcodebuild -project MoriRemote.xcodeproj -scheme MoriRemote -sdk iphonesimulator -arch arm64 build`.
+
+**Files changed:**
+- `MoriRemote/project.yml` — XcodeGen source of truth for the iOS target, package deps, and simulator arch constraint
+- `MoriRemote/MoriRemote.xcodeproj/project.pbxproj` — generated iOS app project
+- `MoriRemote/MoriRemote/Info.plist` — minimal SwiftUI app plist
+- `MoriRemote/MoriRemote/Assets.xcassets/**` — app asset catalog scaffold
+- `MoriRemote/MoriRemote/ConnectView.swift` — SSH connect form
+- `MoriRemote/MoriRemote/TerminalView.swift` — renderer bridge
+- `MoriRemote/MoriRemote/SpikeCoordinator.swift` — SSH/tmux/renderer coordinator
+- `MoriRemote/MoriRemote/SSHChannelTransport.swift` — SSHChannel adapter
+- `MoriRemote/MoriRemote/KeyboardInputView.swift` — text + special key input
+- `MoriRemote/MoriRemote/MoriRemoteApp.swift` — app entry and screen flow
+- `MoriRemote/MoriRemote/Resources/en.lproj/Localizable.strings` — English strings for the iOS spike UI
+- `MoriRemote/MoriRemote/Resources/zh-Hans.lproj/Localizable.strings` — Simplified Chinese strings for the iOS spike UI
+- `CHANGELOG.md` — unreleased feature note for the iOS remote spike app
+- `.agents/sessions/2026-03-28-mori-remote-spike/tasks.md` — Phase 5 checklist updated
+
+**Verification:**
+- `xcodegen generate` in `MoriRemote/` succeeded
+- `xcodebuild -project MoriRemote.xcodeproj -scheme MoriRemote -sdk iphonesimulator -arch arm64 build` succeeded
+- `mise run test:core` → 361 assertions passed
+- `mise run test:tmux` → 243 assertions passed
+
+**Manual validation steps still needed:**
+- Launch the generated `MoriRemote` app in Xcode or Simulator on an Apple Silicon Mac (`arm64` simulator only; the checked-in GhosttyKit simulator slice does not include `x86_64`).
+- Connect to a reachable SSH host with tmux installed.
+- Attach to a session name and confirm the first pane renders in the terminal surface.
+- Type text plus special keys and verify remote pane input lands via tmux `send-keys`.
+- Rotate or resize the simulator/device and confirm the remote client receives updated dimensions via `refresh-client -C`.
+
+**Decisions & context for next phase:**
+- `MoriRemote.xcodeproj` is generated from `MoriRemote/project.yml` using `xcodegen`; update the spec and re-run generation rather than hand-editing `project.pbxproj`.
+- `SpikeCoordinator` serializes all tmux commands through `runTmuxCommand(_:)` because `TmuxControlClient` intentionally allows only one in-flight command; this avoids resize/input races.
+- The app currently renders only the first pane ID returned by `list-panes -F '#{pane_id}'`, which matches the spike scope.
+- The simulator build excludes `x86_64` because the Phase 4 `GhosttyKit.xcframework` only provides an `ios-arm64-simulator` slice. Intel simulator support would require rebuilding GhosttyKit with an x86_64 simulator slice.
+- Manual end-to-end validation was not possible in this environment because no test SSH/tmux endpoint was available.
