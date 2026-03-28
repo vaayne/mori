@@ -2,7 +2,10 @@
 # Build GhosttyKit XCFramework from Ghostty source.
 # Requires: zig 0.15.2 (installed via mise)
 #
-# Usage: bash scripts/build-ghostty.sh [--clean]
+# Usage: bash scripts/build-ghostty.sh [--clean] [--universal]
+#   default: native macOS slice only
+#   --universal: build macOS + iOS device + iOS simulator slices
+#                requires Xcode.app with iOS SDKs installed
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -27,8 +30,27 @@ strip_archive_debug_symbols() {
     done < <(find "$xcframework_path" -type f -name "*.a" -print0)
 }
 
-# Clean mode: remove built artifacts
-if [[ "${1:-}" == "--clean" ]]; then
+CLEAN=false
+UNIVERSAL=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --clean)
+            CLEAN=true
+            ;;
+        --universal)
+            UNIVERSAL=true
+            ;;
+        *)
+            echo "Unknown argument: $1"
+            echo "Usage: bash scripts/build-ghostty.sh [--clean] [--universal]"
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+if [[ "$CLEAN" == true ]]; then
     echo "Cleaning Ghostty build artifacts..."
     rm -rf "$XCFRAMEWORK" "$RESOURCES_DIR"
 fi
@@ -68,21 +90,33 @@ if ! xcrun -sdk macosx --find metal >/dev/null 2>&1; then
     xcodebuild -downloadComponent MetalToolchain
 fi
 
-# Patch: skip iOS/iOS Simulator builds when using native target.
-# Ghostty's GhosttyXCFramework.zig eagerly initializes iOS targets even
-# when xcframework-target=native. This fails without Xcode.app (needs iphoneos SDK).
-# The patch moves iOS init inside the universal branch only.
-XCFW_ZIG="$GHOSTTY_DIR/src/build/GhosttyXCFramework.zig"
-restore_native_patch() {
-    if grep -q "MORI_PATCHED" "$XCFW_ZIG" 2>/dev/null; then
-        git -C "$GHOSTTY_DIR" checkout -- src/build/GhosttyXCFramework.zig >/dev/null 2>&1 || true
+XCFW_TARGET="native"
+if [[ "$UNIVERSAL" == true ]]; then
+    XCFW_TARGET="universal"
+    if ! xcrun -sdk iphoneos --show-sdk-path >/dev/null 2>&1; then
+        echo "Error: --universal requires Xcode.app with the iPhoneOS SDK installed."
+        exit 1
     fi
-}
-trap restore_native_patch EXIT
+    if ! xcrun -sdk iphonesimulator --show-sdk-path >/dev/null 2>&1; then
+        echo "Error: --universal requires Xcode.app with the iPhoneSimulator SDK installed."
+        exit 1
+    fi
+else
+    # Patch: skip iOS/iOS Simulator builds when using native target.
+    # Ghostty's GhosttyXCFramework.zig eagerly initializes iOS targets even
+    # when xcframework-target=native. This fails without Xcode.app (needs iphoneos SDK).
+    # The patch moves iOS init inside the universal branch only.
+    XCFW_ZIG="$GHOSTTY_DIR/src/build/GhosttyXCFramework.zig"
+    restore_native_patch() {
+        if grep -q "MORI_PATCHED" "$XCFW_ZIG" 2>/dev/null; then
+            git -C "$GHOSTTY_DIR" checkout -- src/build/GhosttyXCFramework.zig >/dev/null 2>&1 || true
+        fi
+    }
+    trap restore_native_patch EXIT
 
-if ! grep -q "MORI_PATCHED" "$XCFW_ZIG" 2>/dev/null; then
-    echo "Applying native-only build patch..."
-    cat > "$XCFW_ZIG" << 'ZIGEOF'
+    if ! grep -q "MORI_PATCHED" "$XCFW_ZIG" 2>/dev/null; then
+        echo "Applying native-only build patch..."
+        cat > "$XCFW_ZIG" <<'ZIGEOF'
 // MORI_PATCHED: skip iOS builds for native-only target
 const GhosttyXCFramework = @This();
 
@@ -180,18 +214,19 @@ pub fn addStepDependencies(
     other_step.dependOn(self.xcframework.step);
 }
 ZIGEOF
-    echo "Patch applied."
+        echo "Patch applied."
+    fi
 fi
 
 # Clear zig build cache to pick up patched file
 rm -rf "$GHOSTTY_DIR/.zig-cache"
 
-# Build XCFramework (native macOS only)
-echo "Building GhosttyKit XCFramework (this may take a few minutes)..."
+# Build XCFramework
+echo "Building GhosttyKit XCFramework target=$XCFW_TARGET (this may take a few minutes)..."
 zig build \
     -Demit-xcframework=true \
     -Demit-macos-app=false \
-    -Dxcframework-target=native \
+    -Dxcframework-target="$XCFW_TARGET" \
     -Dapp-runtime=none \
     -Doptimize=ReleaseFast
 
