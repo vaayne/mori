@@ -68,6 +68,8 @@ enum CommandPaletteItem: Sendable {
                 return "folder.badge.plus"
             case "action.remote-connect":
                 return "network"
+            case "action.check-for-updates":
+                return "arrow.triangle.2.circlepath"
             default:
                 return "command"
             }

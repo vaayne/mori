@@ -104,7 +104,22 @@ jobs:
           # DMG
           bash scripts/create-dmg.sh "$VERSION"
 
+      - name: Generate appcast.xml
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          bash scripts/generate-appcast.sh "$VERSION" "Mori-${VERSION}-macos-arm64.zip"
+
+      - name: Upload appcast artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: appcast
+          path: mori-appcast.xml
+
       - name: Create GitHub Release
+
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -162,12 +177,21 @@ jobs:
           SHA256: ${{ env.SHA256 }}
           TAP_DIR: homebrew-tap
 
-      - name: Commit and push tap update
+      - name: Download appcast artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: appcast
+
+      - name: Commit and push tap + appcast update
         run: |
           set -euo pipefail
           git -C homebrew-tap config user.name "github-actions[bot]"
           git -C homebrew-tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C homebrew-tap add Casks/mori.rb
+
+          # Copy mori-appcast.xml into tap repo
+          cp mori-appcast.xml homebrew-tap/mori-appcast.xml
+
+          git -C homebrew-tap add Casks/mori.rb mori-appcast.xml
 
           if git -C homebrew-tap diff --cached --quiet; then
             echo "No tap changes to commit."

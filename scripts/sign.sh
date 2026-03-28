@@ -43,10 +43,30 @@ echo "🔏 Signing $APP_BUNDLE with identity: $SIGNING_IDENTITY"
 # Remove any ._ AppleDouble files that would invalidate the seal
 find "$APP_BUNDLE" -name "._*" -delete 2>/dev/null || true
 
-# Sign embedded frameworks and dylibs first (inside-out signing)
+# Sign XPC services inside embedded frameworks first (deepest inside-out)
+if [[ -d "$APP_BUNDLE/Contents/Frameworks" ]]; then
+    find "$APP_BUNDLE/Contents/Frameworks" -name "*.xpc" -type d -print0 | while IFS= read -r -d '' item; do
+        echo "   Signing embedded XPC: $(basename "$item")"
+        codesign --force --options runtime --timestamp \
+            --sign "$SIGNING_IDENTITY" \
+            "$item"
+    done
+fi
+
+# Sign embedded frameworks and dylibs (inside-out signing)
 if [[ -d "$APP_BUNDLE/Contents/Frameworks" ]]; then
     find "$APP_BUNDLE/Contents/Frameworks" \( -name "*.dylib" -o -name "*.framework" \) -print0 | while IFS= read -r -d '' item; do
         echo "   Signing: $(basename "$item")"
+        codesign --force --options runtime --timestamp \
+            --sign "$SIGNING_IDENTITY" \
+            "$item"
+    done
+fi
+
+# Sign XPC services (inside-out — must be signed before the main app)
+if [[ -d "$APP_BUNDLE/Contents/XPCServices" ]]; then
+    find "$APP_BUNDLE/Contents/XPCServices" -name "*.xpc" -type d -print0 | while IFS= read -r -d '' item; do
+        echo "   Signing XPC service: $(basename "$item")"
         codesign --force --options runtime --timestamp \
             --sign "$SIGNING_IDENTITY" \
             "$item"

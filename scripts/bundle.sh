@@ -60,6 +60,32 @@ else
     echo "   Theme resolution will not work in the bundled app."
 fi
 
+# Embed Sparkle.framework from SPM binary artifact
+SPARKLE_XCFW=".build/artifacts/sparkle/Sparkle/Sparkle.xcframework"
+SPARKLE_FW_SRC="${SPARKLE_XCFW}/macos-arm64_x86_64/Sparkle.framework"
+if [[ -d "$SPARKLE_FW_SRC" ]]; then
+    mkdir -p "$APP_BUNDLE/Contents/Frameworks"
+    ditto "$SPARKLE_FW_SRC" "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
+
+    # Sparkle bundles XPC services inside the framework — copy them to the app
+    # bundle's top-level XPCServices/ so launchd can find them.
+    SPARKLE_XPC_DIR="$APP_BUNDLE/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices"
+    if [[ -d "$SPARKLE_XPC_DIR" ]]; then
+        mkdir -p "$APP_BUNDLE/Contents/XPCServices"
+        for xpc in "$SPARKLE_XPC_DIR"/*.xpc; do
+            if [[ -d "$xpc" ]]; then
+                ditto "$xpc" "$APP_BUNDLE/Contents/XPCServices/$(basename "$xpc")"
+                echo "   XPC service: $(basename "$xpc")"
+            fi
+        done
+    fi
+
+    echo "   Sparkle.framework embedded"
+else
+    echo "⚠️  Warning: Sparkle.framework not found at $SPARKLE_FW_SRC"
+    echo "   Run 'swift package resolve' to download Sparkle artifacts."
+fi
+
 # Create Info.plist
 cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -93,6 +119,10 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
     <string>AppIcon</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>SUPublicEDKey</key>
+    <string>AtuACa7YzgLmnQGVd76Ly7D3hg04TFIxZaH8m5kIkmQ=</string>
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/vaayne/homebrew-tap/main/mori-appcast.xml</string>
 </dict>
 </plist>
 EOF

@@ -1,0 +1,405 @@
+// MARK: - UpdatePopoverView
+// SwiftUI popover with version details and action buttons.
+
+import SwiftUI
+@preconcurrency import Sparkle
+
+/// A popover view that displays detailed update information and action buttons.
+///
+/// The view adapts its content based on the current update state, showing appropriate
+/// UI for checking, downloading, installing, or handling errors.
+struct UpdatePopoverView: View {
+    /// The update view model that provides the current state and information
+    @ObservedObject var model: UpdateViewModel
+
+    /// Environment value for dismissing the popover
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            switch model.state {
+            case .idle:
+                EmptyView()
+
+            case .permissionRequest(let request):
+                PermissionRequestView(request: request, dismiss: dismiss)
+
+            case .checking(let checking):
+                CheckingView(checking: checking, dismiss: dismiss)
+
+            case .updateAvailable(let update):
+                UpdateAvailableView(update: update, dismiss: dismiss)
+
+            case .downloading(let download):
+                DownloadingView(download: download, dismiss: dismiss)
+
+            case .extracting(let extracting):
+                ExtractingView(extracting: extracting)
+
+            case .installing(let installing):
+                InstallingView(installing: installing, dismiss: dismiss)
+
+            case .notFound(let notFound):
+                NotFoundView(notFound: notFound, onDismiss: { [weak model] in
+                    guard let model else { return }
+                    notFound.dismiss(from: model)
+                    dismiss()
+                })
+
+            case .error(let error):
+                UpdateErrorView(error: error, dismiss: dismiss)
+            }
+        }
+        .frame(width: 300)
+    }
+}
+
+// MARK: - Permission Request
+
+private struct PermissionRequestView: View {
+    let request: UpdateState.PermissionRequest
+    let dismiss: DismissAction
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(String.localized("Enable automatic updates?"))
+                    .font(.system(size: 13, weight: .semibold))
+
+                Text(String.localized("Mori can automatically check for updates in the background."))
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 8) {
+                Button(String.localized("Not Now")) {
+                    request.reply(SUUpdatePermissionResponse(
+                        automaticUpdateChecks: false,
+                        sendSystemProfile: false))
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button(String.localized("Allow")) {
+                    request.reply(SUUpdatePermissionResponse(
+                        automaticUpdateChecks: true,
+                        sendSystemProfile: false))
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(16)
+    }
+}
+
+// MARK: - Checking
+
+private struct CheckingView: View {
+    let checking: UpdateState.Checking
+    let dismiss: DismissAction
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.small)
+                Text(String.localized("Checking for updates\u{2026}"))
+                    .font(.system(size: 13))
+            }
+
+            HStack {
+                Spacer()
+                Button(String.localized("Cancel")) {
+                    checking.cancel()
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+                .controlSize(.small)
+            }
+        }
+        .padding(16)
+    }
+}
+
+// MARK: - Update Available
+
+private struct UpdateAvailableView: View {
+    let update: UpdateState.UpdateAvailable
+    let dismiss: DismissAction
+
+    private let labelWidth: CGFloat = 60
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(String.localized("Update Available"))
+                        .font(.system(size: 13, weight: .semibold))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text(String.localized("Version:"))
+                                .foregroundColor(.secondary)
+                                .frame(width: labelWidth, alignment: .trailing)
+                            Text(update.appcastItem.displayVersionString)
+                        }
+                        .font(.system(size: 11))
+
+                        if update.appcastItem.contentLength > 0 {
+                            HStack(spacing: 6) {
+                                Text(String.localized("Size:"))
+                                    .foregroundColor(.secondary)
+                                    .frame(width: labelWidth, alignment: .trailing)
+                                Text(ByteCountFormatter.string(
+                                    fromByteCount: Int64(update.appcastItem.contentLength),
+                                    countStyle: .file))
+                            }
+                            .font(.system(size: 11))
+                        }
+
+                        if let date = update.appcastItem.date {
+                            HStack(spacing: 6) {
+                                Text(String.localized("Released:"))
+                                    .foregroundColor(.secondary)
+                                    .frame(width: labelWidth, alignment: .trailing)
+                                Text(date.formatted(date: .abbreviated, time: .omitted))
+                            }
+                            .font(.system(size: 11))
+                        }
+                    }
+                    .textSelection(.enabled)
+                }
+
+                HStack(spacing: 8) {
+                    Button(String.localized("Skip")) {
+                        update.reply(.skip)
+                        dismiss()
+                    }
+                    .controlSize(.small)
+
+                    Button(String.localized("Later")) {
+                        update.reply(.dismiss)
+                        dismiss()
+                    }
+                    .controlSize(.small)
+                    .keyboardShortcut(.cancelAction)
+
+                    Spacer()
+
+                    Button(String.localized("Install and Relaunch")) {
+                        update.reply(.install)
+                        dismiss()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            }
+            .padding(16)
+
+            if let url = update.releaseNotesURL {
+                Divider()
+
+                Link(destination: url) {
+                    HStack {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 11))
+                        Text(String.localized("View Release Notes"))
+                            .font(.system(size: 11, weight: .medium))
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 10))
+                    }
+                    .foregroundColor(.primary)
+                    .padding(12)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+// MARK: - Downloading
+
+private struct DownloadingView: View {
+    let download: UpdateState.Downloading
+    let dismiss: DismissAction
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(String.localized("Downloading Update"))
+                    .font(.system(size: 13, weight: .semibold))
+
+                if let progress = download.normalizedProgress {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ProgressView(value: progress)
+                        Text(String(format: "%.0f%%", progress * 100))
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                } else {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button(String.localized("Cancel")) {
+                    download.cancel()
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+                .controlSize(.small)
+            }
+        }
+        .padding(16)
+    }
+}
+
+// MARK: - Extracting
+
+private struct ExtractingView: View {
+    let extracting: UpdateState.Extracting
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(String.localized("Preparing Update"))
+                .font(.system(size: 13, weight: .semibold))
+
+            VStack(alignment: .leading, spacing: 6) {
+                ProgressView(value: extracting.normalizedProgress, total: 1.0)
+                Text(String(format: "%.0f%%", extracting.normalizedProgress * 100))
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(16)
+    }
+}
+
+// MARK: - Installing
+
+private struct InstallingView: View {
+    let installing: UpdateState.Installing
+    let dismiss: DismissAction
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(String.localized("Restart Required"))
+                    .font(.system(size: 13, weight: .semibold))
+
+                Text(String.localized("The update is ready. Please restart the application to complete the installation."))
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack {
+                Button(String.localized("Restart Later")) {
+                    installing.dismiss()
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+                .controlSize(.small)
+
+                Spacer()
+
+                Button(String.localized("Restart Now")) {
+                    installing.retryTerminatingApplication()
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+        }
+        .padding(16)
+    }
+}
+
+// MARK: - Not Found
+
+private struct NotFoundView: View {
+    let notFound: UpdateState.NotFound
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(String.localized("No Updates Found"))
+                    .font(.system(size: 13, weight: .semibold))
+
+                Text(String.localized("You're already running the latest version."))
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack {
+                Spacer()
+                Button(String.localized("OK")) {
+                    onDismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .controlSize(.small)
+            }
+        }
+        .padding(16)
+    }
+}
+
+// MARK: - Error
+
+private struct UpdateErrorView: View {
+    let error: UpdateState.Error
+    let dismiss: DismissAction
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 13))
+                    Text(String.localized("Update Failed"))
+                        .font(.system(size: 13, weight: .semibold))
+                }
+
+                Text(error.error.localizedDescription)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 8) {
+                Button(String.localized("OK")) {
+                    error.dismiss()
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+                .controlSize(.small)
+
+                Spacer()
+
+                Button(String.localized("Retry")) {
+                    error.retry()
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .controlSize(.small)
+            }
+        }
+        .padding(16)
+    }
+}

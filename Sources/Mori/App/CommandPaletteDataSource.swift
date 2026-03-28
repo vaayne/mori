@@ -61,6 +61,11 @@ final class CommandPaletteDataSource {
             title: "Remote: Connect to Host...",
             subtitle: "Add a remote SSH project"
         ))
+        items.append(.action(
+            id: "action.check-for-updates",
+            title: .localized("Check for Updates"),
+            subtitle: .localized("Check for available Mori updates")
+        ))
 
         // "Set Worktree Status" actions — only when a worktree is selected
         if let selectedWorktree = appState.selectedWorktree {

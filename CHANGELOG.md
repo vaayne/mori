@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### ✨ Features
 
+- **Sparkle Auto-Update**: In-app update checking and installation via Sparkle 2 framework
+  - Titlebar pill badge shows update status (checking, available, downloading, installing)
+  - Popover with version details, release notes link, and Install/Skip/Later actions
+  - "Check for Updates..." menu item and command palette action
+  - CI pipeline generates signed appcast.xml and publishes to GitHub Pages
+  - Full localization support (English + Simplified Chinese)
+
 - **Task Mode Sidebar**: Alternative sidebar view that groups all worktrees across projects by workflow status (To Do, In Progress, Needs Review, Done, Cancelled) instead of project hierarchy ([#14](https://github.com/vaayne/mori/issues/14))
   - Toggle between Tasks and Workspaces views via segmented control at sidebar top
   - Manual status changes via context menu, command palette, or `mori status` CLI command

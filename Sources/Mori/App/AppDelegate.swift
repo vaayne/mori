@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var proxyApplyTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
     private var remoteConnectWizardController: RemoteConnectWizardController?
+    private var updateController: UpdateController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -184,6 +185,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Restore saved frame after all layout is complete
         windowController.restoreSavedFrame()
         NSApp.activate(ignoringOtherApps: true)
+
+        // Initialize update system (after window exists so hasUnobtrusiveTarget works)
+        let update = UpdateController()
+        self.updateController = update
+        update.startUpdater()
+        windowController.addUpdateAccessory(viewModel: update.viewModel)
 
         // Wire terminal switch: when worktree selection changes, attach terminal
         manager.onTerminalSwitch = { [weak terminalArea] sessionName, workingDirectory, location in
@@ -776,6 +783,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: .localized("About Mori"), action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        let checkForUpdatesItem = NSMenuItem(title: .localized("Check for Updates…"), action: #selector(checkForUpdatesMenuAction), keyEquivalent: "")
+        checkForUpdatesItem.target = self
+        appMenu.addItem(checkForUpdatesItem)
         appMenu.addItem(.separator())
         appMenu.addItem(menuItem(.localized("Open Project…"), action: #selector(openProjectMenuAction), key: "o", mods: [.command, .shift]))
         appMenu.addItem(.separator())
@@ -862,6 +872,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             item.target = self
         }
         return item
+    }
+
+    @objc private func checkForUpdatesMenuAction() {
+        updateController?.checkForUpdates()
     }
 
     @objc private func openProjectMenuAction() {
@@ -1143,6 +1157,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             showAddProjectPanel()
         case "action.remote-connect":
             showRemoteConnectWizard()
+
+        case "action.check-for-updates":
+            updateController?.checkForUpdates()
 
         default:
             // Handle "action.status-<rawValue>" patterns
