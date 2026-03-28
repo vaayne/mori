@@ -45,8 +45,11 @@ copy_resource_bundles() {
 # Copy SPM resource bundles into Contents/Resources/ so the packaged app and
 # runtime bundle lookup use the same app bundle layout in local and CI builds.
 copy_resource_bundles "$APP_BUILD_DIR" "$APP_BUNDLE/Contents/Resources"
-# SwiftPM's Bundle.module for the CLI resolves relative to bin/mori.
+# CLI resource bundles: copy next to the CLI binary AND to Contents/Resources/.
+# When mori runs inside the .app, Bundle.main resolves to the .app bundle,
+# so Bundle.main.resourceURL points to Contents/Resources/ — not bin/.
 copy_resource_bundles "$CLI_BUILD_DIR" "$APP_BUNDLE/Contents/MacOS/bin"
+copy_resource_bundles "$CLI_BUILD_DIR" "$APP_BUNDLE/Contents/Resources"
 
 # Copy ghostty resources (terminfo sentinel + themes) so libghostty can resolve
 # its resources_dir from the app bundle. Ghostty walks up from the executable
