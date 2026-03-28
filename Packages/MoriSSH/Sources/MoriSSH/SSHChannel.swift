@@ -2,59 +2,59 @@ import Foundation
 import NIOCore
 import NIOSSH
 
-/// Wrapper around a NIO SSH child channel providing async read/write access.
-/// Exposes inbound data as an `AsyncThrowingStream` and write access via `write(_:)`.
-public final class SSHExecChannel: Sendable {
-    private let channel: NIOLoopBound<Channel>
-    private let eventLoop: any EventLoop
-
-    /// Stream of inbound data from the SSH channel.
+/// Bidirectional wrapper around an NIO SSH child channel.
+/// Provides an async stream for inbound data and async write for outbound data.
+public final class SSHChannel: @unchecked Sendable {
+    /// Stream of data received from the remote end.
     public let inbound: AsyncThrowingStream<Data, Error>
-    private let continuation: AsyncThrowingStream<Data, Error>.Continuation
 
-    init(channel: Channel) {
-        self.eventLoop = channel.eventLoop
-        self.channel = NIOLoopBound(channel, eventLoop: channel.eventLoop)
+    private let channel: any Channel
 
-        var cont: AsyncThrowingStream<Data, Error>.Continuation!
-        self.inbound = AsyncThrowingStream { cont = $0 }
-        self.continuation = cont
+    init(channel: any Channel, inbound: AsyncThrowingStream<Data, Error>) {
+        self.channel = channel
+        self.inbound = inbound
     }
 
-    /// Feed data from the channel handler into the inbound stream.
-    func feedInbound(_ data: Data) {
-        continuation.yield(data)
-    }
-
-    /// Signal the inbound stream has finished (channel closed or EOF).
-    func feedError(_ error: Error) {
-        continuation.finish(throwing: error)
-    }
-
-    /// Signal clean EOF on the inbound stream.
-    func feedEOF() {
-        continuation.finish()
-    }
-
-    /// Write data to the SSH channel (sends to remote process stdin).
+    /// Write data to the SSH channel.
     public func write(_ data: Data) async throws {
-        try await eventLoop.submit {
-            let channel = self.channel.value
-            var buffer = channel.allocator.buffer(capacity: data.count)
-            buffer.writeBytes(data)
-            let channelData = SSHChannelData(type: .channel, data: .byteBuffer(buffer))
-            channel.writeAndFlush(channelData, promise: nil)
-        }.get()
+        guard channel.isActive else { throw SSHError.disconnected }
+        var buffer = channel.allocator.buffer(capacity: data.count)
+        buffer.writeBytes(data)
+        let channelData = SSHChannelData(type: .channel, data: .byteBuffer(buffer))
+        try await channel.writeAndFlush(channelData).get()
     }
 
     /// Close the SSH channel.
     public func close() async {
-        do {
-            try await eventLoop.submit {
-                self.channel.value.close(promise: nil)
-            }.get()
-        } catch {
-            // Channel may already be closed
-        }
+        try? await channel.close().get()
+    }
+}
+
+// MARK: - Channel Handler
+
+/// Inbound handler that reads SSHChannelData and feeds decoded bytes to an AsyncThrowingStream.
+final class SSHChannelDataHandler: ChannelInboundHandler, @unchecked Sendable {
+    typealias InboundIn = SSHChannelData
+
+    private let continuation: AsyncThrowingStream<Data, Error>.Continuation
+
+    init(continuation: AsyncThrowingStream<Data, Error>.Continuation) {
+        self.continuation = continuation
+    }
+
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        let channelData = unwrapInboundIn(data)
+        guard case .byteBuffer(var buffer) = channelData.data else { return }
+        guard let bytes = buffer.readBytes(length: buffer.readableBytes) else { return }
+        continuation.yield(Data(bytes))
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        continuation.finish(throwing: error)
+        context.close(promise: nil)
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        continuation.finish()
     }
 }
