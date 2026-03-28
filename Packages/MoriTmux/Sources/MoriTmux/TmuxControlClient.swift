@@ -105,11 +105,18 @@ public actor TmuxControlClient {
             throw TmuxControlError.commandInProgress
         }
         let data = Data((command + "\n").utf8)
-        try await transport.write(data)
+        // Register the pending command state BEFORE writing to transport,
+        // so fast %begin/%end responses are correctly correlated.
         return try await withCheckedThrowingContinuation { continuation in
             self.pendingContinuation = continuation
             self.pendingCommandNumber = nil
             self.responseLines = []
+            // Write to transport in a fire-and-forget manner.
+            // If write fails, the transport will close and EOF handling
+            // will cancel the pending continuation via failPending().
+            Task { [transport] in
+                try? await transport.write(data)
+            }
         }
     }
 

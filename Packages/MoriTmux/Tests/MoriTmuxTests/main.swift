@@ -1101,7 +1101,50 @@ func testClientWritesCommandWithNewline() {
     }
 }
 
-// Control-mode parser
+/// Regression test: tmux responds instantly (no delay) to sendCommand.
+/// Ensures the continuation is registered before the transport write completes,
+/// so fast %begin/%end responses are correctly correlated.
+func testClientFastResponseRace() {
+    runAsync {
+        // Use a mock transport that feeds the response immediately on write
+        let fastTransport = FastResponseMockTransport()
+        let client = TmuxControlClient(transport: fastTransport)
+        await client.start()
+
+        do {
+            let result = try await client.sendCommand("list-sessions")
+            assertEqual(result, "fast-response")
+        } catch {
+            assertTrue(false, "Fast response test failed: \(error)")
+        }
+
+        await client.stop()
+    }
+}
+
+/// Mock transport that feeds `%begin`/response/`%end` immediately when write is called.
+final class FastResponseMockTransport: TmuxTransport, @unchecked Sendable {
+    let inbound: AsyncThrowingStream<Data, Error>
+    private let continuation: AsyncThrowingStream<Data, Error>.Continuation
+
+    init() {
+        let (stream, cont) = AsyncThrowingStream<Data, Error>.makeStream()
+        self.inbound = stream
+        self.continuation = cont
+    }
+
+    func write(_ data: Data) async throws {
+        // Immediately feed the response — no delay
+        continuation.yield(Data("%begin 1711000000 99 0\n".utf8))
+        continuation.yield(Data("fast-response\n".utf8))
+        continuation.yield(Data("%end 1711000000 99 0\n".utf8))
+    }
+
+    func close() async {
+        continuation.finish()
+    }
+}
+
 testParseOutputWithOctalNewline()
 testParseOutputWithOctalBackslash()
 testParseOutputHighBitBytes()
@@ -1134,6 +1177,7 @@ testClientEOFCancelsPendingCommand()
 testClientPaneOutputRouting()
 testClientNotificationRouting()
 testClientWritesCommandWithNewline()
+testClientFastResponseRace()
 
 printResults()
 
