@@ -1,5 +1,7 @@
 import Foundation
 
+#if os(macOS)
+
 /// The main tmux integration actor. Manages scanning, session lifecycle,
 /// and background polling with diff-based state updates.
 public actor TmuxBackend: TmuxControlling {
@@ -328,3 +330,5 @@ public actor TmuxBackend: TmuxControlling {
         }
     }
 }
+
+#endif
