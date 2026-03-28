@@ -48,19 +48,20 @@ private final class AcceptAllHostKeysDelegate: NIOSSHClientServerAuthenticationD
 
 // MARK: - Exec Channel Handler
 
-/// NIO channel handler that bridges SSH channel data to `SSHExecChannel`.
-private final class ExecChannelHandler: ChannelDuplexHandler {
+/// NIO channel handler that sends an exec request on channel active,
+/// reads SSHChannelData and feeds decoded bytes into the stream continuation.
+private final class ExecHandler: ChannelDuplexHandler, @unchecked Sendable {
     typealias InboundIn = SSHChannelData
     typealias InboundOut = ByteBuffer
     typealias OutboundIn = ByteBuffer
     typealias OutboundOut = SSHChannelData
 
-    private let execChannel: SSHExecChannel
     private let command: String
+    private let continuation: AsyncThrowingStream<Data, Error>.Continuation
 
-    init(command: String, execChannel: SSHExecChannel) {
+    init(command: String, continuation: AsyncThrowingStream<Data, Error>.Continuation) {
         self.command = command
-        self.execChannel = execChannel
+        self.continuation = continuation
     }
 
     func handlerAdded(context: ChannelHandlerContext) {
@@ -77,36 +78,25 @@ private final class ExecChannelHandler: ChannelDuplexHandler {
             wantReply: true
         )
         context.triggerUserOutboundEvent(execRequest).assumeIsolated().whenFailure { error in
-            self.execChannel.feedError(SSHError.channelError("exec request failed: \(error)"))
+            self.continuation.finish(throwing: SSHError.channelError("exec request failed: \(error)"))
             context.close(promise: nil)
         }
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         let channelData = self.unwrapInboundIn(data)
-
-        guard case .byteBuffer(let buffer) = channelData.data else { return }
-
-        switch channelData.type {
-        case .channel:
-            let data = Data(buffer: buffer)
-            execChannel.feedInbound(data)
-        case .stdErr:
-            // For the spike, stderr also goes to inbound
-            let data = Data(buffer: buffer)
-            execChannel.feedInbound(data)
-        default:
-            break
-        }
+        guard case .byteBuffer(var buffer) = channelData.data else { return }
+        guard let bytes = buffer.readBytes(length: buffer.readableBytes) else { return }
+        continuation.yield(Data(bytes))
     }
 
     func channelInactive(context: ChannelHandlerContext) {
-        execChannel.feedEOF()
+        continuation.finish()
         context.fireChannelInactive()
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
-        execChannel.feedError(error)
+        continuation.finish(throwing: error)
         context.close(promise: nil)
     }
 }
@@ -173,20 +163,17 @@ public actor SSHConnectionManager {
 
     /// Open an exec channel on the SSH connection and run the given command.
     ///
-    /// The returned `SSHExecChannel` provides async access to the command's
+    /// The returned `SSHChannel` provides async access to the command's
     /// stdout/stderr and allows writing to its stdin.
     ///
     /// - Parameter command: The remote command to execute (e.g., `tmux -C new-session`).
-    /// - Returns: An `SSHExecChannel` for reading output and writing input.
-    public func openExecChannel(command: String) async throws -> SSHExecChannel {
+    /// - Returns: An `SSHChannel` for reading output and writing input.
+    public func openExecChannel(command: String) async throws -> SSHChannel {
         guard let channel = self.channel else {
             throw SSHError.disconnected
         }
 
-        let execChannel: SSHExecChannel = try await withCheckedThrowingContinuation { continuation in
-            let promise = channel.eventLoop.makePromise(of: Channel.self)
-
-            // All NIOSSHHandler access must happen on the channel's event loop
+        let sshChannel: SSHChannel = try await withCheckedThrowingContinuation { continuation in
             channel.eventLoop.execute {
                 let sshHandler: NIOSSHHandler
                 do {
@@ -196,7 +183,9 @@ public actor SSHConnectionManager {
                     return
                 }
 
-                var capturedExecChannel: SSHExecChannel?
+                let promise = channel.eventLoop.makePromise(of: Channel.self)
+                var streamContinuation: AsyncThrowingStream<Data, Error>.Continuation!
+                let inbound = AsyncThrowingStream<Data, Error> { streamContinuation = $0 }
 
                 sshHandler.createChannel(promise) { childChannel, channelType in
                     guard channelType == .session else {
@@ -204,31 +193,26 @@ public actor SSHConnectionManager {
                             SSHError.channelError("unexpected channel type")
                         )
                     }
-
                     return childChannel.eventLoop.makeCompletedFuture {
-                        let execCh = SSHExecChannel(channel: childChannel)
-                        capturedExecChannel = execCh
-                        let handler = ExecChannelHandler(command: command, execChannel: execCh)
+                        let handler = ExecHandler(command: command, continuation: streamContinuation)
                         try childChannel.pipeline.syncOperations.addHandler(handler)
                     }
                 }
 
                 promise.futureResult.assumeIsolated().whenComplete { result in
                     switch result {
-                    case .success:
-                        if let ch = capturedExecChannel {
-                            continuation.resume(returning: ch)
-                        } else {
-                            continuation.resume(throwing: SSHError.channelError("channel created but no exec channel"))
-                        }
+                    case .success(let childChannel):
+                        let ch = SSHChannel(channel: childChannel, inbound: inbound)
+                        continuation.resume(returning: ch)
                     case .failure(let error):
+                        streamContinuation.finish(throwing: error)
                         continuation.resume(throwing: SSHError.channelError(error.localizedDescription))
                     }
                 }
             }
         }
 
-        return execChannel
+        return sshChannel
     }
 
     /// Disconnect from the SSH server.
