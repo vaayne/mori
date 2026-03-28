@@ -238,3 +238,25 @@
 ### Fixes (post-review)
 - **Disconnect propagation (reviewer finding #1)**: paneOutput and notifications stream termination now triggers `transitionToDisconnected` when in `.attached` state. Background `scheduleCommand`/`scheduleRefresh` now catch errors and transition to disconnected instead of silently swallowing with `try?`. (commit `ab32bfd`)
 - **Output buffering (reviewer finding #2)**: Added `pendingOutputBuffer` that accumulates pane output before `attachedPaneId` is set. Once `list-panes` returns the pane ID, buffered output is flushed to the renderer. Prevents losing the initial terminal data burst during attach. (commit `ab32bfd`)
+
+## E2E Testing: Task 5.9
+
+**Status:** partial
+
+**What was validated:**
+- ✅ SSH connection from iOS Simulator to remote Mac (192.168.0.2, password auth)
+- ✅ ConnectView → Session screen → TerminalScreen navigation flow works
+- ✅ GhosttyiOSRenderer creates Metal surface (black terminal background visible)
+- ✅ KeyboardInputView renders with text field + special key buttons (Tab, ↑, ↓, ←, →, Esc, Ctrl+C, Ctrl+D)
+- ✅ No crashes after PTY allocation fix
+
+**What remains:**
+- ⚠️ Tmux control-mode attach hangs on `list-panes` command — the initial `%begin/%end` pair from tmux session handshake is consumed before any command is sent, leaving `sendCommand` waiting forever. The `TmuxControlClient` needs to discard unsolicited `%begin/%end` blocks (those not matching a pending command) or wait for the initial handshake to complete before sending commands.
+
+**Fixes during testing:**
+- Added PTY allocation (`PseudoTerminalRequest`) before exec — tmux -C requires a TTY (commit `5e40413`)
+- Fixed NIO promise leak: `execAccepted` promise now failed on channel creation failure
+- Used full path `/opt/homebrew/bin/tmux` since exec channels have minimal PATH
+
+**Known issue for follow-up:**
+The TmuxControlClient protocol assumes all `%begin/%end` blocks are responses to commands we sent. But tmux emits an unsolicited `%begin/%end` on session connect (the initial handshake). The fix is to have `TmuxControlClient` ignore `%begin/%end` blocks when no command is pending, or add a `waitForReady()` method that consumes the initial handshake before allowing commands.
