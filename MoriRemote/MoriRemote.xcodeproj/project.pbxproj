@@ -1,0 +1,453 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		109E4551800EDCA43A760F80 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9A1E86AC034B64B37F68A846 /* Localizable.strings */; };
+		26153CEE6B1AD8ACF4E7DABA /* KeyboardInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8397FF01EC01C32512F7450D /* KeyboardInputView.swift */; };
+		376EEC1B30EE8565C4B085D1 /* MoriRemoteApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46F3182F8D251430A10B298E /* MoriRemoteApp.swift */; };
+		4031D10BB73B613259BD295F /* SpikeCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0399FF6B719FF10610D9D76E /* SpikeCoordinator.swift */; };
+		57A0B148D1B8D23CA120481C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 495654252F6CE455BE0201B3 /* Assets.xcassets */; };
+		5D0A706E5CC15CA815D2205C /* MoriSSH in Frameworks */ = {isa = PBXBuildFile; productRef = E4A46D15917AB2D06DABB5BF /* MoriSSH */; };
+		85ADFC9BAA17017ECA067C5B /* MoriCore in Frameworks */ = {isa = PBXBuildFile; productRef = CB00391E626D4853B15135EF /* MoriCore */; };
+		950C33367217BF06FA564D2B /* MoriTmux in Frameworks */ = {isa = PBXBuildFile; productRef = 8AFD415F38753179608A985F /* MoriTmux */; };
+		96C8DDDEA3B929ED016AF50D /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 293AE41146DC5F2BB4900EA4 /* TerminalView.swift */; };
+		BD0001EDD996C4C33B8C8D9C /* SSHChannelTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B69BBE4138563F4FB5A7709 /* SSHChannelTransport.swift */; };
+		C7B874D9B7973D33D6D7E5D6 /* MoriTerminal in Frameworks */ = {isa = PBXBuildFile; productRef = 35EA6C6FBCAE1CE488930F9F /* MoriTerminal */; };
+		F1389EC25C548603BA95AE2A /* ConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE4E48A48CA59FFCF24563F5 /* ConnectView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0399FF6B719FF10610D9D76E /* SpikeCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpikeCoordinator.swift; sourceTree = "<group>"; };
+		0D01ED3247C1344CC2910A0C /* MoriTerminal */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MoriTerminal; path = ../Packages/MoriTerminal; sourceTree = SOURCE_ROOT; };
+		1B69BBE4138563F4FB5A7709 /* SSHChannelTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHChannelTransport.swift; sourceTree = "<group>"; };
+		293AE41146DC5F2BB4900EA4 /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
+		2B45537B3FC70BA7F912DE66 /* MoriSSH */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MoriSSH; path = ../Packages/MoriSSH; sourceTree = SOURCE_ROOT; };
+		35C6D3B4BCCF583DFF3FE192 /* MoriCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MoriCore; path = ../Packages/MoriCore; sourceTree = SOURCE_ROOT; };
+		405397F8D3FACA71D62B7717 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		46F3182F8D251430A10B298E /* MoriRemoteApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoriRemoteApp.swift; sourceTree = "<group>"; };
+		495654252F6CE455BE0201B3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		6C511C1314958A8D89FC53C8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		8397FF01EC01C32512F7450D /* KeyboardInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardInputView.swift; sourceTree = "<group>"; };
+		BEC31B48C129D1E076933F45 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		D65F64A88926274343CB4D23 /* MoriTmux */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MoriTmux; path = ../Packages/MoriTmux; sourceTree = SOURCE_ROOT; };
+		E6317A1B56EED0B86D2F4D5D /* MoriRemote.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MoriRemote.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FE4E48A48CA59FFCF24563F5 /* ConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		F7510CFC46875E2AE7CF2B7A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				85ADFC9BAA17017ECA067C5B /* MoriCore in Frameworks */,
+				950C33367217BF06FA564D2B /* MoriTmux in Frameworks */,
+				5D0A706E5CC15CA815D2205C /* MoriSSH in Frameworks */,
+				C7B874D9B7973D33D6D7E5D6 /* MoriTerminal in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2A2C3E328CF35E08821257D9 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				9A1E86AC034B64B37F68A846 /* Localizable.strings */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		3AA0698F729DC6B09848C13A /* MoriRemote */ = {
+			isa = PBXGroup;
+			children = (
+				2A2C3E328CF35E08821257D9 /* Resources */,
+				495654252F6CE455BE0201B3 /* Assets.xcassets */,
+				FE4E48A48CA59FFCF24563F5 /* ConnectView.swift */,
+				6C511C1314958A8D89FC53C8 /* Info.plist */,
+				8397FF01EC01C32512F7450D /* KeyboardInputView.swift */,
+				46F3182F8D251430A10B298E /* MoriRemoteApp.swift */,
+				0399FF6B719FF10610D9D76E /* SpikeCoordinator.swift */,
+				1B69BBE4138563F4FB5A7709 /* SSHChannelTransport.swift */,
+				293AE41146DC5F2BB4900EA4 /* TerminalView.swift */,
+			);
+			path = MoriRemote;
+			sourceTree = "<group>";
+		};
+		7545784AFF05234220C217D0 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				35C6D3B4BCCF583DFF3FE192 /* MoriCore */,
+				2B45537B3FC70BA7F912DE66 /* MoriSSH */,
+				0D01ED3247C1344CC2910A0C /* MoriTerminal */,
+				D65F64A88926274343CB4D23 /* MoriTmux */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		CD5421D0DDCEBB050BBBD629 = {
+			isa = PBXGroup;
+			children = (
+				3AA0698F729DC6B09848C13A /* MoriRemote */,
+				7545784AFF05234220C217D0 /* Packages */,
+				CF688A13389F8A9D4F04A9A0 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		CF688A13389F8A9D4F04A9A0 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E6317A1B56EED0B86D2F4D5D /* MoriRemote.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		219FEED5B577C565EBA81436 /* MoriRemote */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3DDF485FADC3D5DFE95D2C40 /* Build configuration list for PBXNativeTarget "MoriRemote" */;
+			buildPhases = (
+				9D6A69F5E0C209F46BFBA798 /* Sources */,
+				D55D2784B20EE0BE03FC4ED5 /* Resources */,
+				F7510CFC46875E2AE7CF2B7A /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MoriRemote;
+			packageProductDependencies = (
+				CB00391E626D4853B15135EF /* MoriCore */,
+				8AFD415F38753179608A985F /* MoriTmux */,
+				E4A46D15917AB2D06DABB5BF /* MoriSSH */,
+				35EA6C6FBCAE1CE488930F9F /* MoriTerminal */,
+			);
+			productName = MoriRemote;
+			productReference = E6317A1B56EED0B86D2F4D5D /* MoriRemote.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		04D4F671C0A85A6697E3F07E /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					219FEED5B577C565EBA81436 = {
+						DevelopmentTeam = "";
+					};
+				};
+			};
+			buildConfigurationList = 9336E4FEC94E0847B39758F5 /* Build configuration list for PBXProject "MoriRemote" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+				"zh-Hans",
+			);
+			mainGroup = CD5421D0DDCEBB050BBBD629;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				22EC689C4EBC0381BBF9502E /* XCLocalSwiftPackageReference "../Packages/MoriCore" */,
+				DC4E78377E3F41EF4AB7AFEC /* XCLocalSwiftPackageReference "../Packages/MoriSSH" */,
+				63BB9A1CF4A54F50FFC9115F /* XCLocalSwiftPackageReference "../Packages/MoriTerminal" */,
+				8A1BCAFD03938FC3421C63BE /* XCLocalSwiftPackageReference "../Packages/MoriTmux" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = CF688A13389F8A9D4F04A9A0 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				219FEED5B577C565EBA81436 /* MoriRemote */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D55D2784B20EE0BE03FC4ED5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				57A0B148D1B8D23CA120481C /* Assets.xcassets in Resources */,
+				109E4551800EDCA43A760F80 /* Localizable.strings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		9D6A69F5E0C209F46BFBA798 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F1389EC25C548603BA95AE2A /* ConnectView.swift in Sources */,
+				26153CEE6B1AD8ACF4E7DABA /* KeyboardInputView.swift in Sources */,
+				376EEC1B30EE8565C4B085D1 /* MoriRemoteApp.swift in Sources */,
+				BD0001EDD996C4C33B8C8D9C /* SSHChannelTransport.swift in Sources */,
+				4031D10BB73B613259BD295F /* SpikeCoordinator.swift in Sources */,
+				96C8DDDEA3B929ED016AF50D /* TerminalView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		9A1E86AC034B64B37F68A846 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				BEC31B48C129D1E076933F45 /* en */,
+				405397F8D3FACA71D62B7717 /* zh-Hans */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		69426152C9AAF1A96AC6E225 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MoriRemote/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.mori.remote;
+				PRODUCT_NAME = MoriRemote;
+				SDKROOT = iphoneos;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		77045044ECE6C75BA99AF33D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		C7934FFE7BF74048CAD0AB5D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		F726711058899274B3209411 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MoriRemote/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.mori.remote;
+				PRODUCT_NAME = MoriRemote;
+				SDKROOT = iphoneos;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3DDF485FADC3D5DFE95D2C40 /* Build configuration list for PBXNativeTarget "MoriRemote" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F726711058899274B3209411 /* Debug */,
+				69426152C9AAF1A96AC6E225 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9336E4FEC94E0847B39758F5 /* Build configuration list for PBXProject "MoriRemote" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C7934FFE7BF74048CAD0AB5D /* Debug */,
+				77045044ECE6C75BA99AF33D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		22EC689C4EBC0381BBF9502E /* XCLocalSwiftPackageReference "../Packages/MoriCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../Packages/MoriCore;
+		};
+		63BB9A1CF4A54F50FFC9115F /* XCLocalSwiftPackageReference "../Packages/MoriTerminal" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../Packages/MoriTerminal;
+		};
+		8A1BCAFD03938FC3421C63BE /* XCLocalSwiftPackageReference "../Packages/MoriTmux" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../Packages/MoriTmux;
+		};
+		DC4E78377E3F41EF4AB7AFEC /* XCLocalSwiftPackageReference "../Packages/MoriSSH" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../Packages/MoriSSH;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		35EA6C6FBCAE1CE488930F9F /* MoriTerminal */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MoriTerminal;
+		};
+		8AFD415F38753179608A985F /* MoriTmux */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MoriTmux;
+		};
+		CB00391E626D4853B15135EF /* MoriCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MoriCore;
+		};
+		E4A46D15917AB2D06DABB5BF /* MoriSSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MoriSSH;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 04D4F671C0A85A6697E3F07E /* Project object */;
+}
