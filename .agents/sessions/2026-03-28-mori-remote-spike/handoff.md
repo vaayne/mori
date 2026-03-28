@@ -234,3 +234,7 @@
 - The app currently renders only the first pane ID returned by `list-panes -F '#{pane_id}'`, which matches the spike scope.
 - The simulator build excludes `x86_64` because the Phase 4 `GhosttyKit.xcframework` only provides an `ios-arm64-simulator` slice. Intel simulator support would require rebuilding GhosttyKit with an x86_64 simulator slice.
 - Manual end-to-end validation was not possible in this environment because no test SSH/tmux endpoint was available.
+
+### Fixes (post-review)
+- **Disconnect propagation (reviewer finding #1)**: paneOutput and notifications stream termination now triggers `transitionToDisconnected` when in `.attached` state. Background `scheduleCommand`/`scheduleRefresh` now catch errors and transition to disconnected instead of silently swallowing with `try?`. (commit `ab32bfd`)
+- **Output buffering (reviewer finding #2)**: Added `pendingOutputBuffer` that accumulates pane output before `attachedPaneId` is set. Once `list-panes` returns the pane ID, buffered output is flushed to the renderer. Prevents losing the initial terminal data burst during attach. (commit `ab32bfd`)
