@@ -22,6 +22,8 @@ public enum TmuxError: Error, LocalizedError, Sendable {
     }
 }
 
+#if os(macOS)
+
 /// Thread-safe, Sendable wrapper around CheckedContinuation to ensure single resume.
 private final class SendableResumeGuard<T>: @unchecked Sendable {
     private let lock = NSLock()
@@ -398,3 +400,5 @@ public actor TmuxCommandRunner {
         }
     }
 }
+
+#endif
