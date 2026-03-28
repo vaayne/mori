@@ -107,8 +107,12 @@ enum UpdateState: Equatable {
         let appcastItem: SUAppcastItem
         let reply: @Sendable (SPUUserUpdateChoice) -> Void
 
-        var releaseNotes: ReleaseNotes? {
-            ReleaseNotes(displayVersionString: appcastItem.displayVersionString)
+        /// URL to the GitHub release page for this version, if the version is semver.
+        var releaseNotesURL: URL? {
+            let version = appcastItem.displayVersionString
+            let pattern = #"^\d+\.\d+\.\d+$"#
+            guard version.range(of: pattern, options: .regularExpression) != nil else { return nil }
+            return URL(string: "https://github.com/vaayne/mori/releases/tag/v\(version)")
         }
     }
 
@@ -133,50 +137,11 @@ enum UpdateState: Equatable {
     }
 
     struct Installing {
-        /// True if triggered by `updater(_:willInstallUpdateOnQuit:immediateInstallationBlock:)`
+        /// True when triggered by `updater(_:willInstallUpdateOnQuit:immediateInstallationBlock:)`.
+        /// The driver sets this to `true` for auto-updates (delegate path) and defaults to
+        /// `false` for user-initiated installs (showInstallingUpdate path).
         var isAutoUpdate = false
         let retryTerminatingApplication: () -> Void
         let dismiss: () -> Void
-    }
-
-    // MARK: - Release Notes
-
-    enum ReleaseNotes {
-        case tagged(URL)
-
-        init?(displayVersionString: String) {
-            let version = displayVersionString
-
-            // Check for semantic version (x.y.z)
-            guard let semver = Self.extractSemanticVersion(from: version) else {
-                return nil
-            }
-
-            guard let url = URL(string: "https://github.com/vaayne/mori/releases/tag/v\(semver)") else {
-                return nil
-            }
-
-            self = .tagged(url)
-        }
-
-        private static func extractSemanticVersion(from version: String) -> String? {
-            let pattern = #"^\d+\.\d+\.\d+$"#
-            if version.range(of: pattern, options: .regularExpression) != nil {
-                return version
-            }
-            return nil
-        }
-
-        var url: URL {
-            switch self {
-            case .tagged(let url): return url
-            }
-        }
-
-        var label: String {
-            switch self {
-            case .tagged: return .localized("View Release Notes")
-            }
-        }
     }
 }

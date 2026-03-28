@@ -2,11 +2,27 @@
 // SPUUserDriver implementation bridging Sparkle callbacks to UpdateState.
 
 import Cocoa
+import os
 @preconcurrency import Sparkle
+
+/// Returns a closure that forwards to `handler` at most once. Subsequent calls are no-ops.
+private func callOnce<T>(_ handler: @escaping @Sendable (T) -> Void) -> @Sendable (T) -> Void {
+    let called = OSAllocatedUnfairLock(initialState: false)
+    return { value in
+        let alreadyCalled = called.withLock { wasCalled in
+            let prev = wasCalled
+            wasCalled = true
+            return prev
+        }
+        guard !alreadyCalled else { return }
+        handler(value)
+    }
+}
 
 /// Implements SPUUserDriver to translate Sparkle callbacks into UpdateState transitions.
 /// Falls back to SPUStandardUserDriver when no visible window is available.
-class UpdateDriver: NSObject, SPUUserDriver {
+@MainActor
+final class UpdateDriver: NSObject, SPUUserDriver {
     let viewModel: UpdateViewModel
     let standard: SPUStandardUserDriver
 
@@ -37,9 +53,9 @@ class UpdateDriver: NSObject, SPUUserDriver {
         // If we lost the ability to show unobtrusive states, cancel whatever
         // update state we're in. This allows the manual "check for updates"
         // call to initialize the standard driver.
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50)) { [weak self] in
-            guard let self else { return }
-            guard !hasUnobtrusiveTarget else { return }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(50))
+            guard let self, !hasUnobtrusiveTarget else { return }
             viewModel.state.cancel()
             viewModel.state = .idle
         }
@@ -49,12 +65,13 @@ class UpdateDriver: NSObject, SPUUserDriver {
 
     func show(_ request: SPUUpdatePermissionRequest,
               reply: @escaping @Sendable (SUUpdatePermissionResponse) -> Void) {
+        let safeReply = callOnce(reply)
         viewModel.state = .permissionRequest(.init(request: request, reply: { [weak viewModel] response in
             viewModel?.state = .idle
-            reply(response)
+            safeReply(response)
         }))
         if !hasUnobtrusiveTarget {
-            standard.show(request, reply: reply)
+            standard.show(request, reply: safeReply)
         }
     }
 
@@ -69,9 +86,10 @@ class UpdateDriver: NSObject, SPUUserDriver {
     func showUpdateFound(with appcastItem: SUAppcastItem,
                          state: SPUUserUpdateState,
                          reply: @escaping @Sendable (SPUUserUpdateChoice) -> Void) {
-        viewModel.state = .updateAvailable(.init(appcastItem: appcastItem, reply: reply))
+        let safeReply = callOnce(reply)
+        viewModel.state = .updateAvailable(.init(appcastItem: appcastItem, reply: safeReply))
         if !hasUnobtrusiveTarget {
-            standard.showUpdateFound(with: appcastItem, state: state, reply: reply)
+            standard.showUpdateFound(with: appcastItem, state: state, reply: safeReply)
         }
     }
 
@@ -98,7 +116,7 @@ class UpdateDriver: NSObject, SPUUserDriver {
             error: error,
             retry: { [weak self, weak viewModel] in
                 viewModel?.state = .idle
-                DispatchQueue.main.async { [weak self] in
+                Task { @MainActor [weak self] in
                     self?.onRetryCheck?()
                 }
             },

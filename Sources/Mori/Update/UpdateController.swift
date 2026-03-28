@@ -7,7 +7,7 @@ import Cocoa
 
 /// Manages the Sparkle updater lifecycle.
 @MainActor
-class UpdateController {
+final class UpdateController {
     private(set) var updater: SPUUpdater
     private let userDriver: UpdateDriver
     private var installCancellable: AnyCancellable?
@@ -68,11 +68,14 @@ class UpdateController {
         guard installCancellable == nil else { return }
 
         installCancellable = viewModel.$state.sink { [weak self] state in
-            guard let self else { return }
+            guard self != nil else { return }
 
             // If we move to a non-installable state, stop force installing.
+            // Defer cleanup to avoid cancelling the subscription mid-callback.
             guard state.isInstallable else {
-                self.installCancellable = nil
+                Task { @MainActor [weak self] in
+                    self?.installCancellable = nil
+                }
                 return
             }
 
@@ -93,7 +96,8 @@ class UpdateController {
         viewModel.state.cancel()
 
         // Delay to let the cancellation settle.
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(100)) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(100))
             self?.updater.checkForUpdates()
         }
     }

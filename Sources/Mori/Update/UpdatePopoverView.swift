@@ -198,14 +198,14 @@ private struct UpdateAvailableView: View {
             }
             .padding(16)
 
-            if let notes = update.releaseNotes {
+            if let url = update.releaseNotesURL {
                 Divider()
 
-                Link(destination: notes.url) {
+                Link(destination: url) {
                     HStack {
                         Image(systemName: "doc.text")
                             .font(.system(size: 11))
-                        Text(notes.label)
+                        Text(String.localized("View Release Notes"))
                             .font(.system(size: 11, weight: .medium))
                         Spacer()
                         Image(systemName: "arrow.up.right")

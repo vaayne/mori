@@ -6,7 +6,7 @@ import Foundation
 import SwiftUI
 @preconcurrency import Sparkle
 
-class UpdateViewModel: ObservableObject {
+final class UpdateViewModel: ObservableObject {
     @Published var state: UpdateState = .idle
 
     /// The text to display for the current update state.
@@ -88,7 +88,7 @@ class UpdateViewModel: ObservableObject {
         case .checking:
             return .localized("Please wait while we check for available updates")
         case .updateAvailable(let update):
-            return update.releaseNotes?.label ?? .localized("Download and install the latest version")
+            return update.releaseNotesURL != nil ? .localized("View Release Notes") : .localized("Download and install the latest version")
         case .downloading:
             return .localized("Downloading the update package")
         case .extracting:

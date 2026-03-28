@@ -1,14 +1,11 @@
 // MARK: - UpdateDelegate
-// SPUUpdaterDelegate conformance providing feed URL and install hooks.
+// SPUUpdaterDelegate conformance providing install hooks.
+// Feed URL is read from SUFeedURL in Info.plist (set by bundle.sh).
 
 import Cocoa
 @preconcurrency import Sparkle
 
 extension UpdateDriver: SPUUpdaterDelegate {
-
-    func feedURLString(for updater: SPUUpdater) -> String? {
-        "https://raw.githubusercontent.com/vaayne/homebrew-tap/main/mori-appcast.xml"
-    }
 
     /// Called when an update is scheduled to install silently on quit.
     func updater(_ updater: SPUUpdater,
