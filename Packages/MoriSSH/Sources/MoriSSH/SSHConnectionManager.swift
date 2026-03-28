@@ -55,9 +55,50 @@ private final class AcceptAllHostKeysDelegate: NIOSSHClientServerAuthenticationD
     }
 }
 
+// MARK: - Auth Completion Handler
+
+/// Listens for `UserAuthSuccessEvent` on the parent SSH channel and resolves a promise.
+/// If the channel closes before auth succeeds, the promise is failed.
+private final class AuthCompletionHandler: ChannelInboundHandler, @unchecked Sendable {
+    typealias InboundIn = Any
+
+    private var authPromise: EventLoopPromise<Void>?
+
+    init(authPromise: EventLoopPromise<Void>) {
+        self.authPromise = authPromise
+    }
+
+    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        if event is UserAuthSuccessEvent, let promise = authPromise {
+            authPromise = nil
+            promise.succeed(())
+            // Remove ourselves from the pipeline — no longer needed.
+            try? context.pipeline.syncOperations.removeHandler(context: context)
+        }
+        context.fireUserInboundEventTriggered(event)
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        if let promise = authPromise {
+            authPromise = nil
+            promise.fail(SSHError.authenticationFailed)
+        }
+        context.fireChannelInactive()
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        if let promise = authPromise {
+            authPromise = nil
+            promise.fail(SSHError.authenticationFailed)
+        }
+        context.fireErrorCaught(error)
+    }
+}
+
 // MARK: - Exec Channel Handler
 
 /// NIO channel handler that sends an exec request on channel active,
+/// waits for `ChannelSuccessEvent` (exec accepted) before signaling readiness,
 /// reads SSHChannelData and feeds decoded bytes into the stream continuation.
 private final class ExecHandler: ChannelDuplexHandler, @unchecked Sendable {
     typealias InboundIn = SSHChannelData
@@ -67,10 +108,16 @@ private final class ExecHandler: ChannelDuplexHandler, @unchecked Sendable {
 
     private let command: String
     private let continuation: AsyncThrowingStream<Data, Error>.Continuation
+    private let execAccepted: EventLoopPromise<Void>
 
-    init(command: String, continuation: AsyncThrowingStream<Data, Error>.Continuation) {
+    init(
+        command: String,
+        continuation: AsyncThrowingStream<Data, Error>.Continuation,
+        execAccepted: EventLoopPromise<Void>
+    ) {
         self.command = command
         self.continuation = continuation
+        self.execAccepted = execAccepted
     }
 
     func handlerAdded(context: ChannelHandlerContext) {
@@ -87,9 +134,24 @@ private final class ExecHandler: ChannelDuplexHandler, @unchecked Sendable {
             wantReply: true
         )
         context.triggerUserOutboundEvent(execRequest).assumeIsolated().whenFailure { error in
+            self.execAccepted.fail(SSHError.channelError("exec request failed: \(error)"))
             self.continuation.finish(throwing: SSHError.channelError("exec request failed: \(error)"))
             context.close(promise: nil)
         }
+    }
+
+    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        switch event {
+        case is ChannelSuccessEvent:
+            execAccepted.succeed(())
+        case is ChannelFailureEvent:
+            execAccepted.fail(SSHError.channelError("exec request rejected by server"))
+            continuation.finish(throwing: SSHError.channelError("exec request rejected by server"))
+            context.close(promise: nil)
+        default:
+            break
+        }
+        context.fireUserInboundEventTriggered(event)
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -122,7 +184,10 @@ public actor SSHConnectionManager {
         self.group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
     }
 
-    /// Connect to a remote SSH host.
+    /// Connect to a remote SSH host and wait for authentication to succeed.
+    ///
+    /// This method returns only after both the TCP connection and SSH authentication
+    /// are complete. If authentication fails, throws `SSHError.authenticationFailed`.
     ///
     /// - Parameters:
     ///   - host: The remote hostname or IP address.
@@ -144,6 +209,10 @@ public actor SSHConnectionManager {
             throw SSHError.authenticationFailed
         }
 
+        // We create the auth promise on the event loop so the handler can resolve it
+        let eventLoop = group.next()
+        let authPromise = eventLoop.makePromise(of: Void.self)
+
         let bootstrap = ClientBootstrap(group: group)
             .channelInitializer { channel in
                 channel.eventLoop.makeCompletedFuture {
@@ -158,22 +227,40 @@ public actor SSHConnectionManager {
                         inboundChildChannelInitializer: nil
                     )
                     try channel.pipeline.syncOperations.addHandler(sshHandler)
+                    try channel.pipeline.syncOperations.addHandler(
+                        AuthCompletionHandler(authPromise: authPromise)
+                    )
                 }
             }
             .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
             .channelOption(ChannelOptions.socket(SocketOptionLevel(IPPROTO_TCP), TCP_NODELAY), value: 1)
 
+        let tcpChannel: Channel
         do {
-            self.channel = try await bootstrap.connect(host: host, port: port).get()
+            tcpChannel = try await bootstrap.connect(host: host, port: port).get()
         } catch {
             throw SSHError.connectionFailed(error.localizedDescription)
         }
+
+        // Wait for SSH authentication to complete before returning
+        do {
+            try await authPromise.futureResult.get()
+        } catch {
+            // Auth failed — close the TCP channel and propagate the error
+            try? await tcpChannel.close().get()
+            if error is SSHError {
+                throw error
+            }
+            throw SSHError.authenticationFailed
+        }
+
+        self.channel = tcpChannel
     }
 
     /// Open an exec channel on the SSH connection and run the given command.
     ///
-    /// The returned `SSHChannel` provides async access to the command's
-    /// stdout/stderr and allows writing to its stdin.
+    /// This method returns only after the remote side has accepted the exec request
+    /// (`ChannelSuccessEvent`). If the server rejects the exec, throws `SSHError.channelError`.
     ///
     /// - Parameter command: The remote command to execute (e.g., `tmux -C new-session`).
     /// - Returns: An `SSHChannel` for reading output and writing input.
@@ -192,27 +279,42 @@ public actor SSHConnectionManager {
                     return
                 }
 
-                let promise = channel.eventLoop.makePromise(of: Channel.self)
+                let channelPromise = channel.eventLoop.makePromise(of: Channel.self)
+                let execAccepted = channel.eventLoop.makePromise(of: Void.self)
                 var streamContinuation: AsyncThrowingStream<Data, Error>.Continuation!
                 let inbound = AsyncThrowingStream<Data, Error> { streamContinuation = $0 }
 
-                sshHandler.createChannel(promise) { childChannel, channelType in
+                sshHandler.createChannel(channelPromise) { childChannel, channelType in
                     guard channelType == .session else {
                         return childChannel.eventLoop.makeFailedFuture(
                             SSHError.channelError("unexpected channel type")
                         )
                     }
                     return childChannel.eventLoop.makeCompletedFuture {
-                        let handler = ExecHandler(command: command, continuation: streamContinuation)
+                        let handler = ExecHandler(
+                            command: command,
+                            continuation: streamContinuation,
+                            execAccepted: execAccepted
+                        )
                         try childChannel.pipeline.syncOperations.addHandler(handler)
                     }
                 }
 
-                promise.futureResult.assumeIsolated().whenComplete { result in
+                // Wait for BOTH the child channel creation AND exec acceptance
+                channelPromise.futureResult.assumeIsolated().whenComplete { result in
                     switch result {
                     case .success(let childChannel):
-                        let ch = SSHChannel(channel: childChannel, inbound: inbound)
-                        continuation.resume(returning: ch)
+                        // Channel created — now wait for exec acceptance
+                        execAccepted.futureResult.assumeIsolated().whenComplete { execResult in
+                            switch execResult {
+                            case .success:
+                                let ch = SSHChannel(channel: childChannel, inbound: inbound)
+                                continuation.resume(returning: ch)
+                            case .failure(let error):
+                                streamContinuation.finish(throwing: error)
+                                continuation.resume(throwing: error)
+                            }
+                        }
                     case .failure(let error):
                         streamContinuation.finish(throwing: error)
                         continuation.resume(throwing: SSHError.channelError(error.localizedDescription))

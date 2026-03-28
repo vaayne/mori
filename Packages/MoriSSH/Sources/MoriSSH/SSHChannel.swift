@@ -10,7 +10,7 @@ public final class SSHChannel: @unchecked Sendable {
 
     private let channel: any Channel
 
-    init(channel: any Channel, inbound: AsyncThrowingStream<Data, Error>) {
+    public init(channel: any Channel, inbound: AsyncThrowingStream<Data, Error>) {
         self.channel = channel
         self.inbound = inbound
     }

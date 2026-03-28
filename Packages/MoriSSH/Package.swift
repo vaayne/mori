@@ -28,7 +28,12 @@ let package = Package(
         ),
         .executableTarget(
             name: "MoriSSHTests",
-            dependencies: ["MoriSSH"],
+            dependencies: [
+                "MoriSSH",
+                .product(name: "NIOEmbedded", package: "swift-nio"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOSSH", package: "swift-nio-ssh"),
+            ],
             path: "Tests/MoriSSHTests"
         ),
     ]
