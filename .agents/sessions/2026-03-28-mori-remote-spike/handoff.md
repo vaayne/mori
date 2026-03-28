@@ -64,12 +64,14 @@
 - `d0f1a1d` — ✨ feat: add SSHChannel with async inbound stream
 - `88bd9cf` — ✨ feat: add SSHConnectionManager actor
 - `f7c9504` — ✅ test: add MoriSSHTests executable test target
+- `76dbd46` — ♻️ refactor: fix Sendable warnings and clean up MoriSSH
 
 **Decisions & context for next phase:**
-- `SSHChannel` uses `@unchecked Sendable` since it wraps a NIO `Channel` (not Sendable by design). All writes are routed through the event loop.
+- `SSHChannel` uses `@unchecked Sendable` since it wraps a NIO `Channel`. All writes go through `writeAndFlush` on the channel's event loop.
 - `ExecHandler` inside `SSHConnectionManager.swift` fires `SSHChannelRequestEvent.ExecRequest` on `channelActive`. It feeds both stdout and stderr into the same inbound stream (sufficient for tmux control-mode which only uses stdout).
-- NIO SSH warnings about non-Sendable types (`NIOSSHHandler`, `NIOSSHClientUserAuthenticationDelegate`) are expected — these are NIO's own types that haven't been fully updated for Swift 6.
-- The `SSHChannel.write()` method wraps data in `SSHChannelData(type: .channel, data: .byteBuffer(...))` — this is the correct encoding for sending data to a remote exec channel's stdin.
+- `PasswordAuthDelegate` offers credentials once, then returns nil (matches `SimplePasswordDelegate` pattern). Uses `@unchecked Sendable` for mutable `offered` flag (safe: only accessed on event loop).
+- Zero warnings in MoriSSH build — resolved by using concrete `PasswordAuthDelegate` type instead of protocol existential in closure capture.
+- The `SSHChannel.write()` method wraps data in `SSHChannelData(type: .channel, data: .byteBuffer(...))` — correct encoding for remote exec channel stdin.
 - Public key auth case exists in `SSHAuthMethod` but `SSHConnectionManager.connect()` throws `authenticationFailed` for it — stretch goal for later.
-- `Task.detached` used in tests to avoid Swift 6 Sendable closure capture warnings. RunLoop spinning approach to wait for async tests in executable target context.
+- RunLoop spinning approach for async tests in executable target context (avoids DispatchSemaphore deadlocks with Swift concurrency).
 - Phase 3's `TmuxControlClient` will use `SSHChannel` via `TmuxTransport` protocol adapter (defined in MoriTmux, bridged in the iOS app).
