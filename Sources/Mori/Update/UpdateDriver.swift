@@ -29,20 +29,34 @@ final class UpdateDriver: NSObject, SPUUserDriver {
     /// Called when the user retries after an error. Set by UpdateController.
     var onRetryCheck: (() -> Void)?
 
+    /// Running download byte count — tracked separately to throttle UI updates.
+    private var downloadProgress: UInt64 = 0
+
+    /// Cached value of whether a visible MainWindowController exists.
+    private var _hasUnobtrusiveTarget = false
+
     init(viewModel: UpdateViewModel, hostBundle: Bundle) {
         self.viewModel = viewModel
         self.standard = SPUStandardUserDriver(hostBundle: hostBundle, delegate: nil)
         super.init()
 
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleWindowWillClose),
-            name: NSWindow.willCloseNotification,
-            object: nil)
+        _hasUnobtrusiveTarget = Self.computeHasUnobtrusiveTarget()
+
+        let nc = NotificationCenter.default
+        nc.addObserver(self, selector: #selector(handleWindowWillClose),
+                       name: NSWindow.willCloseNotification, object: nil)
+        nc.addObserver(self, selector: #selector(updateUnobtrusiveTargetCache),
+                       name: NSWindow.didBecomeKeyNotification, object: nil)
+        nc.addObserver(self, selector: #selector(updateUnobtrusiveTargetCache),
+                       name: NSWindow.didResignKeyNotification, object: nil)
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func updateUnobtrusiveTargetCache(_ notification: Notification? = nil) {
+        _hasUnobtrusiveTarget = Self.computeHasUnobtrusiveTarget()
     }
 
     @objc private func handleWindowWillClose(_ notification: Notification) {
@@ -55,6 +69,7 @@ final class UpdateDriver: NSObject, SPUUserDriver {
         // call to initialize the standard driver.
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(50))
+            self?.updateUnobtrusiveTargetCache()
             guard let self, !hasUnobtrusiveTarget else { return }
             viewModel.state.cancel()
             viewModel.state = .idle
@@ -132,6 +147,7 @@ final class UpdateDriver: NSObject, SPUUserDriver {
     }
 
     func showDownloadInitiated(cancellation: @escaping () -> Void) {
+        downloadProgress = 0
         viewModel.state = .downloading(.init(
             cancel: cancellation,
             expectedLength: nil,
@@ -150,7 +166,7 @@ final class UpdateDriver: NSObject, SPUUserDriver {
         viewModel.state = .downloading(.init(
             cancel: downloading.cancel,
             expectedLength: expectedContentLength,
-            progress: 0))
+            progress: downloadProgress))
 
         if !hasUnobtrusiveTarget {
             standard.showDownloadDidReceiveExpectedContentLength(expectedContentLength)
@@ -162,10 +178,25 @@ final class UpdateDriver: NSObject, SPUUserDriver {
             return
         }
 
+        let oldTotal = downloadProgress
+        downloadProgress += length
+
+        // Throttle UI updates: only push state when the integer percentage changes.
+        if let expected = downloading.expectedLength, expected > 0 {
+            let oldPct = Int(Double(oldTotal) / Double(expected) * 100)
+            let newPct = Int(Double(downloadProgress) / Double(expected) * 100)
+            if oldPct == newPct {
+                if !hasUnobtrusiveTarget {
+                    standard.showDownloadDidReceiveData(ofLength: length)
+                }
+                return
+            }
+        }
+
         viewModel.state = .downloading(.init(
             cancel: downloading.cancel,
             expectedLength: downloading.expectedLength,
-            progress: downloading.progress + length))
+            progress: downloadProgress))
 
         if !hasUnobtrusiveTarget {
             standard.showDownloadDidReceiveData(ofLength: length)
@@ -228,7 +259,9 @@ final class UpdateDriver: NSObject, SPUUserDriver {
     // MARK: - No-Window Fallback
 
     /// True if there is a visible main window that can render the unobtrusive update badge.
-    var hasUnobtrusiveTarget: Bool {
+    var hasUnobtrusiveTarget: Bool { _hasUnobtrusiveTarget }
+
+    private static func computeHasUnobtrusiveTarget() -> Bool {
         NSApp.windows.contains { window in
             window.isVisible && window.windowController is MainWindowController
         }

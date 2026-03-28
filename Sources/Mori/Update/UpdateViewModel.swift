@@ -25,13 +25,12 @@ final class UpdateViewModel: ObservableObject {
             }
             return .localized("Update Available")
         case .downloading(let download):
-            if let expectedLength = download.expectedLength, expectedLength > 0 {
-                let progress = Double(download.progress) / Double(expectedLength)
+            if let progress = download.normalizedProgress {
                 return String(format: .localized("Downloading: %.0f%%"), progress * 100)
             }
             return .localized("Downloading\u{2026}")
         case .extracting(let extracting):
-            return String(format: .localized("Preparing: %.0f%%"), extracting.progress * 100)
+            return String(format: .localized("Preparing: %.0f%%"), extracting.normalizedProgress * 100)
         case .installing(let install):
             return install.isAutoUpdate ? .localized("Restart to Complete Update") : .localized("Installing\u{2026}")
         case .notFound:
@@ -109,13 +108,12 @@ final class UpdateViewModel: ObservableObject {
             let version = update.appcastItem.displayVersionString
             return version.isEmpty ? nil : version
         case .downloading(let download):
-            if let expectedLength = download.expectedLength, expectedLength > 0 {
-                let percentage = Double(download.progress) / Double(expectedLength) * 100
-                return String(format: "%.0f%%", percentage)
+            if let progress = download.normalizedProgress {
+                return String(format: "%.0f%%", progress * 100)
             }
             return nil
         case .extracting(let extracting):
-            return String(format: "%.0f%%", extracting.progress * 100)
+            return String(format: "%.0f%%", extracting.normalizedProgress * 100)
         default:
             return nil
         }

@@ -40,7 +40,11 @@ struct UpdatePopoverView: View {
                 InstallingView(installing: installing, dismiss: dismiss)
 
             case .notFound(let notFound):
-                NotFoundView(model: model, notFound: notFound, dismiss: dismiss)
+                NotFoundView(notFound: notFound, onDismiss: { [weak model] in
+                    guard let model else { return }
+                    notFound.dismiss(from: model)
+                    dismiss()
+                })
 
             case .error(let error):
                 UpdateErrorView(error: error, dismiss: dismiss)
@@ -235,8 +239,7 @@ private struct DownloadingView: View {
                 Text(String.localized("Downloading Update"))
                     .font(.system(size: 13, weight: .semibold))
 
-                if let expectedLength = download.expectedLength, expectedLength > 0 {
-                    let progress = min(1, max(0, Double(download.progress) / Double(expectedLength)))
+                if let progress = download.normalizedProgress {
                     VStack(alignment: .leading, spacing: 6) {
                         ProgressView(value: progress)
                         Text(String(format: "%.0f%%", progress * 100))
@@ -274,8 +277,8 @@ private struct ExtractingView: View {
                 .font(.system(size: 13, weight: .semibold))
 
             VStack(alignment: .leading, spacing: 6) {
-                ProgressView(value: min(1, max(0, extracting.progress)), total: 1.0)
-                Text(String(format: "%.0f%%", min(1, max(0, extracting.progress)) * 100))
+                ProgressView(value: extracting.normalizedProgress, total: 1.0)
+                Text(String(format: "%.0f%%", extracting.normalizedProgress * 100))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
@@ -328,9 +331,8 @@ private struct InstallingView: View {
 // MARK: - Not Found
 
 private struct NotFoundView: View {
-    @ObservedObject var model: UpdateViewModel
     let notFound: UpdateState.NotFound
-    let dismiss: DismissAction
+    let onDismiss: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -347,9 +349,7 @@ private struct NotFoundView: View {
             HStack {
                 Spacer()
                 Button(String.localized("OK")) {
-                    model.state = .idle
-                    notFound.acknowledgement()
-                    dismiss()
+                    onDismiss()
                 }
                 .keyboardShortcut(.defaultAction)
                 .controlSize(.small)

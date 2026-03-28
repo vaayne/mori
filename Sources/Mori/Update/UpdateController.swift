@@ -68,8 +68,6 @@ final class UpdateController {
         guard installCancellable == nil else { return }
 
         installCancellable = viewModel.$state.sink { [weak self] state in
-            guard self != nil else { return }
-
             // If we move to a non-installable state, stop force installing.
             // Defer cleanup to avoid cancelling the subscription mid-callback.
             guard state.isInstallable else {

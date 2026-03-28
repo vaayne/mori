@@ -19,6 +19,9 @@ struct UpdatePill: View {
     /// Task for auto-dismissing the "No Updates" state
     @State private var resetTask: Task<Void, Never>?
 
+    /// Cached text width to avoid remeasuring on every render
+    @State private var cachedTextWidth: CGFloat?
+
     /// The font used for the pill text
     private let textFont = NSFont.systemFont(ofSize: 11, weight: .medium)
 
@@ -29,14 +32,17 @@ struct UpdatePill: View {
                     UpdatePopoverView(model: model)
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .onChange(of: model.maxWidthText) { _, newText in
+                    let attributes: [NSAttributedString.Key: Any] = [.font: textFont]
+                    cachedTextWidth = (newText as NSString).size(withAttributes: attributes).width
+                }
                 .onChange(of: model.state) { _, newState in
                     resetTask?.cancel()
                     if case .notFound(let notFound) = newState {
                         resetTask = Task { [weak model] in
                             try? await Task.sleep(for: .seconds(5))
-                            guard !Task.isCancelled, case .notFound? = model?.state else { return }
-                            model?.state = .idle
-                            notFound.acknowledgement()
+                            guard !Task.isCancelled, let model, case .notFound = model.state else { return }
+                            notFound.dismiss(from: model)
                         }
                     } else {
                         resetTask = nil
@@ -50,8 +56,7 @@ struct UpdatePill: View {
     private var pillButton: some View {
         Button(action: {
             if case .notFound(let notFound) = model.state {
-                model.state = .idle
-                notFound.acknowledgement()
+                notFound.dismiss(from: model)
             } else {
                 showPopover.toggle()
             }
@@ -64,7 +69,7 @@ struct UpdatePill: View {
                     .font(Font(textFont))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .frame(width: textWidth)
+                    .frame(width: cachedTextWidth ?? measureTextWidth(model.maxWidthText))
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
@@ -80,10 +85,8 @@ struct UpdatePill: View {
         .accessibilityLabel(model.text)
     }
 
-    /// Calculated width for the text to prevent resizing during progress updates
-    private var textWidth: CGFloat? {
+    private func measureTextWidth(_ text: String) -> CGFloat {
         let attributes: [NSAttributedString.Key: Any] = [.font: textFont]
-        let size = (model.maxWidthText as NSString).size(withAttributes: attributes)
-        return size.width
+        return (text as NSString).size(withAttributes: attributes).width
     }
 }

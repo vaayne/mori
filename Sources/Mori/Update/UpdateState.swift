@@ -4,6 +4,8 @@
 import Foundation
 @preconcurrency import Sparkle
 
+private let gitHubReleasesBase = "https://github.com/vaayne/mori/releases/tag/v"
+
 /// Represents the current state of the update lifecycle.
 enum UpdateState: Equatable {
     case idle
@@ -112,12 +114,18 @@ enum UpdateState: Equatable {
             let version = appcastItem.displayVersionString
             let pattern = #"^\d+\.\d+\.\d+$"#
             guard version.range(of: pattern, options: .regularExpression) != nil else { return nil }
-            return URL(string: "https://github.com/vaayne/mori/releases/tag/v\(version)")
+            return URL(string: "\(gitHubReleasesBase)\(version)")
         }
     }
 
     struct NotFound {
         let acknowledgement: () -> Void
+
+        /// Acknowledge and transition back to idle. Safe to call multiple times via `callOnce` on construction.
+        func dismiss(from model: UpdateViewModel) {
+            model.state = .idle
+            acknowledgement()
+        }
     }
 
     struct Error {
@@ -130,10 +138,21 @@ enum UpdateState: Equatable {
         let cancel: () -> Void
         let expectedLength: UInt64?
         let progress: UInt64
+
+        /// Download progress normalized to 0.0–1.0, or nil if expected length is unknown.
+        var normalizedProgress: Double? {
+            guard let expectedLength, expectedLength > 0 else { return nil }
+            return min(1, max(0, Double(progress) / Double(expectedLength)))
+        }
     }
 
     struct Extracting {
         let progress: Double
+
+        /// Extraction progress clamped to 0.0–1.0.
+        var normalizedProgress: Double {
+            min(1, max(0, progress))
+        }
     }
 
     struct Installing {

@@ -25,15 +25,14 @@ struct UpdateBadge: View {
     private var badgeContent: some View {
         switch model.state {
         case .downloading(let download):
-            if let expectedLength = download.expectedLength, expectedLength > 0 {
-                let progress = min(1, max(0, Double(download.progress) / Double(expectedLength)))
+            if let progress = download.normalizedProgress {
                 ProgressRingView(progress: progress)
             } else {
                 Image(systemName: "arrow.down.circle")
             }
 
         case .extracting(let extracting):
-            ProgressRingView(progress: min(1, max(0, extracting.progress)))
+            ProgressRingView(progress: extracting.normalizedProgress)
 
         case .checking:
             if let iconName = model.iconName {
