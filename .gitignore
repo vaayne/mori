@@ -7,3 +7,5 @@ DerivedData/
 xcuserdata/
 Mori.app/
 Frameworks/
+.derived-data/
+handoff.md

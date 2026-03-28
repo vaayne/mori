@@ -93,3 +93,51 @@ xcodebuild \
 [tasks."xcode:generate"]
 description = "Generate .xcodeproj from Package.swift"
 run = "swift package generate-xcodeproj"
+
+# ─── iOS (MoriRemote) ───────────────────────────────────────────
+
+[tasks."ios:generate"]
+description = "Generate MoriRemote.xcodeproj from project.yml"
+run = "cd MoriRemote && xcodegen generate"
+
+[tasks."ios:build"]
+description = "Build MoriRemote for iOS Simulator"
+depends = ["ios:generate"]
+run = '''
+set -euo pipefail
+xcodebuild \
+  -project MoriRemote/MoriRemote.xcodeproj \
+  -scheme MoriRemote \
+  -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath "$DERIVED_DATA" \
+  build 2>&1 | xcbeautify
+'''
+
+[tasks."ios:test"]
+description = "Build and run MoriRemote tests on iOS Simulator"
+depends = ["ios:generate"]
+run = '''
+set -euo pipefail
+xcodebuild \
+  -project MoriRemote/MoriRemote.xcodeproj \
+  -scheme MoriRemote \
+  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.2' \
+  -derivedDataPath "$DERIVED_DATA" \
+  test 2>&1 | xcbeautify
+'''
+
+[tasks."ios:run"]
+description = "Build and launch MoriRemote on iOS Simulator"
+depends = ["ios:build"]
+run = '''
+set -euo pipefail
+APP_PATH=$(find "$DERIVED_DATA" -name "MoriRemote.app" -path "*/Debug-iphonesimulator/*" | head -1)
+if [ -z "$APP_PATH" ]; then
+  echo "❌ MoriRemote.app not found in derived data"
+  exit 1
+fi
+xcrun simctl boot "iPhone 16" 2>/dev/null || true
+xcrun simctl install "iPhone 16" "$APP_PATH"
+xcrun simctl launch "iPhone 16" "$(plutil -extract CFBundleIdentifier raw "$APP_PATH/Info.plist")"
+echo "✅ MoriRemote launched on iPhone 16 simulator"
+'''
