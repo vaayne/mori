@@ -111,6 +111,19 @@ private final class ExecHandler: ChannelDuplexHandler, @unchecked Sendable {
     private let execAccepted: EventLoopPromise<Void>
     private var ptyAccepted = false
     private var execSent = false
+    private var execResolved = false
+
+    private func succeedExec() {
+        guard !execResolved else { return }
+        execResolved = true
+        execAccepted.succeed(())
+    }
+
+    private func failExec(_ error: Error) {
+        guard !execResolved else { return }
+        execResolved = true
+        execAccepted.fail(error)
+    }
 
     init(
         command: String,
@@ -142,7 +155,7 @@ private final class ExecHandler: ChannelDuplexHandler, @unchecked Sendable {
             terminalModes: .init([:])
         )
         context.triggerUserOutboundEvent(ptyRequest).assumeIsolated().whenFailure { [self] error in
-            self.execAccepted.fail(SSHError.channelError("pty request failed: \(error)"))
+            self.failExec(SSHError.channelError("pty request failed: \(error)"))
             self.continuation.finish(throwing: SSHError.channelError("pty request failed: \(error)"))
             context.close(promise: nil)
         }
@@ -155,7 +168,7 @@ private final class ExecHandler: ChannelDuplexHandler, @unchecked Sendable {
             wantReply: true
         )
         context.triggerUserOutboundEvent(execRequest).assumeIsolated().whenFailure { [self] error in
-            self.execAccepted.fail(SSHError.channelError("exec request failed: \(error)"))
+            self.failExec(SSHError.channelError("exec request failed: \(error)"))
             self.continuation.finish(throwing: SSHError.channelError("exec request failed: \(error)"))
             context.close(promise: nil)
         }
@@ -170,15 +183,15 @@ private final class ExecHandler: ChannelDuplexHandler, @unchecked Sendable {
                 sendExecRequest(context: context)
             } else if execSent {
                 // Second success = exec accepted
-                execAccepted.succeed(())
+                succeedExec()
             }
         case is ChannelFailureEvent:
             if !ptyAccepted {
-                execAccepted.fail(SSHError.channelError("pty request rejected by server"))
+                failExec(SSHError.channelError("pty request rejected by server"))
                 continuation.finish(throwing: SSHError.channelError("pty request rejected by server"))
                 context.close(promise: nil)
             } else {
-                execAccepted.fail(SSHError.channelError("exec request rejected by server"))
+                failExec(SSHError.channelError("exec request rejected by server"))
                 continuation.finish(throwing: SSHError.channelError("exec request rejected by server"))
                 context.close(promise: nil)
             }
@@ -196,11 +209,15 @@ private final class ExecHandler: ChannelDuplexHandler, @unchecked Sendable {
     }
 
     func channelInactive(context: ChannelHandlerContext) {
+        // Fail execAccepted if still pending (channel closed before exec was accepted)
+        failExec(SSHError.disconnected)
         continuation.finish()
         context.fireChannelInactive()
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
+        // Fail execAccepted if still pending
+        failExec(error)
         continuation.finish(throwing: error)
         context.close(promise: nil)
     }
