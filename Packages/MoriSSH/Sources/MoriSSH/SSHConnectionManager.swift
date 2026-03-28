@@ -109,6 +109,8 @@ private final class ExecHandler: ChannelDuplexHandler, @unchecked Sendable {
     private let command: String
     private let continuation: AsyncThrowingStream<Data, Error>.Continuation
     private let execAccepted: EventLoopPromise<Void>
+    private var ptyAccepted = false
+    private var execSent = false
 
     init(
         command: String,
@@ -129,11 +131,30 @@ private final class ExecHandler: ChannelDuplexHandler, @unchecked Sendable {
     }
 
     func channelActive(context: ChannelHandlerContext) {
+        // Request a PTY first — tmux control mode requires a TTY
+        let ptyRequest = SSHChannelRequestEvent.PseudoTerminalRequest(
+            wantReply: true,
+            term: "xterm-256color",
+            terminalCharacterWidth: 80,
+            terminalRowHeight: 24,
+            terminalPixelWidth: 0,
+            terminalPixelHeight: 0,
+            terminalModes: .init([:])
+        )
+        context.triggerUserOutboundEvent(ptyRequest).assumeIsolated().whenFailure { [self] error in
+            self.execAccepted.fail(SSHError.channelError("pty request failed: \(error)"))
+            self.continuation.finish(throwing: SSHError.channelError("pty request failed: \(error)"))
+            context.close(promise: nil)
+        }
+    }
+
+    private func sendExecRequest(context: ChannelHandlerContext) {
+        execSent = true
         let execRequest = SSHChannelRequestEvent.ExecRequest(
             command: command,
             wantReply: true
         )
-        context.triggerUserOutboundEvent(execRequest).assumeIsolated().whenFailure { error in
+        context.triggerUserOutboundEvent(execRequest).assumeIsolated().whenFailure { [self] error in
             self.execAccepted.fail(SSHError.channelError("exec request failed: \(error)"))
             self.continuation.finish(throwing: SSHError.channelError("exec request failed: \(error)"))
             context.close(promise: nil)
@@ -143,11 +164,24 @@ private final class ExecHandler: ChannelDuplexHandler, @unchecked Sendable {
     func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
         switch event {
         case is ChannelSuccessEvent:
-            execAccepted.succeed(())
+            if !ptyAccepted {
+                // First success = PTY accepted → send exec
+                ptyAccepted = true
+                sendExecRequest(context: context)
+            } else if execSent {
+                // Second success = exec accepted
+                execAccepted.succeed(())
+            }
         case is ChannelFailureEvent:
-            execAccepted.fail(SSHError.channelError("exec request rejected by server"))
-            continuation.finish(throwing: SSHError.channelError("exec request rejected by server"))
-            context.close(promise: nil)
+            if !ptyAccepted {
+                execAccepted.fail(SSHError.channelError("pty request rejected by server"))
+                continuation.finish(throwing: SSHError.channelError("pty request rejected by server"))
+                context.close(promise: nil)
+            } else {
+                execAccepted.fail(SSHError.channelError("exec request rejected by server"))
+                continuation.finish(throwing: SSHError.channelError("exec request rejected by server"))
+                context.close(promise: nil)
+            }
         default:
             break
         }
@@ -317,6 +351,7 @@ public actor SSHConnectionManager {
                         }
                     case .failure(let error):
                         streamContinuation.finish(throwing: error)
+                        execAccepted.fail(error)
                         continuation.resume(throwing: SSHError.channelError(error.localizedDescription))
                     }
                 }

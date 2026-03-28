@@ -92,7 +92,9 @@ final class SpikeCoordinator {
         defer { isAttachingSession = false }
 
         do {
-            let command = "tmux -C new-session -A -s \(Self.shellQuote(trimmedName))"
+            // PTY is allocated by the SSH channel, providing a proper terminal.
+            // Use full path to avoid PATH issues in exec channels.
+            let command = "/opt/homebrew/bin/tmux -C new-session -A -s \(Self.shellQuote(trimmedName))"
             let channel = try await sshManager.openExecChannel(command: command)
             let client = TmuxControlClient(transport: SSHChannelTransport(channel: channel))
 
