@@ -6,9 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.1.3] - 2026-03-28
 ### ✨ Features
 
-- **Sparkle Auto-Update**: In-app update checking and installation via Sparkle 2 framework
+- **Sparkle Auto-Update**: In-app update checking and installation via Sparkle 2 framework ([#25](https://github.com/vaayne/mori/pull/25))
   - Titlebar pill badge shows update status (checking, available, downloading, installing)
   - Popover with version details, release notes link, and Install/Skip/Later actions
   - "Check for Updates..." menu item and command palette action
@@ -23,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Cross-project worktree selection syncs project context automatically
   - Full localization support (English + Simplified Chinese)
 
-- Add Project now prompts `Local Folder` vs `Remote Project (SSH)`
+- Add Project now prompts `Local Folder` vs `Remote Project (SSH)` ([#24](https://github.com/vaayne/mori/pull/24))
 - Added SSH-backed remote project support so git/tmux operations can run on remote hosts while keeping Mori UI local
 - Added a VS Code-style top input wizard for remote host connection (`[user@]host[:port]`, auth mode, path)
 - Added command palette action `Remote: Connect to Host...`
@@ -59,7 +61,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Keychain credential read failures are now surfaced to users with actionable alerts instead of silently falling back as "password not found"
 - Ghostty config save now avoids redundant directory creation by relying on `ensureConfigFileExists()`
 - Added unit tests for shared SSH helper behaviors (control path length, option filtering, shell escaping, askpass environment hardening)
-- Mori app termination now removes the IPC socket synchronously, and the `mori` CLI now reports missing or stale app sockets directly instead of timing out
+- Mori app termination now removes the IPC socket synchronously, and the `mori` CLI now reports missing or stale app sockets directly instead of timing out ([#23](https://github.com/vaayne/mori/pull/23))
+- CLI no longer crashes when invoked from inside the app bundle — safe multi-path resource bundle lookup replaces the fatalError-prone `Bundle.module`
+
+### 📦 Dependencies
+
+- Updated ghostty submodule to 6057f8d2b
+
+**Full Changelog**: [v0.1.2...v0.1.3](https://github.com/vaayne/mori/compare/v0.1.2...v0.1.3)
 
 ## [0.1.2] - 2026-03-27
 
@@ -159,7 +168,8 @@ Initial release of Mori — a macOS native workspace terminal organized around P
 
 **Full Changelog**: [v0.1.0](https://github.com/vaayne/mori/commits/v0.1.0)
 
-[Unreleased]: https://github.com/vaayne/mori/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/vaayne/mori/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/vaayne/mori/releases/tag/v0.1.3
 [0.1.2]: https://github.com/vaayne/mori/releases/tag/v0.1.2
 [0.1.1]: https://github.com/vaayne/mori/releases/tag/v0.1.1
 [0.1.0]: https://github.com/vaayne/mori/releases/tag/v0.1.0
