@@ -205,6 +205,19 @@ func testSessionNameGeneration() {
     )
 }
 
+func testSessionNameSanitizesDotPrefix() {
+    // Directories starting with "." (e.g. ~/.claude) must have the dot stripped
+    // because tmux does not allow "." in session names.
+    assertEqual(
+        SessionNaming.sessionName(projectShortName: ".claude", worktree: "main"),
+        "claude/main"
+    )
+    assertEqual(
+        SessionNaming.sessionName(projectShortName: "vue.js", worktree: "main"),
+        "vue-js/main"
+    )
+}
+
 func testStripBranchPrefix() {
     assertEqual(SessionNaming.stripBranchPrefix("feature/auth"), "auth")
     assertEqual(SessionNaming.stripBranchPrefix("feat/sidebar"), "sidebar")
@@ -564,6 +577,7 @@ testSlugifySimple()
 testSlugifySpecialChars()
 testSlugifyUnicode()
 testSessionNameGeneration()
+testSessionNameSanitizesDotPrefix()
 testStripBranchPrefix()
 testSessionNameParsing()
 testSessionNameParsingComplex()

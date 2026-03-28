@@ -49,9 +49,11 @@ public enum SessionNaming {
 
     /// Build a Mori session name from project short name and branch name.
     /// Format: `<shortName>/<branchSlug>` (e.g. `mori/main`, `api/auth-flow`).
+    /// Both parts are slugified to ensure tmux compatibility (no dots, colons, etc.).
     public static func sessionName(projectShortName: String, worktree: String) -> String {
         let branch = stripBranchPrefix(worktree)
-        return "\(projectShortName)\(separator)\(slugify(branch))"
+        let project = slugify(projectShortName)
+        return "\(project.isEmpty ? "project" : project)\(separator)\(slugify(branch))"
     }
 
     /// Check if a session name matches the Mori naming convention (contains `/`).
