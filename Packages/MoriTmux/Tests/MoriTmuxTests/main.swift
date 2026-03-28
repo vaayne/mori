@@ -651,6 +651,489 @@ testPaneFormatContainsAgentFields()
 // Capture pane output edge cases
 testCapturePaneOutputEmptyResult()
 testCapturePaneOutputLargeLineCount()
+// MARK: - TmuxControlParser Tests
+
+func testParseOutputWithOctalNewline() {
+    let line = "%output %0 hello\\012world"
+    let result = TmuxControlParser.parse(line)
+    if case .output(let paneId, let data) = result {
+        assertEqual(paneId, "%0")
+        assertEqual(data, Data("hello\nworld".utf8))
+    } else {
+        assertTrue(false, "Expected .output, got \(result)")
+    }
+}
+
+func testParseOutputWithOctalBackslash() {
+    let line = "%output %5 test\\134backslash"
+    let result = TmuxControlParser.parse(line)
+    if case .output(let paneId, let data) = result {
+        assertEqual(paneId, "%5")
+        assertEqual(data, Data("test\\backslash".utf8))
+    } else {
+        assertTrue(false, "Expected .output, got \(result)")
+    }
+}
+
+func testParseOutputHighBitBytes() {
+    // © = 0xC2 0xA9 in UTF-8 — high-bit bytes preserved verbatim
+    let line = "%output %2 high\\302\\251bit"
+    let result = TmuxControlParser.parse(line)
+    if case .output(_, let data) = result {
+        // \302 = 0xC2, \251 = 0xA9 → UTF-8 for ©
+        let expected = Data([0x68, 0x69, 0x67, 0x68, 0xC2, 0xA9, 0x62, 0x69, 0x74])
+        assertEqual(data, expected)
+    } else {
+        assertTrue(false, "Expected .output, got \(result)")
+    }
+}
+
+func testParseOutputEmptyData() {
+    let line = "%output %0"
+    let result = TmuxControlParser.parse(line)
+    if case .output(let paneId, let data) = result {
+        assertEqual(paneId, "%0")
+        assertEqual(data, Data())
+    } else {
+        assertTrue(false, "Expected .output, got \(result)")
+    }
+}
+
+func testParseBegin() {
+    let line = "%begin 1711000000 1 0"
+    let result = TmuxControlParser.parse(line)
+    if case .begin(let ts, let cmd, let flags) = result {
+        assertEqual(ts, 1711000000)
+        assertEqual(cmd, 1)
+        assertEqual(flags, 0)
+    } else {
+        assertTrue(false, "Expected .begin, got \(result)")
+    }
+}
+
+func testParseEnd() {
+    let line = "%end 1711000000 1 0"
+    let result = TmuxControlParser.parse(line)
+    if case .end(let ts, let cmd, let flags) = result {
+        assertEqual(ts, 1711000000)
+        assertEqual(cmd, 1)
+        assertEqual(flags, 0)
+    } else {
+        assertTrue(false, "Expected .end, got \(result)")
+    }
+}
+
+func testParseError() {
+    let line = "%error 1711000000 2 1"
+    let result = TmuxControlParser.parse(line)
+    if case .error(let ts, let cmd, let flags) = result {
+        assertEqual(ts, 1711000000)
+        assertEqual(cmd, 2)
+        assertEqual(flags, 1)
+    } else {
+        assertTrue(false, "Expected .error, got \(result)")
+    }
+}
+
+func testParsePlainLine() {
+    let line = "some response text"
+    let result = TmuxControlParser.parse(line)
+    if case .plainLine(let text) = result {
+        assertEqual(text, "some response text")
+    } else {
+        assertTrue(false, "Expected .plainLine, got \(result)")
+    }
+}
+
+func testParseEmptyPlainLine() {
+    let line = ""
+    let result = TmuxControlParser.parse(line)
+    if case .plainLine(let text) = result {
+        assertEqual(text, "")
+    } else {
+        assertTrue(false, "Expected .plainLine, got \(result)")
+    }
+}
+
+func testParseSessionsChanged() {
+    let line = "%sessions-changed"
+    let result = TmuxControlParser.parse(line)
+    if case .notification(let notif) = result {
+        assertEqual(notif, TmuxNotification.sessionsChanged)
+    } else {
+        assertTrue(false, "Expected .notification(.sessionsChanged)")
+    }
+}
+
+func testParseWindowAdd() {
+    let line = "%window-add @1"
+    let result = TmuxControlParser.parse(line)
+    if case .notification(let notif) = result {
+        assertEqual(notif, TmuxNotification.windowAdd(windowId: "@1"))
+    } else {
+        assertTrue(false, "Expected .notification(.windowAdd)")
+    }
+}
+
+func testParseWindowClose() {
+    let line = "%window-close @2"
+    let result = TmuxControlParser.parse(line)
+    if case .notification(let notif) = result {
+        assertEqual(notif, TmuxNotification.windowClose(windowId: "@2"))
+    } else {
+        assertTrue(false, "Expected .notification(.windowClose)")
+    }
+}
+
+func testParseWindowRenamed() {
+    let line = "%window-renamed @0 my-window"
+    let result = TmuxControlParser.parse(line)
+    if case .notification(let notif) = result {
+        assertEqual(notif, TmuxNotification.windowRenamed(windowId: "@0", name: "my-window"))
+    } else {
+        assertTrue(false, "Expected .notification(.windowRenamed)")
+    }
+}
+
+func testParseExit() {
+    let line = "%exit"
+    let result = TmuxControlParser.parse(line)
+    if case .notification(let notif) = result {
+        assertEqual(notif, TmuxNotification.exit(reason: nil))
+    } else {
+        assertTrue(false, "Expected .notification(.exit(nil))")
+    }
+}
+
+func testParseExitWithReason() {
+    let line = "%exit server exited"
+    let result = TmuxControlParser.parse(line)
+    if case .notification(let notif) = result {
+        assertEqual(notif, TmuxNotification.exit(reason: "server exited"))
+    } else {
+        assertTrue(false, "Expected .notification(.exit(reason))")
+    }
+}
+
+func testParseUnknownControlLine() {
+    let line = "%future-event some data"
+    let result = TmuxControlParser.parse(line)
+    if case .notification(let notif) = result {
+        assertEqual(notif, TmuxNotification.unknown("%future-event some data"))
+    } else {
+        assertTrue(false, "Expected .notification(.unknown)")
+    }
+}
+
+func testParseMalformedBegin() {
+    let line = "%begin incomplete"
+    let result = TmuxControlParser.parse(line)
+    if case .notification(.unknown(_)) = result {
+        assertTrue(true)
+    } else {
+        assertTrue(false, "Expected .notification(.unknown) for malformed begin")
+    }
+}
+
+func testOctalUnescapePreservesNonOctalBackslash() {
+    let data = TmuxControlParser.unescapeOctal("hello\\zworld")
+    assertEqual(data, Data("hello\\zworld".utf8))
+}
+
+func testOctalUnescapeMultipleSequences() {
+    let data = TmuxControlParser.unescapeOctal("a\\012b\\011c")
+    assertEqual(data, Data("a\nb\tc".utf8))
+}
+
+func testParseSessionChanged() {
+    let line = "%session-changed $1 my-session"
+    let result = TmuxControlParser.parse(line)
+    if case .notification(let notif) = result {
+        assertEqual(notif, TmuxNotification.sessionChanged(sessionId: "$1", name: "my-session"))
+    } else {
+        assertTrue(false, "Expected .notification(.sessionChanged)")
+    }
+}
+
+func testParseLayoutChanged() {
+    let line = "%layout-change @0 bb62,80x24,0,0,0"
+    let result = TmuxControlParser.parse(line)
+    if case .notification(let notif) = result {
+        assertEqual(notif, TmuxNotification.layoutChanged(windowId: "@0", layout: "bb62,80x24,0,0,0"))
+    } else {
+        assertTrue(false, "Expected .notification(.layoutChanged)")
+    }
+}
+
+func testParseWindowPaneChanged() {
+    let line = "%window-pane-changed @0 %1"
+    let result = TmuxControlParser.parse(line)
+    if case .notification(let notif) = result {
+        assertEqual(notif, TmuxNotification.windowPaneChanged(windowId: "@0", paneId: "%1"))
+    } else {
+        assertTrue(false, "Expected .notification(.windowPaneChanged)")
+    }
+}
+
+// MARK: - MockTransport for TmuxControlClient Tests
+
+final class MockTransport: TmuxTransport, @unchecked Sendable {
+    let inbound: AsyncThrowingStream<Data, Error>
+    private let continuation: AsyncThrowingStream<Data, Error>.Continuation
+    private(set) var written: [Data] = []
+    private(set) var closed = false
+
+    init() {
+        let (stream, cont) = AsyncThrowingStream<Data, Error>.makeStream()
+        self.inbound = stream
+        self.continuation = cont
+    }
+
+    func write(_ data: Data) async throws { written.append(data) }
+    func close() async { closed = true }
+
+    func feed(_ string: String) { continuation.yield(Data(string.utf8)) }
+    func feedData(_ data: Data) { continuation.yield(data) }
+    func finish() { continuation.finish() }
+}
+
+// MARK: - TmuxControlClient Tests
+
+nonisolated(unsafe) var asyncDone = false
+
+func runAsync(_ block: @escaping @Sendable () async -> Void) {
+    asyncDone = false
+    Task { await block(); asyncDone = true }
+    while !asyncDone {
+        RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.01))
+    }
+}
+
+func testClientSendCommandSuccess() {
+    runAsync {
+        let transport = MockTransport()
+        let client = TmuxControlClient(transport: transport)
+        await client.start()
+
+        Task {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            transport.feed("%begin 1711000000 42 0\n")
+            transport.feed("line1\n")
+            transport.feed("line2\n")
+            transport.feed("%end 1711000000 42 0\n")
+        }
+
+        do {
+            let result = try await client.sendCommand("list-sessions")
+            assertEqual(result, "line1\nline2")
+        } catch {
+            assertTrue(false, "Unexpected error: \(error)")
+        }
+        await client.stop()
+    }
+}
+
+func testClientSendCommandError() {
+    runAsync {
+        let transport = MockTransport()
+        let client = TmuxControlClient(transport: transport)
+        await client.start()
+
+        Task {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            transport.feed("%begin 1711000000 1 0\n")
+            transport.feed("bad command\n")
+            transport.feed("%error 1711000000 1 0\n")
+        }
+
+        do {
+            _ = try await client.sendCommand("bad-cmd")
+            assertTrue(false, "Expected error")
+        } catch let error as TmuxControlError {
+            if case .commandFailed(let msg) = error {
+                assertEqual(msg, "bad command")
+            } else {
+                assertTrue(false, "Expected .commandFailed, got \(error)")
+            }
+        } catch {
+            assertTrue(false, "Unexpected error type: \(error)")
+        }
+        await client.stop()
+    }
+}
+
+func testClientLineSplitAcrossChunks() {
+    runAsync {
+        let transport = MockTransport()
+        let client = TmuxControlClient(transport: transport)
+        await client.start()
+
+        Task {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            transport.feed("%begin 171")
+            try? await Task.sleep(nanoseconds: 10_000_000)
+            transport.feed("1000000 1 0\nok\n%end 1711000000 1 0\n")
+        }
+
+        do {
+            let result = try await client.sendCommand("test")
+            assertEqual(result, "ok")
+        } catch {
+            assertTrue(false, "Unexpected error: \(error)")
+        }
+        await client.stop()
+    }
+}
+
+func testClientMultipleLinesInOneChunk() {
+    runAsync {
+        let transport = MockTransport()
+        let client = TmuxControlClient(transport: transport)
+        await client.start()
+
+        Task {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            transport.feed("%begin 1711000000 5 0\nfoo\nbar\n%end 1711000000 5 0\n")
+        }
+
+        do {
+            let result = try await client.sendCommand("test")
+            assertEqual(result, "foo\nbar")
+        } catch {
+            assertTrue(false, "Unexpected error: \(error)")
+        }
+        await client.stop()
+    }
+}
+
+func testClientEOFCancelsPendingCommand() {
+    runAsync {
+        let transport = MockTransport()
+        let client = TmuxControlClient(transport: transport)
+        await client.start()
+
+        Task {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            transport.feed("%begin 1711000000 1 0\n")
+            transport.finish()
+        }
+
+        do {
+            _ = try await client.sendCommand("test")
+            assertTrue(false, "Expected disconnected error")
+        } catch let error as TmuxControlError {
+            if case .disconnected = error {
+                assertTrue(true)
+            } else {
+                assertTrue(false, "Expected .disconnected, got \(error)")
+            }
+        } catch {
+            assertTrue(false, "Unexpected error type: \(error)")
+        }
+        await client.stop()
+    }
+}
+
+func testClientPaneOutputRouting() {
+    runAsync {
+        let transport = MockTransport()
+        let client = TmuxControlClient(transport: transport)
+        await client.start()
+
+        transport.feed("%output %0 hello\\012world\n")
+
+        var received: (paneId: String, data: Data)?
+        for await item in await client.paneOutput {
+            received = item
+            break
+        }
+
+        assertNotNil(received)
+        if let r = received {
+            assertEqual(r.paneId, "%0")
+            assertEqual(r.data, Data("hello\nworld".utf8))
+        }
+
+        await client.stop()
+    }
+}
+
+func testClientNotificationRouting() {
+    runAsync {
+        let transport = MockTransport()
+        let client = TmuxControlClient(transport: transport)
+        await client.start()
+
+        transport.feed("%sessions-changed\n")
+
+        var received: TmuxNotification?
+        for await item in await client.notifications {
+            received = item
+            break
+        }
+
+        assertEqual(received, TmuxNotification.sessionsChanged)
+
+        await client.stop()
+    }
+}
+
+func testClientWritesCommandWithNewline() {
+    runAsync {
+        let transport = MockTransport()
+        let client = TmuxControlClient(transport: transport)
+        await client.start()
+
+        Task {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            transport.feed("%begin 1711000000 1 0\n%end 1711000000 1 0\n")
+        }
+
+        _ = try? await client.sendCommand("list-sessions")
+
+        let written = transport.written
+        assertEqual(written.count, 1)
+        if let first = written.first {
+            assertEqual(String(data: first, encoding: .utf8), "list-sessions\n")
+        }
+
+        await client.stop()
+    }
+}
+
+// Control-mode parser
+testParseOutputWithOctalNewline()
+testParseOutputWithOctalBackslash()
+testParseOutputHighBitBytes()
+testParseOutputEmptyData()
+testParseBegin()
+testParseEnd()
+testParseError()
+testParsePlainLine()
+testParseEmptyPlainLine()
+testParseSessionsChanged()
+testParseWindowAdd()
+testParseWindowClose()
+testParseWindowRenamed()
+testParseExit()
+testParseExitWithReason()
+testParseUnknownControlLine()
+testParseMalformedBegin()
+testOctalUnescapePreservesNonOctalBackslash()
+testOctalUnescapeMultipleSequences()
+testParseSessionChanged()
+testParseLayoutChanged()
+testParseWindowPaneChanged()
+
+// Control-mode client
+testClientSendCommandSuccess()
+testClientSendCommandError()
+testClientLineSplitAcrossChunks()
+testClientMultipleLinesInOneChunk()
+testClientEOFCancelsPendingCommand()
+testClientPaneOutputRouting()
+testClientNotificationRouting()
+testClientWritesCommandWithNewline()
 
 printResults()
 
