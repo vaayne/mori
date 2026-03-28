@@ -120,3 +120,7 @@
 - `unescapeOctal` operates on raw UTF-8 bytes (`Array(escaped.utf8)`) so high-bit bytes pass through untouched. Tested with `\302\251` → `0xC2 0xA9` (©).
 - The `paneOutput` stream type is `AsyncStream<(paneId: String, data: Data)>` — a tuple stream. Phase 5's `SpikeCoordinator` will consume this to feed bytes into the terminal renderer.
 - All new files are cross-platform (no `#if os(macOS)` needed) — `TmuxControlClient` works on both macOS and iOS.
+
+### Fixes (post-review)
+- **sendCommand race**: Moved `pendingContinuation` registration before `transport.write()` so fast `%begin/%end` responses are correlated correctly. Write is now fire-and-forget via `Task`; write failures handled by transport EOF → `failPending()` path. (commit `ebb5b54`)
+- **Regression test**: Added `FastResponseMockTransport` that feeds `%begin/response/%end` immediately during `write()` call. `testClientFastResponseRace` validates the fix. 242 → 243 assertions.
