@@ -48,6 +48,7 @@ final class SpikeCoordinator {
     private var tmuxClient: TmuxControlClient?
     private weak var renderer: GhosttyiOSRenderer?
     private var attachedPaneId: String?
+    private var pendingOutputBuffer: [(paneId: String, data: Data)] = []
 
     private var paneOutputTask: Task<Void, Never>?
     private var notificationTask: Task<Void, Never>?
@@ -99,7 +100,8 @@ final class SpikeCoordinator {
             tmuxClient = client
             await client.start()
 
-            startPaneOutputTask(for: client)
+            // Buffer output until pane ID is known, then start consumers
+            startPaneOutputTask(for: client, buffered: true)
             startNotificationTask(for: client)
 
             let paneResponse = try await runTmuxCommand("list-panes -F '#{pane_id}'")
@@ -112,6 +114,15 @@ final class SpikeCoordinator {
             }
 
             attachedPaneId = paneId
+
+            // Flush buffered output now that pane ID is known
+            for event in pendingOutputBuffer {
+                if event.paneId == paneId {
+                    self.renderer?.feedBytes(event.data)
+                }
+            }
+            pendingOutputBuffer.removeAll()
+
             try await refreshClientSizeIfNeeded()
             state = .attached(paneId: paneId)
         } catch {
@@ -148,12 +159,28 @@ final class SpikeCoordinator {
         state = .disconnected(error)
     }
 
-    private func startPaneOutputTask(for client: TmuxControlClient) {
+    private func startPaneOutputTask(for client: TmuxControlClient, buffered: Bool = false) {
         paneOutputTask?.cancel()
         paneOutputTask = Task { [weak self] in
             let paneOutput = await client.paneOutput
             for await event in paneOutput {
-                await self?.applyPaneOutput(event)
+                guard let self else { return }
+                if self.attachedPaneId != nil {
+                    // Pane ID known — deliver directly
+                    if event.paneId == self.attachedPaneId {
+                        self.renderer?.feedBytes(event.data)
+                    }
+                } else {
+                    // Pane ID not yet known — buffer
+                    self.pendingOutputBuffer.append(event)
+                }
+            }
+            // Stream ended — transport closed or tmux exited
+            guard let self, !Task.isCancelled else { return }
+            if case .attached = self.state {
+                await self.transitionToDisconnected(
+                    SpikeCoordinatorError.tmuxExited("pane output stream ended")
+                )
             }
         }
     }
@@ -165,12 +192,14 @@ final class SpikeCoordinator {
             for await notification in notifications {
                 await self?.handleNotification(notification)
             }
+            // Stream ended — transport closed
+            guard let self, !Task.isCancelled else { return }
+            if case .attached = self.state {
+                await self.transitionToDisconnected(
+                    SpikeCoordinatorError.tmuxExited("notification stream ended")
+                )
+            }
         }
-    }
-
-    private func applyPaneOutput(_ event: (paneId: String, data: Data)) async {
-        guard event.paneId == attachedPaneId else { return }
-        renderer?.feedBytes(event.data)
     }
 
     private func handleNotification(_ notification: TmuxNotification) async {
@@ -213,14 +242,27 @@ final class SpikeCoordinator {
     private func scheduleCommand(_ command: String) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            _ = try? await self.runTmuxCommand(command)
+            do {
+                _ = try await self.runTmuxCommand(command)
+            } catch {
+                // Transport/SSH failure during background command → disconnect
+                if case .attached = self.state {
+                    await self.transitionToDisconnected(error)
+                }
+            }
         }
     }
 
     private func scheduleRefresh() {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            try? await self.refreshClientSizeIfNeeded()
+            do {
+                try await self.refreshClientSizeIfNeeded()
+            } catch {
+                if case .attached = self.state {
+                    await self.transitionToDisconnected(error)
+                }
+            }
         }
     }
 
@@ -240,6 +282,7 @@ final class SpikeCoordinator {
         notificationTask = nil
 
         attachedPaneId = nil
+        pendingOutputBuffer.removeAll()
         isAttachingSession = false
 
         if let tmuxClient {
