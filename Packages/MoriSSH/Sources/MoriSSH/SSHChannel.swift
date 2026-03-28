@@ -29,32 +29,3 @@ public final class SSHChannel: @unchecked Sendable {
         try? await channel.close().get()
     }
 }
-
-// MARK: - Channel Handler
-
-/// Inbound handler that reads SSHChannelData and feeds decoded bytes to an AsyncThrowingStream.
-final class SSHChannelDataHandler: ChannelInboundHandler, @unchecked Sendable {
-    typealias InboundIn = SSHChannelData
-
-    private let continuation: AsyncThrowingStream<Data, Error>.Continuation
-
-    init(continuation: AsyncThrowingStream<Data, Error>.Continuation) {
-        self.continuation = continuation
-    }
-
-    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        let channelData = unwrapInboundIn(data)
-        guard case .byteBuffer(var buffer) = channelData.data else { return }
-        guard let bytes = buffer.readBytes(length: buffer.readableBytes) else { return }
-        continuation.yield(Data(bytes))
-    }
-
-    func errorCaught(context: ChannelHandlerContext, error: Error) {
-        continuation.finish(throwing: error)
-        context.close(promise: nil)
-    }
-
-    func channelInactive(context: ChannelHandlerContext) {
-        continuation.finish()
-    }
-}

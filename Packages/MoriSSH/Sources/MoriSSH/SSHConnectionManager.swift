@@ -6,9 +6,12 @@ import NIOSSH
 // MARK: - Auth Delegate
 
 /// Password-based auth delegate for the spike.
-private final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate, Sendable {
+/// Offers credentials once; returns nil on subsequent calls (server-rejected auth fails cleanly).
+/// Marked @unchecked Sendable: mutable state is only accessed from the NIO event loop.
+private final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate, @unchecked Sendable {
     private let username: String
     private let password: String
+    private var offered = false
 
     init(username: String, password: String) {
         self.username = username
@@ -19,8 +22,14 @@ private final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate
         availableMethods: NIOSSHAvailableUserAuthenticationMethods,
         nextChallengePromise: EventLoopPromise<NIOSSHUserAuthenticationOffer?>
     ) {
+        guard !offered else {
+            nextChallengePromise.succeed(nil)
+            return
+        }
+        offered = true
+
         guard availableMethods.contains(.password) else {
-            nextChallengePromise.fail(SSHError.authenticationFailed)
+            nextChallengePromise.succeed(nil)
             return
         }
         nextChallengePromise.succeed(
@@ -126,7 +135,7 @@ public actor SSHConnectionManager {
         user: String,
         auth: SSHAuthMethod
     ) async throws {
-        let authDelegate: NIOSSHClientUserAuthenticationDelegate
+        let authDelegate: PasswordAuthDelegate
         switch auth {
         case .password(let password):
             authDelegate = PasswordAuthDelegate(username: user, password: password)
