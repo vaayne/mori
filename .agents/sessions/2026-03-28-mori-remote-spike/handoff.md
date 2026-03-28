@@ -75,3 +75,10 @@
 - Public key auth case exists in `SSHAuthMethod` but `SSHConnectionManager.connect()` throws `authenticationFailed` for it — stretch goal for later.
 - RunLoop spinning approach for async tests in executable target context (avoids DispatchSemaphore deadlocks with Swift concurrency).
 - Phase 3's `TmuxControlClient` will use `SSHChannel` via `TmuxTransport` protocol adapter (defined in MoriTmux, bridged in the iOS app).
+
+### Fixes (post-review)
+- **Auth wait**: `connect()` now installs `AuthCompletionHandler` that listens for `UserAuthSuccessEvent`. Returns only after auth succeeds; channel-close or errors before auth → `SSHError.authenticationFailed`. (commit `8fc51c2`)
+- **Exec acceptance**: `ExecHandler` now handles `ChannelSuccessEvent` / `ChannelFailureEvent`. `openExecChannel()` waits for both child channel creation AND exec acceptance before returning `SSHChannel`. Server rejection → `SSHError.channelError`.
+- **Test coverage**: 18 → 32 assertions. Added: SSHChannel inbound stream (single chunk, multi chunk, error propagation), write to inactive channel, close idempotency, publicKey auth rejection, unreachable host connection failure.
+- **SSHChannel.init** made `public` for testability via `EmbeddedChannel`.
+- **Package.swift** test target now depends on `NIOEmbedded`, `NIOCore`, `NIOSSH` for in-memory channel testing.
