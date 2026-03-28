@@ -177,3 +177,9 @@
 
 ### Fixes (post-review, pre-reviewer)
 - **Incomplete macOS gating**: Four files (`GhosttyApp.swift`, `GhosttySurfaceView.swift`, `NativeTerminalAdapter.swift`, `ANSIParser.swift`) had `#if os(macOS)` only around imports/initial types — class/struct bodies were exposed. Moved `#endif` to end of each file. (commit `cb0d103`)
+- **iOS build errors (reviewer finding #1)**: Fixed 3 compilation errors in iOS Simulator build:
+  - `GhosttyiOSApp.swift`: `strdup` argv array type — used `[UnsafeMutablePointer<CChar>?]` and passed `baseAddress!` directly to `ghostty_init` (matches `char**` → `UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>`)
+  - `GhosttyiOSRenderer.swift`: `bytes.count` → `UInt(bytes.count)` for `ghostty_surface_write_output` length
+  - `GhosttyiOSRenderer.swift`: `deinit` wrapped in `MainActor.assumeIsolated` for Swift 6 strict concurrency
+  - Verified: `xcodebuild -scheme MoriTerminal -destination 'generic/platform=iOS Simulator' build` → BUILD SUCCEEDED (commit `b2df89f`)
+- **Build script cache validation (reviewer finding #2)**: `--universal` now checks for `ios-arm64` and `ios-arm64-simulator` slices in cached xcframework; rebuilds if missing (commit `b2df89f`)
