@@ -13,12 +13,12 @@
 
 ## Phase 2: MoriSSH Package — SSH Transport
 
-- [ ] 2.1 — Create `Packages/MoriSSH/Package.swift` with `swift-nio-ssh` 0.8.0+, `swift-nio` 2.65.0+ (`Packages/MoriSSH/Package.swift`)
-- [ ] 2.2 — Create `SSHAuthConfig.swift` — password + public key (Data, not path) auth types (`Packages/MoriSSH/Sources/MoriSSH/SSHAuthConfig.swift`)
-- [ ] 2.3 — Create `SSHConnectionManager.swift` — actor, TCP → SSH → auth → channels, accept-all host keys (`Packages/MoriSSH/Sources/MoriSSH/SSHConnectionManager.swift`)
-- [ ] 2.4 — Create `SSHChannel.swift` — async read/write wrapper over NIO channel (`Packages/MoriSSH/Sources/MoriSSH/SSHChannel.swift`)
-- [ ] 2.5 — Create `SSHError.swift` — error types (`Packages/MoriSSH/Sources/MoriSSH/SSHError.swift`)
-- [ ] 2.6 — Create `MoriSSHTests` executable test target (`Packages/MoriSSH/Tests/MoriSSHTests/SSHTests.swift`)
+- [x] 2.1 — Create `Packages/MoriSSH/Package.swift` with `swift-nio-ssh` 0.8.0+, `swift-nio` 2.65.0+ (`Packages/MoriSSH/Package.swift`)
+- [x] 2.2 — Create `SSHAuthConfig.swift` — password + public key (Data, not path) auth types (`Packages/MoriSSH/Sources/MoriSSH/SSHAuthConfig.swift`)
+- [x] 2.3 — Create `SSHConnectionManager.swift` — actor, TCP → SSH → auth → channels, accept-all host keys (`Packages/MoriSSH/Sources/MoriSSH/SSHConnectionManager.swift`)
+- [x] 2.4 — Create `SSHChannel.swift` — async read/write wrapper over NIO channel (`Packages/MoriSSH/Sources/MoriSSH/SSHChannel.swift`)
+- [x] 2.5 — Create `SSHError.swift` — error types (`Packages/MoriSSH/Sources/MoriSSH/SSHError.swift`)
+- [x] 2.6 — Create `MoriSSHTests` executable test target (18/18 assertions pass)
 
 ## Phase 3: Tmux Control-Mode Client
 
