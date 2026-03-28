@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 
 /// Reads and writes the user's ghostty config file (`~/.config/ghostty/config`),
@@ -211,3 +212,4 @@ public final class GhosttyConfigFile {
         return []
     }
 }
+#endif

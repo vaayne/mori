@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import GhosttyKit
 
@@ -86,3 +87,4 @@ public struct GhosttyThemeInfo: Sendable {
         )
     }
 }
+#endif

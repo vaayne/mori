@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 /// LRU cache for terminal surfaces keyed by a session identity key.
@@ -95,3 +96,4 @@ public final class TerminalSurfaceCache {
         remove(sessionKey: lruKey)
     }
 }
+#endif

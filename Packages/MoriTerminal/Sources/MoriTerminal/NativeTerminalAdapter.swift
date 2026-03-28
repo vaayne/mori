@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Darwin
 
@@ -34,6 +35,7 @@ public final class NativeTerminalAdapter: TerminalHost {
     }
 
 }
+#endif
 
 // MARK: - PTYTerminalView
 

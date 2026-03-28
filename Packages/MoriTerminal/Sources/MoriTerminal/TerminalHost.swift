@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 /// Protocol abstracting terminal surface lifecycle.
@@ -22,3 +23,4 @@ public protocol TerminalHost: AnyObject {
     /// Make the given surface the active input target.
     func focusSurface(_ surface: NSView)
 }
+#endif

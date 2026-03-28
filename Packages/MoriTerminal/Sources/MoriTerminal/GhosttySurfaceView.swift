@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Carbon
 import GhosttyKit
@@ -21,6 +22,7 @@ private enum GhosttyInputHelpers {
         return nil
     }
 }
+#endif
 
 private extension NSEvent {
     var ghosttyCharacters: String? {

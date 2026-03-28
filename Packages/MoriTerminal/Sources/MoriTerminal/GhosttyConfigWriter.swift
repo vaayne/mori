@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 
 /// Writes minimal Mori-specific overrides to a Ghostty config file.
@@ -32,3 +33,4 @@ enum GhosttyConfigWriter {
         return configPath.path
     }
 }
+#endif

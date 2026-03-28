@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 /// Parsed segment from ANSI escape sequence processing.
@@ -14,6 +15,7 @@ enum ANSISegment {
     case bell
     case setTitle(String)
 }
+#endif
 
 /// Attributes derived from SGR (Select Graphic Rendition) escape codes.
 struct SGRAttributes {

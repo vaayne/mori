@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import GhosttyKit
 
@@ -107,3 +108,4 @@ public final class GhosttyAdapter: TerminalHost {
         "'" + str.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }
+#endif
