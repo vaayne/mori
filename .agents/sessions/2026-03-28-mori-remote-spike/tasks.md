@@ -31,12 +31,12 @@
 
 ## Phase 4: GhosttyKit iOS Build + Terminal Bridge
 
-- [ ] 4.1 — Update `scripts/build-ghostty.sh` with `--universal` flag (`scripts/build-ghostty.sh`)
-- [ ] 4.2 — Build and validate universal xcframework (**HARD GATE**: if this fails, spike is blocked)
-- [ ] 4.3 — Update `MoriTerminal/Package.swift` to add `.iOS(.v17)`, conditional `Carbon` linker setting (`Packages/MoriTerminal/Package.swift`)
-- [ ] 4.4 — Gate all macOS-specific files behind `#if os(macOS)` (`Packages/MoriTerminal/Sources/MoriTerminal/*.swift`)
-- [ ] 4.5 — Create `GhosttyiOSApp.swift` — iOS ghostty app singleton (`Packages/MoriTerminal/Sources/MoriTerminal/GhosttyiOSApp.swift`)
-- [ ] 4.6 — Create `GhosttyPipeRenderer.swift` — UIView + pipe backend + CADisplayLink (`Packages/MoriTerminal/Sources/MoriTerminal/GhosttyPipeRenderer.swift`)
+- [x] 4.1 — Update `scripts/build-ghostty.sh` with `--universal` flag (`scripts/build-ghostty.sh`)
+- [x] 4.2 — Cherry-pick Manual backend, build, and validate universal xcframework (`vendor/ghostty`, `Frameworks/GhosttyKit.xcframework`)
+- [x] 4.3 — Update `MoriTerminal/Package.swift` to add `.iOS(.v17)`, conditional `Carbon` linker setting (`Packages/MoriTerminal/Package.swift`)
+- [x] 4.4 — Gate all macOS-specific files behind `#if os(macOS)` (`Packages/MoriTerminal/Sources/MoriTerminal/*.swift`)
+- [x] 4.5 — Create `GhosttyiOSApp.swift` — iOS ghostty app singleton (`Packages/MoriTerminal/Sources/MoriTerminal/GhosttyiOSApp.swift`)
+- [x] 4.6 — Create `GhosttyiOSRenderer.swift` — UIView + Manual backend + CADisplayLink (`Packages/MoriTerminal/Sources/MoriTerminal/GhosttyiOSRenderer.swift`)
 
 ## Phase 5: iOS App Target + End-to-End Wiring
 

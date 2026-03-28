@@ -124,3 +124,53 @@
 ### Fixes (post-review)
 - **sendCommand race**: Moved `pendingContinuation` registration before `transport.write()` so fast `%begin/%end` responses are correlated correctly. Write is now fire-and-forget via `Task`; write failures handled by transport EOF → `failPending()` path. (commit `ebb5b54`)
 - **Regression test**: Added `FastResponseMockTransport` that feeds `%begin/response/%end` immediately during `write()` call. `testClientFastResponseRace` validates the fix. 242 → 243 assertions.
+
+## Phase 4: GhosttyKit iOS Build + Terminal Bridge
+
+**Status:** complete
+
+**Tasks completed:**
+- 4.1: Updated `scripts/build-ghostty.sh` to parse `--clean` and `--universal`, preserve native-by-default behavior, skip the native-only patch in universal mode, and explicitly validate iPhoneOS/iPhoneSimulator SDK availability.
+- 4.2: Cherry-picked ghostty commit `a383d30aa` into `vendor/ghostty`, producing submodule HEAD `dfab86c51`. Built `Frameworks/GhosttyKit.xcframework` with `bash scripts/build-ghostty.sh --clean --universal` and verified the required slices: `macos-arm64_x86_64`, `ios-arm64`, and `ios-arm64-simulator`.
+- 4.3: Added `.iOS(.v17)` to `Packages/MoriTerminal/Package.swift` and made `Carbon` link only on macOS with `.when(platforms: [.macOS])`.
+- 4.4: Gated the listed macOS-only MoriTerminal source files with `#if os(macOS)` so AppKit/Carbon-only code is excluded from iOS builds.
+- 4.5: Added `GhosttyiOSApp.swift`, a minimal `ghostty_app_t` singleton for iOS that initializes ghostty with a minimal config, installs wakeup/runtime stubs, and creates iOS surfaces with `GHOSTTY_PLATFORM_IOS`.
+- 4.6: Added `GhosttyiOSRenderer.swift`, a `UIView`/`CAMetalLayer` host that creates a surface on demand, updates size and content scale, feeds remote bytes via `ghostty_surface_write_output`, reports grid size, and drives rendering with `CADisplayLink`.
+
+**Files changed:**
+- `scripts/build-ghostty.sh` — added `--universal` flag parsing, iOS SDK checks, universal/native target selection
+- `vendor/ghostty` — submodule pointer updated to cherry-picked Manual backend commit `dfab86c51`
+- `Packages/MoriTerminal/Package.swift` — added `.iOS(.v17)`, conditional `Carbon` linker setting
+- `Packages/MoriTerminal/Sources/MoriTerminal/GhosttyApp.swift` — macOS-only gate
+- `Packages/MoriTerminal/Sources/MoriTerminal/GhosttyAdapter.swift` — macOS-only gate
+- `Packages/MoriTerminal/Sources/MoriTerminal/GhosttySurfaceView.swift` — macOS-only gate
+- `Packages/MoriTerminal/Sources/MoriTerminal/GhosttyConfigFile.swift` — macOS-only gate
+- `Packages/MoriTerminal/Sources/MoriTerminal/GhosttyConfigWriter.swift` — macOS-only gate
+- `Packages/MoriTerminal/Sources/MoriTerminal/GhosttyThemeInfo.swift` — macOS-only gate
+- `Packages/MoriTerminal/Sources/MoriTerminal/NativeTerminalAdapter.swift` — macOS-only gate
+- `Packages/MoriTerminal/Sources/MoriTerminal/TerminalSurfaceCache.swift` — macOS-only gate
+- `Packages/MoriTerminal/Sources/MoriTerminal/TerminalHost.swift` — macOS-only gate
+- `Packages/MoriTerminal/Sources/MoriTerminal/ANSIParser.swift` — macOS-only gate
+- `Packages/MoriTerminal/Sources/MoriTerminal/GhosttyiOSApp.swift` — new: minimal iOS ghostty app singleton
+- `Packages/MoriTerminal/Sources/MoriTerminal/GhosttyiOSRenderer.swift` — new: iOS terminal renderer bridge
+- `.agents/sessions/2026-03-28-mori-remote-spike/tasks.md` — Phase 4 checklist updated
+
+**Verification:**
+- `bash scripts/build-ghostty.sh --clean --universal` succeeded
+- `swift build` in `Packages/MoriTerminal` succeeded on macOS with the rebuilt xcframework
+- `mise run test:core` → 361 assertions passed
+- `mise run test:tmux` → 243 assertions passed
+
+**Commits:**
+- `f88452d` — ✨ feat: add universal GhosttyKit build flag
+- `136ca0e` — ✨ feat: add Ghostty iOS manual backend
+- `dc4c43f` — ✨ feat: add iOS platform to MoriTerminal package
+- `24c3625` — ♻️ refactor: gate macOS terminal sources by platform
+- `cfeea1e` — ✨ feat: add Ghostty iOS app singleton
+- `44361b2` — ✨ feat: add Ghostty iOS renderer bridge
+
+**Decisions & context for next phase:**
+- The original plan’s “pipe backend” was replaced by the cherry-picked Manual backend; `GhosttyiOSRenderer.feedBytes(_:)` uses `ghostty_surface_write_output`, which is the correct embedding API from `dfab86c51`.
+- `GhosttyiOSApp` intentionally does not load user config files. It finalizes an empty config so iOS avoids `~/.config` assumptions and starts with the minimal embedded defaults from ghostty itself.
+- `GhosttyiOSRenderer` is intentionally minimal: no keyboard/input, clipboard, IME, or selection support. Phase 5’s coordinator can feed SSH/tmux output in and use `gridSize()` for `refresh-client -C`.
+- A direct `swift build --triple arm64-apple-ios17.0-simulator` attempt from the CLI failed in this environment with `unable to load standard library for target 'arm64-apple-ios17.0-simulator'`, which appears to be host toolchain/sysroot wiring rather than a MoriTerminal source error. The universal xcframework itself built successfully with the iOS slices present.
