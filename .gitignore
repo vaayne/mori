@@ -8,4 +8,5 @@ xcuserdata/
 Mori.app/
 Frameworks/
 .derived-data/
+.derived-data-ios/
 handoff.md
