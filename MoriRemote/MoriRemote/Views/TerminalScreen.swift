@@ -20,10 +20,24 @@ struct TerminalScreen: View {
                     renderer = SwiftTermRendererBox(r)
 
                     guard !shellStarted else { return }
-                    shellStarted = true
 
-                    Task {
-                        await coordinator.openShell(renderer: r)
+                    // Wait for the first layout so gridSize() returns the real
+                    // phone-screen dimensions, not the default 80x24.
+                    r.initialLayoutHandler = { [weak r] cols, rows in
+                        guard let r, !shellStarted else { return }
+                        shellStarted = true
+                        Task {
+                            await coordinator.openShell(renderer: r)
+                        }
+                    }
+
+                    // If layout already happened (e.g. reuse), open immediately
+                    let size = r.gridSize()
+                    if size.cols > 0 && size.rows > 0 {
+                        shellStarted = true
+                        Task {
+                            await coordinator.openShell(renderer: r)
+                        }
                     }
                 }
             )

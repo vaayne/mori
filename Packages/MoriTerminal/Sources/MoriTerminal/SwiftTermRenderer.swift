@@ -30,6 +30,9 @@ public final class SwiftTermRenderer: UIView {
     /// Tracks whether the initial size report has been sent after layout.
     private var didReportInitialSize = false
 
+    /// Called once after the first layout with valid grid dimensions.
+    public var initialLayoutHandler: ((UInt16, UInt16) -> Void)?
+
     public init(
         frame: CGRect = .zero,
         inputHandler: SwiftTermInputHandler? = nil,
@@ -78,6 +81,8 @@ public final class SwiftTermRenderer: UIView {
             if size.cols > 0 && size.rows > 0 {
                 didReportInitialSize = true
                 sizeChangeHandler?(size.cols, size.rows)
+                initialLayoutHandler?(size.cols, size.rows)
+                initialLayoutHandler = nil
             }
         }
     }
