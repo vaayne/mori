@@ -12,10 +12,17 @@ let package = Package(
     products: [
         .library(name: "MoriTerminal", targets: ["MoriTerminal"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.13.0"),
+    ],
     targets: [
         .target(
             name: "MoriTerminal",
-            dependencies: ["GhosttyKit"],
+            dependencies: [
+                "GhosttyKit",
+                .product(name: "SwiftTerm", package: "SwiftTerm",
+                         condition: .when(platforms: [.iOS])),
+            ],
             path: "Sources/MoriTerminal",
             linkerSettings: [
                 .linkedFramework("Carbon", .when(platforms: [.macOS])),
