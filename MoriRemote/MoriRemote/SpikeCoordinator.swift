@@ -210,6 +210,35 @@ final class SpikeCoordinator {
         state = .disconnected(nil)
     }
 
+    /// Detach from the current tmux session but keep SSH alive.
+    func detachSession() async {
+        commandQueueTail?.cancel()
+        commandQueueTail = nil
+
+        paneOutputTask?.cancel()
+        paneOutputTask = nil
+
+        notificationTask?.cancel()
+        notificationTask = nil
+
+        attachedPaneId = nil
+        pendingOutputBuffer.removeAll()
+        isAttachingSession = false
+        renderer = nil
+
+        if let tmuxClient {
+            self.tmuxClient = nil
+            await tmuxClient.stop()
+        }
+
+        if let sshChannel {
+            self.sshChannel = nil
+            await sshChannel.close()
+        }
+
+        state = .connected
+    }
+
     private func startPaneOutputTask(for client: TmuxControlClient, buffered: Bool = false) {
         paneOutputTask?.cancel()
         paneOutputTask = Task { [weak self] in

@@ -36,6 +36,7 @@ private struct RootView: View {
                     TerminalScreen(
                         sessionName: session,
                         serverName: server.displayName,
+                        onDetach: { detachSession() },
                         onDisconnect: { disconnect() }
                     )
                 } else if let server = activeServer {
@@ -64,6 +65,13 @@ private struct RootView: View {
     private func resetNavigation() {
         activeServer = nil
         activeSessionName = nil
+    }
+
+    private func detachSession() {
+        activeSessionName = nil
+        Task {
+            await coordinator.detachSession()
+        }
     }
 
     private func disconnect() {
