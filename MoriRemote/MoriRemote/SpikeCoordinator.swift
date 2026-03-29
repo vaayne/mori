@@ -43,6 +43,8 @@ final class SpikeCoordinator {
     var state: SpikeState = .disconnected(nil)
     var isAttachingSession = false
 
+    var stateKey: String { state.key }
+
     private var sshManager: SSHConnectionManager?
     private var sshChannel: SSHChannel?
     private var tmuxClient: TmuxControlClient?
@@ -184,8 +186,28 @@ final class SpikeCoordinator {
         scheduleCommand("refresh-client -C \(cols),\(rows)")
     }
 
+    /// Run a one-shot command over SSH and return its stdout as a string.
+    func runSSHCommand(_ command: String) async throws -> String {
+        guard let sshManager else {
+            throw SpikeCoordinatorError.notConnected
+        }
+
+        let channel = try await sshManager.openExecChannel(command: command)
+        var output = Data()
+        for try await chunk in channel.inbound {
+            output.append(chunk)
+        }
+        await channel.close()
+        return String(data: output, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
     func presentDisconnected(error: Error?) {
         state = .disconnected(error)
+    }
+
+    func disconnectAndReset() async {
+        await resetConnection()
+        state = .disconnected(nil)
     }
 
     private func startPaneOutputTask(for client: TmuxControlClient, buffered: Bool = false) {
@@ -341,5 +363,14 @@ extension SpikeState {
             return true
         }
         return false
+    }
+
+    var key: String {
+        switch self {
+        case .disconnected: return "disconnected"
+        case .connecting: return "connecting"
+        case .connected: return "connected"
+        case .attached: return "attached"
+        }
     }
 }

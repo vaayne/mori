@@ -4,109 +4,84 @@ import SwiftUI
 @main
 struct MoriRemoteApp: App {
     @State private var coordinator = SpikeCoordinator()
+    @State private var store = ServerStore()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(coordinator)
+                .environment(store)
         }
     }
 }
 
 private struct RootView: View {
     @Environment(SpikeCoordinator.self) private var coordinator
+    @Environment(ServerStore.self) private var store
 
-    @State private var sessionName = "main"
+    /// The server we're currently connecting/connected to.
+    @State private var activeServer: Server?
+    /// The session name once the user chose to attach.
     @State private var activeSessionName: String?
 
     var body: some View {
         Group {
             switch coordinator.state {
             case .disconnected, .connecting:
-                ConnectView()
-                    .onAppear {
-                        activeSessionName = nil
-                    }
+                ServerListView()
+                    .onAppear { resetNavigation() }
+
             case .connected, .attached:
-                if let activeSessionName {
-                    TerminalScreen(sessionName: activeSessionName)
-                } else {
-                    SessionAttachView(
-                        sessionName: $sessionName,
-                        onAttach: {
-                            activeSessionName = sessionName.trimmingCharacters(in: .whitespacesAndNewlines)
-                        }
+                if let server = activeServer, let session = activeSessionName {
+                    TerminalScreen(
+                        sessionName: session,
+                        serverName: server.displayName,
+                        onDisconnect: { disconnect() }
                     )
+                } else if let server = activeServer {
+                    SessionPickerView(
+                        server: server,
+                        onAttach: { session in
+                            activeSessionName = session
+                        },
+                        onDisconnect: { disconnect() }
+                    )
+                } else {
+                    // Edge case: connected but no server context — go back
+                    ServerListView()
+                        .onAppear { disconnect() }
                 }
             }
+        }
+        .animation(.easeInOut(duration: 0.25), value: coordinator.stateKey)
+        .onReceive(NotificationCenter.default.publisher(for: .serverSelected)) { note in
+            if let server = note.object as? ServerBox {
+                activeServer = server.value
+            }
+        }
+    }
+
+    private func resetNavigation() {
+        activeServer = nil
+        activeSessionName = nil
+    }
+
+    private func disconnect() {
+        Task {
+            await coordinator.disconnectAndReset()
         }
     }
 }
 
-private struct SessionAttachView: View {
-    @Binding var sessionName: String
-    let onAttach: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Session Name", text: $sessionName)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
-
-                Section {
-                    Button("Attach Session") {
-                        onAttach()
-                    }
-                    .disabled(sessionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-            .navigationTitle("Session")
-        }
-    }
+// Notification-based bridge so ServerListView can set activeServer before connect.
+extension Notification.Name {
+    static let serverSelected = Notification.Name("serverSelected")
 }
 
-private struct TerminalScreen: View {
-    @Environment(SpikeCoordinator.self) private var coordinator
-
-    let sessionName: String
-
-    @State private var attachStarted = false
-
-    var body: some View {
-        TerminalView(
-            onRendererReady: { renderer in
-                coordinator.registerRenderer(renderer)
-
-                guard !attachStarted else { return }
-                attachStarted = true
-
-                Task {
-                    await coordinator.attachSession(name: sessionName, renderer: renderer)
-                }
-            }
-        )
-        .ignoresSafeArea(edges: .bottom)
-        .background(Color.black)
-        .overlay {
-            if coordinator.isAttachingSession || !coordinator.isTerminalAttached {
-                ProgressView("Attaching session...")
-                    .padding(20)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-            }
-        }
-    }
-}
-
-private extension SpikeCoordinator {
-    var isTerminalAttached: Bool {
-        if case .attached = state {
-            return true
-        }
-        return false
-    }
+/// Box to pass Server through NotificationCenter (which needs AnyObject or uses `object`).
+final class ServerBox: @unchecked Sendable {
+    let value: Server
+    init(_ value: Server) { self.value = value }
 }
 
 extension String {

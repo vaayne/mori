@@ -10,33 +10,45 @@
 		109E4551800EDCA43A760F80 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9A1E86AC034B64B37F68A846 /* Localizable.strings */; };
 		259A4B632905B1F7F86E0CD7 /* TerminalDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6446C74F96EC23E8A06F4258 /* TerminalDebugView.swift */; };
 		376EEC1B30EE8565C4B085D1 /* MoriRemoteApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46F3182F8D251430A10B298E /* MoriRemoteApp.swift */; };
+		3E10DC5EF41F3B0DBD7E18E0 /* ServerFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93C9BF50025C03B0BCF8E77A /* ServerFormView.swift */; };
 		4031D10BB73B613259BD295F /* SpikeCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0399FF6B719FF10610D9D76E /* SpikeCoordinator.swift */; };
 		57A0B148D1B8D23CA120481C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 495654252F6CE455BE0201B3 /* Assets.xcassets */; };
+		58C6389AD3DF6D861F49D1DE /* ServerListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6666C37E7773D0C60B3D16BA /* ServerListView.swift */; };
+		5ACA156F8A500931E29BAD3E /* TerminalScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11EBAEEBBFE6A6FF22BFC722 /* TerminalScreen.swift */; };
 		5D0A706E5CC15CA815D2205C /* MoriSSH in Frameworks */ = {isa = PBXBuildFile; productRef = E4A46D15917AB2D06DABB5BF /* MoriSSH */; };
+		84BCE7CB7E779A71350C7FB7 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977760861C89855B90308D6B /* Theme.swift */; };
 		85ADFC9BAA17017ECA067C5B /* MoriCore in Frameworks */ = {isa = PBXBuildFile; productRef = CB00391E626D4853B15135EF /* MoriCore */; };
+		949356F283B52C6F3AFC7B06 /* ServerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5C351C1B33D101446ECAAE1 /* ServerStore.swift */; };
 		950C33367217BF06FA564D2B /* MoriTmux in Frameworks */ = {isa = PBXBuildFile; productRef = 8AFD415F38753179608A985F /* MoriTmux */; };
 		96C8DDDEA3B929ED016AF50D /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 293AE41146DC5F2BB4900EA4 /* TerminalView.swift */; };
+		97B5FB0C7E80E60AF0D59B0E /* Server.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493C27506159F574E156F96C /* Server.swift */; };
+		ABC22A30FBA56C3092EF8DF8 /* SessionPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC01A0E499A058F9957300F6 /* SessionPickerView.swift */; };
 		BD0001EDD996C4C33B8C8D9C /* SSHChannelTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B69BBE4138563F4FB5A7709 /* SSHChannelTransport.swift */; };
 		C7B874D9B7973D33D6D7E5D6 /* MoriTerminal in Frameworks */ = {isa = PBXBuildFile; productRef = 35EA6C6FBCAE1CE488930F9F /* MoriTerminal */; };
-		F1389EC25C548603BA95AE2A /* ConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE4E48A48CA59FFCF24563F5 /* ConnectView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		0399FF6B719FF10610D9D76E /* SpikeCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpikeCoordinator.swift; sourceTree = "<group>"; };
 		0D01ED3247C1344CC2910A0C /* MoriTerminal */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MoriTerminal; path = ../Packages/MoriTerminal; sourceTree = SOURCE_ROOT; };
+		11EBAEEBBFE6A6FF22BFC722 /* TerminalScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalScreen.swift; sourceTree = "<group>"; };
 		1B69BBE4138563F4FB5A7709 /* SSHChannelTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHChannelTransport.swift; sourceTree = "<group>"; };
 		293AE41146DC5F2BB4900EA4 /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
 		2B45537B3FC70BA7F912DE66 /* MoriSSH */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MoriSSH; path = ../Packages/MoriSSH; sourceTree = SOURCE_ROOT; };
 		35C6D3B4BCCF583DFF3FE192 /* MoriCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MoriCore; path = ../Packages/MoriCore; sourceTree = SOURCE_ROOT; };
 		405397F8D3FACA71D62B7717 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		46F3182F8D251430A10B298E /* MoriRemoteApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoriRemoteApp.swift; sourceTree = "<group>"; };
+		493C27506159F574E156F96C /* Server.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Server.swift; sourceTree = "<group>"; };
 		495654252F6CE455BE0201B3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6446C74F96EC23E8A06F4258 /* TerminalDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalDebugView.swift; sourceTree = "<group>"; };
+		6666C37E7773D0C60B3D16BA /* ServerListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerListView.swift; sourceTree = "<group>"; };
 		6C511C1314958A8D89FC53C8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		93C9BF50025C03B0BCF8E77A /* ServerFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerFormView.swift; sourceTree = "<group>"; };
+		977760861C89855B90308D6B /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		BEC31B48C129D1E076933F45 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		C5C351C1B33D101446ECAAE1 /* ServerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerStore.swift; sourceTree = "<group>"; };
 		D65F64A88926274343CB4D23 /* MoriTmux */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MoriTmux; path = ../Packages/MoriTmux; sourceTree = SOURCE_ROOT; };
 		E6317A1B56EED0B86D2F4D5D /* MoriRemote.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MoriRemote.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		FE4E48A48CA59FFCF24563F5 /* ConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectView.swift; sourceTree = "<group>"; };
+		FC01A0E499A058F9957300F6 /* SessionPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionPickerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -65,17 +77,28 @@
 		3AA0698F729DC6B09848C13A /* MoriRemote */ = {
 			isa = PBXGroup;
 			children = (
+				51D726D874821968DFE9EA85 /* Models */,
 				2A2C3E328CF35E08821257D9 /* Resources */,
+				B723E13FED944C47F0F5BB37 /* Views */,
 				495654252F6CE455BE0201B3 /* Assets.xcassets */,
-				FE4E48A48CA59FFCF24563F5 /* ConnectView.swift */,
 				6C511C1314958A8D89FC53C8 /* Info.plist */,
 				46F3182F8D251430A10B298E /* MoriRemoteApp.swift */,
 				0399FF6B719FF10610D9D76E /* SpikeCoordinator.swift */,
 				1B69BBE4138563F4FB5A7709 /* SSHChannelTransport.swift */,
 				6446C74F96EC23E8A06F4258 /* TerminalDebugView.swift */,
 				293AE41146DC5F2BB4900EA4 /* TerminalView.swift */,
+				977760861C89855B90308D6B /* Theme.swift */,
 			);
 			path = MoriRemote;
+			sourceTree = "<group>";
+		};
+		51D726D874821968DFE9EA85 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				493C27506159F574E156F96C /* Server.swift */,
+				C5C351C1B33D101446ECAAE1 /* ServerStore.swift */,
+			);
+			path = Models;
 			sourceTree = "<group>";
 		};
 		7545784AFF05234220C217D0 /* Packages */ = {
@@ -87,6 +110,17 @@
 				D65F64A88926274343CB4D23 /* MoriTmux */,
 			);
 			name = Packages;
+			sourceTree = "<group>";
+		};
+		B723E13FED944C47F0F5BB37 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				93C9BF50025C03B0BCF8E77A /* ServerFormView.swift */,
+				6666C37E7773D0C60B3D16BA /* ServerListView.swift */,
+				FC01A0E499A058F9957300F6 /* SessionPickerView.swift */,
+				11EBAEEBBFE6A6FF22BFC722 /* TerminalScreen.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 		CD5421D0DDCEBB050BBBD629 = {
@@ -189,12 +223,18 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F1389EC25C548603BA95AE2A /* ConnectView.swift in Sources */,
 				376EEC1B30EE8565C4B085D1 /* MoriRemoteApp.swift in Sources */,
 				BD0001EDD996C4C33B8C8D9C /* SSHChannelTransport.swift in Sources */,
+				97B5FB0C7E80E60AF0D59B0E /* Server.swift in Sources */,
+				3E10DC5EF41F3B0DBD7E18E0 /* ServerFormView.swift in Sources */,
+				58C6389AD3DF6D861F49D1DE /* ServerListView.swift in Sources */,
+				949356F283B52C6F3AFC7B06 /* ServerStore.swift in Sources */,
+				ABC22A30FBA56C3092EF8DF8 /* SessionPickerView.swift in Sources */,
 				4031D10BB73B613259BD295F /* SpikeCoordinator.swift in Sources */,
 				259A4B632905B1F7F86E0CD7 /* TerminalDebugView.swift in Sources */,
+				5ACA156F8A500931E29BAD3E /* TerminalScreen.swift in Sources */,
 				96C8DDDEA3B929ED016AF50D /* TerminalView.swift in Sources */,
+				84BCE7CB7E779A71350C7FB7 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
