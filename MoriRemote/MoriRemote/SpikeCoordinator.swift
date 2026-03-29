@@ -130,6 +130,14 @@ final class SpikeCoordinator {
             pendingOutputBuffer.removeAll()
 
             try await refreshClientSizeIfNeeded()
+
+            // Capture existing pane content — %output only delivers new data,
+            // so anything already on screen must be fetched explicitly.
+            let captured = try await runTmuxCommand("capture-pane -t \(paneId) -p -e")
+            if !captured.isEmpty, let data = (captured + "\n").data(using: .utf8) {
+                self.renderer?.feedBytes(data)
+            }
+
             state = .attached(paneId: paneId)
         } catch {
             await transitionToDisconnected(error)

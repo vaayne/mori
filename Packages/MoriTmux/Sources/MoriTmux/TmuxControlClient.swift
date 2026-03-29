@@ -162,9 +162,14 @@ public actor TmuxControlClient {
     /// Extract complete `\n`-terminated lines from the buffer.
     private func extractAndProcessLines() {
         let newline = UInt8(ascii: "\n")
+        let cr = UInt8(ascii: "\r")
         while let nlIndex = lineBuffer.firstIndex(of: newline) {
-            let lineData = lineBuffer[lineBuffer.startIndex..<nlIndex]
+            var lineData = lineBuffer[lineBuffer.startIndex..<nlIndex]
             lineBuffer = Data(lineBuffer[lineBuffer.index(after: nlIndex)...])
+            // Strip trailing \r (SSH channels often send \r\n)
+            if let last = lineData.last, last == cr {
+                lineData = lineData.dropLast()
+            }
             let lineStr = String(decoding: lineData, as: UTF8.self)
             processLine(lineStr)
         }

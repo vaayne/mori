@@ -27,7 +27,7 @@ private struct RootView: View {
                     .onAppear {
                         activeSessionName = nil
                     }
-            case .connected:
+            case .connected, .attached:
                 if let activeSessionName {
                     TerminalScreen(sessionName: activeSessionName)
                 } else {
@@ -37,10 +37,6 @@ private struct RootView: View {
                             activeSessionName = sessionName.trimmingCharacters(in: .whitespacesAndNewlines)
                         }
                     )
-                }
-            case .attached:
-                if let activeSessionName {
-                    TerminalScreen(sessionName: activeSessionName)
                 }
             }
         }
