@@ -76,26 +76,19 @@ private struct TerminalScreen: View {
     @State private var attachStarted = false
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            TerminalView(
-                onRendererReady: { renderer in
-                    coordinator.registerRenderer(renderer)
+        TerminalView(
+            onRendererReady: { renderer in
+                coordinator.registerRenderer(renderer)
 
-                    guard !attachStarted else { return }
-                    attachStarted = true
+                guard !attachStarted else { return }
+                attachStarted = true
 
-                    Task {
-                        await coordinator.attachSession(name: sessionName, renderer: renderer)
-                    }
-                },
-                onRendererResize: { renderer in
-                    coordinator.rendererDidResize(renderer)
+                Task {
+                    await coordinator.attachSession(name: sessionName, renderer: renderer)
                 }
-            )
-            .ignoresSafeArea(edges: .bottom)
-
-            KeyboardInputView()
-        }
+            }
+        )
+        .ignoresSafeArea(edges: .bottom)
         .background(Color.black)
         .overlay {
             if coordinator.isAttachingSession || !coordinator.isTerminalAttached {

@@ -46,7 +46,7 @@ final class SpikeCoordinator {
     private var sshManager: SSHConnectionManager?
     private var sshChannel: SSHChannel?
     private var tmuxClient: TmuxControlClient?
-    private weak var renderer: GhosttyiOSRenderer?
+    private weak var renderer: SwiftTermRenderer?
     private var attachedPaneId: String?
     private var pendingOutputBuffer: [(paneId: String, data: Data)] = []
 
@@ -74,7 +74,7 @@ final class SpikeCoordinator {
         }
     }
 
-    func attachSession(name: String, renderer: GhosttyiOSRenderer) async {
+    func attachSession(name: String, renderer: SwiftTermRenderer) async {
         // Prevent concurrent attach calls
         guard !isAttachingSession else { return }
         if case .attached = state { return }
@@ -144,15 +144,16 @@ final class SpikeCoordinator {
         }
     }
 
-    func registerRenderer(_ renderer: GhosttyiOSRenderer) {
+    func registerRenderer(_ renderer: SwiftTermRenderer) {
         self.renderer = renderer
-        if case .attached = state {
-            scheduleRefresh()
-        }
-    }
 
-    func rendererDidResize(_ renderer: GhosttyiOSRenderer) {
-        self.renderer = renderer
+        renderer.inputHandler = { [weak self] data in
+            self?.sendRawInput(data)
+        }
+        renderer.sizeChangeHandler = { [weak self] cols, rows in
+            self?.handleSizeChange(cols, rows)
+        }
+
         if case .attached = state {
             scheduleRefresh()
         }
@@ -167,6 +168,20 @@ final class SpikeCoordinator {
     func sendSpecialKey(_ key: String) {
         guard let paneId = attachedPaneId else { return }
         scheduleCommand("send-keys -t \(paneId) \(key)")
+    }
+
+    /// Receive raw bytes from SwiftTerm keyboard input and forward to tmux.
+    func sendRawInput(_ data: Data) {
+        guard let paneId = attachedPaneId else { return }
+        guard let text = String(data: data, encoding: .utf8), !text.isEmpty else { return }
+        let escapedText = Self.shellQuote(text)
+        scheduleCommand("send-keys -l -t \(paneId) \(escapedText)")
+    }
+
+    /// Respond to terminal grid resize from SwiftTerm.
+    func handleSizeChange(_ cols: UInt16, _ rows: UInt16) {
+        guard cols > 0, rows > 0 else { return }
+        scheduleCommand("refresh-client -C \(cols),\(rows)")
     }
 
     func presentDisconnected(error: Error?) {
