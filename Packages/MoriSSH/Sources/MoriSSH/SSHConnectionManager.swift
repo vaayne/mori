@@ -2,6 +2,9 @@ import Foundation
 import NIOCore
 import NIOPosix
 import NIOSSH
+import os.log
+
+private let sshLog = Logger(subsystem: "dev.mori.remote", category: "SSH")
 
 // MARK: - Auth Delegate
 
@@ -22,16 +25,20 @@ private final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate
         availableMethods: NIOSSHAvailableUserAuthenticationMethods,
         nextChallengePromise: EventLoopPromise<NIOSSHUserAuthenticationOffer?>
     ) {
+        sshLog.info("nextAuthenticationType called, offered=\(self.offered), available=\(availableMethods.rawValue), hasPassword=\(availableMethods.contains(.password))")
         guard !offered else {
+            sshLog.info("Already offered credentials, returning nil")
             nextChallengePromise.succeed(nil)
             return
         }
         offered = true
 
         guard availableMethods.contains(.password) else {
+            sshLog.warning("Server does not support password auth")
             nextChallengePromise.succeed(nil)
             return
         }
+        sshLog.info("Offering password auth for user: \(self.username)")
         nextChallengePromise.succeed(
             NIOSSHUserAuthenticationOffer(
                 username: username,
@@ -69,6 +76,7 @@ private final class AuthCompletionHandler: ChannelInboundHandler, @unchecked Sen
     }
 
     func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        sshLog.info("AuthCompletionHandler event: \(type(of: event))")
         if event is UserAuthSuccessEvent, let promise = authPromise {
             authPromise = nil
             promise.succeed(())
@@ -79,6 +87,7 @@ private final class AuthCompletionHandler: ChannelInboundHandler, @unchecked Sen
     }
 
     func channelInactive(context: ChannelHandlerContext) {
+        sshLog.warning("AuthCompletionHandler: channel inactive, auth pending=\(self.authPromise != nil)")
         if let promise = authPromise {
             authPromise = nil
             promise.fail(SSHError.authenticationFailed)
@@ -87,6 +96,7 @@ private final class AuthCompletionHandler: ChannelInboundHandler, @unchecked Sen
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
+        sshLog.error("AuthCompletionHandler error: \(error)")
         if let promise = authPromise {
             authPromise = nil
             promise.fail(SSHError.authenticationFailed)
@@ -265,6 +275,7 @@ public actor SSHConnectionManager {
         let authPromise = eventLoop.makePromise(of: Void.self)
 
         let bootstrap = ClientBootstrap(group: group)
+            .connectTimeout(.seconds(10))
             .channelInitializer { channel in
                 channel.eventLoop.makeCompletedFuture {
                     let sshHandler = NIOSSHHandler(
@@ -288,15 +299,21 @@ public actor SSHConnectionManager {
 
         let tcpChannel: Channel
         do {
+            sshLog.info("TCP connect to \(host):\(port)…")
             tcpChannel = try await bootstrap.connect(host: host, port: port).get()
+            sshLog.info("TCP connected")
         } catch {
+            sshLog.error("TCP connect failed: \(error)")
             throw SSHError.connectionFailed(error.localizedDescription)
         }
 
         // Wait for SSH authentication to complete before returning
         do {
+            sshLog.info("Waiting for SSH auth…")
             try await authPromise.futureResult.get()
+            sshLog.info("SSH auth succeeded")
         } catch {
+            sshLog.error("SSH auth failed: \(error)")
             // Auth failed — close the TCP channel and propagate the error
             try? await tcpChannel.close().get()
             if error is SSHError {
