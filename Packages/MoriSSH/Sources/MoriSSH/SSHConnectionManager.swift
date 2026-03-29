@@ -110,6 +110,138 @@ private final class AuthCompletionHandler: ChannelInboundHandler, @unchecked Sen
 /// NIO channel handler that sends an exec request on channel active,
 /// waits for `ChannelSuccessEvent` (exec accepted) before signaling readiness,
 /// reads SSHChannelData and feeds decoded bytes into the stream continuation.
+// MARK: - Shell Handler
+
+/// Channel handler that allocates a PTY and requests the user's login shell.
+private final class ShellHandler: ChannelDuplexHandler, @unchecked Sendable {
+    typealias InboundIn = SSHChannelData
+    typealias InboundOut = ByteBuffer
+    typealias OutboundIn = ByteBuffer
+    typealias OutboundOut = SSHChannelData
+
+    private let cols: Int
+    private let rows: Int
+    private let term: String
+    private let continuation: AsyncThrowingStream<Data, Error>.Continuation
+    private let shellAccepted: EventLoopPromise<Void>
+    private var shellResolved = false
+    private var ptyAccepted = false
+    private var shellSent = false
+
+    init(
+        cols: Int,
+        rows: Int,
+        term: String,
+        continuation: AsyncThrowingStream<Data, Error>.Continuation,
+        shellAccepted: EventLoopPromise<Void>
+    ) {
+        self.cols = cols
+        self.rows = rows
+        self.term = term
+        self.continuation = continuation
+        self.shellAccepted = shellAccepted
+    }
+
+    private func failShell(_ error: Error) {
+        guard !shellResolved else { return }
+        shellResolved = true
+        shellAccepted.fail(error)
+    }
+
+    private func succeedShell() {
+        guard !shellResolved else { return }
+        shellResolved = true
+        shellAccepted.succeed(())
+    }
+
+    func handlerAdded(context: ChannelHandlerContext) {
+        context.channel.setOption(ChannelOptions.allowRemoteHalfClosure, value: true)
+            .assumeIsolated()
+            .whenFailure { error in
+                context.fireErrorCaught(error)
+            }
+    }
+
+    func channelActive(context: ChannelHandlerContext) {
+        sshLog.info("ShellHandler: channelActive, requesting PTY \(self.cols)x\(self.rows)")
+        let ptyRequest = SSHChannelRequestEvent.PseudoTerminalRequest(
+            wantReply: true,
+            term: term,
+            terminalCharacterWidth: cols,
+            terminalRowHeight: rows,
+            terminalPixelWidth: 0,
+            terminalPixelHeight: 0,
+            terminalModes: .init([:])
+        )
+        context.triggerUserOutboundEvent(ptyRequest).assumeIsolated().whenFailure { [self] error in
+            self.failShell(SSHError.channelError("pty request failed: \(error)"))
+            self.continuation.finish(throwing: SSHError.channelError("pty request failed: \(error)"))
+            context.close(promise: nil)
+        }
+    }
+
+    private func sendShellRequest(context: ChannelHandlerContext) {
+        shellSent = true
+        sshLog.info("ShellHandler: PTY accepted, sending shell request")
+        let shellRequest = SSHChannelRequestEvent.ShellRequest(wantReply: true)
+        context.triggerUserOutboundEvent(shellRequest).assumeIsolated().whenFailure { [self] error in
+            self.failShell(SSHError.channelError("shell request failed: \(error)"))
+            self.continuation.finish(throwing: SSHError.channelError("shell request failed: \(error)"))
+            context.close(promise: nil)
+        }
+    }
+
+    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        switch event {
+        case is ChannelSuccessEvent:
+            if !ptyAccepted {
+                sshLog.info("ShellHandler: PTY accepted")
+                ptyAccepted = true
+                sendShellRequest(context: context)
+            } else if shellSent {
+                sshLog.info("ShellHandler: shell accepted")
+                succeedShell()
+            }
+        case is ChannelFailureEvent:
+            if !ptyAccepted {
+                failShell(SSHError.channelError("pty request rejected by server"))
+                continuation.finish(throwing: SSHError.channelError("pty request rejected by server"))
+                context.close(promise: nil)
+            } else {
+                failShell(SSHError.channelError("shell request rejected by server"))
+                continuation.finish(throwing: SSHError.channelError("shell request rejected by server"))
+                context.close(promise: nil)
+            }
+        default:
+            break
+        }
+        context.fireUserInboundEventTriggered(event)
+    }
+
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        let channelData = self.unwrapInboundIn(data)
+        guard case .byteBuffer(var buffer) = channelData.data else { return }
+        guard let bytes = buffer.readBytes(length: buffer.readableBytes) else { return }
+        sshLog.debug("ShellHandler: read \(bytes.count) bytes")
+        continuation.yield(Data(bytes))
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        sshLog.info("ShellHandler: channel inactive")
+        failShell(SSHError.disconnected)
+        continuation.finish()
+        context.fireChannelInactive()
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        failShell(error)
+        continuation.finish(throwing: error)
+        context.close(promise: nil)
+    }
+}
+
+// MARK: - Exec Handler
+
 private final class ExecHandler: ChannelDuplexHandler, @unchecked Sendable {
     typealias InboundIn = SSHChannelData
     typealias InboundOut = ByteBuffer
@@ -386,6 +518,83 @@ public actor SSHConnectionManager {
                     case .failure(let error):
                         streamContinuation.finish(throwing: error)
                         execAccepted.fail(error)
+                        continuation.resume(throwing: SSHError.channelError(error.localizedDescription))
+                    }
+                }
+            }
+        }
+
+        return sshChannel
+    }
+
+    /// Open an interactive shell channel with a PTY.
+    ///
+    /// Allocates a pseudo-terminal and starts the user's login shell.
+    /// Use `SSHChannel.resize(cols:rows:)` to send window-change requests.
+    ///
+    /// - Parameters:
+    ///   - cols: Initial terminal width in columns (default 80).
+    ///   - rows: Initial terminal height in rows (default 24).
+    ///   - term: TERM environment variable (default xterm-256color).
+    /// - Returns: An `SSHChannel` for reading output and writing input.
+    public func openShellChannel(
+        cols: Int = 80,
+        rows: Int = 24,
+        term: String = "xterm-256color"
+    ) async throws -> SSHChannel {
+        guard let channel = self.channel else {
+            throw SSHError.disconnected
+        }
+
+        let sshChannel: SSHChannel = try await withCheckedThrowingContinuation { continuation in
+            channel.eventLoop.execute {
+                let sshHandler: NIOSSHHandler
+                do {
+                    sshHandler = try channel.pipeline.syncOperations.handler(type: NIOSSHHandler.self)
+                } catch {
+                    continuation.resume(throwing: SSHError.channelError("no SSH handler: \(error)"))
+                    return
+                }
+
+                let channelPromise = channel.eventLoop.makePromise(of: Channel.self)
+                let shellAccepted = channel.eventLoop.makePromise(of: Void.self)
+                var streamContinuation: AsyncThrowingStream<Data, Error>.Continuation!
+                let inbound = AsyncThrowingStream<Data, Error> { streamContinuation = $0 }
+
+                sshHandler.createChannel(channelPromise) { childChannel, channelType in
+                    guard channelType == .session else {
+                        return childChannel.eventLoop.makeFailedFuture(
+                            SSHError.channelError("unexpected channel type")
+                        )
+                    }
+                    return childChannel.eventLoop.makeCompletedFuture {
+                        let handler = ShellHandler(
+                            cols: cols,
+                            rows: rows,
+                            term: term,
+                            continuation: streamContinuation,
+                            shellAccepted: shellAccepted
+                        )
+                        try childChannel.pipeline.syncOperations.addHandler(handler)
+                    }
+                }
+
+                channelPromise.futureResult.assumeIsolated().whenComplete { result in
+                    switch result {
+                    case .success(let childChannel):
+                        shellAccepted.futureResult.assumeIsolated().whenComplete { shellResult in
+                            switch shellResult {
+                            case .success:
+                                let ch = SSHChannel(channel: childChannel, inbound: inbound)
+                                continuation.resume(returning: ch)
+                            case .failure(let error):
+                                streamContinuation.finish(throwing: error)
+                                continuation.resume(throwing: error)
+                            }
+                        }
+                    case .failure(let error):
+                        streamContinuation.finish(throwing: error)
+                        shellAccepted.fail(error)
                         continuation.resume(throwing: SSHError.channelError(error.localizedDescription))
                     }
                 }

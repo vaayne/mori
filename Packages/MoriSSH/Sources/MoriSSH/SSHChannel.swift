@@ -24,6 +24,18 @@ public final class SSHChannel: @unchecked Sendable {
         try await channel.writeAndFlush(channelData).get()
     }
 
+    /// Send a PTY window-change request to resize the remote terminal.
+    public func resize(cols: Int, rows: Int) async throws {
+        guard channel.isActive else { throw SSHError.disconnected }
+        let request = SSHChannelRequestEvent.WindowChangeRequest(
+            terminalCharacterWidth: cols,
+            terminalRowHeight: rows,
+            terminalPixelWidth: 0,
+            terminalPixelHeight: 0
+        )
+        try await channel.triggerUserOutboundEvent(request).get()
+    }
+
     /// Close the SSH channel.
     public func close() async {
         try? await channel.close().get()

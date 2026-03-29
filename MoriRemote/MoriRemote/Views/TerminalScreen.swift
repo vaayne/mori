@@ -1,42 +1,70 @@
+import MoriTerminal
 import SwiftUI
 
 struct TerminalScreen: View {
-    @Environment(SpikeCoordinator.self) private var coordinator
+    @Environment(ShellCoordinator.self) private var coordinator
 
-    let sessionName: String
     let serverName: String
-    let onDetach: () -> Void
     let onDisconnect: () -> Void
 
-    @State private var attachStarted = false
+    @State private var shellStarted = false
     @State private var showToolbar = false
+    @State private var renderer: SwiftTermRendererBox?
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
             TerminalView(
-                onRendererReady: { renderer in
-                    coordinator.registerRenderer(renderer)
+                onRendererReady: { r in
+                    renderer = SwiftTermRendererBox(r)
 
-                    guard !attachStarted else { return }
-                    attachStarted = true
+                    guard !shellStarted else { return }
+                    shellStarted = true
 
                     Task {
-                        await coordinator.attachSession(name: sessionName, renderer: renderer)
+                        await coordinator.openShell(renderer: r)
                     }
                 }
             )
             .ignoresSafeArea(edges: .bottom)
 
-            // Attach overlay
-            if coordinator.isAttachingSession || !coordinator.isTerminalAttached {
-                attachingOverlay
+            // Loading overlay
+            if !coordinator.isShellActive {
+                VStack(spacing: 14) {
+                    ProgressView()
+                        .tint(Theme.accent)
+                        .scaleEffect(1.2)
+
+                    Text("Opening shell…")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                .padding(24)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
             }
 
             // Floating menu button (top-right)
-            if coordinator.isTerminalAttached {
-                floatingMenuButton
+            if coordinator.isShellActive && !showToolbar {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button {
+                            withAnimation(.spring(duration: 0.25)) { showToolbar = true }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.7))
+                                .frame(width: 32, height: 32)
+                                .background(.ultraThinMaterial, in: Circle())
+                        }
+                        .padding(.trailing, 12)
+                        .padding(.top, 8)
+                    }
+                    Spacer()
+                }
+                .allowsHitTesting(true)
+                .contentShape(Rectangle().size(.zero))
             }
 
             // Toolbar overlay
@@ -46,119 +74,81 @@ struct TerminalScreen: View {
         }
         .statusBarHidden(true)
         .preferredColorScheme(.dark)
-    }
-
-    // MARK: - Attaching Overlay
-
-    private var attachingOverlay: some View {
-        VStack(spacing: 14) {
-            ProgressView()
-                .tint(Theme.accent)
-                .scaleEffect(1.2)
-
-            Text("Attaching session…")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(Theme.textSecondary)
-        }
-        .padding(24)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-    }
-
-    // MARK: - Floating Menu Button
-
-    private var floatingMenuButton: some View {
-        VStack {
-            HStack {
-                Spacer()
-                Button {
-                    withAnimation(.spring(duration: 0.25)) { showToolbar.toggle() }
-                } label: {
-                    Image(systemName: showToolbar ? "xmark" : "ellipsis")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .frame(width: 32, height: 32)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-                .padding(.trailing, 12)
-                .padding(.top, 8)
+        .onChange(of: coordinator.isShellActive) { _, active in
+            if active {
+                renderer?.value.activateKeyboard()
             }
-            Spacer()
         }
     }
 
     // MARK: - Toolbar Overlay
 
     private var toolbarOverlay: some View {
-        VStack {
-            // Top bar
-            VStack(spacing: 0) {
-                // Session info
-                HStack(spacing: 10) {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 8, height: 8)
+        ZStack {
+            Color.black.opacity(0.3)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.spring(duration: 0.25)) { showToolbar = false }
+                    renderer?.value.activateKeyboard()
+                }
 
-                    VStack(alignment: .leading, spacing: 1) {
+            VStack {
+                VStack(spacing: 0) {
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 8, height: 8)
+
                         Text(serverName)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(Theme.textPrimary)
-                        Text("session: \(sessionName)")
-                            .font(.caption2)
-                            .foregroundStyle(Theme.textSecondary)
+
+                        Spacer()
+
+                        Button {
+                            withAnimation(.spring(duration: 0.25)) { showToolbar = false }
+                            renderer?.value.activateKeyboard()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(Theme.textTertiary)
+                                .frame(width: 28, height: 28)
+                                .background(Color.white.opacity(0.08), in: Circle())
+                        }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
 
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                    Divider().overlay(Theme.cardBorder)
 
-                Divider().overlay(Theme.cardBorder)
-
-                // Actions
-                HStack(spacing: 0) {
-                    toolbarAction("Sessions", icon: "rectangle.stack", color: Theme.accent) {
-                        withAnimation(.spring(duration: 0.25)) { showToolbar = false }
-                        onDetach()
-                    }
-
-                    Divider().overlay(Theme.cardBorder).frame(height: 36)
-
-                    toolbarAction("Disconnect", icon: "xmark.circle", color: Theme.destructive) {
+                    Button {
                         withAnimation(.spring(duration: 0.25)) { showToolbar = false }
                         onDisconnect()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "xmark.circle")
+                                .font(.system(size: 13, weight: .medium))
+                            Text("Disconnect")
+                                .font(.subheadline.weight(.medium))
+                        }
+                        .foregroundStyle(Theme.destructive)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
                     }
                 }
-                .padding(.vertical, 6)
-            }
-            .background(.ultraThinMaterial)
+                .background(.ultraThinMaterial)
 
-            Spacer()
-        }
-        .transition(.move(edge: .top).combined(with: .opacity))
-        .onTapGesture {
-            withAnimation(.spring(duration: 0.25)) { showToolbar = false }
-        }
-    }
-
-    private func toolbarAction(_ label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .medium))
-                Text(label)
-                    .font(.subheadline.weight(.medium))
+                Spacer()
             }
-            .foregroundStyle(color)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
         }
+        .transition(.opacity)
     }
 }
 
-extension SpikeCoordinator {
-    var isTerminalAttached: Bool {
-        if case .attached = state { return true }
-        return false
-    }
+// Box to hold renderer reference in @State
+@MainActor
+private final class SwiftTermRendererBox {
+    let value: SwiftTermRenderer
+    init(_ value: SwiftTermRenderer) { self.value = value }
 }

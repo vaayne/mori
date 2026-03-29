@@ -3,7 +3,7 @@ import SwiftUI
 
 @main
 struct MoriRemoteApp: App {
-    @State private var coordinator = SpikeCoordinator()
+    @State private var coordinator = ShellCoordinator()
     @State private var store = ServerStore()
 
     var body: some Scene {
@@ -16,39 +16,26 @@ struct MoriRemoteApp: App {
 }
 
 private struct RootView: View {
-    @Environment(SpikeCoordinator.self) private var coordinator
+    @Environment(ShellCoordinator.self) private var coordinator
     @Environment(ServerStore.self) private var store
 
     /// The server we're currently connecting/connected to.
     @State private var activeServer: Server?
-    /// The session name once the user chose to attach.
-    @State private var activeSessionName: String?
 
     var body: some View {
         Group {
             switch coordinator.state {
             case .disconnected, .connecting:
                 ServerListView()
-                    .onAppear { resetNavigation() }
+                    .onAppear { activeServer = nil }
 
-            case .connected, .attached:
-                if let server = activeServer, let session = activeSessionName {
+            case .connected, .shell:
+                if let server = activeServer {
                     TerminalScreen(
-                        sessionName: session,
                         serverName: server.displayName,
-                        onDetach: { detachSession() },
-                        onDisconnect: { disconnect() }
-                    )
-                } else if let server = activeServer {
-                    SessionPickerView(
-                        server: server,
-                        onAttach: { session in
-                            activeSessionName = session
-                        },
                         onDisconnect: { disconnect() }
                     )
                 } else {
-                    // Edge case: connected but no server context — go back
                     ServerListView()
                         .onAppear { disconnect() }
                 }
@@ -62,21 +49,9 @@ private struct RootView: View {
         }
     }
 
-    private func resetNavigation() {
-        activeServer = nil
-        activeSessionName = nil
-    }
-
-    private func detachSession() {
-        activeSessionName = nil
-        Task {
-            await coordinator.detachSession()
-        }
-    }
-
     private func disconnect() {
         Task {
-            await coordinator.disconnectAndReset()
+            await coordinator.disconnect()
         }
     }
 }

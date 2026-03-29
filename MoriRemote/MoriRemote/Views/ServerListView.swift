@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ServerListView: View {
     @Environment(ServerStore.self) private var store
-    @Environment(SpikeCoordinator.self) private var coordinator
+    @Environment(ShellCoordinator.self) private var coordinator
 
     @State private var editingServer: Server?
     @State private var showingAddSheet = false
@@ -63,7 +63,7 @@ struct ServerListView: View {
                     connectingServerId = nil
                 }
             }
-            if newKey == "connected" {
+            if newKey == "connected" || newKey == "shell" {
                 connectingServerId = nil
             }
         }

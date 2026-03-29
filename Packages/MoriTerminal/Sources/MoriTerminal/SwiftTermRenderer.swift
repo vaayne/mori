@@ -27,6 +27,9 @@ public final class SwiftTermRenderer: UIView {
     /// Called when the terminal grid dimensions change (e.g. device rotation).
     public var sizeChangeHandler: SwiftTermSizeChangeHandler?
 
+    /// Tracks whether the initial size report has been sent after layout.
+    private var didReportInitialSize = false
+
     public init(
         frame: CGRect = .zero,
         inputHandler: SwiftTermInputHandler? = nil,
@@ -48,11 +51,35 @@ public final class SwiftTermRenderer: UIView {
         ])
 
         terminalView.terminalDelegate = self
+
+        // Prevent UIScrollView from dismissing the keyboard on scroll/drag.
+        terminalView.keyboardDismissMode = .none
+
+        // Hide the blinking cursor caret that iOS renders for UITextInput views.
+        // SwiftTerm draws its own cursor in the terminal grid.
+        terminalView.tintColor = .clear
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    // MARK: - Layout
+
+    public override func layoutSubviews() {
+        super.layoutSubviews()
+
+        // After the first real layout, report the correct grid size.
+        // SwiftTerm calculates cols/rows from its frame, which isn't
+        // available during makeUIView.
+        if !didReportInitialSize && bounds.width > 0 && bounds.height > 0 {
+            let size = gridSize()
+            if size.cols > 0 && size.rows > 0 {
+                didReportInitialSize = true
+                sizeChangeHandler?(size.cols, size.rows)
+            }
+        }
     }
 
     // MARK: - Public API
