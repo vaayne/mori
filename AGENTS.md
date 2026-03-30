@@ -46,6 +46,24 @@ Always build release before tagging.
 - **SwiftUI views are pure**: Data + callbacks as parameters, no direct AppState dependency
 - **No XCTest**: Tests are executable targets with custom `assertEqual`/`assertTrue` helpers
 
+## Theme / Appearance
+
+All windows and panels **must** sync their appearance with the Ghostty terminal theme.
+The theme is resolved at startup via `GhosttyThemeInfo` (from `MoriTerminal`) and updated
+on config reload in `AppDelegate.reloadGhosttyConfig()`.
+
+When adding a new `NSWindow` or `NSPanel`:
+1. Set `window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)`
+2. Set `window.backgroundColor = themeInfo.background`
+3. Add an `updateAppearance(themeInfo:)` method and call it from `reloadGhosttyConfig()`
+
+SwiftUI views inside `NSHostingView` automatically inherit the window's `NSAppearance`,
+so semantic colors like `Color.primary`, `Color(nsColor: .controlBackgroundColor)`, and
+`MoriTokens.Color.*` adapt correctly — no manual dark/light branching needed in SwiftUI.
+
+Existing examples: `MainWindowController`, settings window, `WorktreeCreationController`,
+`AgentDashboardPanel`.
+
 ## Release
 
 See [release skill](.agents/skills/release/SKILL.md) for the full release workflow.
