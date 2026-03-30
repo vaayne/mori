@@ -122,6 +122,23 @@ func testCommandPaneReadFraming() {
     assertEqual(decoded.requestId, "pane-2", "paneRead framed request id")
 }
 
+func testCommandPaneMessageRoundTrip() {
+    let cmd = IPCCommand.paneMessage(project: "mori", worktree: "main", window: "codex", text: "Review auth module")
+    let data = try! JSONEncoder().encode(cmd)
+    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
+    assertEqual(decoded, cmd, "paneMessage round-trip")
+}
+
+func testCommandPaneMessageFraming() {
+    let cmd = IPCCommand.paneMessage(project: "api", worktree: "feat", window: "claude", text: "hello")
+    let request = IPCRequest(command: cmd, requestId: "msg-1")
+    let data = try! IPCFraming.encode(request)
+    assertEqual(data.last, 0x0A, "paneMessage framed request ends with newline")
+    let decoded = try! IPCFraming.decodeRequest(from: data)
+    assertEqual(decoded.command, cmd, "paneMessage framed request decodable")
+    assertEqual(decoded.requestId, "msg-1", "paneMessage framed request id")
+}
+
 // MARK: - IPCRequest Tests
 
 func testIPCRequestRoundTrip() {
@@ -290,6 +307,8 @@ testCommandPaneReadRoundTrip()
 testCommandPaneReadMaxLines()
 testCommandPaneListFraming()
 testCommandPaneReadFraming()
+testCommandPaneMessageRoundTrip()
+testCommandPaneMessageFraming()
 
 // Request round-trips
 testIPCRequestRoundTrip()
