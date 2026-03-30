@@ -17,7 +17,8 @@ struct TerminalScreen: View {
         SidebarContainer(isOpen: $showSidebar) {
             TmuxSidebarView(
                 onDismiss: { showSidebar = false },
-                onDisconnect: onDisconnect
+                onDisconnect: onDisconnect,
+                onSwitchHost: onDisconnect
             )
         } content: {
             terminalContent
