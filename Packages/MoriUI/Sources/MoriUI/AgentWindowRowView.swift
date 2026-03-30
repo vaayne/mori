@@ -46,7 +46,7 @@ public struct AgentWindowRowView: View {
             hoverTask?.cancel()
             if hovering, onRequestPaneOutput != nil {
                 hoverTask = Task {
-                    try? await Task.sleep(for: .milliseconds(100))
+                    try? await Task.sleep(for: .milliseconds(500))
                     guard !Task.isCancelled else { return }
                     isLoadingOutput = true
                     showPopover = true
@@ -77,7 +77,13 @@ public struct AgentWindowRowView: View {
     }
 
     private var rowContent: some View {
-        Button(action: onSelect) {
+        Button(action: {
+                hoverTask?.cancel()
+                showPopover = false
+                popoverOutput = nil
+                isLoadingOutput = false
+                onSelect()
+            }) {
             HStack(spacing: MoriTokens.Spacing.md) {
                 agentIcon
 

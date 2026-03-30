@@ -43,7 +43,7 @@ public struct WindowRowView: View {
             hoverTask?.cancel()
             if hovering, window.badge != nil, onRequestPaneOutput != nil {
                 hoverTask = Task {
-                    try? await Task.sleep(for: .milliseconds(100))
+                    try? await Task.sleep(for: .milliseconds(500))
                     guard !Task.isCancelled else { return }
                     isLoadingOutput = true
                     showPopover = true
@@ -74,7 +74,13 @@ public struct WindowRowView: View {
     }
 
     private var rowButton: some View {
-        Button(action: onSelect) {
+        Button(action: {
+                hoverTask?.cancel()
+                showPopover = false
+                popoverOutput = nil
+                isLoadingOutput = false
+                onSelect()
+            }) {
             HStack(spacing: MoriTokens.Spacing.md) {
                 Image(systemName: window.tag?.symbolName ?? "terminal")
                     .font(MoriTokens.Font.label)
