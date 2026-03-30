@@ -51,6 +51,7 @@ final class SpikeCoordinator {
     private weak var renderer: SwiftTermRenderer?
     private var attachedPaneId: String?
     private var pendingOutputBuffer: [(paneId: String, data: Data)] = []
+    private var pendingBufferSize = 0
 
     private var paneOutputTask: Task<Void, Never>?
     private var notificationTask: Task<Void, Never>?
@@ -133,6 +134,7 @@ final class SpikeCoordinator {
                 }
             }
             pendingOutputBuffer.removeAll()
+        pendingBufferSize = 0
 
             try await refreshClientSizeIfNeeded()
 
@@ -189,19 +191,9 @@ final class SpikeCoordinator {
         scheduleCommand("refresh-client -C \(cols),\(rows)")
     }
 
-    /// Run a one-shot command over SSH and return its stdout as a string.
     func runSSHCommand(_ command: String) async throws -> String {
-        guard let sshManager else {
-            throw SpikeCoordinatorError.notConnected
-        }
-
-        let channel = try await sshManager.openExecChannel(command: command)
-        var output = Data()
-        for try await chunk in channel.inbound {
-            output.append(chunk)
-        }
-        await channel.close()
-        return String(data: output, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard let sshManager else { throw SpikeCoordinatorError.notConnected }
+        return try await sshManager.runCommand(command)
     }
 
     func presentDisconnected(error: Error?) {
@@ -226,6 +218,7 @@ final class SpikeCoordinator {
 
         attachedPaneId = nil
         pendingOutputBuffer.removeAll()
+        pendingBufferSize = 0
         isAttachingSession = false
         renderer = nil
 
@@ -254,9 +247,8 @@ final class SpikeCoordinator {
                         self.renderer?.feedBytes(event.data)
                     }
                 } else {
-                    // Pane ID not yet known — buffer with cap to prevent unbounded growth
-                    let currentSize = self.pendingOutputBuffer.reduce(0) { $0 + $1.data.count }
-                    if currentSize + event.data.count <= Self.maxPendingBufferBytes {
+                    if self.pendingBufferSize + event.data.count <= Self.maxPendingBufferBytes {
+                        self.pendingBufferSize += event.data.count
                         self.pendingOutputBuffer.append(event)
                     }
                 }
@@ -369,6 +361,7 @@ final class SpikeCoordinator {
 
         attachedPaneId = nil
         pendingOutputBuffer.removeAll()
+        pendingBufferSize = 0
         isAttachingSession = false
 
         if let tmuxClient {

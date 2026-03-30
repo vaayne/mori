@@ -81,17 +81,9 @@ final class ShellCoordinator {
     // MARK: - Shell
 
     func openShell(renderer: SwiftTermRenderer) async {
-        // Only open if connected but not yet in shell
         guard case .connected = state else {
-            // Already in .shell — just re-register the renderer for output
             if case .shell = state {
-                self.renderer = renderer
-                renderer.inputHandler = { [weak self] data in
-                    self?.sendInput(data)
-                }
-                renderer.sizeChangeHandler = { [weak self] newCols, newRows in
-                    self?.sendResize(Int(newCols), Int(newRows))
-                }
+                wireRenderer(renderer)
                 renderer.activateKeyboard()
             }
             return
@@ -101,52 +93,43 @@ final class ShellCoordinator {
             return
         }
 
-        self.renderer = renderer
+        wireRenderer(renderer)
 
         let size = renderer.gridSize()
         let cols = size.cols > 0 ? Int(size.cols) : 80
         let rows = size.rows > 0 ? Int(size.rows) : 24
 
         do {
-            log.info("Opening shell channel cols=\(cols) rows=\(rows)")
             let channel = try await sshManager.openShellChannel(cols: cols, rows: rows)
             shellChannel = channel
-            log.info("Shell channel opened")
 
-            // Wire input: renderer keystrokes → SSH channel
-            renderer.inputHandler = { [weak self] data in
-                log.debug("Input: \(data.count) bytes")
-                self?.sendInput(data)
-            }
-
-            // Wire resize: renderer size changes → SSH window-change
-            renderer.sizeChangeHandler = { [weak self] newCols, newRows in
-                log.info("Resize: \(newCols)x\(newRows)")
-                self?.sendResize(Int(newCols), Int(newRows))
-            }
-
-            // Wire output: SSH channel → renderer
             outputTask = Task { [weak self] in
                 do {
                     for try await chunk in channel.inbound {
                         guard let self else { return }
-                        log.debug("Output: \(chunk.count) bytes")
                         self.renderer?.feedBytes(chunk)
                     }
-                    log.info("Shell inbound stream ended")
                 } catch {
                     log.error("Shell inbound error: \(error)")
                 }
-                // Channel closed
                 guard let self, !Task.isCancelled else { return }
                 await self.handleShellClosed()
             }
 
             state = .shell
             renderer.activateKeyboard()
-            log.info("Shell active")
         } catch {
             state = .disconnected(error)
+        }
+    }
+
+    private func wireRenderer(_ renderer: SwiftTermRenderer) {
+        self.renderer = renderer
+        renderer.inputHandler = { [weak self] data in
+            self?.sendInput(data)
+        }
+        renderer.sizeChangeHandler = { [weak self] newCols, newRows in
+            self?.sendResize(Int(newCols), Int(newRows))
         }
     }
 
@@ -170,19 +153,9 @@ final class ShellCoordinator {
         }
     }
 
-    /// Run a one-shot command over SSH and return its stdout as a string.
     func runSSHCommand(_ command: String) async throws -> String {
-        guard let sshManager else {
-            throw ShellError.notConnected
-        }
-
-        let channel = try await sshManager.openExecChannel(command: command)
-        var output = Data()
-        for try await chunk in channel.inbound {
-            output.append(chunk)
-        }
-        await channel.close()
-        return String(data: output, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard let sshManager else { throw ShellError.notConnected }
+        return try await sshManager.runCommand(command)
     }
 
     // MARK: - Private

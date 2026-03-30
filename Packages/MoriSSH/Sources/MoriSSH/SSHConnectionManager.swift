@@ -107,11 +107,6 @@ private final class AuthCompletionHandler: ChannelInboundHandler, @unchecked Sen
     }
 }
 
-// MARK: - Exec Channel Handler
-
-/// NIO channel handler that sends an exec request on channel active,
-/// waits for `ChannelSuccessEvent` (exec accepted) before signaling readiness,
-/// reads SSHChannelData and feeds decoded bytes into the stream continuation.
 // MARK: - Shell Handler
 
 /// Channel handler that allocates a PTY and requests the user's login shell.
@@ -610,6 +605,18 @@ public actor SSHConnectionManager {
             try? await channel.close().get()
         }
         try? await group.shutdownGracefully()
+    }
+
+    /// Run a one-shot command and collect its stdout as a string.
+    public func runCommand(_ command: String) async throws -> String {
+        let channel = try await openExecChannel(command: command)
+        var output = Data()
+        for try await chunk in channel.inbound {
+            output.append(chunk)
+        }
+        await channel.close()
+        return String(data: output, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
     /// Whether the connection is currently active.

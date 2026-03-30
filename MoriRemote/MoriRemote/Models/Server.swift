@@ -65,17 +65,17 @@ struct Server: Identifiable, Codable, Equatable, Sendable {
         KeychainHelper.delete(account: id.uuidString)
     }
 
-    /// Display label — falls back to user@host if name is empty.
+    private var address: String {
+        port != 22 ? "\(host):\(port)" : host
+    }
+
     var displayName: String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty { return trimmed }
-        let userHost = "\(username)@\(host)"
-        return port != 22 ? "\(userHost):\(port)" : userHost
+        return !trimmed.isEmpty ? trimmed : "\(username)@\(address)"
     }
 
     var subtitle: String {
-        let addr = port != 22 ? "\(host):\(port)" : host
-        return "\(username)@\(addr)"
+        "\(username)@\(address)"
     }
 
     var isValid: Bool {

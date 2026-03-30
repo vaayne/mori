@@ -91,8 +91,10 @@ public final class SwiftTermRenderer: UIView {
 
     /// Feed raw terminal output bytes (from SSH / tmux) into the emulator.
     public func feedBytes(_ data: Data) {
-        let slice = Array(data)[...]
-        terminalView.feed(byteArray: slice)
+        data.withUnsafeBytes { ptr in
+            let slice = ptr.bindMemory(to: UInt8.self)
+            terminalView.feed(byteArray: ArraySlice(slice))
+        }
     }
 
     /// Current terminal grid dimensions.

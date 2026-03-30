@@ -99,14 +99,16 @@ struct TerminalScreen: View {
 
     // MARK: - Toolbar Overlay
 
+    private func dismissToolbar() {
+        withAnimation(.spring(duration: 0.25)) { showToolbar = false }
+        renderer?.value.activateKeyboard()
+    }
+
     private var toolbarOverlay: some View {
         ZStack {
             Color.black.opacity(0.3)
                 .ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.spring(duration: 0.25)) { showToolbar = false }
-                    renderer?.value.activateKeyboard()
-                }
+                .onTapGesture { dismissToolbar() }
 
             VStack {
                 VStack(spacing: 0) {
@@ -121,10 +123,7 @@ struct TerminalScreen: View {
 
                         Spacer()
 
-                        Button {
-                            withAnimation(.spring(duration: 0.25)) { showToolbar = false }
-                            renderer?.value.activateKeyboard()
-                        } label: {
+                        Button { dismissToolbar() } label: {
                             Image(systemName: "xmark")
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(Theme.textTertiary)
@@ -138,7 +137,7 @@ struct TerminalScreen: View {
                     Divider().overlay(Theme.cardBorder)
 
                     Button {
-                        withAnimation(.spring(duration: 0.25)) { showToolbar = false }
+                        dismissToolbar()
                         onDisconnect()
                     } label: {
                         HStack(spacing: 6) {

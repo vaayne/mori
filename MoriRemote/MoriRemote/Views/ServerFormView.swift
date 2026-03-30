@@ -55,10 +55,11 @@ struct ServerFormView: View {
     }
 
     private var isValid: Bool {
-        !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !password.isEmpty &&
-        (Int(port) ?? 0) > 0
+        let p = Int(port) ?? 0
+        return !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !password.isEmpty &&
+            p > 0 && p <= 65535
     }
 
     var body: some View {
