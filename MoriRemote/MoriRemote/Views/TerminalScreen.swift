@@ -21,14 +21,11 @@ struct TerminalScreen: View {
 
                     guard !shellStarted else { return }
 
-                    // Wait for the first layout so gridSize() returns the real
-                    // phone-screen dimensions, not the default 80x24.
                     r.initialLayoutHandler = { [weak r] cols, rows in
                         guard let r else { return }
                         startShellOnce(renderer: r)
                     }
 
-                    // If layout already happened (e.g. reuse), open immediately
                     let size = r.gridSize()
                     if size.cols > 0 && size.rows > 0 {
                         startShellOnce(renderer: r)
@@ -37,7 +34,6 @@ struct TerminalScreen: View {
             )
             .ignoresSafeArea(edges: .bottom)
 
-            // Loading overlay
             if coordinator.state != .shell {
                 VStack(spacing: 14) {
                     ProgressView()
@@ -52,26 +48,13 @@ struct TerminalScreen: View {
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
             }
 
-            // Floating menu button (top-right)
-            if coordinator.state == .shell && !showToolbar {
-                Button {
-                    withAnimation(.spring(duration: 0.25)) { showToolbar = true }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .frame(width: 44, height: 44)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .padding(.trailing, 12)
-                .padding(.top, 8)
-                .allowsHitTesting(true)
-            }
-
-            // Toolbar overlay
             if showToolbar {
                 toolbarOverlay
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if coordinator.state == .shell && !showToolbar {
+                menuButton
             }
         }
         .statusBarHidden(true)
@@ -89,6 +72,22 @@ struct TerminalScreen: View {
         Task {
             await coordinator.openShell(renderer: r)
         }
+    }
+
+    // MARK: - Menu Button
+
+    private var menuButton: some View {
+        Button {
+            withAnimation(.spring(duration: 0.25)) { showToolbar = true }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white.opacity(0.7))
+                .frame(width: 44, height: 44)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .padding(.trailing, 12)
+        .padding(.top, 8)
     }
 
     // MARK: - Toolbar Overlay
@@ -155,7 +154,6 @@ struct TerminalScreen: View {
     }
 }
 
-// Box to hold renderer reference in @State
 @MainActor
 private final class SwiftTermRendererBox {
     let value: SwiftTermRenderer
