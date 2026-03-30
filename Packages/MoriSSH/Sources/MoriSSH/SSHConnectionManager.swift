@@ -433,6 +433,8 @@ public actor SSHConnectionManager {
             sshLog.info("TCP connected")
         } catch {
             sshLog.error("TCP connect failed: \(error)")
+            // Fail the auth promise so NIO doesn't assert on unconsumed future.
+            authPromise.fail(SSHError.connectionFailed(error.localizedDescription))
             throw SSHError.connectionFailed(error.localizedDescription)
         }
 
