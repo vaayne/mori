@@ -52,6 +52,37 @@ jobs:
       - name: Test MoriIPC
         run: cd Packages/MoriIPC && swift run MoriIPCTests
 
+  ios-build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Cache SPM packages
+        uses: actions/cache@v5
+        with:
+          path: MoriRemote/.derived-data-sim/SourcePackages
+          key: spm-ios-${{ hashFiles('MoriRemote/MoriRemote.xcodeproj/project.pbxproj', '**/Package.resolved') }}
+          restore-keys: spm-ios-
+
+      - name: Install tools
+        run: |
+          brew install xcodegen xcbeautify
+
+      - name: Generate Xcode project
+        run: cd MoriRemote && xcodegen generate
+
+      - name: Build for iOS Simulator
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project MoriRemote/MoriRemote.xcodeproj \
+            -scheme MoriRemote \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath .derived-data-ios \
+            build 2>&1 | xcbeautify
+
   bundle:
     needs: [ghosttykit, build-and-test]
     runs-on: macos-15

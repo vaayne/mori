@@ -50,11 +50,13 @@ targets:
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
         EXCLUDED_ARCHS[sdk=iphonesimulator*]: x86_64
-        DEVELOPMENT_TEAM: YARFK6Y332
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM:YARFK6Y332}
+        MARKETING_VERSION: ${MARKETING_VERSION:0.1.0}
+        CURRENT_PROJECT_VERSION: ${CURRENT_PROJECT_VERSION:1}
 schemes:
   MoriRemote:
     build:
       targets:
         MoriRemote: all
+    archive:
+      config: Release

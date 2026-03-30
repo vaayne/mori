@@ -143,3 +143,64 @@ xcrun simctl install "$SIMULATOR" "$APP_PATH"
 xcrun simctl launch "$SIMULATOR" "$(plutil -extract CFBundleIdentifier raw "$APP_PATH/Info.plist")"
 echo "✅ MoriRemote launched on $SIMULATOR simulator"
 '''
+
+[tasks."ios:archive"]
+description = "Archive MoriRemote for distribution"
+depends = ["ios:generate"]
+run = '''
+set -euo pipefail
+DERIVED_IOS="${DERIVED_DATA}-ios"
+ARCHIVE_PATH="${DERIVED_IOS}/MoriRemote.xcarchive"
+MARKETING_VERSION="${MARKETING_VERSION:-0.1.0}"
+CURRENT_PROJECT_VERSION="${CURRENT_PROJECT_VERSION:-1}"
+xcodebuild archive \
+  -project MoriRemote/MoriRemote.xcodeproj \
+  -scheme MoriRemote \
+  -destination 'generic/platform=iOS' \
+  -archivePath "$ARCHIVE_PATH" \
+  -derivedDataPath "$DERIVED_IOS" \
+  MARKETING_VERSION="$MARKETING_VERSION" \
+  CURRENT_PROJECT_VERSION="$CURRENT_PROJECT_VERSION" \
+  2>&1 | xcbeautify
+echo "✅ Archive created at $ARCHIVE_PATH"
+'''
+
+[tasks."ios:export"]
+description = "Export IPA from archive"
+depends = ["ios:archive"]
+run = '''
+set -euo pipefail
+DERIVED_IOS="${DERIVED_DATA}-ios"
+ARCHIVE_PATH="${DERIVED_IOS}/MoriRemote.xcarchive"
+EXPORT_DIR="${DERIVED_IOS}/export"
+EXPORT_PLIST="${EXPORT_OPTIONS_PLIST:-MoriRemote/ExportOptions.plist}"
+if [ ! -f "$EXPORT_PLIST" ]; then
+  echo "❌ Export options plist not found: $EXPORT_PLIST"
+  exit 1
+fi
+xcodebuild -exportArchive \
+  -archivePath "$ARCHIVE_PATH" \
+  -exportOptionsPlist "$EXPORT_PLIST" \
+  -exportPath "$EXPORT_DIR" \
+  2>&1 | xcbeautify
+echo "✅ IPA exported to $EXPORT_DIR"
+'''
+
+[tasks."ios:upload"]
+description = "Upload IPA to App Store Connect / TestFlight"
+run = '''
+set -euo pipefail
+DERIVED_IOS="${DERIVED_DATA}-ios"
+EXPORT_DIR="${DERIVED_IOS}/export"
+IPA_PATH=$(find "$EXPORT_DIR" -name "*.ipa" | head -1)
+if [ -z "$IPA_PATH" ]; then
+  echo "❌ No IPA found in $EXPORT_DIR. Run ios:export first."
+  exit 1
+fi
+xcrun altool --upload-app \
+  --type ios \
+  --file "$IPA_PATH" \
+  --apiKey "${APP_STORE_API_KEY}" \
+  --apiIssuer "${APP_STORE_API_ISSUER}"
+echo "✅ Uploaded $IPA_PATH to App Store Connect"
+'''
