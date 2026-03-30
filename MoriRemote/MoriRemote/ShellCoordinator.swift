@@ -52,6 +52,10 @@ final class ShellCoordinator {
     var tmuxWindows: [TmuxWindow] = []
     var isTmuxActive: Bool { tmuxActiveSession != nil }
 
+    /// Whether the shell is currently inside a tmux session (attached).
+    /// True when the active session reports as attached.
+    var isTmuxAttached: Bool { tmuxActiveSession?.isAttached == true }
+
     var isShellActive: Bool { state == .shell }
 
     private var sshManager: SSHConnectionManager?
@@ -324,22 +328,23 @@ final class ShellCoordinator {
                 let windowsRaw: String
                 do {
                     windowsRaw = try await sshManager.runCommandNoPTY(
-                        "\(tmuxPath) list-windows -t '\(session.name)' -F '#{window_index}:#{window_name}:#{window_active}' 2>/dev/null"
+                        "\(tmuxPath) list-windows -t '\(session.name)' -F '#{window_index}:#{window_name}:#{window_active}:#{pane_current_path}' 2>/dev/null"
                     )
                 } catch {
                     windowsRaw = try await sshManager.runCommand(
-                        "\(tmuxPath) list-windows -t '\(session.name)' -F '#{window_index}:#{window_name}:#{window_active}' 2>/dev/null"
+                        "\(tmuxPath) list-windows -t '\(session.name)' -F '#{window_index}:#{window_name}:#{window_active}:#{pane_current_path}' 2>/dev/null"
                     )
                 }
 
                 let windows = windowsRaw.split(separator: "\n").compactMap { line -> TmuxWindow? in
-                    let parts = line.split(separator: ":", maxSplits: 2)
+                    let parts = line.split(separator: ":", maxSplits: 3)
                     guard parts.count >= 3 else { return nil }
                     return TmuxWindow(
                         index: Int(parts[0]) ?? 0,
                         name: String(parts[1]),
                         isActive: parts[2] == "1",
-                        sessionName: session.name
+                        sessionName: session.name,
+                        path: parts.count >= 4 ? String(parts[3]) : ""
                     )
                 }
 
@@ -368,48 +373,90 @@ final class ShellCoordinator {
 
     /// Switch to a specific tmux window by index in the given session.
     func selectTmuxWindow(session: String, windowIndex: Int) {
-        // switch-client handles both session switch and window selection
-        sendTmuxShellCommand("tmux switch-client -t '\(session):\(windowIndex)'")
+        if isTmuxAttached {
+            runTmuxCommand("\(tmuxPath) switch-client -t '\(session):\(windowIndex)'")
+        } else {
+            attachTmuxSession(session, selectWindow: windowIndex)
+        }
     }
 
     /// Switch to a different tmux session.
     func switchTmuxSession(_ sessionName: String) {
-        sendTmuxShellCommand("tmux switch-client -t '\(sessionName)'")
+        if isTmuxAttached {
+            runTmuxCommand("\(tmuxPath) switch-client -t '\(sessionName)'")
+        } else {
+            attachTmuxSession(sessionName)
+        }
     }
 
     /// Close (kill) a tmux window.
     func closeTmuxWindow(session: String, windowIndex: Int) {
-        sendTmuxShellCommand("tmux kill-window -t '\(session):\(windowIndex)'")
+        runTmuxCommand("\(tmuxPath) kill-window -t '\(session):\(windowIndex)'")
     }
 
     /// Create a new tmux window in the active session.
     func newTmuxWindow() {
-        handleTmuxCommand(.newWindow)
+        runTmuxCommand("\(tmuxPath) new-window")
     }
 
     /// Create a new tmux session.
     func newTmuxSession() {
-        sendTmuxShellCommand("tmux new-session -d")
+        runTmuxCommand("\(tmuxPath) new-session -d")
     }
 
     /// Kill (close) a tmux session.
     func closeTmuxSession(_ sessionName: String) {
-        sendTmuxShellCommand("tmux kill-session -t '\(sessionName)'")
+        runTmuxCommand("\(tmuxPath) kill-session -t '\(sessionName)'")
     }
 
     /// Rename a tmux session.
     func renameTmuxSession(_ oldName: String, to newName: String) {
-        sendTmuxShellCommand("tmux rename-session -t '\(oldName)' '\(newName)'")
+        runTmuxCommand("\(tmuxPath) rename-session -t '\(oldName)' '\(newName)'")
     }
 
     /// Create a new tmux window after a specific window index.
     func newTmuxWindowAfter(session: String, windowIndex: Int) {
-        sendTmuxShellCommand("tmux new-window -a -t '\(session):\(windowIndex)'")
+        runTmuxCommand("\(tmuxPath) new-window -a -t '\(session):\(windowIndex)'")
     }
 
     /// Force a tmux state refresh.
     func refreshTmuxState() {
         Task { await pollTmuxState() }
+    }
+
+    /// Attach to a tmux session via the shell channel.
+    /// Used when not currently inside tmux (switch-client won't work).
+    private func attachTmuxSession(_ sessionName: String, selectWindow: Int? = nil) {
+        var cmd = "tmux attach-session -t '\(sessionName)'"
+        if let win = selectWindow {
+            // Select the target window first, then attach
+            cmd = "tmux select-window -t '\(sessionName):\(win)' \\; attach-session -t '\(sessionName)'"
+        }
+        log.info("Tmux attach via shell: \(cmd)")
+        let sequence = "\u{15}\(cmd)\n"
+        sendInput(Data(sequence.utf8))
+        Task {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            await self.pollTmuxState()
+        }
+    }
+
+    /// Run a tmux command via NoPTY exec channel and refresh state.
+    private func runTmuxCommand(_ cmd: String) {
+        guard let sshManager else {
+            log.error("runTmuxCommand: no SSH manager")
+            return
+        }
+        log.info("Tmux exec: \(cmd)")
+        Task {
+            do {
+                _ = try await sshManager.runCommandNoPTY(cmd)
+            } catch {
+                log.error("Tmux exec failed: \(error)")
+            }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            await self.pollTmuxState()
+        }
     }
 
     /// Send a tmux command through the shell channel and refresh state.

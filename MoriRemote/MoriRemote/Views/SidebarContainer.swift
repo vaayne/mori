@@ -77,6 +77,11 @@ struct SidebarContainer<Sidebar: View, Content: View>: View {
             .onChanged { value in
                 let startX = value.startLocation.x
 
+                // Ignore mostly-vertical drags (let ScrollView handle them)
+                let horizontal = abs(value.translation.width)
+                let vertical = abs(value.translation.height)
+                guard horizontal > vertical else { return }
+
                 if isOpen {
                     // Dragging to close (swipe left on sidebar)
                     let translation = min(0, value.translation.width)

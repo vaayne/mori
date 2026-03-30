@@ -37,13 +37,26 @@ struct TmuxWindowRow: View {
                         isHighlighted ? Theme.accent : Color.white.opacity(0.25)
                     )
 
-                // Window name
-                Text(window.name)
-                    .font(.system(size: 14, weight: isHighlighted ? .semibold : .medium))
-                    .foregroundStyle(
-                        isHighlighted ? Theme.textPrimary : Color.white.opacity(0.55)
-                    )
-                    .lineLimit(1)
+                // Window name + path
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(window.name)
+                        .font(.system(size: 14, weight: isHighlighted ? .semibold : .medium))
+                        .foregroundStyle(
+                            isHighlighted ? Theme.textPrimary : Color.white.opacity(0.55)
+                        )
+                        .lineLimit(1)
+
+                    if !window.shortPath.isEmpty {
+                        Text(window.shortPath)
+                            .font(.system(size: 10))
+                            .foregroundStyle(
+                                isHighlighted
+                                    ? Theme.accent.opacity(0.5)
+                                    : Color.white.opacity(0.2)
+                            )
+                            .lineLimit(1)
+                    }
+                }
 
                 Spacer()
 

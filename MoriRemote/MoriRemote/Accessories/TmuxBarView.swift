@@ -17,14 +17,29 @@ struct TmuxWindow: Equatable, Sendable, Identifiable {
     let name: String
     let isActive: Bool
     let sessionName: String
+    let path: String
 
     var id: String { "\(sessionName):\(index)" }
 
-    init(index: Int, name: String, isActive: Bool, sessionName: String = "") {
+    /// Short display path: last two path components or ~ for home.
+    var shortPath: String {
+        guard !path.isEmpty else { return "" }
+        // Replace home dir prefix with ~
+        let display = path.contains("/Users/") || path.contains("/home/")
+            ? "~" + path.split(separator: "/").dropFirst(2).map { "/" + $0 }.joined()
+            : path
+        // Show last 2 components
+        let parts = display.split(separator: "/")
+        if parts.count <= 2 { return display }
+        return "…/" + parts.suffix(2).joined(separator: "/")
+    }
+
+    init(index: Int, name: String, isActive: Bool, sessionName: String = "", path: String = "") {
         self.index = index
         self.name = name
         self.isActive = isActive
         self.sessionName = sessionName
+        self.path = path
     }
 }
 
