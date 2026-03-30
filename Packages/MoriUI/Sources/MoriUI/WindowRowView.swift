@@ -7,19 +7,25 @@ public struct WindowRowView: View {
     let isActive: Bool
     let shortcutIndex: Int?
     let onSelect: () -> Void
+    let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
 
     @State private var isHovered = false
+    @State private var showPopover = false
+    @State private var popoverOutput: String?
+    @State private var hoverTimer: Timer?
 
     public init(
         window: RuntimeWindow,
         isActive: Bool,
         shortcutIndex: Int? = nil,
-        onSelect: @escaping () -> Void
+        onSelect: @escaping () -> Void,
+        onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil
     ) {
         self.window = window
         self.isActive = isActive
         self.shortcutIndex = shortcutIndex
         self.onSelect = onSelect
+        self.onRequestPaneOutput = onRequestPaneOutput
     }
 
     public var body: some View {
@@ -59,7 +65,30 @@ public struct WindowRowView: View {
         .buttonStyle(.plain)
         .background(rowBackground)
         .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
-        .onHover { isHovered = $0 }
+        .onHover { hovering in
+            isHovered = hovering
+            if hovering && window.badge != nil && onRequestPaneOutput != nil {
+                hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+                    let paneId = window.activePaneId ?? window.tmuxWindowId
+                    onRequestPaneOutput?(paneId) { output in
+                        DispatchQueue.main.async {
+                            self.popoverOutput = output
+                            self.showPopover = output != nil
+                        }
+                    }
+                }
+            } else {
+                hoverTimer?.invalidate()
+                hoverTimer = nil
+                showPopover = false
+                popoverOutput = nil
+            }
+        }
+        .popover(isPresented: $showPopover, arrowEdge: .trailing) {
+            if let output = popoverOutput {
+                PanePreviewPopover(output: output)
+            }
+        }
     }
 
     private var rowBackground: some ShapeStyle {
