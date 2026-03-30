@@ -43,6 +43,18 @@ final class IPCHandler {
 
         case .setWorkflowStatus(let project, let worktree, let status):
             return handleSetWorkflowStatus(manager: manager, projectName: project, worktreeName: worktree, statusString: status)
+
+        case .paneList:
+            return handlePaneList(manager: manager)
+
+        case .paneRead(let project, let worktree, let window, let lines):
+            return await handlePaneRead(manager: manager, projectName: project, worktreeName: worktree, windowName: window, lines: lines)
+
+        case .paneMessage(let project, let worktree, let window, let text,
+                         let senderProject, let senderWorktree, let senderWindow, let senderPaneId):
+            return await handlePaneMessage(manager: manager, projectName: project, worktreeName: worktree, windowName: window, text: text,
+                                           senderProject: senderProject, senderWorktree: senderWorktree,
+                                           senderWindow: senderWindow, senderPaneId: senderPaneId)
         }
     }
 
@@ -181,6 +193,105 @@ final class IPCHandler {
 
         manager.setWorkflowStatus(worktreeId: worktree.id, status: validStatus)
         return .success(payload: nil)
+    }
+
+    // TODO: Enumerate individual panes for multi-pane windows.
+    // Currently emits one AgentPaneInfo per window (using activePaneId),
+    // so non-active panes in multi-pane windows are invisible to agents.
+    // Requires expanding RuntimeWindow to carry all pane IDs from the refresh cycle.
+    private func handlePaneList(manager: WorkspaceManager) -> IPCResponse {
+        var entries: [AgentPaneInfo] = []
+        for project in manager.appState.projects {
+            let worktrees = manager.appState.worktrees.filter { $0.projectId == project.id }
+            for worktree in worktrees {
+                let windows = manager.appState.runtimeWindows.filter { $0.worktreeId == worktree.id }
+                for window in windows {
+                    let paneId = window.activePaneId ?? manager.rawTmuxWindowId(from: window)
+                    let entry = AgentPaneInfo(
+                        endpoint: worktree.resolvedLocation.endpointKey,
+                        tmuxPaneId: paneId,
+                        projectName: project.name,
+                        worktreeName: worktree.name,
+                        windowName: window.title,
+                        agentState: window.agentState,
+                        detectedAgent: window.detectedAgent
+                    )
+                    entries.append(entry)
+                }
+            }
+        }
+        do {
+            let data = try JSONEncoder().encode(entries)
+            return .success(payload: data)
+        } catch {
+            return .error(message: "Failed to encode pane list: \(error.localizedDescription)")
+        }
+    }
+
+    private func handlePaneRead(manager: WorkspaceManager, projectName: String, worktreeName: String, windowName: String, lines: Int) async -> IPCResponse {
+        guard let (worktree, runtimeWindow) = resolveWindow(manager: manager, projectName: projectName, worktreeName: worktreeName, windowName: windowName) else {
+            return .error(message: "Window not found: \(projectName)/\(worktreeName)/\(windowName)")
+        }
+
+        let paneId = runtimeWindow.activePaneId ?? manager.rawTmuxWindowId(from: runtimeWindow)
+        let tmux = manager.tmuxBackendForWorktree(worktree)
+        let clampedLines = min(max(lines, 1), 200)
+
+        do {
+            let output = try await tmux.capturePaneOutput(paneId: paneId, lineCount: clampedLines)
+            let data = Data(output.utf8)
+            return .success(payload: data)
+        } catch {
+            return .error(message: "Failed to capture pane output: \(error.localizedDescription)")
+        }
+    }
+
+    private func handlePaneMessage(manager: WorkspaceManager, projectName: String, worktreeName: String, windowName: String, text: String,
+                                     senderProject: String?, senderWorktree: String?, senderWindow: String?, senderPaneId: String?) async -> IPCResponse {
+        guard let (worktree, runtimeWindow) = resolveWindow(manager: manager, projectName: projectName, worktreeName: worktreeName, windowName: windowName) else {
+            return .error(message: "Window not found: \(projectName)/\(worktreeName)/\(windowName)")
+        }
+
+        guard let sessionName = worktree.tmuxSessionName else {
+            return .error(message: "Worktree has no tmux session")
+        }
+
+        let paneId = runtimeWindow.activePaneId ?? manager.rawTmuxWindowId(from: runtimeWindow)
+        let tmux = manager.tmuxBackendForWorktree(worktree)
+
+        // Use sender identity transmitted from the CLI caller via IPC
+        let message = AgentMessage(
+            fromProject: senderProject ?? "cli",
+            fromWorktree: senderWorktree ?? "cli",
+            fromWindow: senderWindow ?? "cli",
+            fromPaneId: senderPaneId ?? "unknown",
+            text: text
+        )
+
+        do {
+            // sendKeys already appends Enter — no need for a second call
+            try await tmux.sendKeys(sessionId: sessionName, paneId: paneId, keys: message.envelope)
+            return .success(payload: nil)
+        } catch {
+            return .error(message: "Failed to send message: \(error.localizedDescription)")
+        }
+    }
+
+    /// Resolve project/worktree/window triplet to a (Worktree, RuntimeWindow) pair.
+    private func resolveWindow(manager: WorkspaceManager, projectName: String, worktreeName: String, windowName: String) -> (Worktree, RuntimeWindow)? {
+        guard let project = manager.appState.projects.first(where: {
+            $0.name.caseInsensitiveCompare(projectName) == .orderedSame
+        }) else { return nil }
+
+        guard let worktree = manager.appState.worktrees.first(where: {
+            $0.projectId == project.id && $0.name.caseInsensitiveCompare(worktreeName) == .orderedSame
+        }) else { return nil }
+
+        guard let runtimeWindow = manager.appState.runtimeWindows.first(where: {
+            $0.worktreeId == worktree.id && $0.title.caseInsensitiveCompare(windowName) == .orderedSame
+        }) else { return nil }
+
+        return (worktree, runtimeWindow)
     }
 
     private func handleOpen(manager: WorkspaceManager, path: String) async -> IPCResponse {

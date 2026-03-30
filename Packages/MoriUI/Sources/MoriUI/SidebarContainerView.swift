@@ -29,6 +29,8 @@ public struct SidebarContainerView: View {
     private let onOpenSettings: (() -> Void)?
     private let onOpenCommandPalette: (() -> Void)?
     private let onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)?
+    private let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
+    private let onSendKeys: ((String, String) -> Void)?
 
     public init(
         sidebarMode: SidebarMode,
@@ -51,7 +53,9 @@ public struct SidebarContainerView: View {
         onAddProject: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
         onOpenCommandPalette: (() -> Void)? = nil,
-        onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)? = nil
+        onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)? = nil,
+        onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
+        onSendKeys: ((String, String) -> Void)? = nil
     ) {
         self.sidebarMode = sidebarMode
         self.onToggleSidebarMode = onToggleSidebarMode
@@ -74,6 +78,8 @@ public struct SidebarContainerView: View {
         self.onOpenSettings = onOpenSettings
         self.onOpenCommandPalette = onOpenCommandPalette
         self.onSetWorkflowStatus = onSetWorkflowStatus
+        self.onRequestPaneOutput = onRequestPaneOutput
+        self.onSendKeys = onSendKeys
     }
 
     @State private var selectedMode: SidebarMode = .workspaces
@@ -109,7 +115,9 @@ public struct SidebarContainerView: View {
                     onSetWorkflowStatus: onSetWorkflowStatus,
                     onAddProject: onAddProject,
                     onOpenSettings: onOpenSettings,
-                    onOpenCommandPalette: onOpenCommandPalette
+                    onOpenCommandPalette: onOpenCommandPalette,
+                    onRequestPaneOutput: onRequestPaneOutput,
+                    onSendKeys: onSendKeys
                 )
             case .workspaces:
                 WorktreeSidebarView(
@@ -131,7 +139,9 @@ public struct SidebarContainerView: View {
                     onAddProject: onAddProject,
                     onOpenSettings: onOpenSettings,
                     onOpenCommandPalette: onOpenCommandPalette,
-                    onSetWorkflowStatus: onSetWorkflowStatus
+                    onSetWorkflowStatus: onSetWorkflowStatus,
+                    onRequestPaneOutput: onRequestPaneOutput,
+                    onSendKeys: onSendKeys
                 )
             }
         }

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- **Agent Bridge**: Cross-pane agent monitoring, communication, and dashboard
+  - `mori pane list` — list all panes with project/worktree/window/agent/state info
+  - `mori pane read <project> <worktree> <window> [--lines N]` — capture pane output
+  - `mori pane message <project> <worktree> <window> <text>` — send message with sender metadata
+  - `mori pane id` — print current pane identity for self-labeling
+  - Hover any window row with agent badge → popover shows last lines of pane output
+  - Click waiting badge → inline reply field → sends keys to pane
+  - New "Agents" sidebar mode groups all agent windows by state (Attention, Running, Completed, Idle)
+  - Multi-pane dashboard panel (⌘⇧A) shows live output from all agent panes
+  - Agent-to-agent messaging protocol with `[mori-bridge from:...]` envelope format
+
 ## [0.1.3] - 2026-03-28
 ### ✨ Features
 

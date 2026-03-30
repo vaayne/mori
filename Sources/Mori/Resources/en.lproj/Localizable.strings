@@ -171,3 +171,10 @@
 "Size:" = "Size:";
 "Released:" = "Released:";
 "You're already running the latest version." = "You're already running the latest version.";
+
+/* Agent command palette */
+"Idle" = "Idle";
+"Done" = "Done";
+"Running" = "Running";
+"Waiting" = "Waiting";
+"Error" = "Error";

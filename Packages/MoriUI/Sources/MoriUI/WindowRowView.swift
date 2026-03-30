@@ -7,22 +7,62 @@ public struct WindowRowView: View {
     let isActive: Bool
     let shortcutIndex: Int?
     let onSelect: () -> Void
+    let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
+    let onSendKeys: ((String, String) -> Void)?
 
     @State private var isHovered = false
+    @State private var showPopover = false
+    @State private var popoverOutput: String?
+    @State private var hoverTask: Task<Void, Never>?
+    @State private var showReplyField = false
 
     public init(
         window: RuntimeWindow,
         isActive: Bool,
         shortcutIndex: Int? = nil,
-        onSelect: @escaping () -> Void
+        onSelect: @escaping () -> Void,
+        onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
+        onSendKeys: ((String, String) -> Void)? = nil
     ) {
         self.window = window
         self.isActive = isActive
         self.shortcutIndex = shortcutIndex
         self.onSelect = onSelect
+        self.onRequestPaneOutput = onRequestPaneOutput
+        self.onSendKeys = onSendKeys
     }
 
     public var body: some View {
+        VStack(spacing: 0) {
+            rowButton
+            replyFieldView
+        }
+        .onHover { hovering in
+            isHovered = hovering
+            hoverTask?.cancel()
+            if hovering, window.badge != nil, let onRequestPaneOutput {
+                hoverTask = Task {
+                    try? await Task.sleep(for: .milliseconds(300))
+                    guard !Task.isCancelled else { return }
+                    let paneId = window.activePaneId ?? window.tmuxWindowId
+                    onRequestPaneOutput(paneId) { output in
+                        self.popoverOutput = output
+                        self.showPopover = output != nil
+                    }
+                }
+            } else {
+                showPopover = false
+                popoverOutput = nil
+            }
+        }
+        .popover(isPresented: $showPopover, arrowEdge: .trailing) {
+            if let output = popoverOutput {
+                PanePreviewPopover(output: output)
+            }
+        }
+    }
+
+    private var rowButton: some View {
         Button(action: onSelect) {
             HStack(spacing: MoriTokens.Spacing.md) {
                 Image(systemName: window.tag?.symbolName ?? "terminal")
@@ -59,7 +99,20 @@ public struct WindowRowView: View {
         .buttonStyle(.plain)
         .background(rowBackground)
         .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
-        .onHover { isHovered = $0 }
+    }
+
+    @ViewBuilder
+    private var replyFieldView: some View {
+        if showReplyField {
+            QuickReplyField(
+                onSend: { text in
+                    let paneId = window.activePaneId ?? window.tmuxWindowId
+                    onSendKeys?(paneId, text + "\n")
+                },
+                onDismiss: { showReplyField = false }
+            )
+            .padding(EdgeInsets(top: 0, leading: MoriTokens.Spacing.lg, bottom: MoriTokens.Spacing.xs, trailing: MoriTokens.Spacing.lg))
+        }
     }
 
     private var rowBackground: some ShapeStyle {
@@ -83,11 +136,20 @@ public struct WindowRowView: View {
                     .help("Error")
                     .accessibilityLabel("Error")
             case .waiting:
-                Image(systemName: "exclamationmark.bubble.fill")
-                    .font(.system(size: MoriTokens.Icon.badge))
-                    .foregroundStyle(MoriTokens.Color.attention)
-                    .help("Waiting for input")
-                    .accessibilityLabel("Waiting for input")
+                Button(action: {
+                    if onSendKeys != nil {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            showReplyField.toggle()
+                        }
+                    }
+                }) {
+                    Image(systemName: "exclamationmark.bubble.fill")
+                        .font(.system(size: MoriTokens.Icon.badge))
+                        .foregroundStyle(MoriTokens.Color.attention)
+                }
+                .buttonStyle(.plain)
+                .help("Waiting for input — click to reply")
+                .accessibilityLabel("Waiting for input")
             case .longRunning:
                 Image(systemName: "clock.fill")
                     .font(.system(size: MoriTokens.Icon.badge))

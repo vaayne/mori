@@ -12,6 +12,9 @@ public enum SidebarMode: String, Codable, Sendable {
             self = .workspaces
         case "tasks":
             self = .tasks
+        case "agents":
+            // Backward compat: fold agents into tasks
+            self = .tasks
         case "worktrees", "search":
             self = .workspaces
         default:

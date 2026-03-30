@@ -16,6 +16,7 @@ struct MoriCLI: ParsableCommand {
             NewWindow.self,
             Open.self,
             StatusCmd.self,
+            PaneCmd.self,
         ]
     )
 }
@@ -256,5 +257,98 @@ struct StatusCmd: ParsableCommand {
 
     func run() throws {
         try runIPCRequest(.setWorkflowStatus(project: project, worktree: worktree, status: status))
+    }
+}
+
+// MARK: - mori pane
+
+struct PaneCmd: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "pane",
+        abstract: .localized("Pane commands for agent communication"),
+        subcommands: [PaneList.self, PaneRead.self, PaneMessage.self, PaneId.self]
+    )
+}
+
+struct PaneList: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "list",
+        abstract: .localized("List all panes with project/worktree/window info")
+    )
+
+    func run() throws {
+        try runIPCRequest(.paneList)
+    }
+}
+
+struct PaneRead: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "read",
+        abstract: .localized("Capture output from a pane")
+    )
+
+    @Argument(help: ArgumentHelp(.localized("Project name")))
+    var project: String
+
+    @Argument(help: ArgumentHelp(.localized("Worktree name")))
+    var worktree: String
+
+    @Argument(help: ArgumentHelp(.localized("Window name")))
+    var window: String
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Number of lines to capture (default: 50, max: 200)")))
+    var lines: Int = 50
+
+    func run() throws {
+        try runIPCRequest(.paneRead(project: project, worktree: worktree, window: window, lines: lines))
+    }
+}
+
+struct PaneMessage: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "message",
+        abstract: .localized("Send a message to a pane with sender metadata")
+    )
+
+    @Argument(help: ArgumentHelp(.localized("Project name")))
+    var project: String
+
+    @Argument(help: ArgumentHelp(.localized("Worktree name")))
+    var worktree: String
+
+    @Argument(help: ArgumentHelp(.localized("Window name")))
+    var window: String
+
+    @Argument(help: ArgumentHelp(.localized("Message text")))
+    var text: String
+
+    func run() throws {
+        // Read sender identity from environment variables set by Mori in each pane
+        let senderProject = ProcessInfo.processInfo.environment["MORI_PROJECT"]
+        let senderWorktree = ProcessInfo.processInfo.environment["MORI_WORKTREE"]
+        let senderWindow = ProcessInfo.processInfo.environment["MORI_WINDOW"]
+        let senderPaneId = ProcessInfo.processInfo.environment["MORI_PANE_ID"]
+
+        try runIPCRequest(.paneMessage(
+            project: project, worktree: worktree, window: window, text: text,
+            senderProject: senderProject, senderWorktree: senderWorktree,
+            senderWindow: senderWindow, senderPaneId: senderPaneId
+        ))
+    }
+}
+
+struct PaneId: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "id",
+        abstract: .localized("Print the current pane's identity")
+    )
+
+    func run() throws {
+        // Read identity from environment variables set by Mori
+        let project = ProcessInfo.processInfo.environment["MORI_PROJECT"] ?? "unknown"
+        let worktree = ProcessInfo.processInfo.environment["MORI_WORKTREE"] ?? "unknown"
+        let window = ProcessInfo.processInfo.environment["MORI_WINDOW"] ?? "unknown"
+        let paneId = ProcessInfo.processInfo.environment["MORI_PANE_ID"] ?? "unknown"
+        print("\(project)/\(worktree)/\(window) pane:\(paneId)")
     }
 }

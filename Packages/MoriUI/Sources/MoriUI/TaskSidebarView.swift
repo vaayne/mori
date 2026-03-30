@@ -17,6 +17,8 @@ public struct TaskSidebarView: View {
     private let onAddProject: (() -> Void)?
     private let onOpenSettings: (() -> Void)?
     private let onOpenCommandPalette: (() -> Void)?
+    private let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
+    private let onSendKeys: ((String, String) -> Void)?
 
     @State private var showCancelled = false
     @State private var collapsedGroups: Set<WorkflowStatus> = [.done]
@@ -37,7 +39,9 @@ public struct TaskSidebarView: View {
         onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
-        onOpenCommandPalette: (() -> Void)? = nil
+        onOpenCommandPalette: (() -> Void)? = nil,
+        onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
+        onSendKeys: ((String, String) -> Void)? = nil
     ) {
         self.projects = projects
         self.worktrees = worktrees
@@ -52,6 +56,8 @@ public struct TaskSidebarView: View {
         self.onAddProject = onAddProject
         self.onOpenSettings = onOpenSettings
         self.onOpenCommandPalette = onOpenCommandPalette
+        self.onRequestPaneOutput = onRequestPaneOutput
+        self.onSendKeys = onSendKeys
     }
 
     private var projectMap: [UUID: Project] {
@@ -67,10 +73,26 @@ public struct TaskSidebarView: View {
             .filter { $0.workflowStatus == status }
     }
 
+    /// Windows that have an active agent but aren't associated with any worktree.
+    private var orphanAgentWindows: [RuntimeWindow] {
+        let worktreeIds = Set(worktrees.map { $0.id })
+        return windows.filter { window in
+            (window.detectedAgent != nil || window.agentState != .none)
+            && !worktreeIds.contains(window.worktreeId)
+        }
+    }
+
+    /// Count of agent windows needing attention across all worktrees.
+    private var attentionCount: Int {
+        windows.filter { $0.agentState == .waitingForInput || $0.agentState == .error }.count
+    }
+
     public var body: some View {
         VStack(spacing: 0) {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 0) {
+                    attentionBanner
+
                     ForEach(Self.visibleStatuses, id: \.self) { status in
                         let items = worktreesForStatus(status)
                         if !items.isEmpty {
@@ -174,11 +196,13 @@ public struct TaskSidebarView: View {
             .filter { $0.worktreeId == worktree.id }
             .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
         let projectName = projectMap[worktree.projectId]?.name ?? ""
+        let agentName = worktreeWindows.first(where: { $0.detectedAgent != nil })?.detectedAgent
 
         VStack(alignment: .leading, spacing: 0) {
             TaskWorktreeRowView(
                 worktree: worktree,
                 projectName: projectName,
+                agentName: agentName,
                 isSelected: isSelected,
                 onSelect: { onSelectWorktree(worktree.id) }
             )
@@ -222,12 +246,28 @@ public struct TaskSidebarView: View {
             // Nested windows under each worktree
             if !worktreeWindows.isEmpty {
                 ForEach(Array(worktreeWindows.enumerated()), id: \.element.id) { index, window in
-                    WindowRowView(
-                        window: window,
-                        isActive: isSelected && window.tmuxWindowId == selectedWindowId,
-                        shortcutIndex: isSelected && index < 9 ? index + 1 : nil,
-                        onSelect: { onSelectWindow(window.tmuxWindowId) }
-                    )
+                    Group {
+                        if window.detectedAgent != nil {
+                            AgentWindowRowView(
+                                window: window,
+                                projectName: projectName,
+                                worktreeName: worktree.name,
+                                isSelected: isSelected && window.tmuxWindowId == selectedWindowId,
+                                onSelect: { onSelectWindow(window.tmuxWindowId) },
+                                onRequestPaneOutput: onRequestPaneOutput,
+                                onSendKeys: onSendKeys
+                            )
+                        } else {
+                            WindowRowView(
+                                window: window,
+                                isActive: isSelected && window.tmuxWindowId == selectedWindowId,
+                                shortcutIndex: isSelected && index < 9 ? index + 1 : nil,
+                                onSelect: { onSelectWindow(window.tmuxWindowId) },
+                                onRequestPaneOutput: onRequestPaneOutput,
+                                onSendKeys: onSendKeys
+                            )
+                        }
+                    }
                     .padding(.leading, MoriTokens.Spacing.xxl)
                     .contextMenu {
                         if let onCloseWindow {
@@ -242,6 +282,32 @@ public struct TaskSidebarView: View {
             }
         }
         .padding(.horizontal, MoriTokens.Spacing.sm)
+    }
+
+    // MARK: - Attention Banner
+
+    @ViewBuilder
+    private var attentionBanner: some View {
+        let count = attentionCount
+        if count > 0 {
+            HStack(spacing: MoriTokens.Spacing.md) {
+                Image(systemName: "exclamationmark.bubble.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(MoriTokens.Color.attention)
+                Text(count == 1
+                    ? String.localized("1 agent needs attention")
+                    : String.localized("\(count) agents need attention"))
+                    .font(MoriTokens.Font.caption)
+                    .foregroundStyle(MoriTokens.Color.attention)
+                Spacer()
+            }
+            .padding(.horizontal, MoriTokens.Spacing.xl)
+            .padding(.vertical, MoriTokens.Spacing.md)
+            .background(MoriTokens.Color.attention.opacity(MoriTokens.Opacity.subtle))
+            .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
+            .padding(.horizontal, MoriTokens.Spacing.sm)
+            .padding(.bottom, MoriTokens.Spacing.sm)
+        }
     }
 
     // MARK: - Footer

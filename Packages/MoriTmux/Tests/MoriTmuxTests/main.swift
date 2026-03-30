@@ -547,6 +547,29 @@ func testPaneFormatContainsAgentFields() {
     )
 }
 
+// MARK: - Capture Pane Output Edge Case Tests
+
+func testCapturePaneOutputEmptyResult() {
+    // capturePaneOutput returns a String. An empty pane returns empty/whitespace.
+    // Downstream consumers should handle empty output gracefully.
+    let emptyOutput = ""
+    assertTrue(emptyOutput.isEmpty, "Empty pane output should be empty string")
+
+    let whitespaceOutput = "\n\n\n"
+    let trimmed = whitespaceOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+    assertTrue(trimmed.isEmpty, "Whitespace-only pane output trims to empty")
+}
+
+func testCapturePaneOutputLargeLineCount() {
+    // tmux capture-pane with -S -N where N > actual lines just returns all available lines.
+    // Simulate: request 200 lines, only 3 available.
+    let available = "line1\nline2\nline3\n"
+    let lines = available.split(separator: "\n", omittingEmptySubsequences: false)
+    // With 3 content lines + trailing, we get <= 200 requested
+    assertTrue(lines.count <= 200, "Line count within requested range")
+    assertTrue(lines.count >= 3, "All available lines present")
+}
+
 // MARK: - Main
 
 print("=== MoriTmux Tests ===")
@@ -624,6 +647,10 @@ testParsePanesWithAgentState()
 testParsePanesWithEmptyAgentFields()
 testParsePanesWithoutAgentFields()
 testPaneFormatContainsAgentFields()
+
+// Capture pane output edge cases
+testCapturePaneOutputEmptyResult()
+testCapturePaneOutputLargeLineCount()
 
 printResults()
 

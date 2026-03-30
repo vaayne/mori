@@ -1300,6 +1300,67 @@ func testSidebarModeBackwardsCompatSearch() {
     assertEqual(decoded, .workspaces)
 }
 
+func testSidebarModeBackwardsCompatAgents() {
+    // Old "agents" value should map to .tasks
+    let json = "\"agents\"".data(using: .utf8)!
+    let decoded = try! JSONDecoder().decode(SidebarMode.self, from: json)
+    assertEqual(decoded, .tasks)
+}
+
+// MARK: - AgentMessage Tests
+
+func testAgentMessageEnvelope() {
+    let msg = AgentMessage(
+        fromProject: "mori",
+        fromWorktree: "main",
+        fromWindow: "claude",
+        fromPaneId: "%5",
+        text: "Review the auth module"
+    )
+    assertEqual(msg.envelope, "[mori-bridge project:mori worktree:main window:claude pane:%5] Review the auth module")
+}
+
+func testAgentMessageParse() {
+    let envelope = "[mori-bridge project:mori worktree:main window:claude pane:%5] Review the auth module"
+    let msg = AgentMessage.parse(envelope)
+    assertNotNil(msg)
+    assertEqual(msg?.fromProject, "mori")
+    assertEqual(msg?.fromWorktree, "main")
+    assertEqual(msg?.fromWindow, "claude")
+    assertEqual(msg?.fromPaneId, "%5")
+    assertEqual(msg?.text, "Review the auth module")
+}
+
+func testAgentMessageParseSlashInWorktree() {
+    let envelope = "[mori-bridge project:mori worktree:feature/auth window:codex pane:%3] hello"
+    let msg = AgentMessage.parse(envelope)
+    assertNotNil(msg)
+    assertEqual(msg?.fromProject, "mori")
+    assertEqual(msg?.fromWorktree, "feature/auth")
+    assertEqual(msg?.fromWindow, "codex")
+    assertEqual(msg?.fromPaneId, "%3")
+    assertEqual(msg?.text, "hello")
+}
+
+func testAgentMessageParseInvalid() {
+    assertNil(AgentMessage.parse("not a valid envelope"))
+    assertNil(AgentMessage.parse("[mori-bridge project:incomplete"))
+    assertNil(AgentMessage.parse(""))
+}
+
+func testAgentMessageCodable() {
+    let msg = AgentMessage(
+        fromProject: "api",
+        fromWorktree: "feat",
+        fromWindow: "codex",
+        fromPaneId: "%1",
+        text: "hello"
+    )
+    let data = try! JSONEncoder().encode(msg)
+    let decoded = try! JSONDecoder().decode(AgentMessage.self, from: data)
+    assertEqual(decoded, msg, "AgentMessage codable round-trip")
+}
+
 // MARK: - Main
 
 print("=== MoriCore Model Tests ===")
@@ -1414,6 +1475,7 @@ testWorktreeCodableWithWorkflowStatus()
 testSidebarModeNewValuesRoundTrip()
 testSidebarModeBackwardsCompatWorktrees()
 testSidebarModeBackwardsCompatSearch()
+testSidebarModeBackwardsCompatAgents()
 
 testSSHControlSocketPathLengthLimit()
 testSSHExecutionConfigTargetFormatting()
@@ -1421,6 +1483,13 @@ testSSHRemovingBatchMode()
 testSSHShellEscape()
 testSSHAskPassEnvironmentIsMinimal()
 testSSHCreateAskPassScriptHasSecurePermissions()
+
+// AgentMessage
+testAgentMessageEnvelope()
+testAgentMessageParse()
+testAgentMessageParseSlashInWorktree()
+testAgentMessageParseInvalid()
+testAgentMessageCodable()
 
 printResults()
 

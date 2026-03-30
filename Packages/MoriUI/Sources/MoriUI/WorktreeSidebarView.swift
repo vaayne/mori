@@ -23,6 +23,8 @@ public struct WorktreeSidebarView: View {
     private let onOpenSettings: (() -> Void)?
     private let onOpenCommandPalette: (() -> Void)?
     private let onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)?
+    private let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
+    private let onSendKeys: ((String, String) -> Void)?
 
     public init(
         projects: [Project] = [],
@@ -43,7 +45,9 @@ public struct WorktreeSidebarView: View {
         onAddProject: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
         onOpenCommandPalette: (() -> Void)? = nil,
-        onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)? = nil
+        onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)? = nil,
+        onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
+        onSendKeys: ((String, String) -> Void)? = nil
     ) {
         self.projects = projects
         self.selectedProjectId = selectedProjectId
@@ -64,12 +68,21 @@ public struct WorktreeSidebarView: View {
         self.onOpenSettings = onOpenSettings
         self.onOpenCommandPalette = onOpenCommandPalette
         self.onSetWorkflowStatus = onSetWorkflowStatus
+        self.onRequestPaneOutput = onRequestPaneOutput
+        self.onSendKeys = onSendKeys
+    }
+
+    /// Count of agent windows needing attention across all worktrees.
+    private var attentionCount: Int {
+        windows.filter { $0.agentState == .waitingForInput || $0.agentState == .error }.count
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 0) {
+                    attentionBanner
+
                     ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
                         if index > 0 {
                             Divider()
@@ -268,10 +281,12 @@ public struct WorktreeSidebarView: View {
         let worktreeWindows = windows
             .filter { $0.worktreeId == worktree.id }
             .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
+        let agentName = worktreeWindows.first(where: { $0.detectedAgent != nil })?.detectedAgent
 
         VStack(alignment: .leading, spacing: 0) {
             WorktreeRowView(
                 worktree: worktree,
+                agentName: agentName,
                 isSelected: isSelected,
                 onSelect: { onSelectWorktree(worktree.id) },
                 onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } }
@@ -316,12 +331,28 @@ public struct WorktreeSidebarView: View {
             // Show windows (tabs) under every worktree that has them
             if !worktreeWindows.isEmpty {
                 ForEach(Array(worktreeWindows.enumerated()), id: \.element.id) { index, window in
-                    WindowRowView(
-                        window: window,
-                        isActive: isSelected && window.tmuxWindowId == selectedWindowId,
-                        shortcutIndex: isSelected && index < 9 ? index + 1 : nil,
-                        onSelect: { onSelectWindow(window.tmuxWindowId) }
-                    )
+                    Group {
+                        if window.detectedAgent != nil {
+                            AgentWindowRowView(
+                                window: window,
+                                projectName: projects.first(where: { $0.id == worktree.projectId })?.name ?? "",
+                                worktreeName: worktree.name,
+                                isSelected: isSelected && window.tmuxWindowId == selectedWindowId,
+                                onSelect: { onSelectWindow(window.tmuxWindowId) },
+                                onRequestPaneOutput: onRequestPaneOutput,
+                                onSendKeys: onSendKeys
+                            )
+                        } else {
+                            WindowRowView(
+                                window: window,
+                                isActive: isSelected && window.tmuxWindowId == selectedWindowId,
+                                shortcutIndex: isSelected && index < 9 ? index + 1 : nil,
+                                onSelect: { onSelectWindow(window.tmuxWindowId) },
+                                onRequestPaneOutput: onRequestPaneOutput,
+                                onSendKeys: onSendKeys
+                            )
+                        }
+                    }
                     .padding(.leading, MoriTokens.Spacing.xxl)
                     .contextMenu {
                         if let onCloseWindow {
@@ -339,6 +370,32 @@ public struct WorktreeSidebarView: View {
     }
 
     // MARK: - Helpers
+
+    // MARK: - Attention Banner
+
+    @ViewBuilder
+    private var attentionBanner: some View {
+        let count = attentionCount
+        if count > 0 {
+            HStack(spacing: MoriTokens.Spacing.md) {
+                Image(systemName: "exclamationmark.bubble.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(MoriTokens.Color.attention)
+                Text(count == 1
+                    ? String.localized("1 agent needs attention")
+                    : String.localized("\(count) agents need attention"))
+                    .font(MoriTokens.Font.caption)
+                    .foregroundStyle(MoriTokens.Color.attention)
+                Spacer()
+            }
+            .padding(.horizontal, MoriTokens.Spacing.xl)
+            .padding(.vertical, MoriTokens.Spacing.md)
+            .background(MoriTokens.Color.attention.opacity(MoriTokens.Opacity.subtle))
+            .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
+            .padding(.horizontal, MoriTokens.Spacing.sm)
+            .padding(.bottom, MoriTokens.Spacing.sm)
+        }
+    }
 
     // MARK: - Footer
 

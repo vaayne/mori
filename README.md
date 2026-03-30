@@ -97,6 +97,10 @@ mori worktree create <project> <branch>
 mori focus <project> <worktree>
 mori send <project> <worktree> <window> "command"
 mori new-window <project> <worktree> <name>
+mori pane list
+mori pane read <project> <worktree> <window> [--lines N]
+mori pane message <project> <worktree> <window> "text"
+mori pane id
 ```
 
 ## Terminal Configuration

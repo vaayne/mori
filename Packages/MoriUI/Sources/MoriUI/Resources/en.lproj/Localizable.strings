@@ -147,3 +147,9 @@
 "%lldm ago" = "%lldm ago";
 "%lldh ago" = "%lldh ago";
 "%lldd ago" = "%lldd ago";
+
+/* Tasks+Agents merge */
+"1 agent needs attention" = "1 agent needs attention";
+"%lld agents need attention" = "%lld agents need attention";
+"Idle" = "Idle";
+"Done" = "Done";
