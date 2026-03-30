@@ -36,7 +36,7 @@ final class AgentDashboardPanel {
         if panel == nil {
             createPanel()
         }
-        panel?.makeKeyAndOrderFront(nil)
+        panel?.orderFrontRegardless()
         startRefresh()
     }
 
@@ -59,6 +59,7 @@ final class AgentDashboardPanel {
         panel.title = String.localized("Agent Dashboard")
         panel.level = .floating
         panel.isFloatingPanel = true
+        panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
         panel.isReleasedWhenClosed = false
         panel.center()
