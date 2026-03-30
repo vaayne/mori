@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import MoriCore
+import MoriTerminal
 import MoriUI
 
 /// Floating NSPanel hosting the multi-pane agent dashboard.
@@ -16,6 +17,13 @@ final class AgentDashboardPanel: NSObject, NSWindowDelegate {
     init(workspaceManager: WorkspaceManager, paneOutputCache: PaneOutputCache) {
         self.workspaceManager = workspaceManager
         self.paneOutputCache = paneOutputCache
+    }
+
+    /// Sync panel appearance with the Ghostty terminal theme.
+    func updateAppearance(themeInfo: GhosttyThemeInfo) {
+        guard let panel else { return }
+        panel.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        panel.backgroundColor = themeInfo.background
     }
 
     var isVisible: Bool {

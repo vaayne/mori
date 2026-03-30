@@ -755,6 +755,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             settingsWindow.contentViewController?.view.layer?.backgroundColor = themeInfo.background.cgColor
         }
 
+        // Update agent dashboard appearance
+        agentDashboardPanel?.updateAppearance(themeInfo: themeInfo)
+
         // Sync to tmux
         if let tmuxBackend = workspaceManager?.tmuxBackend {
             Task {
@@ -911,6 +914,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             )
         }
         agentDashboardPanel?.toggle()
+        // Sync appearance with Ghostty terminal theme
+        let themeInfo = terminalAreaController?.themeInfo ?? .fallback
+        agentDashboardPanel?.updateAppearance(themeInfo: themeInfo)
     }
 
     @objc private func openLazygitMenuAction() {
