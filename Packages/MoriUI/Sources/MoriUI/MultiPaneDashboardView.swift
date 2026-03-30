@@ -40,7 +40,7 @@ public struct MultiPaneDashboardView: View {
     }
 
     public var body: some View {
-        Group {
+        ZStack {
             if model.tiles.isEmpty {
                 VStack(spacing: MoriTokens.Spacing.lg) {
                     Image(systemName: "person.2.slash")
@@ -50,7 +50,6 @@ public struct MultiPaneDashboardView: View {
                         .font(MoriTokens.Font.windowTitle)
                         .foregroundStyle(MoriTokens.Color.muted)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 8) {
@@ -68,5 +67,6 @@ public struct MultiPaneDashboardView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

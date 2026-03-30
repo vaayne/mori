@@ -66,7 +66,18 @@ final class AgentDashboardPanel: NSObject, NSWindowDelegate {
 
         let view = MultiPaneDashboardView(model: self.tilesModel)
         let hostingView = NSHostingView(rootView: view)
-        panel.contentView = hostingView
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+
+        // Use a wrapper view so auto layout anchors the hosting view to fill the panel
+        let wrapper = NSView(frame: contentRect)
+        wrapper.addSubview(hostingView)
+        NSLayoutConstraint.activate([
+            hostingView.topAnchor.constraint(equalTo: wrapper.topAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor),
+            hostingView.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
+        ])
+        panel.contentView = wrapper
         self.panel = panel
     }
 
