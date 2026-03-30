@@ -6,17 +6,23 @@ import MoriCore
 public struct PaneTileView: View {
     let agentName: String
     let windowTitle: String
+    let projectName: String
+    let worktreeName: String
     let agentState: AgentState
     let output: String
 
     public init(
         agentName: String,
         windowTitle: String,
+        projectName: String = "",
+        worktreeName: String = "",
         agentState: AgentState,
         output: String
     ) {
         self.agentName = agentName
         self.windowTitle = windowTitle
+        self.projectName = projectName
+        self.worktreeName = worktreeName
         self.agentState = agentState
         self.output = output
     }
@@ -32,6 +38,13 @@ public struct PaneTileView: View {
                 Text(agentName)
                     .font(MoriTokens.Font.sectionTitle)
                     .lineLimit(1)
+
+                if !contextLabel.isEmpty {
+                    Text(contextLabel)
+                        .font(MoriTokens.Font.caption)
+                        .foregroundStyle(MoriTokens.Color.muted)
+                        .lineLimit(1)
+                }
 
                 Spacer()
 
@@ -86,6 +99,16 @@ public struct PaneTileView: View {
         case .error: return MoriTokens.Color.error
         case .completed: return MoriTokens.Color.success
         case .none: return MoriTokens.Color.muted
+        }
+    }
+
+    /// Compact "project / worktree" label for context.
+    private var contextLabel: String {
+        switch (projectName.isEmpty, worktreeName.isEmpty) {
+        case (false, false): return "\(projectName) / \(worktreeName)"
+        case (false, true): return projectName
+        case (true, false): return worktreeName
+        case (true, true): return ""
         }
     }
 }

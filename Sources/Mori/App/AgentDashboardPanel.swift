@@ -128,12 +128,14 @@ final class AgentDashboardPanel: NSObject, NSWindowDelegate {
 
         var newTiles: [MultiPaneDashboardView.TileData] = []
         for window in agentWindows {
+            let worktree = manager.appState.worktrees.first(where: { $0.id == window.worktreeId })
+            let project = worktree.flatMap { wt in manager.appState.projects.first(where: { $0.id == wt.projectId }) }
             let paneId = window.activePaneId ?? window.tmuxWindowId
             var output = paneOutputCache.get(paneId) ?? ""
 
             if output.isEmpty {
                 // Fetch fresh output
-                if let worktree = manager.appState.worktrees.first(where: { $0.id == window.worktreeId }) {
+                if let worktree {
                     let tmux = manager.tmuxBackendForWorktree(worktree)
                     let rawId = manager.rawTmuxWindowId(from: window)
                     let targetPaneId = window.activePaneId ?? rawId
@@ -148,6 +150,8 @@ final class AgentDashboardPanel: NSObject, NSWindowDelegate {
                 id: window.tmuxWindowId,
                 agentName: window.detectedAgent ?? "agent",
                 windowTitle: window.title,
+                projectName: project?.name ?? "",
+                worktreeName: worktree?.name ?? "",
                 agentState: window.agentState,
                 output: output
             ))

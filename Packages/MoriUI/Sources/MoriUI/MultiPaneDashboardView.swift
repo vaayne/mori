@@ -8,13 +8,25 @@ public struct MultiPaneDashboardView: View {
         public let id: String  // tmuxWindowId
         public let agentName: String
         public let windowTitle: String
+        public let projectName: String
+        public let worktreeName: String
         public let agentState: AgentState
         public let output: String
 
-        public init(id: String, agentName: String, windowTitle: String, agentState: AgentState, output: String) {
+        public init(
+            id: String,
+            agentName: String,
+            windowTitle: String,
+            projectName: String = "",
+            worktreeName: String = "",
+            agentState: AgentState,
+            output: String
+        ) {
             self.id = id
             self.agentName = agentName
             self.windowTitle = windowTitle
+            self.projectName = projectName
+            self.worktreeName = worktreeName
             self.agentState = agentState
             self.output = output
         }
@@ -57,6 +69,8 @@ public struct MultiPaneDashboardView: View {
                             PaneTileView(
                                 agentName: tile.agentName,
                                 windowTitle: tile.windowTitle,
+                                projectName: tile.projectName,
+                                worktreeName: tile.worktreeName,
                                 agentState: tile.agentState,
                                 output: tile.output
                             )
