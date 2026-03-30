@@ -5,6 +5,7 @@ import MoriCore
 public struct TaskWorktreeRowView: View {
     let worktree: Worktree
     let projectName: String
+    let agentName: String?
     let isSelected: Bool
     let onSelect: () -> Void
 
@@ -13,11 +14,13 @@ public struct TaskWorktreeRowView: View {
     public init(
         worktree: Worktree,
         projectName: String,
+        agentName: String? = nil,
         isSelected: Bool,
         onSelect: @escaping () -> Void
     ) {
         self.worktree = worktree
         self.projectName = projectName
+        self.agentName = agentName
         self.isSelected = isSelected
         self.onSelect = onSelect
     }
@@ -146,37 +149,41 @@ public struct TaskWorktreeRowView: View {
         return result
     }
 
+    /// Combined agent state derived from the worktree's own state and its windows.
+    private var effectiveAgentLabel: (icon: String, color: Color, help: String, name: String?)? {
+        // Use worktree-level agentState which reflects the most relevant window
+        switch worktree.agentState {
+        case .error:
+            return ("xmark.circle.fill", MoriTokens.Color.error, "Agent error", agentName)
+        case .waitingForInput:
+            return ("exclamationmark.bubble.fill", MoriTokens.Color.attention, "Agent waiting for input", agentName)
+        case .running:
+            return ("bolt.fill", MoriTokens.Color.success, "Agent running", agentName)
+        case .completed:
+            return ("checkmark.circle.fill", MoriTokens.Color.success, "Agent completed", agentName)
+        case .none:
+            return nil
+        }
+    }
+
     // MARK: - Alert Badge
 
     @ViewBuilder
     private var alertBadgeView: some View {
-        switch worktree.agentState {
-        case .error:
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: MoriTokens.Icon.badge))
-                .foregroundStyle(MoriTokens.Color.error)
-                .help("Agent error")
-                .accessibilityLabel("Agent error")
-        case .waitingForInput:
-            Image(systemName: "exclamationmark.bubble.fill")
-                .font(.system(size: MoriTokens.Icon.badge))
-                .foregroundStyle(MoriTokens.Color.attention)
-                .help("Agent waiting for input")
-                .accessibilityLabel("Agent waiting for input")
-        case .running:
-            Image(systemName: "bolt.fill")
-                .font(.system(size: MoriTokens.Icon.badge))
-                .foregroundStyle(MoriTokens.Color.success)
-                .help("Agent running")
-                .accessibilityLabel("Agent running")
-        case .completed:
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: MoriTokens.Icon.badge))
-                .foregroundStyle(MoriTokens.Color.success)
-                .help("Agent completed")
-                .accessibilityLabel("Agent completed")
-        case .none:
-            EmptyView()
+        if let label = effectiveAgentLabel {
+            HStack(spacing: MoriTokens.Spacing.xxs) {
+                Image(systemName: label.icon)
+                    .font(.system(size: MoriTokens.Icon.badge))
+                    .foregroundStyle(label.color)
+                if let name = label.name {
+                    Text(name)
+                        .font(MoriTokens.Font.monoSmall)
+                        .foregroundStyle(label.color)
+                        .lineLimit(1)
+                }
+            }
+            .help(label.help)
+            .accessibilityLabel(label.help)
         }
     }
 }
