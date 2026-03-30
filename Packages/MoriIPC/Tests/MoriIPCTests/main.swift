@@ -79,6 +79,49 @@ func testCommandSetWorkflowStatusFraming() {
     assertEqual(decoded.requestId, "status-1", "setWorkflowStatus framed request id")
 }
 
+// MARK: - Pane Command Round-trip Tests
+
+func testCommandPaneListRoundTrip() {
+    let cmd = IPCCommand.paneList
+    let data = try! JSONEncoder().encode(cmd)
+    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
+    assertEqual(decoded, cmd, "paneList round-trip")
+}
+
+func testCommandPaneReadRoundTrip() {
+    let cmd = IPCCommand.paneRead(project: "mori", worktree: "main", window: "shell", lines: 50)
+    let data = try! JSONEncoder().encode(cmd)
+    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
+    assertEqual(decoded, cmd, "paneRead round-trip")
+}
+
+func testCommandPaneReadMaxLines() {
+    let cmd = IPCCommand.paneRead(project: "mori", worktree: "feat", window: "agent", lines: 200)
+    let data = try! JSONEncoder().encode(cmd)
+    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
+    assertEqual(decoded, cmd, "paneRead max lines round-trip")
+}
+
+func testCommandPaneListFraming() {
+    let cmd = IPCCommand.paneList
+    let request = IPCRequest(command: cmd, requestId: "pane-1")
+    let data = try! IPCFraming.encode(request)
+    assertEqual(data.last, 0x0A, "paneList framed request ends with newline")
+    let decoded = try! IPCFraming.decodeRequest(from: data)
+    assertEqual(decoded.command, cmd, "paneList framed request decodable")
+    assertEqual(decoded.requestId, "pane-1", "paneList framed request id")
+}
+
+func testCommandPaneReadFraming() {
+    let cmd = IPCCommand.paneRead(project: "proj", worktree: "wt", window: "win", lines: 30)
+    let request = IPCRequest(command: cmd, requestId: "pane-2")
+    let data = try! IPCFraming.encode(request)
+    assertEqual(data.last, 0x0A, "paneRead framed request ends with newline")
+    let decoded = try! IPCFraming.decodeRequest(from: data)
+    assertEqual(decoded.command, cmd, "paneRead framed request decodable")
+    assertEqual(decoded.requestId, "pane-2", "paneRead framed request id")
+}
+
 // MARK: - IPCRequest Tests
 
 func testIPCRequestRoundTrip() {
@@ -240,6 +283,13 @@ testCommandOpenRoundTrip()
 testCommandSetWorkflowStatusRoundTrip()
 testCommandSetWorkflowStatusAllStatuses()
 testCommandSetWorkflowStatusFraming()
+
+// Pane command round-trips
+testCommandPaneListRoundTrip()
+testCommandPaneReadRoundTrip()
+testCommandPaneReadMaxLines()
+testCommandPaneListFraming()
+testCommandPaneReadFraming()
 
 // Request round-trips
 testIPCRequestRoundTrip()
