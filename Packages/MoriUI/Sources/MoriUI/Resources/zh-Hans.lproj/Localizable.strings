@@ -147,3 +147,9 @@
 "%lldm ago" = "%lld分钟前";
 "%lldh ago" = "%lld小时前";
 "%lldd ago" = "%lld天前";
+
+/* Tasks+Agents merge */
+"1 agent needs attention" = "1 个代理需要关注";
+"%lld agents need attention" = "%lld 个代理需要关注";
+"Idle" = "空闲";
+"Done" = "完成";
