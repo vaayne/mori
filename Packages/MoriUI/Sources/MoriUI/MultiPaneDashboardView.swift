@@ -20,19 +20,28 @@ public struct MultiPaneDashboardView: View {
         }
     }
 
-    let tiles: [TileData]
+    /// Observable model providing tiles data.
+    /// Declared as a protocol-less `AnyObject` with dynamic member lookup
+    /// so MoriUI doesn't depend on the app layer.
+    @Observable
+    public final class Model {
+        public var tiles: [TileData] = []
+        public init() {}
+    }
+
+    @Bindable private var model: Model
 
     private let columns = [
         GridItem(.adaptive(minimum: 320, maximum: 600), spacing: 8)
     ]
 
-    public init(tiles: [TileData]) {
-        self.tiles = tiles
+    public init(model: Model) {
+        self.model = model
     }
 
     public var body: some View {
         Group {
-            if tiles.isEmpty {
+            if model.tiles.isEmpty {
                 VStack(spacing: MoriTokens.Spacing.lg) {
                     Image(systemName: "person.2.slash")
                         .font(.system(size: 32))
@@ -45,7 +54,7 @@ public struct MultiPaneDashboardView: View {
             } else {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 8) {
-                        ForEach(tiles) { tile in
+                        ForEach(model.tiles) { tile in
                             PaneTileView(
                                 agentName: tile.agentName,
                                 windowTitle: tile.windowTitle,

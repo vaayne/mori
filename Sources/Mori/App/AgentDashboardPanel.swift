@@ -6,14 +6,12 @@ import MoriUI
 /// Floating NSPanel hosting the multi-pane agent dashboard.
 /// Non-modal, utility window style, toggleable independently of the main window.
 @MainActor
-final class AgentDashboardPanel {
+final class AgentDashboardPanel: NSObject, NSWindowDelegate {
     private var panel: NSPanel?
     private var refreshTimer: Timer?
     private weak var workspaceManager: WorkspaceManager?
     private let paneOutputCache: PaneOutputCache
-
-    /// Observable tiles data for the SwiftUI dashboard view.
-    private var tiles: [MultiPaneDashboardView.TileData] = []
+    private let tilesModel = MultiPaneDashboardView.Model()
 
     init(workspaceManager: WorkspaceManager, paneOutputCache: PaneOutputCache) {
         self.workspaceManager = workspaceManager
@@ -54,7 +52,7 @@ final class AgentDashboardPanel {
             contentRect: contentRect,
             styleMask: styleMask,
             backing: .buffered,
-            defer: true
+            defer: false
         )
         panel.title = String.localized("Agent Dashboard")
         panel.level = .floating
@@ -62,16 +60,20 @@ final class AgentDashboardPanel {
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
         panel.isReleasedWhenClosed = false
+        panel.delegate = self
         panel.center()
+        panel.minSize = NSSize(width: 400, height: 300)
 
-        updatePanelContent(panel: panel)
+        let view = MultiPaneDashboardView(model: self.tilesModel)
+        let hostingView = NSHostingView(rootView: view)
+        panel.contentView = hostingView
         self.panel = panel
     }
 
-    private func updatePanelContent(panel: NSPanel) {
-        let view = MultiPaneDashboardView(tiles: tiles)
-        let hostingView = NSHostingView(rootView: view)
-        panel.contentView = hostingView
+    // MARK: - NSWindowDelegate
+
+    func windowWillClose(_ notification: Notification) {
+        stopRefresh()
     }
 
     // MARK: - Refresh
@@ -132,9 +134,6 @@ final class AgentDashboardPanel {
             ))
         }
 
-        tiles = newTiles
-        if let panel {
-            updatePanelContent(panel: panel)
-        }
+        tilesModel.tiles = newTiles
     }
 }
