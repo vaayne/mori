@@ -54,25 +54,19 @@ struct TerminalScreen: View {
 
             // Floating menu button (top-right)
             if coordinator.state == .shell && !showToolbar {
-                VStack {
-                    HStack {
-                        Spacer()
-                        Button {
-                            withAnimation(.spring(duration: 0.25)) { showToolbar = true }
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white.opacity(0.7))
-                                .frame(width: 32, height: 32)
-                                .background(.ultraThinMaterial, in: Circle())
-                        }
-                        .padding(.trailing, 12)
-                        .padding(.top, 8)
-                    }
-                    Spacer()
+                Button {
+                    withAnimation(.spring(duration: 0.25)) { showToolbar = true }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .frame(width: 44, height: 44)
+                        .background(.ultraThinMaterial, in: Circle())
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .padding(.trailing, 12)
+                .padding(.top, 8)
                 .allowsHitTesting(true)
-                .contentShape(Rectangle().size(.zero))
             }
 
             // Toolbar overlay
