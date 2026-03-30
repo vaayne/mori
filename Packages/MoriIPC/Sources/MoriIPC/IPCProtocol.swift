@@ -13,6 +13,7 @@ public enum IPCCommand: Codable, Sendable, Equatable {
     case setWorkflowStatus(project: String, worktree: String, status: String)
     case paneList
     case paneRead(project: String, worktree: String, window: String, lines: Int)
+    case paneMessage(project: String, worktree: String, window: String, text: String)
 }
 
 // MARK: - IPC Request
