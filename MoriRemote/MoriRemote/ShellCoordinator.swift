@@ -124,6 +124,9 @@ final class ShellCoordinator {
 
             state = .shell
             renderer.activateKeyboard()
+            // TODO: Re-enable tmux polling with a non-blocking approach.
+            // The current exec-channel polling interferes with the shell channel.
+            // startTmuxPolling()
         } catch {
             await resetConnection()
             lastError = error
@@ -133,6 +136,9 @@ final class ShellCoordinator {
 
     // MARK: - Private
 
+    /// The custom keyboard accessory bar (set by TerminalScreen).
+    var accessoryBar: TerminalAccessoryBar?
+
     private func wireRenderer(_ renderer: SwiftTermRenderer) {
         self.renderer = renderer
         renderer.inputHandler = { [weak self] data in
@@ -140,6 +146,18 @@ final class ShellCoordinator {
         }
         renderer.sizeChangeHandler = { [weak self] newCols, newRows in
             self?.sendResize(Int(newCols), Int(newRows))
+        }
+
+        // Wire the custom accessory bar — must set before activateKeyboard
+        if let bar = accessoryBar {
+            let tv = renderer.swiftTermView
+            bar.terminalView = tv
+            tv.inputAccessoryView = bar
+            // Force the keyboard to pick up the new accessory view
+            tv.reloadInputViews()
+            bar.onTmuxCommand = { [weak self] cmd in
+                self?.handleTmuxCommand(cmd)
+            }
         }
     }
 
@@ -161,6 +179,97 @@ final class ShellCoordinator {
         }
     }
 
+    // MARK: - Tmux
+
+    private var tmuxPollTask: Task<Void, Never>?
+
+    func handleTmuxCommand(_ command: TmuxCommand) {
+        guard let sshManager else { return }
+        Task {
+            do {
+                // Execute real tmux CLI commands via separate exec channel.
+                // No prefix key needed — works regardless of tmux config.
+                _ = try await sshManager.runCommand(command.shellCommand)
+            } catch {
+                log.error("Tmux command error: \(error)")
+            }
+        }
+    }
+
+    func startTmuxPolling() {
+        tmuxPollTask?.cancel()
+        tmuxPollTask = Task {
+            // Initial poll after shell starts
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            await self.pollTmuxState()
+
+            // Then poll every 3 seconds
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                guard !Task.isCancelled else { return }
+                await self.pollTmuxState()
+            }
+        }
+    }
+
+    private func pollTmuxState() async {
+        guard let sshManager, await sshManager.isConnected else {
+            log.debug("tmux poll: no SSH manager or disconnected")
+            return
+        }
+
+        do {
+            // List sessions: "session_name:window_count:attached"
+            let sessionsRaw = try await sshManager.runCommand(
+                "tmux list-sessions -F '#{session_name}:#{session_windows}:#{session_attached}' 2>/dev/null"
+            )
+            log.debug("tmux sessions raw: '\(sessionsRaw)'")
+            guard !sessionsRaw.isEmpty else {
+                accessoryBar?.updateTmux(session: nil, windows: [])
+                return
+            }
+
+            let sessions = sessionsRaw.split(separator: "\n").compactMap { line -> TmuxSession? in
+                let parts = line.split(separator: ":", maxSplits: 2)
+                guard parts.count >= 3 else { return nil }
+                return TmuxSession(
+                    name: String(parts[0]),
+                    windowCount: Int(parts[1]) ?? 0,
+                    isAttached: parts[2] == "1"
+                )
+            }
+
+            // Find the attached session (or first)
+            let activeSession = sessions.first(where: { $0.isAttached }) ?? sessions.first
+
+            guard let activeSession else {
+                accessoryBar?.updateTmux(session: nil, windows: [])
+                return
+            }
+
+            // List windows for active session: "index:name:active"
+            let windowsRaw = try await sshManager.runCommand(
+                "tmux list-windows -t '\(activeSession.name)' -F '#{window_index}:#{window_name}:#{window_active}' 2>/dev/null"
+            )
+
+            let windows = windowsRaw.split(separator: "\n").compactMap { line -> TmuxWindow? in
+                let parts = line.split(separator: ":", maxSplits: 2)
+                guard parts.count >= 3 else { return nil }
+                return TmuxWindow(
+                    index: Int(parts[0]) ?? 0,
+                    name: String(parts[1]),
+                    isActive: parts[2] == "1"
+                )
+            }
+
+            accessoryBar?.updateTmux(session: activeSession, windows: windows)
+        } catch {
+            // tmux not running — hide the bar
+            accessoryBar?.updateTmux(session: nil, windows: [])
+        }
+    }
+
     private func handleShellClosed() async {
         await resetConnection()
         lastError = ShellError.shellFailed("Shell session ended.")
@@ -168,6 +277,8 @@ final class ShellCoordinator {
     }
 
     private func resetConnection() async {
+        tmuxPollTask?.cancel()
+        tmuxPollTask = nil
         outputTask?.cancel()
         outputTask = nil
 

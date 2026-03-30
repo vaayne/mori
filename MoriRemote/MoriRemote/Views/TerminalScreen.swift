@@ -9,7 +9,9 @@ struct TerminalScreen: View {
 
     @State private var shellStarted = false
     @State private var showToolbar = false
+    @State private var showKeyBarCustomize = false
     @State private var renderer: SwiftTermRendererBox?
+    @State private var accessoryBar = TerminalAccessoryBar()
 
     var body: some View {
         ZStack {
@@ -59,6 +61,10 @@ struct TerminalScreen: View {
         }
         .statusBarHidden(true)
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showKeyBarCustomize) {
+            KeyBarCustomizeView(keyBar: accessoryBar.keyBar)
+                .presentationDetents([.medium, .large])
+        }
         .onChange(of: coordinator.state) { _, newState in
             if newState == .shell {
                 renderer?.value.activateKeyboard()
@@ -69,6 +75,10 @@ struct TerminalScreen: View {
     private func startShellOnce(renderer r: SwiftTermRenderer) {
         guard !shellStarted else { return }
         shellStarted = true
+        coordinator.accessoryBar = accessoryBar
+        accessoryBar.onCustomizeTapped = {
+            showKeyBarCustomize = true
+        }
         Task {
             await coordinator.openShell(renderer: r)
         }

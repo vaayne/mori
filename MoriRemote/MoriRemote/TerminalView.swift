@@ -8,9 +8,9 @@ struct TerminalView: UIViewRepresentable {
     func makeUIView(context: Context) -> SwiftTermRenderer {
         let renderer = SwiftTermRenderer()
         // Defer callback so SwiftUI layout is settled before the coordinator acts.
+        // Don't activate keyboard here — let openShell do it after the accessory bar is wired.
         DispatchQueue.main.async {
             onRendererReady(renderer)
-            renderer.activateKeyboard()
         }
         return renderer
     }

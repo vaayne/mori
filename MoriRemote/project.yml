@@ -12,6 +12,9 @@ packages:
     path: ../Packages/MoriSSH
   MoriTerminal:
     path: ../Packages/MoriTerminal
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm.git
+    from: "1.13.0"
 targets:
   MoriRemote:
     type: application
@@ -28,6 +31,8 @@ targets:
         product: MoriSSH
       - package: MoriTerminal
         product: MoriTerminal
+      - package: SwiftTerm
+        product: SwiftTerm
     settings:
       base:
         PRODUCT_NAME: MoriRemote

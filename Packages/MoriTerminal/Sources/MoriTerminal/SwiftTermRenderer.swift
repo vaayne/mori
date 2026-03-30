@@ -109,6 +109,10 @@ public final class SwiftTermRenderer: UIView {
         return (UInt16(terminal.cols), UInt16(terminal.rows))
     }
 
+    /// The underlying SwiftTerm `TerminalView` — exposed so callers can set
+    /// a custom `inputAccessoryView` and send keys directly.
+    public var swiftTermView: TerminalView { terminalView }
+
     /// Make the embedded terminal view first responder to show the iOS keyboard.
     public func activateKeyboard() {
         _ = terminalView.becomeFirstResponder()
