@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var reconnectTask: Task<Void, Never>?
     private var remoteConnectWizardController: RemoteConnectWizardController?
     private var updateController: UpdateController?
+    private var agentDashboardPanel: AgentDashboardPanel?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -846,6 +847,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         windowMenu.addItem(withTitle: .localized("Minimize"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
         windowMenu.addItem(withTitle: .localized("Zoom"), action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
         windowMenu.addItem(menuItem(.localized("Close Window"), action: #selector(closeWindowMenuAction), key: "w", mods: [.command, .shift]))
+        windowMenu.addItem(.separator())
+        windowMenu.addItem(menuItem(.localized("Agent Dashboard"), action: #selector(toggleAgentDashboardAction), key: "a", mods: [.command, .shift]))
         windowMenuItem.submenu = windowMenu
         mainMenu.addItem(windowMenuItem)
         NSApp.windowsMenu = windowMenu
@@ -898,6 +901,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     @objc private func closeWindowMenuAction() {
         mainWindowController?.window?.close()
+    }
+
+    @objc private func toggleAgentDashboardAction() {
+        if agentDashboardPanel == nil, let manager = workspaceManager {
+            agentDashboardPanel = AgentDashboardPanel(
+                workspaceManager: manager,
+                paneOutputCache: PaneOutputCache()
+            )
+        }
+        agentDashboardPanel?.toggle()
     }
 
     @objc private func openLazygitMenuAction() {
