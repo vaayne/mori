@@ -139,7 +139,9 @@ public struct SidebarContainerView: View {
                     onAddProject: onAddProject,
                     onOpenSettings: onOpenSettings,
                     onOpenCommandPalette: onOpenCommandPalette,
-                    onSetWorkflowStatus: onSetWorkflowStatus
+                    onSetWorkflowStatus: onSetWorkflowStatus,
+                    onRequestPaneOutput: onRequestPaneOutput,
+                    onSendKeys: onSendKeys
                 )
             }
         }
