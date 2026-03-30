@@ -1300,6 +1300,13 @@ func testSidebarModeBackwardsCompatSearch() {
     assertEqual(decoded, .workspaces)
 }
 
+func testSidebarModeBackwardsCompatAgents() {
+    // Old "agents" value should map to .tasks
+    let json = "\"agents\"".data(using: .utf8)!
+    let decoded = try! JSONDecoder().decode(SidebarMode.self, from: json)
+    assertEqual(decoded, .tasks)
+}
+
 // MARK: - AgentMessage Tests
 
 func testAgentMessageEnvelope() {
@@ -1457,6 +1464,7 @@ testWorktreeCodableWithWorkflowStatus()
 testSidebarModeNewValuesRoundTrip()
 testSidebarModeBackwardsCompatWorktrees()
 testSidebarModeBackwardsCompatSearch()
+testSidebarModeBackwardsCompatAgents()
 
 testSSHControlSocketPathLengthLimit()
 testSSHExecutionConfigTargetFormatting()
