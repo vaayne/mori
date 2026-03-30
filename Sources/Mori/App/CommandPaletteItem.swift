@@ -6,6 +6,7 @@ enum CommandPaletteItem: Sendable {
     case project(id: UUID, name: String)
     case worktree(id: UUID, projectId: UUID, name: String, branch: String?)
     case window(id: String, worktreeId: UUID, title: String, tag: WindowTag?)
+    case agent(windowId: String, agentName: String, context: String, state: AgentState)
     case action(id: String, title: String, subtitle: String?)
 
     var title: String {
@@ -16,6 +17,8 @@ enum CommandPaletteItem: Sendable {
             return name
         case .window(_, _, let title, _):
             return title
+        case .agent(_, let agentName, _, _):
+            return agentName
         case .action(_, let title, _):
             return title
         }
@@ -32,6 +35,15 @@ enum CommandPaletteItem: Sendable {
                 return .localized("Window (\(tag.rawValue))")
             }
             return .localized("Window")
+        case .agent(_, _, let context, let state):
+            let stateLabel = switch state {
+            case .running: String.localized("Running")
+            case .waitingForInput: String.localized("Waiting")
+            case .error: String.localized("Error")
+            case .completed: String.localized("Done")
+            case .none: String.localized("Idle")
+            }
+            return context.isEmpty ? stateLabel : "\(context) — \(stateLabel)"
         case .action(_, _, let subtitle):
             return subtitle
         }
@@ -58,6 +70,14 @@ enum CommandPaletteItem: Sendable {
             return "arrow.triangle.branch"
         case .window(_, _, _, let tag):
             return tag?.symbolName ?? "terminal"
+        case .agent(_, _, _, let state):
+            return switch state {
+            case .running: "bolt.fill"
+            case .waitingForInput: "exclamationmark.bubble.fill"
+            case .error: "xmark.circle.fill"
+            case .completed: "checkmark.circle.fill"
+            case .none: "terminal"
+            }
         case .action(let id, _, _):
             switch id {
             case "action.create-worktree":

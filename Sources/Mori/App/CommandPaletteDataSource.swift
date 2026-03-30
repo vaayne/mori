@@ -67,6 +67,19 @@ final class CommandPaletteDataSource {
             subtitle: .localized("Check for available Mori updates")
         ))
 
+        // Agent windows — searchable by agent name
+        for window in appState.runtimeWindows where window.detectedAgent != nil {
+            let worktree = appState.worktrees.first { $0.id == window.worktreeId }
+            let project = worktree.flatMap { wt in appState.projects.first { $0.id == wt.projectId } }
+            let context = [project?.name, worktree?.name].compactMap { $0 }.joined(separator: "/")
+            items.append(.agent(
+                windowId: window.tmuxWindowId,
+                agentName: window.detectedAgent ?? window.title,
+                context: context,
+                state: window.agentState
+            ))
+        }
+
         // "Set Worktree Status" actions — only when a worktree is selected
         if let selectedWorktree = appState.selectedWorktree {
             for status in WorkflowStatus.allCases {
@@ -103,11 +116,23 @@ final class CommandPaletteDataSource {
     /// Score all items against a query and return sorted results (highest score first).
     /// Items with zero score are excluded.
     /// Supports `tag:<tagname>` prefix to filter windows by semantic tag.
+    /// Supports `agent:` prefix to filter agent windows.
     func search(query: String) -> [CommandPaletteItem] {
         let items = allItems()
 
         if query.isEmpty {
             return items
+        }
+
+        // Handle "agent:" prefix filtering
+        if query.lowercased().hasPrefix("agent:") {
+            let agentQuery = String(query.dropFirst(6)).trimmingCharacters(in: .whitespaces).lowercased()
+            return items.filter { item in
+                if case .agent(_, let name, _, _) = item {
+                    return agentQuery.isEmpty || name.lowercased().contains(agentQuery)
+                }
+                return false
+            }
         }
 
         // Handle "tag:" prefix filtering

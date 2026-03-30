@@ -1151,6 +1151,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         case .window(let id, _, _, _):
             manager.selectWindow(id)
 
+        case .agent(let windowId, _, _, _):
+            manager.selectWindow(windowId)
+
         case .action(let id, _, _):
             handlePaletteAction(id, manager: manager)
         }
