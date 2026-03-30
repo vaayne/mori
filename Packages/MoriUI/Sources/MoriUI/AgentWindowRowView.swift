@@ -14,7 +14,7 @@ public struct AgentWindowRowView: View {
     @State private var isHovered = false
     @State private var showPopover = false
     @State private var popoverOutput: String?
-    @State private var hoverTimer: Timer?
+    @State private var hoverTask: Task<Void, Never>?
     @State private var showReplyField = false
 
     public init(
@@ -42,19 +42,18 @@ public struct AgentWindowRowView: View {
         }
         .onHover { hovering in
             isHovered = hovering
-            if hovering, onRequestPaneOutput != nil {
-                hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+            hoverTask?.cancel()
+            if hovering, let onRequestPaneOutput {
+                hoverTask = Task {
+                    try? await Task.sleep(for: .milliseconds(300))
+                    guard !Task.isCancelled else { return }
                     let paneId = window.activePaneId ?? window.tmuxWindowId
-                    onRequestPaneOutput?(paneId) { output in
-                        DispatchQueue.main.async {
-                            self.popoverOutput = output
-                            self.showPopover = output != nil
-                        }
+                    onRequestPaneOutput(paneId) { output in
+                        self.popoverOutput = output
+                        self.showPopover = output != nil
                     }
                 }
             } else {
-                hoverTimer?.invalidate()
-                hoverTimer = nil
                 showPopover = false
                 popoverOutput = nil
             }

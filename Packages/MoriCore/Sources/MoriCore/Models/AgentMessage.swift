@@ -1,7 +1,7 @@
 import Foundation
 
 /// Envelope format for agent-to-agent messages sent via `mori pane message`.
-/// Format: `[mori-bridge project:<project> worktree:<worktree> window:<window> pane:<id>] <text>`
+/// Format: `[mori-bridge project:<p> worktree:<w> window:<win> pane:<id>] <text>`
 public struct AgentMessage: Codable, Sendable, Equatable {
     public let fromProject: String
     public let fromWorktree: String

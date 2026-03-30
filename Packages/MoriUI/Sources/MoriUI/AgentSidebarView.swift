@@ -167,8 +167,8 @@ public struct AgentSidebarView: View {
                             .foregroundStyle(MoriTokens.Color.muted)
                     }
                     .buttonStyle(.plain)
-                    .help("Add Repository")
-                    .accessibilityLabel("Add Repository")
+                    .help(String.localized("Add Repository"))
+                    .accessibilityLabel(String.localized("Add Repository"))
                 }
 
                 Spacer()
@@ -180,8 +180,8 @@ public struct AgentSidebarView: View {
                             .foregroundStyle(MoriTokens.Color.muted)
                     }
                     .buttonStyle(.plain)
-                    .help("Command Palette (⇧⌘P)")
-                    .accessibilityLabel("Command Palette")
+                    .help(String.localized("Command Palette (⇧⌘P)"))
+                    .accessibilityLabel(String.localized("Command Palette"))
                 }
 
                 if let onOpenSettings {
@@ -191,8 +191,8 @@ public struct AgentSidebarView: View {
                             .foregroundStyle(MoriTokens.Color.muted)
                     }
                     .buttonStyle(.plain)
-                    .help("Settings (⌘,)")
-                    .accessibilityLabel("Settings")
+                    .help(String.localized("Settings (⌘,)"))
+                    .accessibilityLabel(String.localized("Settings"))
                 }
             }
             .padding(.horizontal, MoriTokens.Spacing.xl)
