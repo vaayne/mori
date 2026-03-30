@@ -3,16 +3,29 @@ import UIKit
 
 // MARK: - Tmux Data Types
 
-struct TmuxSession: Equatable, Sendable {
+struct TmuxSession: Equatable, Sendable, Identifiable {
     let name: String
     let windowCount: Int
     let isAttached: Bool
+    var windows: [TmuxWindow] = []
+
+    var id: String { name }
 }
 
-struct TmuxWindow: Equatable, Sendable {
+struct TmuxWindow: Equatable, Sendable, Identifiable {
     let index: Int
     let name: String
     let isActive: Bool
+    let sessionName: String
+
+    var id: String { "\(sessionName):\(index)" }
+
+    init(index: Int, name: String, isActive: Bool, sessionName: String = "") {
+        self.index = index
+        self.name = name
+        self.isActive = isActive
+        self.sessionName = sessionName
+    }
 }
 
 // MARK: - Delegate

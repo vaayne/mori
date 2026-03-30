@@ -135,7 +135,10 @@ enum TmuxCommand: Sendable {
     case detach
 
     /// The real tmux CLI command to execute via SSH exec channel.
-    var shellCommand: String {
+    ///
+    /// PTY-based exec channels inherit tmux client context, so these
+    /// commands can target the current session/window/pane without explicit `-t`.
+    func shellCommand(session: String? = nil) -> String {
         switch self {
         case .selectWindow(let idx): return "tmux select-window -t :\(idx)"
         case .newWindow:             return "tmux new-window"

@@ -371,6 +371,99 @@ private final class ExecHandler: ChannelDuplexHandler, @unchecked Sendable {
     }
 }
 
+// MARK: - NoPTY Exec Handler
+
+/// Exec handler that skips PTY allocation — lightweight channel for one-shot commands.
+/// Use this for background queries (e.g., tmux state polling) that should not
+/// interfere with the interactive shell channel.
+private final class NoPTYExecHandler: ChannelDuplexHandler, @unchecked Sendable {
+    typealias InboundIn = SSHChannelData
+    typealias InboundOut = ByteBuffer
+    typealias OutboundIn = ByteBuffer
+    typealias OutboundOut = SSHChannelData
+
+    private let command: String
+    private let continuation: AsyncThrowingStream<Data, Error>.Continuation
+    private let execAccepted: EventLoopPromise<Void>
+    private var execResolved = false
+
+    private func succeedExec() {
+        guard !execResolved else { return }
+        execResolved = true
+        execAccepted.succeed(())
+    }
+
+    private func failExec(_ error: Error) {
+        guard !execResolved else { return }
+        execResolved = true
+        execAccepted.fail(error)
+    }
+
+    init(
+        command: String,
+        continuation: AsyncThrowingStream<Data, Error>.Continuation,
+        execAccepted: EventLoopPromise<Void>
+    ) {
+        self.command = command
+        self.continuation = continuation
+        self.execAccepted = execAccepted
+    }
+
+    func handlerAdded(context: ChannelHandlerContext) {
+        context.channel.setOption(ChannelOptions.allowRemoteHalfClosure, value: true)
+            .assumeIsolated()
+            .whenFailure { error in
+                context.fireErrorCaught(error)
+            }
+    }
+
+    func channelActive(context: ChannelHandlerContext) {
+        // Skip PTY — send exec request directly
+        let execRequest = SSHChannelRequestEvent.ExecRequest(
+            command: command,
+            wantReply: true
+        )
+        context.triggerUserOutboundEvent(execRequest).assumeIsolated().whenFailure { [self] error in
+            self.failExec(SSHError.channelError("exec request failed: \(error)"))
+            self.continuation.finish(throwing: SSHError.channelError("exec request failed: \(error)"))
+            context.close(promise: nil)
+        }
+    }
+
+    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        switch event {
+        case is ChannelSuccessEvent:
+            succeedExec()
+        case is ChannelFailureEvent:
+            failExec(SSHError.channelError("exec request rejected by server"))
+            continuation.finish(throwing: SSHError.channelError("exec request rejected by server"))
+            context.close(promise: nil)
+        default:
+            break
+        }
+        context.fireUserInboundEventTriggered(event)
+    }
+
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        let channelData = self.unwrapInboundIn(data)
+        guard case .byteBuffer(var buffer) = channelData.data else { return }
+        guard let bytes = buffer.readBytes(length: buffer.readableBytes) else { return }
+        continuation.yield(Data(bytes))
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        failExec(SSHError.disconnected)
+        continuation.finish()
+        context.fireChannelInactive()
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        failExec(error)
+        continuation.finish(throwing: error)
+        context.close(promise: nil)
+    }
+}
+
 // MARK: - Connection Manager
 
 /// Actor managing a single SSH connection to a remote host.
@@ -621,6 +714,86 @@ public actor SSHConnectionManager {
     /// Run a one-shot command and collect its stdout as a string.
     public func runCommand(_ command: String) async throws -> String {
         let channel = try await openExecChannel(command: command)
+        var output = Data()
+        for try await chunk in channel.inbound {
+            output.append(chunk)
+        }
+        await channel.close()
+        return String(data: output, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    /// Open an exec channel **without** PTY allocation.
+    ///
+    /// Lighter weight than `openExecChannel` — suitable for background queries
+    /// that should not interfere with interactive shell channels.
+    public func openExecChannelNoPTY(command: String) async throws -> SSHChannel {
+        guard let channel = self.channel else {
+            throw SSHError.disconnected
+        }
+
+        let sshChannel: SSHChannel = try await withCheckedThrowingContinuation { continuation in
+            channel.eventLoop.execute {
+                let sshHandler: NIOSSHHandler
+                do {
+                    sshHandler = try channel.pipeline.syncOperations.handler(type: NIOSSHHandler.self)
+                } catch {
+                    continuation.resume(throwing: SSHError.channelError("no SSH handler: \(error)"))
+                    return
+                }
+
+                let channelPromise = channel.eventLoop.makePromise(of: Channel.self)
+                let execAccepted = channel.eventLoop.makePromise(of: Void.self)
+                var streamContinuation: AsyncThrowingStream<Data, Error>.Continuation!
+                let inbound = AsyncThrowingStream<Data, Error> { streamContinuation = $0 }
+
+                sshHandler.createChannel(channelPromise) { childChannel, channelType in
+                    guard channelType == .session else {
+                        return childChannel.eventLoop.makeFailedFuture(
+                            SSHError.channelError("unexpected channel type")
+                        )
+                    }
+                    return childChannel.eventLoop.makeCompletedFuture {
+                        let handler = NoPTYExecHandler(
+                            command: command,
+                            continuation: streamContinuation,
+                            execAccepted: execAccepted
+                        )
+                        try childChannel.pipeline.syncOperations.addHandler(handler)
+                    }
+                }
+
+                channelPromise.futureResult.assumeIsolated().whenComplete { result in
+                    switch result {
+                    case .success(let childChannel):
+                        execAccepted.futureResult.assumeIsolated().whenComplete { execResult in
+                            switch execResult {
+                            case .success:
+                                let ch = SSHChannel(channel: childChannel, inbound: inbound)
+                                continuation.resume(returning: ch)
+                            case .failure(let error):
+                                streamContinuation.finish(throwing: error)
+                                continuation.resume(throwing: error)
+                            }
+                        }
+                    case .failure(let error):
+                        streamContinuation.finish(throwing: error)
+                        execAccepted.fail(error)
+                        continuation.resume(throwing: SSHError.channelError(error.localizedDescription))
+                    }
+                }
+            }
+        }
+
+        return sshChannel
+    }
+
+    /// Run a one-shot command without PTY and collect stdout as a string.
+    ///
+    /// Use this for background queries (e.g., tmux state) that must not
+    /// interfere with the interactive shell channel.
+    public func runCommandNoPTY(_ command: String) async throws -> String {
+        let channel = try await openExecChannelNoPTY(command: command)
         var output = Data()
         for try await chunk in channel.inbound {
             output.append(chunk)

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		109E4551800EDCA43A760F80 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9A1E86AC034B64B37F68A846 /* Localizable.strings */; };
+		229F7BB580720A05A8DFF1AE /* TmuxSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A15134BC85B9E6519FF7F2A9 /* TmuxSidebarView.swift */; };
 		376EEC1B30EE8565C4B085D1 /* MoriRemoteApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46F3182F8D251430A10B298E /* MoriRemoteApp.swift */; };
 		3E10DC5EF41F3B0DBD7E18E0 /* ServerFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93C9BF50025C03B0BCF8E77A /* ServerFormView.swift */; };
 		511FAAE001FB06AACCFC7E2C /* KeyBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAEB9A39277AB28A5B3718E3 /* KeyBarView.swift */; };
@@ -27,6 +28,7 @@
 		97B5FB0C7E80E60AF0D59B0E /* Server.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493C27506159F574E156F96C /* Server.swift */; };
 		C7B874D9B7973D33D6D7E5D6 /* MoriTerminal in Frameworks */ = {isa = PBXBuildFile; productRef = 35EA6C6FBCAE1CE488930F9F /* MoriTerminal */; };
 		D2F9125D254E9980272FA1F7 /* TmuxBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 879D7ABF80A185D8F5020407 /* TmuxBarView.swift */; };
+		F005EC1ECFC968DF06655D7E /* SidebarContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 348894A19970D2C348B4A692 /* SidebarContainer.swift */; };
 		F8BC0A57AF5F0A266F023AB0 /* TerminalAccessoryBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3314AE88EB123344D196346D /* TerminalAccessoryBar.swift */; };
 /* End PBXBuildFile section */
 
@@ -36,6 +38,7 @@
 		293AE41146DC5F2BB4900EA4 /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
 		2B45537B3FC70BA7F912DE66 /* MoriSSH */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MoriSSH; path = ../Packages/MoriSSH; sourceTree = SOURCE_ROOT; };
 		3314AE88EB123344D196346D /* TerminalAccessoryBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalAccessoryBar.swift; sourceTree = "<group>"; };
+		348894A19970D2C348B4A692 /* SidebarContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarContainer.swift; sourceTree = "<group>"; };
 		35C6D3B4BCCF583DFF3FE192 /* MoriCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MoriCore; path = ../Packages/MoriCore; sourceTree = SOURCE_ROOT; };
 		377F0FEA59D35705F0BCD383 /* KeyAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyAction.swift; sourceTree = "<group>"; };
 		405397F8D3FACA71D62B7717 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
@@ -49,6 +52,7 @@
 		93C9BF50025C03B0BCF8E77A /* ServerFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerFormView.swift; sourceTree = "<group>"; };
 		94A4540E9036A99292A5A06A /* ShellCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellCoordinator.swift; sourceTree = "<group>"; };
 		977760861C89855B90308D6B /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		A15134BC85B9E6519FF7F2A9 /* TmuxSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TmuxSidebarView.swift; sourceTree = "<group>"; };
 		BEC31B48C129D1E076933F45 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		C5C351C1B33D101446ECAAE1 /* ServerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerStore.swift; sourceTree = "<group>"; };
 		CAEB9A39277AB28A5B3718E3 /* KeyBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBarView.swift; sourceTree = "<group>"; };
@@ -134,7 +138,9 @@
 			children = (
 				93C9BF50025C03B0BCF8E77A /* ServerFormView.swift */,
 				6666C37E7773D0C60B3D16BA /* ServerListView.swift */,
+				348894A19970D2C348B4A692 /* SidebarContainer.swift */,
 				11EBAEEBBFE6A6FF22BFC722 /* TerminalScreen.swift */,
+				A15134BC85B9E6519FF7F2A9 /* TmuxSidebarView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -251,11 +257,13 @@
 				58C6389AD3DF6D861F49D1DE /* ServerListView.swift in Sources */,
 				949356F283B52C6F3AFC7B06 /* ServerStore.swift in Sources */,
 				6AB5F68B40467923E1395F97 /* ShellCoordinator.swift in Sources */,
+				F005EC1ECFC968DF06655D7E /* SidebarContainer.swift in Sources */,
 				F8BC0A57AF5F0A266F023AB0 /* TerminalAccessoryBar.swift in Sources */,
 				5ACA156F8A500931E29BAD3E /* TerminalScreen.swift in Sources */,
 				96C8DDDEA3B929ED016AF50D /* TerminalView.swift in Sources */,
 				84BCE7CB7E779A71350C7FB7 /* Theme.swift in Sources */,
 				D2F9125D254E9980272FA1F7 /* TmuxBarView.swift in Sources */,
+				229F7BB580720A05A8DFF1AE /* TmuxSidebarView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
