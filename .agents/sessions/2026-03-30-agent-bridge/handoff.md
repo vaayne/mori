@@ -154,3 +154,51 @@
 - MoriPersistence: 47 assertions passed
 - Release build (Mori app): ✅
 - Release build (mori CLI): ✅
+
+## Phase 7: Tasks + Agents Merge
+
+**Status:** complete
+
+### What was done
+
+- **7.1** — `TaskWorktreeRowView` badge now shows agent name alongside icon (e.g. `"⚡ claude"`) via new `agentName` init parameter
+- **7.2** — `TaskSidebarView` uses `AgentWindowRowView` inline for windows with `detectedAgent`, passes `onRequestPaneOutput`/`onSendKeys` callbacks through, adds attention summary banner at top ("N agents need attention")
+- **7.3** — Removed `SidebarMode.agents` enum case; decoding `"agents"` maps to `.tasks` for backward compat; `SidebarContainerView` dropped to 2-segment picker (Tasks | Workspaces); removed `AgentSidebarView` reference from container
+- **7.4** — Added `.agent` case to `CommandPaletteItem` with agent-specific icon/subtitle; `CommandPaletteDataSource` includes agent windows with project/worktree context; supports `agent:` prefix filter
+- **7.5** — Added `testSidebarModeBackwardsCompatAgents()` test
+- **7.6** — Localization strings added for both en and zh-Hans
+
+### Files changed
+
+- `Packages/MoriCore/Sources/MoriCore/Models/SidebarMode.swift` (removed `.agents`, added backward compat)
+- `Packages/MoriCore/Tests/MoriCoreTests/main.swift` (added backward compat test)
+- `Packages/MoriUI/Sources/MoriUI/TaskWorktreeRowView.swift` (agent name in badge)
+- `Packages/MoriUI/Sources/MoriUI/TaskSidebarView.swift` (enriched agent rows, attention banner, callbacks)
+- `Packages/MoriUI/Sources/MoriUI/SidebarContainerView.swift` (2-segment picker, callback passthrough)
+- `Sources/Mori/App/CommandPaletteItem.swift` (`.agent` case)
+- `Sources/Mori/App/CommandPaletteDataSource.swift` (agent entries, `agent:` filter)
+- `Sources/Mori/App/AppDelegate.swift` (handle `.agent` palette selection)
+- Localization strings (MoriUI + Mori, en + zh-Hans)
+
+### Commits
+
+- `635170b` ✨ feat: show agent name in TaskWorktreeRowView badge
+- `21b7223` ✨ feat: enrich agent windows in TaskSidebarView with attention banner
+- `f9b8abf` ♻️ refactor: remove SidebarMode.agents — fold into Tasks view
+- `ad89dc3` ✨ feat: add agent entries and agent: filter to command palette
+- `0d2e79b` 🌐 i18n: add localization strings for Tasks+Agents merge
+
+### Test results
+
+- MoriCore: 373 assertions passed
+- MoriIPC: 61 assertions passed
+- MoriTmux: 206 assertions passed
+- MoriPersistence: 47 assertions passed
+- Mori app build: ✅
+- mori CLI build: ✅
+
+### Design decisions
+
+- `AgentSidebarView.swift` is **not deleted** — kept as reference / potential reuse for dashboard panel. No code references it from the main app path.
+- Non-agent users see zero added clutter: attention banner only appears when agents need attention, agent badge only shows when `agentState != .none`
+- Agent Dashboard panel (⌘⇧A) remains completely separate and unaffected

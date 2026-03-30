@@ -52,3 +52,12 @@
 - [x] 6.6 — Document messaging protocol + agent skill (`docs/agent-bridge.md`)
 - [x] 6.7 — Update `CHANGELOG.md` and `README.md` (`CHANGELOG.md`, `README.md`)
 - [x] 6.8 — Write integration test for message exchange (`Packages/MoriIPC/Tests/`)
+
+## Phase 7: Tasks + Agents Merge
+
+- [x] 7.1 — Add agent name to `TaskWorktreeRowView` badge (e.g. `"⚡ claude"`) (`Packages/MoriUI/Sources/MoriUI/TaskWorktreeRowView.swift`)
+- [x] 7.2 — Enrich agent windows in `TaskSidebarView` — use `AgentWindowRowView` inline when `detectedAgent != nil`, add attention banner, pass `onRequestPaneOutput`/`onSendKeys` callbacks (`Packages/MoriUI/Sources/MoriUI/TaskSidebarView.swift`)
+- [x] 7.3 — Remove `SidebarMode.agents` case, map `"agents"` → `.tasks` for backward compat, drop third picker segment from `SidebarContainerView` (`Packages/MoriCore/Sources/MoriCore/Models/SidebarMode.swift`, `Packages/MoriUI/Sources/MoriUI/SidebarContainerView.swift`)
+- [x] 7.4 — Add `.agent` case to `CommandPaletteItem`, agent window entries + `agent:` prefix filter to `CommandPaletteDataSource` (`Sources/Mori/App/CommandPaletteItem.swift`, `Sources/Mori/App/CommandPaletteDataSource.swift`)
+- [x] 7.5 — Add backward-compat decoding test for `SidebarMode.agents → .tasks` (`Packages/MoriCore/Tests/MoriCoreTests/main.swift`)
+- [x] 7.6 — Add localization strings (en + zh-Hans) for attention banner, agent states (`Packages/MoriUI/Sources/MoriUI/Resources/`, `Sources/Mori/Resources/`)
