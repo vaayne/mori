@@ -87,6 +87,7 @@ public struct SidebarContainerView: View {
             )) {
                 Text(String.localized("Tasks")).tag(SidebarMode.tasks)
                 Text(String.localized("Workspaces")).tag(SidebarMode.workspaces)
+                Text(String.localized("Agents")).tag(SidebarMode.agents)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, MoriTokens.Spacing.xl)
@@ -132,6 +133,17 @@ public struct SidebarContainerView: View {
                     onOpenSettings: onOpenSettings,
                     onOpenCommandPalette: onOpenCommandPalette,
                     onSetWorkflowStatus: onSetWorkflowStatus
+                )
+            case .agents:
+                AgentSidebarView(
+                    projects: projects,
+                    worktrees: worktrees,
+                    windows: windows,
+                    selectedWindowId: selectedWindowId,
+                    onSelectWindow: onSelectWindow,
+                    onAddProject: onAddProject,
+                    onOpenSettings: onOpenSettings,
+                    onOpenCommandPalette: onOpenCommandPalette
                 )
             }
         }
