@@ -7,16 +7,11 @@ import SwiftUI
 /// - Swiping from the left edge
 /// - Tapping the sidebar button
 /// - Setting `isOpen` to true
-struct SidebarContainer<Content: View>: View {
+struct SidebarContainer<Sidebar: View, Content: View>: View {
     @Binding var isOpen: Bool
     let content: Content
 
     private let sidebarWidth: CGFloat = 280
-
-    init(isOpen: Binding<Bool>, @ViewBuilder content: () -> Content) {
-        self._isOpen = isOpen
-        self.content = content()
-    }
 
     @State private var dragOffset: CGFloat = 0
     @GestureState private var isDragging = false
@@ -51,8 +46,16 @@ struct SidebarContainer<Content: View>: View {
 
     // MARK: - Sidebar Panel
 
+    let sidebar: () -> Sidebar
+
+    init(isOpen: Binding<Bool>, @ViewBuilder sidebar: @escaping () -> Sidebar, @ViewBuilder content: () -> Content) {
+        self._isOpen = isOpen
+        self.sidebar = sidebar
+        self.content = content()
+    }
+
     private var sidebarPanel: some View {
-        TmuxSidebarView(onDismiss: { close() })
+        sidebar()
             .clipShape(
                 UnevenRoundedRectangle(
                     topLeadingRadius: 0,

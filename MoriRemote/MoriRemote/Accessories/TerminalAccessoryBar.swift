@@ -20,6 +20,9 @@ final class TerminalAccessoryBar: UIInputView, UIInputViewAudioFeedback {
     /// The bar fires these; the coordinator executes them over SSH.
     var onTmuxCommand: ((TmuxCommand) -> Void)?
 
+    /// Called when the user taps the tmux status pill to open the sidebar.
+    var onTmuxBarTapped: (() -> Void)?
+
     /// Called when the user taps the gear button to customize the key bar.
     var onCustomizeTapped: (() -> Void)?
 
@@ -99,16 +102,8 @@ final class TerminalAccessoryBar: UIInputView, UIInputViewAudioFeedback {
 // MARK: - TmuxBarDelegate
 
 extension TerminalAccessoryBar: TmuxBarDelegate {
-    func tmuxBarDidSelectWindow(_ window: TmuxWindow) {
-        onTmuxCommand?(.selectWindow(window.index))
-    }
-
-    func tmuxBarDidRequestNewWindow() {
-        onTmuxCommand?(.newWindow)
-    }
-
-    func tmuxBarDidTapSession() {
-        onTmuxCommand?(.showSessionPicker)
+    func tmuxBarDidTap() {
+        onTmuxBarTapped?()
     }
 }
 

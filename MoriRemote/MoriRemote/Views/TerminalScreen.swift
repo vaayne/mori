@@ -16,6 +16,11 @@ struct TerminalScreen: View {
 
     var body: some View {
         SidebarContainer(isOpen: $showSidebar) {
+            TmuxSidebarView(
+                onDismiss: { showSidebar = false },
+                onDisconnect: onDisconnect
+            )
+        } content: {
             terminalContent
         }
         .statusBarHidden(true)
@@ -75,7 +80,7 @@ struct TerminalScreen: View {
             }
         }
         .overlay(alignment: .topLeading) {
-            if coordinator.state == .shell && !showToolbar && !showSidebar && coordinator.isTmuxActive {
+            if coordinator.state == .shell && !showToolbar && !showSidebar {
                 sidebarButton
             }
         }
@@ -92,6 +97,10 @@ struct TerminalScreen: View {
         coordinator.accessoryBar = accessoryBar
         accessoryBar.onCustomizeTapped = {
             showKeyBarCustomize = true
+        }
+        accessoryBar.onTmuxBarTapped = { [weak accessoryBar] in
+            _ = accessoryBar // prevent retain cycle warning
+            showSidebar = true
         }
         Task {
             await coordinator.openShell(renderer: r)

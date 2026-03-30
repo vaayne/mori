@@ -207,6 +207,9 @@ final class ShellCoordinator {
     func startTmuxPolling() {
         tmuxPollTask?.cancel()
         tmuxPollTask = Task {
+            // Detect tmux path first
+            await self.detectTmuxPath()
+
             // Initial poll after shell starts
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             guard !Task.isCancelled else { return }
@@ -221,6 +224,48 @@ final class ShellCoordinator {
         }
     }
 
+    /// Resolved full path to tmux binary (exec channels don't have user's PATH).
+    private var tmuxPath: String = "tmux"
+
+    private func detectTmuxPath() async {
+        guard let sshManager, await sshManager.isConnected else { return }
+        // Try common paths — exec channels don't source .zshrc/.bashrc
+        let candidates = [
+            "/opt/homebrew/bin/tmux",
+            "/usr/local/bin/tmux",
+            "/usr/bin/tmux",
+            "/bin/tmux",
+        ]
+        do {
+            // Use login shell to find the real path
+            let result = try await sshManager.runCommandNoPTY(
+                "bash -lc 'which tmux' 2>/dev/null || zsh -lc 'which tmux' 2>/dev/null"
+            )
+            let path = result.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !path.isEmpty && !path.contains("not found") {
+                tmuxPath = path
+                log.info("Detected tmux path: \(path)")
+                return
+            }
+        } catch {
+            log.debug("tmux path detection via shell failed: \(error)")
+        }
+        // Fallback: check common paths directly
+        for candidate in candidates {
+            do {
+                let result = try await sshManager.runCommandNoPTY(
+                    "test -x \(candidate) && echo \(candidate)"
+                )
+                if !result.isEmpty {
+                    tmuxPath = candidate
+                    log.info("Detected tmux path (fallback): \(candidate)")
+                    return
+                }
+            } catch { continue }
+        }
+        log.info("Could not detect tmux path, using default: tmux")
+    }
+
     private func pollTmuxState() async {
         guard let sshManager, await sshManager.isConnected else {
             log.debug("tmux poll: no SSH manager or disconnected")
@@ -229,10 +274,19 @@ final class ShellCoordinator {
 
         do {
             // List sessions: "session_name:window_count:attached"
-            let sessionsRaw = try await sshManager.runCommandNoPTY(
-                "tmux list-sessions -F '#{session_name}:#{session_windows}:#{session_attached}' 2>/dev/null"
-            )
-            log.debug("tmux sessions raw: '\(sessionsRaw)'")
+            // Try NoPTY first, fall back to PTY if it fails
+            let sessionsRaw: String
+            do {
+                sessionsRaw = try await sshManager.runCommandNoPTY(
+                    "\(tmuxPath) list-sessions -F '#{session_name}:#{session_windows}:#{session_attached}' 2>/dev/null"
+                )
+            } catch {
+                log.debug("NoPTY poll failed, trying with PTY: \(error)")
+                sessionsRaw = try await sshManager.runCommand(
+                    "\(tmuxPath) list-sessions -F '#{session_name}:#{session_windows}:#{session_attached}' 2>/dev/null"
+                )
+            }
+            log.info("tmux sessions raw: '\(sessionsRaw)'")
             guard !sessionsRaw.isEmpty else {
                 accessoryBar?.updateTmux(session: nil, windows: [])
                 self.tmuxSessions = []
@@ -267,9 +321,16 @@ final class ShellCoordinator {
             var activeWindows: [TmuxWindow] = []
 
             for session in sessions {
-                let windowsRaw = try await sshManager.runCommandNoPTY(
-                    "tmux list-windows -t '\(session.name)' -F '#{window_index}:#{window_name}:#{window_active}' 2>/dev/null"
-                )
+                let windowsRaw: String
+                do {
+                    windowsRaw = try await sshManager.runCommandNoPTY(
+                        "\(tmuxPath) list-windows -t '\(session.name)' -F '#{window_index}:#{window_name}:#{window_active}' 2>/dev/null"
+                    )
+                } catch {
+                    windowsRaw = try await sshManager.runCommand(
+                        "\(tmuxPath) list-windows -t '\(session.name)' -F '#{window_index}:#{window_name}:#{window_active}' 2>/dev/null"
+                    )
+                }
 
                 let windows = windowsRaw.split(separator: "\n").compactMap { line -> TmuxWindow? in
                     let parts = line.split(separator: ":", maxSplits: 2)
@@ -297,6 +358,7 @@ final class ShellCoordinator {
             self.tmuxWindows = activeWindows
         } catch {
             // tmux not running — hide the bar
+            log.info("tmux poll error: \(error)")
             accessoryBar?.updateTmux(session: nil, windows: [])
             self.tmuxSessions = []
             self.tmuxActiveSession = nil
@@ -306,47 +368,18 @@ final class ShellCoordinator {
 
     /// Switch to a specific tmux window by index in the given session.
     func selectTmuxWindow(session: String, windowIndex: Int) {
-        guard let sshManager else { return }
-        Task {
-            do {
-                _ = try await sshManager.runCommand(
-                    "tmux select-window -t '\(session):\(windowIndex)'"
-                )
-                await self.pollTmuxState()
-            } catch {
-                log.error("selectTmuxWindow error: \(error)")
-            }
-        }
+        // switch-client handles both session switch and window selection
+        sendTmuxShellCommand("tmux switch-client -t '\(session):\(windowIndex)'")
     }
 
     /// Switch to a different tmux session.
     func switchTmuxSession(_ sessionName: String) {
-        guard let sshManager else { return }
-        Task {
-            do {
-                _ = try await sshManager.runCommand(
-                    "tmux switch-client -t '\(sessionName)'"
-                )
-                await self.pollTmuxState()
-            } catch {
-                log.error("switchTmuxSession error: \(error)")
-            }
-        }
+        sendTmuxShellCommand("tmux switch-client -t '\(sessionName)'")
     }
 
     /// Close (kill) a tmux window.
     func closeTmuxWindow(session: String, windowIndex: Int) {
-        guard let sshManager else { return }
-        Task {
-            do {
-                _ = try await sshManager.runCommand(
-                    "tmux kill-window -t '\(session):\(windowIndex)'"
-                )
-                await self.pollTmuxState()
-            } catch {
-                log.error("closeTmuxWindow error: \(error)")
-            }
-        }
+        sendTmuxShellCommand("tmux kill-window -t '\(session):\(windowIndex)'")
     }
 
     /// Create a new tmux window in the active session.
@@ -356,35 +389,38 @@ final class ShellCoordinator {
 
     /// Create a new tmux session.
     func newTmuxSession() {
-        guard let sshManager else { return }
-        Task {
-            do {
-                _ = try await sshManager.runCommand("tmux new-session -d")
-                await self.pollTmuxState()
-            } catch {
-                log.error("newTmuxSession error: \(error)")
-            }
-        }
+        sendTmuxShellCommand("tmux new-session -d")
     }
 
     /// Kill (close) a tmux session.
     func closeTmuxSession(_ sessionName: String) {
-        guard let sshManager else { return }
-        Task {
-            do {
-                _ = try await sshManager.runCommand(
-                    "tmux kill-session -t '\(sessionName)'"
-                )
-                await self.pollTmuxState()
-            } catch {
-                log.error("closeTmuxSession error: \(error)")
-            }
-        }
+        sendTmuxShellCommand("tmux kill-session -t '\(sessionName)'")
+    }
+
+    /// Rename a tmux session.
+    func renameTmuxSession(_ oldName: String, to newName: String) {
+        sendTmuxShellCommand("tmux rename-session -t '\(oldName)' '\(newName)'")
+    }
+
+    /// Create a new tmux window after a specific window index.
+    func newTmuxWindowAfter(session: String, windowIndex: Int) {
+        sendTmuxShellCommand("tmux new-window -a -t '\(session):\(windowIndex)'")
     }
 
     /// Force a tmux state refresh.
     func refreshTmuxState() {
         Task { await pollTmuxState() }
+    }
+
+    /// Send a tmux command through the shell channel and refresh state.
+    private func sendTmuxShellCommand(_ cmd: String) {
+        log.info("Tmux shell command: \(cmd)")
+        let sequence = "\u{15}\(cmd)\n"
+        sendInput(Data(sequence.utf8))
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            await self.pollTmuxState()
+        }
     }
 
     private func handleShellClosed() async {
