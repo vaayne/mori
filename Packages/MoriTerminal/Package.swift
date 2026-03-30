@@ -19,14 +19,14 @@ let package = Package(
         .target(
             name: "MoriTerminal",
             dependencies: [
-                "GhosttyKit",
+                .target(name: "GhosttyKit", condition: .when(platforms: [.macOS])),
                 .product(name: "SwiftTerm", package: "SwiftTerm",
                          condition: .when(platforms: [.iOS])),
             ],
             path: "Sources/MoriTerminal",
             linkerSettings: [
                 .linkedFramework("Carbon", .when(platforms: [.macOS])),
-                .linkedLibrary("c++"),
+                .linkedLibrary("c++", .when(platforms: [.macOS])),
             ]
         ),
         .binaryTarget(

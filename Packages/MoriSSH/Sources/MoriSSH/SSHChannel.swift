@@ -9,10 +9,20 @@ public final class SSHChannel: @unchecked Sendable {
     public let inbound: AsyncThrowingStream<Data, Error>
 
     private let channel: any Channel
+    private var closed = false
 
     public init(channel: any Channel, inbound: AsyncThrowingStream<Data, Error>) {
         self.channel = channel
         self.inbound = inbound
+    }
+
+    deinit {
+        if !closed, channel.isActive {
+            let ch = channel
+            ch.eventLoop.execute {
+                ch.close(promise: nil)
+            }
+        }
     }
 
     /// Write data to the SSH channel.
@@ -38,6 +48,8 @@ public final class SSHChannel: @unchecked Sendable {
 
     /// Close the SSH channel.
     public func close() async {
+        guard !closed else { return }
+        closed = true
         try? await channel.close().get()
     }
 }

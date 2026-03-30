@@ -56,6 +56,9 @@ final class SpikeCoordinator {
     private var notificationTask: Task<Void, Never>?
     private var commandQueueTail: Task<Void, Never>?
 
+    /// Maximum bytes to buffer before pane ID is known.
+    private static let maxPendingBufferBytes = 64 * 1024
+
     func connect(host: String, port: Int, user: String, password: String) async {
         await resetConnection()
         state = .connecting
@@ -251,8 +254,11 @@ final class SpikeCoordinator {
                         self.renderer?.feedBytes(event.data)
                     }
                 } else {
-                    // Pane ID not yet known — buffer
-                    self.pendingOutputBuffer.append(event)
+                    // Pane ID not yet known — buffer with cap to prevent unbounded growth
+                    let currentSize = self.pendingOutputBuffer.reduce(0) { $0 + $1.data.count }
+                    if currentSize + event.data.count <= Self.maxPendingBufferBytes {
+                        self.pendingOutputBuffer.append(event)
+                    }
                 }
             }
             // Stream ended — transport closed or tmux exited

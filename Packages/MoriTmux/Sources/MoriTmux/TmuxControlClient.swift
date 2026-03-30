@@ -69,6 +69,13 @@ public actor TmuxControlClient {
         self.notificationsContinuation = notifCont
     }
 
+    deinit {
+        // Ensure continuations are finished even if stop() was never called.
+        paneOutputContinuation.finish()
+        notificationsContinuation.finish()
+        responseContinuation?.finish()
+    }
+
     // MARK: - Lifecycle
 
     /// Start reading from the transport. Call once after init.
@@ -153,9 +160,16 @@ public actor TmuxControlClient {
 
     // MARK: - Receive pipeline
 
+    /// Maximum line buffer size (1 MB). If exceeded without finding a newline,
+    /// the buffer is dropped to prevent unbounded memory growth from malformed input.
+    private static let maxLineBufferSize = 1024 * 1024
+
     /// Append incoming data to the line buffer and process complete lines.
     private func receive(_ chunk: Data) {
         lineBuffer.append(chunk)
+        if lineBuffer.count > Self.maxLineBufferSize {
+            lineBuffer.removeAll()
+        }
         extractAndProcessLines()
     }
 

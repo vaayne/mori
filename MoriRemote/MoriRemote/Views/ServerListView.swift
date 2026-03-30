@@ -3,6 +3,7 @@ import SwiftUI
 struct ServerListView: View {
     @Environment(ServerStore.self) private var store
     @Environment(ShellCoordinator.self) private var coordinator
+    @Environment(NavigationState.self) private var navigation
 
     @State private var editingServer: Server?
     @State private var showingAddSheet = false
@@ -124,7 +125,7 @@ struct ServerListView: View {
         withAnimation { errorMessage = nil }
 
         connectingServerId = server.id
-        NotificationCenter.default.post(name: .serverSelected, object: ServerBox(server))
+        navigation.activeServer = server
 
         Task {
             await coordinator.connect(

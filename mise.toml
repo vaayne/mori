@@ -118,10 +118,11 @@ description = "Build and run MoriRemote tests on iOS Simulator"
 depends = ["ios:generate"]
 run = '''
 set -euo pipefail
+SIMULATOR=${MORI_IOS_SIMULATOR:-$(xcrun simctl list devices available | grep -m1 'iPhone' | sed 's/^ *//' | sed 's/ (.*//')}
 xcodebuild \
   -project MoriRemote/MoriRemote.xcodeproj \
   -scheme MoriRemote \
-  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.2' \
+  -destination "platform=iOS Simulator,name=$SIMULATOR" \
   -derivedDataPath "$DERIVED_DATA" \
   test 2>&1 | xcbeautify
 '''
@@ -131,13 +132,14 @@ description = "Build and launch MoriRemote on iOS Simulator"
 depends = ["ios:build"]
 run = '''
 set -euo pipefail
+SIMULATOR=${MORI_IOS_SIMULATOR:-$(xcrun simctl list devices available | grep -m1 'iPhone' | sed 's/^ *//' | sed 's/ (.*//')}
 APP_PATH=$(find "$DERIVED_DATA" -name "MoriRemote.app" -path "*/Debug-iphonesimulator/*" | head -1)
 if [ -z "$APP_PATH" ]; then
   echo "❌ MoriRemote.app not found in derived data"
   exit 1
 fi
-xcrun simctl boot "iPhone 16" 2>/dev/null || true
-xcrun simctl install "iPhone 16" "$APP_PATH"
-xcrun simctl launch "iPhone 16" "$(plutil -extract CFBundleIdentifier raw "$APP_PATH/Info.plist")"
-echo "✅ MoriRemote launched on iPhone 16 simulator"
+xcrun simctl boot "$SIMULATOR" 2>/dev/null || true
+xcrun simctl install "$SIMULATOR" "$APP_PATH"
+xcrun simctl launch "$SIMULATOR" "$(plutil -extract CFBundleIdentifier raw "$APP_PATH/Info.plist")"
+echo "✅ MoriRemote launched on $SIMULATOR simulator"
 '''

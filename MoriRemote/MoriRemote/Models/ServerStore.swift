@@ -1,5 +1,8 @@
 import Foundation
 import Observation
+import os.log
+
+private let log = Logger(subsystem: "dev.mori.remote", category: "ServerStore")
 
 @MainActor
 @Observable
@@ -13,22 +16,28 @@ final class ServerStore {
     }
 
     func add(_ server: Server) {
+        server.savePasswordToKeychain()
         servers.append(server)
         save()
     }
 
     func update(_ server: Server) {
         guard let index = servers.firstIndex(where: { $0.id == server.id }) else { return }
+        server.savePasswordToKeychain()
         servers[index] = server
         save()
     }
 
     func delete(_ server: Server) {
+        server.deletePasswordFromKeychain()
         servers.removeAll { $0.id == server.id }
         save()
     }
 
     func delete(at offsets: IndexSet) {
+        for index in offsets {
+            servers[index].deletePasswordFromKeychain()
+        }
         servers.remove(atOffsets: offsets)
         save()
     }
@@ -45,7 +54,7 @@ final class ServerStore {
             let data = try JSONEncoder().encode(servers)
             try data.write(to: Self.fileURL, options: .atomic)
         } catch {
-            print("[ServerStore] save failed: \(error)")
+            log.error("Save failed: \(error.localizedDescription)")
         }
     }
 
@@ -59,7 +68,10 @@ final class ServerStore {
     }
 
     private static var fileURL: URL {
-        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            // Fallback to temp directory — should never happen on iOS
+            return FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        }
         return dir.appendingPathComponent(fileName)
     }
 }

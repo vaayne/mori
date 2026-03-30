@@ -105,6 +105,11 @@ public final class SwiftTermRenderer: UIView {
     public func activateKeyboard() {
         _ = terminalView.becomeFirstResponder()
     }
+
+    /// Resign first responder to dismiss the iOS keyboard.
+    public func deactivateKeyboard() {
+        _ = terminalView.resignFirstResponder()
+    }
 }
 
 // MARK: - TerminalViewDelegate

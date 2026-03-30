@@ -51,13 +51,15 @@ private final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate
 
 // MARK: - Host Key Delegate
 
-/// Accept-all host key delegate for the spike.
-/// TODO: TOFU (trust on first use) for production.
+/// SECURITY: Accept-all host key delegate — vulnerable to MITM attacks.
+/// Acceptable for spike/development only. Production must implement TOFU
+/// (trust-on-first-use) with persisted known_hosts or certificate pinning.
 private final class AcceptAllHostKeysDelegate: NIOSSHClientServerAuthenticationDelegate, Sendable {
     func validateHostKey(
         hostKey: NIOSSHPublicKey,
         validationCompletePromise: EventLoopPromise<Void>
     ) {
+        sshLog.warning("Accepting host key without validation (spike mode)")
         validationCompletePromise.succeed(())
     }
 }
@@ -448,10 +450,7 @@ public actor SSHConnectionManager {
             sshLog.error("SSH auth failed: \(error)")
             // Auth failed — close the TCP channel and propagate the error
             try? await tcpChannel.close().get()
-            if error is SSHError {
-                throw error
-            }
-            throw SSHError.authenticationFailed
+            throw (error as? SSHError) ?? SSHError.connectionFailed("authentication failed: \(error.localizedDescription)")
         }
 
         self.channel = tcpChannel

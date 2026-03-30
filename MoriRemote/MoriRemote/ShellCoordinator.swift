@@ -146,7 +146,7 @@ final class ShellCoordinator {
             renderer.activateKeyboard()
             log.info("Shell active")
         } catch {
-            state = .disconnected(ShellError.shellFailed(error.localizedDescription))
+            state = .disconnected(error)
         }
     }
 
