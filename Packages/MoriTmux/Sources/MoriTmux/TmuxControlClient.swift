@@ -100,13 +100,6 @@ public actor TmuxControlClient {
         ready = true
     }
 
-    /// Wait for the initial tmux handshake to complete, then mark ready.
-    /// Call after `start()` and before sending any commands.
-    public func waitForReady() async {
-        try? await Task.sleep(for: .milliseconds(500))
-        markReady()
-    }
-
     /// Stop the client, close the transport, and cancel any in-flight command.
     public func stop() async {
         readTask?.cancel()
@@ -144,7 +137,15 @@ public actor TmuxControlClient {
         // Write the command — the actor suspends here, allowing the read
         // task to process incoming data and deliver the response.
         let data = Data((command + "\n").utf8)
-        try? await transport.write(data)
+        do {
+            try await transport.write(data)
+        } catch {
+            // Write failed — clean up response state so caller isn't stuck.
+            awaitingResponse = false
+            responseContinuation?.finish()
+            responseContinuation = nil
+            throw TmuxControlError.disconnected
+        }
 
         // Await the response from the stream.
         guard let result = await stream.first(where: { _ in true }) else {

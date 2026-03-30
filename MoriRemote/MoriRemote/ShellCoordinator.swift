@@ -125,14 +125,10 @@ final class ShellCoordinator {
             state = .shell
             renderer.activateKeyboard()
         } catch {
+            await resetConnection()
             lastError = error
             state = .disconnected
         }
-    }
-
-    func runSSHCommand(_ command: String) async throws -> String {
-        guard let sshManager else { throw ShellError.notConnected }
-        return try await sshManager.runCommand(command)
     }
 
     // MARK: - Private
