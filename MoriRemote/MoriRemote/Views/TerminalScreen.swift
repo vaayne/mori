@@ -38,7 +38,7 @@ struct TerminalScreen: View {
             .ignoresSafeArea(edges: .bottom)
 
             // Loading overlay
-            if !coordinator.isShellActive {
+            if coordinator.state != .shell {
                 VStack(spacing: 14) {
                     ProgressView()
                         .tint(Theme.accent)
@@ -53,7 +53,7 @@ struct TerminalScreen: View {
             }
 
             // Floating menu button (top-right)
-            if coordinator.isShellActive && !showToolbar {
+            if coordinator.state == .shell && !showToolbar {
                 VStack {
                     HStack {
                         Spacer()
@@ -82,8 +82,8 @@ struct TerminalScreen: View {
         }
         .statusBarHidden(true)
         .preferredColorScheme(.dark)
-        .onChange(of: coordinator.isShellActive) { _, active in
-            if active {
+        .onChange(of: coordinator.state) { _, newState in
+            if newState == .shell {
                 renderer?.value.activateKeyboard()
             }
         }

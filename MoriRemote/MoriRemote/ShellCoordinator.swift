@@ -6,11 +6,23 @@ import os.log
 
 private let log = Logger(subsystem: "dev.mori.remote", category: "Shell")
 
-enum ShellState: Sendable {
-    case disconnected(Error?)
+enum ShellState: Equatable, Sendable {
+    case disconnected
     case connecting
     case connected
     case shell
+
+    nonisolated static func == (lhs: ShellState, rhs: ShellState) -> Bool {
+        switch (lhs, rhs) {
+        case (.disconnected, .disconnected),
+             (.connecting, .connecting),
+             (.connected, .connected),
+             (.shell, .shell):
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 enum ShellError: LocalizedError {
@@ -30,26 +42,11 @@ enum ShellError: LocalizedError {
 @MainActor
 @Observable
 final class ShellCoordinator {
-    var state: ShellState = .disconnected(nil)
+    var state: ShellState = .disconnected
+    var lastError: Error?
+    var activeServer: Server?
 
-    var stateKey: String {
-        switch state {
-        case .disconnected: return "disconnected"
-        case .connecting: return "connecting"
-        case .connected: return "connected"
-        case .shell: return "shell"
-        }
-    }
-
-    var isConnecting: Bool {
-        if case .connecting = state { return true }
-        return false
-    }
-
-    var isShellActive: Bool {
-        if case .shell = state { return true }
-        return false
-    }
+    var isShellActive: Bool { state == .shell }
 
     private var sshManager: SSHConnectionManager?
     private var shellChannel: SSHChannel?
@@ -58,24 +55,32 @@ final class ShellCoordinator {
 
     // MARK: - Connect / Disconnect
 
-    func connect(host: String, port: Int, user: String, password: String) async {
+    func connect(server: Server) async {
         await resetConnection()
+        activeServer = server
         state = .connecting
+        lastError = nil
 
         let manager = SSHConnectionManager()
         do {
-            try await manager.connect(host: host, port: port, user: user, auth: .password(password))
+            try await manager.connect(
+                host: server.host.trimmingCharacters(in: .whitespacesAndNewlines),
+                port: server.port,
+                user: server.username.trimmingCharacters(in: .whitespacesAndNewlines),
+                auth: .password(server.password)
+            )
             sshManager = manager
             state = .connected
         } catch {
             await manager.disconnect()
-            state = .disconnected(error)
+            lastError = error
+            state = .disconnected
         }
     }
 
     func disconnect() async {
         await resetConnection()
-        state = .disconnected(nil)
+        state = .disconnected
     }
 
     // MARK: - Shell
@@ -89,7 +94,8 @@ final class ShellCoordinator {
             return
         }
         guard let sshManager else {
-            state = .disconnected(ShellError.notConnected)
+            lastError = ShellError.notConnected
+            state = .disconnected
             return
         }
 
@@ -119,9 +125,17 @@ final class ShellCoordinator {
             state = .shell
             renderer.activateKeyboard()
         } catch {
-            state = .disconnected(error)
+            lastError = error
+            state = .disconnected
         }
     }
+
+    func runSSHCommand(_ command: String) async throws -> String {
+        guard let sshManager else { throw ShellError.notConnected }
+        return try await sshManager.runCommand(command)
+    }
+
+    // MARK: - Private
 
     private func wireRenderer(_ renderer: SwiftTermRenderer) {
         self.renderer = renderer
@@ -133,38 +147,8 @@ final class ShellCoordinator {
         }
     }
 
-    func closeShell() async {
-        outputTask?.cancel()
-        outputTask = nil
-
-        if let shellChannel {
-            self.shellChannel = nil
-            await shellChannel.close()
-        }
-
-        renderer?.inputHandler = nil
-        renderer?.sizeChangeHandler = nil
-        renderer = nil
-
-        if let sshManager, await sshManager.isConnected {
-            state = .connected
-        } else {
-            state = .disconnected(nil)
-        }
-    }
-
-    func runSSHCommand(_ command: String) async throws -> String {
-        guard let sshManager else { throw ShellError.notConnected }
-        return try await sshManager.runCommand(command)
-    }
-
-    // MARK: - Private
-
     private func sendInput(_ data: Data) {
-        guard let shellChannel else {
-            log.warning("sendInput: no shell channel")
-            return
-        }
+        guard let shellChannel else { return }
         Task {
             do {
                 try await shellChannel.write(data)
@@ -183,7 +167,8 @@ final class ShellCoordinator {
 
     private func handleShellClosed() async {
         await resetConnection()
-        state = .disconnected(ShellError.shellFailed("Shell session ended."))
+        lastError = ShellError.shellFailed("Shell session ended.")
+        state = .disconnected
     }
 
     private func resetConnection() async {
@@ -203,5 +188,7 @@ final class ShellCoordinator {
             self.sshManager = nil
             await sshManager.disconnect()
         }
+
+        activeServer = nil
     }
 }

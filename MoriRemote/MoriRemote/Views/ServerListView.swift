@@ -3,12 +3,9 @@ import SwiftUI
 struct ServerListView: View {
     @Environment(ServerStore.self) private var store
     @Environment(ShellCoordinator.self) private var coordinator
-    @Environment(NavigationState.self) private var navigation
 
     @State private var editingServer: Server?
     @State private var showingAddSheet = false
-    @State private var connectingServerId: UUID?
-    @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -46,9 +43,9 @@ struct ServerListView: View {
                 }
             }
             .overlay(alignment: .bottom) {
-                if let errorMessage {
-                    ErrorBanner(message: errorMessage) {
-                        withAnimation { self.errorMessage = nil }
+                if let error = coordinator.lastError {
+                    ErrorBanner(message: error.localizedDescription) {
+                        coordinator.lastError = nil
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .padding(.horizontal, 16)
@@ -57,17 +54,6 @@ struct ServerListView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .onChange(of: coordinator.stateKey) { _, newKey in
-            if newKey == "disconnected", case .disconnected(let error) = coordinator.state, let error {
-                withAnimation {
-                    errorMessage = error.localizedDescription
-                    connectingServerId = nil
-                }
-            }
-            if newKey == "connected" || newKey == "shell" {
-                connectingServerId = nil
-            }
-        }
     }
 
     // MARK: - Empty State
@@ -105,7 +91,7 @@ struct ServerListView: View {
                 ForEach(store.servers) { server in
                     ServerRow(
                         server: server,
-                        isConnecting: connectingServerId == server.id,
+                        isConnecting: coordinator.state == .connecting && coordinator.activeServer?.id == server.id,
                         onTap: { connectToServer(server) },
                         onEdit: { editingServer = server },
                         onDelete: { store.delete(server) }
@@ -121,20 +107,8 @@ struct ServerListView: View {
     // MARK: - Connect
 
     private func connectToServer(_ server: Server) {
-        guard connectingServerId == nil else { return }
-        withAnimation { errorMessage = nil }
-
-        connectingServerId = server.id
-        navigation.activeServer = server
-
-        Task {
-            await coordinator.connect(
-                host: server.host.trimmingCharacters(in: .whitespacesAndNewlines),
-                port: server.port,
-                user: server.username.trimmingCharacters(in: .whitespacesAndNewlines),
-                password: server.password
-            )
-        }
+        guard coordinator.state == .disconnected else { return }
+        Task { await coordinator.connect(server: server) }
     }
 }
 
@@ -152,7 +126,6 @@ private struct ServerRow: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 14) {
-                // Icon
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(Theme.accent.opacity(0.12))
@@ -168,7 +141,6 @@ private struct ServerRow: View {
                     }
                 }
 
-                // Text
                 VStack(alignment: .leading, spacing: 3) {
                     Text(server.displayName)
                         .font(.body.weight(.medium))
@@ -183,7 +155,6 @@ private struct ServerRow: View {
 
                 Spacer()
 
-                // Chevron
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Theme.textTertiary)
