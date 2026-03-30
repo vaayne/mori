@@ -50,8 +50,11 @@ final class IPCHandler {
         case .paneRead(let project, let worktree, let window, let lines):
             return await handlePaneRead(manager: manager, projectName: project, worktreeName: worktree, windowName: window, lines: lines)
 
-        case .paneMessage(let project, let worktree, let window, let text):
-            return await handlePaneMessage(manager: manager, projectName: project, worktreeName: worktree, windowName: window, text: text)
+        case .paneMessage(let project, let worktree, let window, let text,
+                         let senderProject, let senderWorktree, let senderWindow, let senderPaneId):
+            return await handlePaneMessage(manager: manager, projectName: project, worktreeName: worktree, windowName: window, text: text,
+                                           senderProject: senderProject, senderWorktree: senderWorktree,
+                                           senderWindow: senderWindow, senderPaneId: senderPaneId)
         }
     }
 
@@ -192,6 +195,10 @@ final class IPCHandler {
         return .success(payload: nil)
     }
 
+    // TODO: Enumerate individual panes for multi-pane windows.
+    // Currently emits one AgentPaneInfo per window (using activePaneId),
+    // so non-active panes in multi-pane windows are invisible to agents.
+    // Requires expanding RuntimeWindow to carry all pane IDs from the refresh cycle.
     private func handlePaneList(manager: WorkspaceManager) -> IPCResponse {
         var entries: [AgentPaneInfo] = []
         for project in manager.appState.projects {
@@ -239,7 +246,8 @@ final class IPCHandler {
         }
     }
 
-    private func handlePaneMessage(manager: WorkspaceManager, projectName: String, worktreeName: String, windowName: String, text: String) async -> IPCResponse {
+    private func handlePaneMessage(manager: WorkspaceManager, projectName: String, worktreeName: String, windowName: String, text: String,
+                                     senderProject: String?, senderWorktree: String?, senderWindow: String?, senderPaneId: String?) async -> IPCResponse {
         guard let (worktree, runtimeWindow) = resolveWindow(manager: manager, projectName: projectName, worktreeName: worktreeName, windowName: windowName) else {
             return .error(message: "Window not found: \(projectName)/\(worktreeName)/\(windowName)")
         }
@@ -251,23 +259,18 @@ final class IPCHandler {
         let paneId = runtimeWindow.activePaneId ?? manager.rawTmuxWindowId(from: runtimeWindow)
         let tmux = manager.tmuxBackendForWorktree(worktree)
 
-        // Build envelope with sender info (best-effort: use MORI_PROJECT/MORI_WORKTREE env vars or "cli")
-        let senderProject = ProcessInfo.processInfo.environment["MORI_PROJECT"] ?? "cli"
-        let senderWorktree = ProcessInfo.processInfo.environment["MORI_WORKTREE"] ?? "cli"
-        let senderWindow = ProcessInfo.processInfo.environment["MORI_WINDOW"] ?? "cli"
-        let senderPaneId = ProcessInfo.processInfo.environment["MORI_PANE_ID"] ?? "unknown"
-
+        // Use sender identity transmitted from the CLI caller via IPC
         let message = AgentMessage(
-            fromProject: senderProject,
-            fromWorktree: senderWorktree,
-            fromWindow: senderWindow,
-            fromPaneId: senderPaneId,
+            fromProject: senderProject ?? "cli",
+            fromWorktree: senderWorktree ?? "cli",
+            fromWindow: senderWindow ?? "cli",
+            fromPaneId: senderPaneId ?? "unknown",
             text: text
         )
 
         do {
+            // sendKeys already appends Enter — no need for a second call
             try await tmux.sendKeys(sessionId: sessionName, paneId: paneId, keys: message.envelope)
-            try await tmux.sendKeys(sessionId: sessionName, paneId: paneId, keys: "Enter")
             return .success(payload: nil)
         } catch {
             return .error(message: "Failed to send message: \(error.localizedDescription)")

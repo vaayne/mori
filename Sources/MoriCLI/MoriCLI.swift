@@ -323,7 +323,17 @@ struct PaneMessage: ParsableCommand {
     var text: String
 
     func run() throws {
-        try runIPCRequest(.paneMessage(project: project, worktree: worktree, window: window, text: text))
+        // Read sender identity from environment variables set by Mori in each pane
+        let senderProject = ProcessInfo.processInfo.environment["MORI_PROJECT"]
+        let senderWorktree = ProcessInfo.processInfo.environment["MORI_WORKTREE"]
+        let senderWindow = ProcessInfo.processInfo.environment["MORI_WINDOW"]
+        let senderPaneId = ProcessInfo.processInfo.environment["MORI_PANE_ID"]
+
+        try runIPCRequest(.paneMessage(
+            project: project, worktree: worktree, window: window, text: text,
+            senderProject: senderProject, senderWorktree: senderWorktree,
+            senderWindow: senderWindow, senderPaneId: senderPaneId
+        ))
     }
 }
 

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Envelope format for agent-to-agent messages sent via `mori pane message`.
-/// Format: `[mori-bridge from:<project>/<worktree>/<window> pane:<id>] <text>`
+/// Format: `[mori-bridge project:<project> worktree:<worktree> window:<window> pane:<id>] <text>`
 public struct AgentMessage: Codable, Sendable, Equatable {
     public let fromProject: String
     public let fromWorktree: String
@@ -24,36 +24,54 @@ public struct AgentMessage: Codable, Sendable, Equatable {
     }
 
     /// Format the message as the wire envelope string.
+    /// Uses labeled fields to avoid ambiguity with `/` in worktree/branch names.
     public var envelope: String {
-        "[mori-bridge from:\(fromProject)/\(fromWorktree)/\(fromWindow) pane:\(fromPaneId)] \(text)"
+        "[mori-bridge project:\(fromProject) worktree:\(fromWorktree) window:\(fromWindow) pane:\(fromPaneId)] \(text)"
     }
 
     /// Parse an envelope string back into an `AgentMessage`.
     /// Returns nil if the string doesn't match the expected format.
     public static func parse(_ string: String) -> AgentMessage? {
-        // Pattern: [mori-bridge from:<project>/<worktree>/<window> pane:<id>] <text>
-        guard string.hasPrefix("[mori-bridge from:") else { return nil }
+        // Pattern: [mori-bridge project:<p> worktree:<w> window:<win> pane:<id>] <text>
+        let prefix = "[mori-bridge "
+        guard string.hasPrefix(prefix) else { return nil }
         guard let closeBracket = string.firstIndex(of: "]") else { return nil }
 
-        let header = string[string.index(string.startIndex, offsetBy: 18)..<closeBracket]
+        let header = String(string[string.index(string.startIndex, offsetBy: prefix.count)..<closeBracket])
         let remaining = string[string.index(after: closeBracket)...]
         let text = remaining.trimmingCharacters(in: .whitespaces)
 
-        // Split header into "project/worktree/window pane:id"
-        let parts = header.split(separator: " ", maxSplits: 1)
-        guard parts.count == 2 else { return nil }
+        // Parse labeled fields from header
+        var fields: [String: String] = [:]
+        var current = header[...]
+        while !current.isEmpty {
+            current = current.drop(while: { $0 == " " })
+            guard let colonIdx = current.firstIndex(of: ":") else { break }
+            let key = String(current[current.startIndex..<colonIdx])
+            let afterColon = current[current.index(after: colonIdx)...]
+            // Value runs until the next " key:" pattern or end of string
+            let value: String
+            let rest: Substring
+            if let nextField = afterColon.range(of: #" (?:project|worktree|window|pane):"#, options: .regularExpression) {
+                value = String(afterColon[afterColon.startIndex..<nextField.lowerBound])
+                rest = afterColon[nextField.lowerBound...]
+            } else {
+                value = String(afterColon)
+                rest = afterColon[afterColon.endIndex...]
+            }
+            fields[key] = value
+            current = rest
+        }
 
-        let addressParts = parts[0].split(separator: "/", maxSplits: 2)
-        guard addressParts.count == 3 else { return nil }
-
-        let paneStr = String(parts[1])
-        guard paneStr.hasPrefix("pane:") else { return nil }
-        let paneId = String(paneStr.dropFirst(5))
+        guard let project = fields["project"],
+              let worktree = fields["worktree"],
+              let window = fields["window"],
+              let paneId = fields["pane"] else { return nil }
 
         return AgentMessage(
-            fromProject: String(addressParts[0]),
-            fromWorktree: String(addressParts[1]),
-            fromWindow: String(addressParts[2]),
+            fromProject: project,
+            fromWorktree: worktree,
+            fromWindow: window,
             fromPaneId: paneId,
             text: text
         )

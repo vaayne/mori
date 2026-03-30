@@ -1317,11 +1317,11 @@ func testAgentMessageEnvelope() {
         fromPaneId: "%5",
         text: "Review the auth module"
     )
-    assertEqual(msg.envelope, "[mori-bridge from:mori/main/claude pane:%5] Review the auth module")
+    assertEqual(msg.envelope, "[mori-bridge project:mori worktree:main window:claude pane:%5] Review the auth module")
 }
 
 func testAgentMessageParse() {
-    let envelope = "[mori-bridge from:mori/main/claude pane:%5] Review the auth module"
+    let envelope = "[mori-bridge project:mori worktree:main window:claude pane:%5] Review the auth module"
     let msg = AgentMessage.parse(envelope)
     assertNotNil(msg)
     assertEqual(msg?.fromProject, "mori")
@@ -1331,9 +1331,20 @@ func testAgentMessageParse() {
     assertEqual(msg?.text, "Review the auth module")
 }
 
+func testAgentMessageParseSlashInWorktree() {
+    let envelope = "[mori-bridge project:mori worktree:feature/auth window:codex pane:%3] hello"
+    let msg = AgentMessage.parse(envelope)
+    assertNotNil(msg)
+    assertEqual(msg?.fromProject, "mori")
+    assertEqual(msg?.fromWorktree, "feature/auth")
+    assertEqual(msg?.fromWindow, "codex")
+    assertEqual(msg?.fromPaneId, "%3")
+    assertEqual(msg?.text, "hello")
+}
+
 func testAgentMessageParseInvalid() {
     assertNil(AgentMessage.parse("not a valid envelope"))
-    assertNil(AgentMessage.parse("[mori-bridge from:incomplete"))
+    assertNil(AgentMessage.parse("[mori-bridge project:incomplete"))
     assertNil(AgentMessage.parse(""))
 }
 
@@ -1476,6 +1487,7 @@ testSSHCreateAskPassScriptHasSecurePermissions()
 // AgentMessage
 testAgentMessageEnvelope()
 testAgentMessageParse()
+testAgentMessageParseSlashInWorktree()
 testAgentMessageParseInvalid()
 testAgentMessageCodable()
 
