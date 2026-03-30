@@ -61,6 +61,12 @@ public final class SwiftTermRenderer: UIView {
         // Hide the blinking cursor caret that iOS renders for UITextInput views.
         // SwiftTerm draws its own cursor in the terminal grid.
         terminalView.tintColor = .clear
+
+        // Set explicit terminal colors so the draw method fills with an opaque
+        // background. SwiftTerm defaults nativeBackgroundColor to .clear which
+        // causes old content to show through after `clear` or scrollback changes.
+        terminalView.nativeBackgroundColor = .black
+        terminalView.nativeForegroundColor = UIColor(white: 0.84, alpha: 1.0)
     }
 
     @available(*, unavailable)

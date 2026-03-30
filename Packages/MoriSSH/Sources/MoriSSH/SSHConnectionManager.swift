@@ -177,7 +177,16 @@ private final class ShellHandler: ChannelDuplexHandler, @unchecked Sendable {
         }
     }
 
-    private func sendShellRequest(context: ChannelHandlerContext) {
+    private func sendEnvironmentAndShell(context: ChannelHandlerContext) {
+        // Send LANG before the shell request — without UTF-8 locale, tools like
+        // tmux and vi produce non-UTF-8 sequences that break rendering.
+        let envRequest = SSHChannelRequestEvent.EnvironmentRequest(
+            wantReply: false,
+            name: "LANG",
+            value: "en_US.UTF-8"
+        )
+        context.triggerUserOutboundEvent(envRequest, promise: nil)
+
         shellSent = true
         sshLog.info("ShellHandler: PTY accepted, sending shell request")
         let shellRequest = SSHChannelRequestEvent.ShellRequest(wantReply: true)
@@ -194,7 +203,7 @@ private final class ShellHandler: ChannelDuplexHandler, @unchecked Sendable {
             if !ptyAccepted {
                 sshLog.info("ShellHandler: PTY accepted")
                 ptyAccepted = true
-                sendShellRequest(context: context)
+                sendEnvironmentAndShell(context: context)
             } else if shellSent {
                 sshLog.info("ShellHandler: shell accepted")
                 succeedShell()
