@@ -43,6 +43,12 @@ final class IPCHandler {
 
         case .setWorkflowStatus(let project, let worktree, let status):
             return handleSetWorkflowStatus(manager: manager, projectName: project, worktreeName: worktree, statusString: status)
+
+        case .paneList:
+            return handlePaneList(manager: manager)
+
+        case .paneRead(let project, let worktree, let window, let lines):
+            return await handlePaneRead(manager: manager, projectName: project, worktreeName: worktree, windowName: window, lines: lines)
         }
     }
 
@@ -181,6 +187,67 @@ final class IPCHandler {
 
         manager.setWorkflowStatus(worktreeId: worktree.id, status: validStatus)
         return .success(payload: nil)
+    }
+
+    private func handlePaneList(manager: WorkspaceManager) -> IPCResponse {
+        var entries: [AgentPaneInfo] = []
+        for project in manager.appState.projects {
+            let worktrees = manager.appState.worktrees.filter { $0.projectId == project.id }
+            for worktree in worktrees {
+                let windows = manager.appState.runtimeWindows.filter { $0.worktreeId == worktree.id }
+                for window in windows {
+                    let paneId = window.activePaneId ?? manager.rawTmuxWindowId(from: window)
+                    let entry = AgentPaneInfo(
+                        endpoint: worktree.resolvedLocation.endpointKey,
+                        tmuxPaneId: paneId,
+                        projectName: project.name,
+                        worktreeName: worktree.name,
+                        windowName: window.title,
+                        agentState: window.agentState,
+                        detectedAgent: window.detectedAgent
+                    )
+                    entries.append(entry)
+                }
+            }
+        }
+        do {
+            let data = try JSONEncoder().encode(entries)
+            return .success(payload: data)
+        } catch {
+            return .error(message: "Failed to encode pane list: \(error.localizedDescription)")
+        }
+    }
+
+    private func handlePaneRead(manager: WorkspaceManager, projectName: String, worktreeName: String, windowName: String, lines: Int) async -> IPCResponse {
+        guard let project = manager.appState.projects.first(where: {
+            $0.name.caseInsensitiveCompare(projectName) == .orderedSame
+        }) else {
+            return .error(message: "Project not found: \(projectName)")
+        }
+
+        guard let worktree = manager.appState.worktrees.first(where: {
+            $0.projectId == project.id && $0.name.caseInsensitiveCompare(worktreeName) == .orderedSame
+        }) else {
+            return .error(message: "Worktree not found: \(worktreeName)")
+        }
+
+        guard let runtimeWindow = manager.appState.runtimeWindows.first(where: {
+            $0.worktreeId == worktree.id && $0.title.caseInsensitiveCompare(windowName) == .orderedSame
+        }) else {
+            return .error(message: "Window not found: \(windowName)")
+        }
+
+        let paneId = runtimeWindow.activePaneId ?? manager.rawTmuxWindowId(from: runtimeWindow)
+        let tmux = manager.tmuxBackendForWorktree(worktree)
+        let clampedLines = min(max(lines, 1), 200)
+
+        do {
+            let output = try await tmux.capturePaneOutput(paneId: paneId, lineCount: clampedLines)
+            let data = Data(output.utf8)
+            return .success(payload: data)
+        } catch {
+            return .error(message: "Failed to capture pane output: \(error.localizedDescription)")
+        }
     }
 
     private func handleOpen(manager: WorkspaceManager, path: String) async -> IPCResponse {
