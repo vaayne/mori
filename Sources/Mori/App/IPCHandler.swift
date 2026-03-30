@@ -49,6 +49,9 @@ final class IPCHandler {
 
         case .paneRead(let project, let worktree, let window, let lines):
             return await handlePaneRead(manager: manager, projectName: project, worktreeName: worktree, windowName: window, lines: lines)
+
+        case .paneMessage(let project, let worktree, let window, let text):
+            return await handlePaneMessage(manager: manager, projectName: project, worktreeName: worktree, windowName: window, text: text)
         }
     }
 
@@ -219,22 +222,8 @@ final class IPCHandler {
     }
 
     private func handlePaneRead(manager: WorkspaceManager, projectName: String, worktreeName: String, windowName: String, lines: Int) async -> IPCResponse {
-        guard let project = manager.appState.projects.first(where: {
-            $0.name.caseInsensitiveCompare(projectName) == .orderedSame
-        }) else {
-            return .error(message: "Project not found: \(projectName)")
-        }
-
-        guard let worktree = manager.appState.worktrees.first(where: {
-            $0.projectId == project.id && $0.name.caseInsensitiveCompare(worktreeName) == .orderedSame
-        }) else {
-            return .error(message: "Worktree not found: \(worktreeName)")
-        }
-
-        guard let runtimeWindow = manager.appState.runtimeWindows.first(where: {
-            $0.worktreeId == worktree.id && $0.title.caseInsensitiveCompare(windowName) == .orderedSame
-        }) else {
-            return .error(message: "Window not found: \(windowName)")
+        guard let (worktree, runtimeWindow) = resolveWindow(manager: manager, projectName: projectName, worktreeName: worktreeName, windowName: windowName) else {
+            return .error(message: "Window not found: \(projectName)/\(worktreeName)/\(windowName)")
         }
 
         let paneId = runtimeWindow.activePaneId ?? manager.rawTmuxWindowId(from: runtimeWindow)
@@ -248,6 +237,58 @@ final class IPCHandler {
         } catch {
             return .error(message: "Failed to capture pane output: \(error.localizedDescription)")
         }
+    }
+
+    private func handlePaneMessage(manager: WorkspaceManager, projectName: String, worktreeName: String, windowName: String, text: String) async -> IPCResponse {
+        guard let (worktree, runtimeWindow) = resolveWindow(manager: manager, projectName: projectName, worktreeName: worktreeName, windowName: windowName) else {
+            return .error(message: "Window not found: \(projectName)/\(worktreeName)/\(windowName)")
+        }
+
+        guard let sessionName = worktree.tmuxSessionName else {
+            return .error(message: "Worktree has no tmux session")
+        }
+
+        let paneId = runtimeWindow.activePaneId ?? manager.rawTmuxWindowId(from: runtimeWindow)
+        let tmux = manager.tmuxBackendForWorktree(worktree)
+
+        // Build envelope with sender info (best-effort: use MORI_PROJECT/MORI_WORKTREE env vars or "cli")
+        let senderProject = ProcessInfo.processInfo.environment["MORI_PROJECT"] ?? "cli"
+        let senderWorktree = ProcessInfo.processInfo.environment["MORI_WORKTREE"] ?? "cli"
+        let senderWindow = ProcessInfo.processInfo.environment["MORI_WINDOW"] ?? "cli"
+        let senderPaneId = ProcessInfo.processInfo.environment["MORI_PANE_ID"] ?? "unknown"
+
+        let message = AgentMessage(
+            fromProject: senderProject,
+            fromWorktree: senderWorktree,
+            fromWindow: senderWindow,
+            fromPaneId: senderPaneId,
+            text: text
+        )
+
+        do {
+            try await tmux.sendKeys(sessionId: sessionName, paneId: paneId, keys: message.envelope)
+            try await tmux.sendKeys(sessionId: sessionName, paneId: paneId, keys: "Enter")
+            return .success(payload: nil)
+        } catch {
+            return .error(message: "Failed to send message: \(error.localizedDescription)")
+        }
+    }
+
+    /// Resolve project/worktree/window triplet to a (Worktree, RuntimeWindow) pair.
+    private func resolveWindow(manager: WorkspaceManager, projectName: String, worktreeName: String, windowName: String) -> (Worktree, RuntimeWindow)? {
+        guard let project = manager.appState.projects.first(where: {
+            $0.name.caseInsensitiveCompare(projectName) == .orderedSame
+        }) else { return nil }
+
+        guard let worktree = manager.appState.worktrees.first(where: {
+            $0.projectId == project.id && $0.name.caseInsensitiveCompare(worktreeName) == .orderedSame
+        }) else { return nil }
+
+        guard let runtimeWindow = manager.appState.runtimeWindows.first(where: {
+            $0.worktreeId == worktree.id && $0.title.caseInsensitiveCompare(windowName) == .orderedSame
+        }) else { return nil }
+
+        return (worktree, runtimeWindow)
     }
 
     private func handleOpen(manager: WorkspaceManager, path: String) async -> IPCResponse {
