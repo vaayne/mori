@@ -8,27 +8,62 @@ public struct WindowRowView: View {
     let shortcutIndex: Int?
     let onSelect: () -> Void
     let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
+    let onSendKeys: ((String, String) -> Void)?
 
     @State private var isHovered = false
     @State private var showPopover = false
     @State private var popoverOutput: String?
     @State private var hoverTimer: Timer?
+    @State private var showReplyField = false
 
     public init(
         window: RuntimeWindow,
         isActive: Bool,
         shortcutIndex: Int? = nil,
         onSelect: @escaping () -> Void,
-        onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil
+        onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
+        onSendKeys: ((String, String) -> Void)? = nil
     ) {
         self.window = window
         self.isActive = isActive
         self.shortcutIndex = shortcutIndex
         self.onSelect = onSelect
         self.onRequestPaneOutput = onRequestPaneOutput
+        self.onSendKeys = onSendKeys
     }
 
     public var body: some View {
+        VStack(spacing: 0) {
+            rowButton
+            replyFieldView
+        }
+        .onHover { hovering in
+            isHovered = hovering
+            if hovering && window.badge != nil && onRequestPaneOutput != nil {
+                hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+                    let paneId = window.activePaneId ?? window.tmuxWindowId
+                    onRequestPaneOutput?(paneId) { output in
+                        DispatchQueue.main.async {
+                            self.popoverOutput = output
+                            self.showPopover = output != nil
+                        }
+                    }
+                }
+            } else {
+                hoverTimer?.invalidate()
+                hoverTimer = nil
+                showPopover = false
+                popoverOutput = nil
+            }
+        }
+        .popover(isPresented: $showPopover, arrowEdge: .trailing) {
+            if let output = popoverOutput {
+                PanePreviewPopover(output: output)
+            }
+        }
+    }
+
+    private var rowButton: some View {
         Button(action: onSelect) {
             HStack(spacing: MoriTokens.Spacing.md) {
                 Image(systemName: window.tag?.symbolName ?? "terminal")
@@ -65,29 +100,19 @@ public struct WindowRowView: View {
         .buttonStyle(.plain)
         .background(rowBackground)
         .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
-        .onHover { hovering in
-            isHovered = hovering
-            if hovering && window.badge != nil && onRequestPaneOutput != nil {
-                hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+    }
+
+    @ViewBuilder
+    private var replyFieldView: some View {
+        if showReplyField {
+            QuickReplyField(
+                onSend: { text in
                     let paneId = window.activePaneId ?? window.tmuxWindowId
-                    onRequestPaneOutput?(paneId) { output in
-                        DispatchQueue.main.async {
-                            self.popoverOutput = output
-                            self.showPopover = output != nil
-                        }
-                    }
-                }
-            } else {
-                hoverTimer?.invalidate()
-                hoverTimer = nil
-                showPopover = false
-                popoverOutput = nil
-            }
-        }
-        .popover(isPresented: $showPopover, arrowEdge: .trailing) {
-            if let output = popoverOutput {
-                PanePreviewPopover(output: output)
-            }
+                    onSendKeys?(paneId, text + "\n")
+                },
+                onDismiss: { showReplyField = false }
+            )
+            .padding(EdgeInsets(top: 0, leading: MoriTokens.Spacing.lg, bottom: MoriTokens.Spacing.xs, trailing: MoriTokens.Spacing.lg))
         }
     }
 
@@ -112,11 +137,20 @@ public struct WindowRowView: View {
                     .help("Error")
                     .accessibilityLabel("Error")
             case .waiting:
-                Image(systemName: "exclamationmark.bubble.fill")
-                    .font(.system(size: MoriTokens.Icon.badge))
-                    .foregroundStyle(MoriTokens.Color.attention)
-                    .help("Waiting for input")
-                    .accessibilityLabel("Waiting for input")
+                Button(action: {
+                    if onSendKeys != nil {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            showReplyField.toggle()
+                        }
+                    }
+                }) {
+                    Image(systemName: "exclamationmark.bubble.fill")
+                        .font(.system(size: MoriTokens.Icon.badge))
+                        .foregroundStyle(MoriTokens.Color.attention)
+                }
+                .buttonStyle(.plain)
+                .help("Waiting for input — click to reply")
+                .accessibilityLabel("Waiting for input")
             case .longRunning:
                 Image(systemName: "clock.fill")
                     .font(.system(size: MoriTokens.Icon.badge))
