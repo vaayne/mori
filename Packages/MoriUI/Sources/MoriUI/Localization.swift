@@ -1,6 +1,6 @@
 import Foundation
 
-private let moriSharedSuite = "dev.mori.shared"
+private let moriSharedSuite = "com.vaayne.mori.shared"
 private let moriLanguageKey = "MoriLanguage"
 
 extension String {

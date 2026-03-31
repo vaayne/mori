@@ -31,7 +31,10 @@ cask "mori" do
     "~/Library/Preferences/com.mori.app.plist",
     "~/Library/Preferences/dev.mori.app.plist",
     "~/Library/Preferences/dev.mori.shared.plist",
+    "~/Library/Preferences/com.vaayne.mori.plist",
+    "~/Library/Preferences/com.vaayne.mori.shared.plist",
     "~/Library/Saved Application State/dev.mori.app.savedState",
+    "~/Library/Saved Application State/com.vaayne.mori.savedState",
   ]
 end
 EOF

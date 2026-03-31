@@ -26,7 +26,7 @@ enum SSHCredentialStoreError: LocalizedError {
 
 /// Stores password-based SSH credentials in macOS Keychain.
 enum SSHCredentialStore {
-    private static let service = "dev.mori.app.ssh"
+    private static let service = "com.vaayne.mori.ssh"
 
     private static func account(for ssh: SSHWorkspaceLocation) -> String {
         "password:\(ssh.endpointKey)"

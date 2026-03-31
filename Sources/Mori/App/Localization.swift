@@ -9,7 +9,7 @@ extension String {
 private extension Bundle {
     static let preferredLocalization: Bundle = {
         let lang: String
-        if let stored = UserDefaults(suiteName: "dev.mori.shared")?.string(forKey: "MoriLanguage") {
+        if let stored = UserDefaults(suiteName: "com.vaayne.mori.shared")?.string(forKey: "MoriLanguage") {
             lang = stored
         } else {
             let system = Locale.preferredLanguages.first ?? "en"

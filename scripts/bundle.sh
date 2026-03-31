@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_NAME="Mori"
-BUNDLE_ID="dev.mori.app"
+BUNDLE_ID="com.vaayne.mori"
 APP_BUILD_DIR=".build/release"
 CLI_BUILD_DIR=".build-cli/release"
 APP_BUNDLE="${APP_NAME}.app"
