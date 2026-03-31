@@ -347,7 +347,9 @@ final class KeyBarView: UIView {
             try? await Task.sleep(nanoseconds: 500_000_000) // 500ms initial delay
             guard !Task.isCancelled else { return }
             self.repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in
-                self?.executeAction(action)
+                MainActor.assumeIsolated {
+                    self?.executeAction(action)
+                }
             }
         }
     }
