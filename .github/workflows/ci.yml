@@ -72,8 +72,33 @@ jobs:
 
       - name: Stub GhosttyKit for SPM resolution
         run: |
-          mkdir -p Frameworks/GhosttyKit.xcframework
-          echo '{"version":1}' > Frameworks/GhosttyKit.xcframework/Info.plist
+          mkdir -p Frameworks/GhosttyKit.xcframework/macos-arm64_x86_64/GhosttyKit.framework/Headers
+          touch Frameworks/GhosttyKit.xcframework/macos-arm64_x86_64/GhosttyKit.framework/GhosttyKit
+          cat > Frameworks/GhosttyKit.xcframework/Info.plist << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>AvailableLibraries</key>
+            <array>
+              <dict>
+                <key>LibraryIdentifier</key>
+                <string>macos-arm64_x86_64</string>
+                <key>LibraryPath</key>
+                <string>GhosttyKit.framework</string>
+                <key>SupportedArchitectures</key>
+                <array><string>arm64</string><string>x86_64</string></array>
+                <key>SupportedPlatform</key>
+                <string>macos</string>
+              </dict>
+            </array>
+            <key>CFBundlePackageType</key>
+            <string>XFWK</string>
+            <key>XCFrameworkFormatVersion</key>
+            <string>1.0</string>
+          </dict>
+          </plist>
+          PLIST
 
       - name: Generate Xcode project
         run: cd MoriRemote && xcodegen generate
