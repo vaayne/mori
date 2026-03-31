@@ -219,7 +219,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					219FEED5B577C565EBA81436 = {
-						DevelopmentTeam = "${DEVELOPMENT_TEAM:YARFK6Y332}";
+						DevelopmentTeam = "${DEVELOPMENT_TEAM}";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -316,7 +316,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "${CURRENT_PROJECT_VERSION:1}";
-				DEVELOPMENT_TEAM = "${DEVELOPMENT_TEAM:YARFK6Y332}";
+				DEVELOPMENT_TEAM = "${DEVELOPMENT_TEAM}";
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MoriRemote/Info.plist;
@@ -464,7 +464,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "${CURRENT_PROJECT_VERSION:1}";
-				DEVELOPMENT_TEAM = "${DEVELOPMENT_TEAM:YARFK6Y332}";
+				DEVELOPMENT_TEAM = "${DEVELOPMENT_TEAM}";
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MoriRemote/Info.plist;
