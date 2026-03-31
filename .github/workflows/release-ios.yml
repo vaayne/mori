@@ -57,6 +57,8 @@ jobs:
           restore-keys: spm-ios-
 
       - name: Generate Xcode project
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
         run: cd MoriRemote && xcodegen generate
 
       - name: Stub GhosttyKit for SPM resolution
@@ -129,6 +131,7 @@ jobs:
             -allowProvisioningUpdates \
             MARKETING_VERSION="$VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
             2>&1 | xcbeautify
           echo "✅ Archive created"
 
