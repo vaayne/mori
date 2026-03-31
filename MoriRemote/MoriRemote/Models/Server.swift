@@ -89,7 +89,7 @@ struct Server: Identifiable, Codable, Equatable, Sendable {
 // MARK: - Keychain Helper
 
 enum KeychainHelper {
-    private static let service = "dev.mori.remote.servers"
+    private static let service = "com.vaayne.mori.servers"
 
     static func save(_ password: String, account: String) {
         guard let data = password.data(using: .utf8) else { return }

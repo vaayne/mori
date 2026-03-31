@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import os.log
 
-private let log = Logger(subsystem: "dev.mori.remote", category: "ServerStore")
+private let log = Logger(subsystem: "com.vaayne.mori", category: "ServerStore")
 
 @MainActor
 @Observable

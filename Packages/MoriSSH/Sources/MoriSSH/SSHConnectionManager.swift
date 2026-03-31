@@ -4,7 +4,7 @@ import NIOPosix
 import NIOSSH
 import os.log
 
-private let sshLog = Logger(subsystem: "dev.mori.remote", category: "SSH")
+private let sshLog = Logger(subsystem: "com.vaayne.mori", category: "SSH")
 
 // MARK: - Auth Delegate
 
