@@ -46,13 +46,19 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGNING_ALLOWED: YES
         CODE_SIGNING_REQUIRED: YES
-        CODE_SIGN_IDENTITY: "Apple Development"
-        CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
         EXCLUDED_ARCHS[sdk=iphonesimulator*]: x86_64
         DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
         MARKETING_VERSION: ${MARKETING_VERSION:0.1.0}
         CURRENT_PROJECT_VERSION: ${CURRENT_PROJECT_VERSION:1}
+      configs:
+        Debug:
+          CODE_SIGN_IDENTITY: "Apple Development"
+          CODE_SIGN_STYLE: Automatic
+        Release:
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          CODE_SIGN_STYLE: Manual
+          PROVISIONING_PROFILE_SPECIFIER: "MoriRemote App Store"
 schemes:
   MoriRemote:
     build:

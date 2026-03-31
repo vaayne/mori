@@ -115,6 +115,18 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
 
+      - name: Install provisioning profile
+        env:
+          PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+        run: |
+          PROFILE_PATH="$RUNNER_TEMP/profile.mobileprovision"
+          echo "$PROVISIONING_PROFILE" | base64 --decode > "$PROFILE_PATH"
+          PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" | plutil -extract UUID raw -)
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/${PROFILE_UUID}.mobileprovision
+          rm -f "$PROFILE_PATH"
+          echo "✅ Installed profile: $PROFILE_UUID"
+
       - name: Archive
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -128,10 +140,8 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$DERIVED_DATA/MoriRemote.xcarchive" \
             -derivedDataPath "$DERIVED_DATA" \
-            -allowProvisioningUpdates \
             MARKETING_VERSION="$VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
             2>&1 | xcbeautify
           echo "✅ Archive created"
 
@@ -142,7 +152,6 @@ jobs:
             -archivePath "$DERIVED_DATA/MoriRemote.xcarchive" \
             -exportOptionsPlist MoriRemote/ExportOptions.plist \
             -exportPath "$DERIVED_DATA/export" \
-            -allowProvisioningUpdates \
             2>&1 | xcbeautify
           echo "✅ IPA exported"
 
