@@ -141,7 +141,7 @@ if [[ -n "${SIGNING_IDENTITY:-}" ]]; then
     if [[ -n "${KEYCHAIN_PROFILE:-}" ]]; then
         SIGN_ARGS+=(--notarize)
     fi
-    bash scripts/sign.sh "${SIGN_ARGS[@]}"
+    bash scripts/sign.sh ${SIGN_ARGS[@]+"${SIGN_ARGS[@]}"}
 fi
 
 # In CI, keep the bundle in the working directory for archiving
