@@ -4,8 +4,6 @@
 <dict>
 	<key>method</key>
 	<string>app-store-connect</string>
-	<key>destination</key>
-	<string>upload</string>
 	<key>signingStyle</key>
 	<string>manual</string>
 	<key>provisioningProfiles</key>
