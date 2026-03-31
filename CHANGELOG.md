@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-31
+
 ### ✨ Features
 
-- **Agent Bridge**: Cross-pane agent monitoring, communication, and dashboard
+- **Agent Bridge**: Cross-pane agent monitoring, communication, and dashboard ([#31](https://github.com/vaayne/mori/pull/31))
   - `mori pane list` — list all panes with project/worktree/window/agent/state info
   - `mori pane read <project> <worktree> <window> [--lines N]` — capture pane output
   - `mori pane message <project> <worktree> <window> <text>` — send message with sender metadata
@@ -19,6 +21,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New "Agents" sidebar mode groups all agent windows by state (Attention, Running, Completed, Idle)
   - Multi-pane dashboard panel (⌘⇧A) shows live output from all agent panes
   - Agent-to-agent messaging protocol with `[mori-bridge from:...]` envelope format
+- Added "waiting" agent state for Quick Reply support
+
+### 🐛 Bug Fixes
+
+- Slugify project shortName in tmux session naming ([#28](https://github.com/vaayne/mori/pull/28))
+- Prevent hover peek from triggering on click-to-switch
+- Wire onRequestPaneOutput and onSendKeys callbacks from app layer
+
+### ⚡ Performance
+
+- Faster hover peek — show popover immediately with loading spinner
+
+### 📝 Documentation
+
+- Rewrite agent-bridge.md with comprehensive guide
+- Add pre-push CI verification steps to AGENTS.md
+
+**Full Changelog**: [v0.1.3...v0.2.0](https://github.com/vaayne/mori/compare/v0.1.3...v0.2.0)
 
 ## [0.1.3] - 2026-03-28
 ### ✨ Features
@@ -181,7 +201,8 @@ Initial release of Mori — a macOS native workspace terminal organized around P
 
 **Full Changelog**: [v0.1.0](https://github.com/vaayne/mori/commits/v0.1.0)
 
-[Unreleased]: https://github.com/vaayne/mori/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/vaayne/mori/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/vaayne/mori/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/vaayne/mori/releases/tag/v0.1.3
 [0.1.2]: https://github.com/vaayne/mori/releases/tag/v0.1.2
 [0.1.1]: https://github.com/vaayne/mori/releases/tag/v0.1.1
