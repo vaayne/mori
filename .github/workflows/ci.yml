@@ -70,6 +70,11 @@ jobs:
         run: |
           brew install xcodegen xcbeautify
 
+      - name: Stub GhosttyKit for SPM resolution
+        run: |
+          mkdir -p Frameworks/GhosttyKit.xcframework
+          echo '{"version":1}' > Frameworks/GhosttyKit.xcframework/Info.plist
+
       - name: Generate Xcode project
         run: cd MoriRemote && xcodegen generate
 
