@@ -200,7 +200,7 @@ fi
 xcrun altool --upload-app \
   --type ios \
   --file "$IPA_PATH" \
-  --apiKey "${APP_STORE_API_KEY}" \
-  --apiIssuer "${APP_STORE_API_ISSUER}"
+  --username "${APPLE_ID}" \
+  --password "${APPLE_APP_PASSWORD}"
 echo "✅ Uploaded $IPA_PATH to App Store Connect"
 '''

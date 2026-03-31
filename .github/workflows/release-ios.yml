@@ -59,15 +59,6 @@ jobs:
       - name: Generate Xcode project
         run: cd MoriRemote && xcodegen generate
 
-      - name: Install App Store Connect API key
-        env:
-          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-        run: |
-          mkdir -p ~/private_keys
-          echo "$APP_STORE_CONNECT_KEY" > ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
-
       - name: Import signing certificate
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
@@ -106,9 +97,6 @@ jobs:
             -archivePath "$DERIVED_DATA/MoriRemote.xcarchive" \
             -derivedDataPath "$DERIVED_DATA" \
             -allowProvisioningUpdates \
-            -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8 \
-            -authenticationKeyID ${{ secrets.APP_STORE_CONNECT_KEY_ID }} \
-            -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
             MARKETING_VERSION="$VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             2>&1 | xcbeautify
@@ -122,16 +110,13 @@ jobs:
             -exportOptionsPlist MoriRemote/ExportOptions.plist \
             -exportPath "$DERIVED_DATA/export" \
             -allowProvisioningUpdates \
-            -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8 \
-            -authenticationKeyID ${{ secrets.APP_STORE_CONNECT_KEY_ID }} \
-            -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
             2>&1 | xcbeautify
           echo "✅ IPA exported"
 
       - name: Upload to TestFlight
         env:
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
           set -euo pipefail
           IPA_PATH=$(find "$DERIVED_DATA/export" -name "*.ipa" | head -1)
@@ -142,8 +127,8 @@ jobs:
           xcrun altool --upload-app \
             --type ios \
             --file "$IPA_PATH" \
-            --apiKey "$APP_STORE_CONNECT_KEY_ID" \
-            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+            --username "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD"
           echo "✅ Uploaded to TestFlight"
 
       - name: Upload IPA artifact
@@ -158,4 +143,3 @@ jobs:
         run: |
           KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
           security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
-          rm -rf ~/private_keys
