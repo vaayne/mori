@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Download GhosttyKit
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: GhosttyKit
           path: Frameworks
@@ -113,7 +113,7 @@ jobs:
           bash scripts/generate-appcast.sh "$VERSION" "Mori-${VERSION}-macos-arm64.zip"
 
       - name: Upload appcast artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: appcast
           path: mori-appcast.xml
@@ -178,7 +178,7 @@ jobs:
           TAP_DIR: homebrew-tap
 
       - name: Download appcast artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: appcast
 
