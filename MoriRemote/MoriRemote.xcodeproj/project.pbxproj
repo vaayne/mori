@@ -326,7 +326,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = "${MARKETING_VERSION:0.1.0}";
-				PRODUCT_BUNDLE_IDENTIFIER = com.vaayne.mori.remote;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.vaayne.mori-remote";
 				PRODUCT_NAME = MoriRemote;
 				SDKROOT = iphoneos;
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -474,7 +474,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = "${MARKETING_VERSION:0.1.0}";
-				PRODUCT_BUNDLE_IDENTIFIER = com.vaayne.mori.remote;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.vaayne.mori-remote";
 				PRODUCT_NAME = MoriRemote;
 				SDKROOT = iphoneos;
 				SWIFT_STRICT_CONCURRENCY = complete;

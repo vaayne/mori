@@ -4,7 +4,7 @@ import MoriTerminal
 import Observation
 import os.log
 
-private let log = Logger(subsystem: "com.vaayne.mori.remote", category: "Shell")
+private let log = Logger(subsystem: "com.vaayne.mori-remote", category: "Shell")
 
 enum ShellState: Equatable, Sendable {
     case disconnected

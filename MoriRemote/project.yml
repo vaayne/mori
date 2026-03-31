@@ -36,7 +36,7 @@ targets:
     settings:
       base:
         PRODUCT_NAME: MoriRemote
-        PRODUCT_BUNDLE_IDENTIFIER: com.vaayne.mori.remote
+        PRODUCT_BUNDLE_IDENTIFIER: com.vaayne.mori-remote
         INFOPLIST_FILE: MoriRemote/Info.plist
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
