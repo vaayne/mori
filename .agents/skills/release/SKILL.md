@@ -1,19 +1,22 @@
 ---
 name: release
 description: >
-  Release workflow for Mori macOS workspace terminal. Create releases with semantic
-  versioned tags, update changelog, and trigger automated CI/CD builds. Use when the
-  user asks to "release", "create a release", "tag a version", "update changelog",
-  "prepare release", "cut a release", or discusses versioning and release artifacts.
+  Release workflow for Mori macOS workspace terminal and MoriRemote iOS app.
+  Create releases with semantic versioned tags, update changelog, and trigger
+  automated CI/CD builds. Use when the user asks to "release", "create a release",
+  "tag a version", "update changelog", "prepare release", "cut a release",
+  "publish to TestFlight", or discusses versioning and release artifacts.
 ---
 
 # Release
 
-## Tag Format
+## macOS Release
+
+### Tag Format
 
 Use semantic versioning with `v` prefix: `v0.1.0`, `v1.0.0`, `v1.2.3-rc.1`.
 
-## Release Flow
+### Release Flow
 
 1. Update `CHANGELOG.md` (see below)
 2. Commit: `📝 docs: update CHANGELOG for vX.Y.Z`
@@ -22,9 +25,7 @@ Use semantic versioning with `v` prefix: `v0.1.0`, `v1.0.0`, `v1.2.3-rc.1`.
 5. CI triggers `.github/workflows/release.yml` → builds, signs, notarizes, and publishes the GitHub Release
 6. CI updates `vaayne/homebrew-tap` with the new `mori` cask version and SHA-256
 
-## Required Secrets
-
-The release workflow requires:
+### Required Secrets
 
 - `APPLE_CERTIFICATE_P12`
 - `APPLE_CERTIFICATE_PASSWORD`
@@ -33,8 +34,9 @@ The release workflow requires:
 - `APPLE_APP_PASSWORD`
 - `APPLE_DEVELOPER_NAME`
 - `HOMEBREW_TAP_TOKEN` — personal access token with write access to `vaayne/homebrew-tap`
+- `SPARKLE_PRIVATE_KEY` — EdDSA key for Sparkle appcast signing
 
-## Homebrew Tap
+### Homebrew Tap
 
 Homebrew does not automatically update a third-party tap from GitHub Releases. Mori's release workflow is responsible for updating `vaayne/homebrew-tap`.
 
@@ -45,6 +47,67 @@ The tap update flow:
 3. Commit and push the cask update to the tap's default branch
 
 The generated cask installs `Mori.app`, depends on `tmux`, and exposes the embedded `mori` CLI via a `binary` stanza.
+
+### Artifacts
+
+- **macOS app ZIP**: `Mori-X.Y.Z-macos-arm64.zip` (signed and notarized)
+- **macOS app DMG**: `Mori-X.Y.Z-macos-arm64.dmg` (signed and notarized)
+- **GitHub Release**: Auto-created by `release.yml` workflow on tag push
+- **Homebrew tap**: `vaayne/homebrew-tap` updated automatically after a successful release
+
+---
+
+## iOS Release (MoriRemote → TestFlight)
+
+### Tag Format
+
+Use semantic versioning with `ios-v` prefix: `ios-v0.1.0`, `ios-v1.0.0`.
+
+### Release Flow
+
+**Option A: Manual dispatch (recommended for testing)**
+
+```bash
+gh workflow run release-ios.yml -R vaayne/mori \
+  --ref <branch> \
+  -f version=X.Y.Z \
+  -f build_number=N
+```
+
+**Option B: Tag-based**
+
+1. Tag: `git tag ios-vX.Y.Z`
+2. Push: `git push origin ios-vX.Y.Z`
+3. CI triggers `.github/workflows/release-ios.yml` → archives, exports IPA, uploads to TestFlight
+
+### Required Secrets
+
+- `IOS_CERTIFICATE_P12` — Apple Distribution certificate (base64-encoded .p12)
+- `IOS_CERTIFICATE_PASSWORD` — password for the .p12
+- `APPLE_ID` — Apple ID email (shared with macOS)
+- `APPLE_APP_PASSWORD` — app-specific password (shared with macOS)
+- `APPLE_TEAM_ID` — team ID (shared with macOS)
+
+### App Store Connect
+
+- **App Name**: MoriRemote
+- **Bundle ID**: `com.vaayne.mori-remote`
+- **Apple ID**: 6761400903
+- **SKU**: `mori-remote`
+
+### After Upload
+
+1. Go to [App Store Connect → MoriRemote → TestFlight](https://appstoreconnect.apple.com/apps/6761400903/testflight)
+2. Wait for Apple's processing (5–15 minutes)
+3. Add testers under **Internal Testing** group
+4. Testers receive a TestFlight invite on their device
+
+### Artifacts
+
+- **IPA**: uploaded to GitHub Actions as artifact (90-day retention)
+- **TestFlight**: uploaded automatically via `xcrun altool`
+
+---
 
 ## Update Changelog
 
@@ -64,10 +127,3 @@ Apply to `CHANGELOG.md`:
 3. Categorize: `✨ Features`, `🐛 Bug Fixes`, `♻️ Refactoring`, `📝 Documentation`, `📦 Dependencies`
 4. Link PRs: `([#123](https://github.com/vaayne/mori/pull/123))`
 5. Append: `**Full Changelog**: [vPREV...vX.Y.Z](https://github.com/vaayne/mori/compare/vPREV...vX.Y.Z)`
-
-## Artifacts
-
-- **macOS app ZIP**: `Mori-X.Y.Z-macos-arm64.zip` (signed and notarized)
-- **macOS app DMG**: `Mori-X.Y.Z-macos-arm64.dmg` (signed and notarized)
-- **GitHub Release**: Auto-created by `release.yml` workflow on tag push
-- **Homebrew tap**: `vaayne/homebrew-tap` updated automatically after a successful release
