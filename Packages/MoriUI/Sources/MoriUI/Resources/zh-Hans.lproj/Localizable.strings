@@ -148,6 +148,79 @@
 "%lldh ago" = "%lld小时前";
 "%lldd ago" = "%lld天前";
 
+/* Keyboard Shortcut Settings */
+"Press keys…" = "按下按键…";
+"Unassigned" = "未分配";
+"Unassign shortcut" = "取消分配快捷键";
+"Reset" = "重置";
+"Reset All Shortcuts" = "重置所有快捷键";
+"Conflict with %@" = "与 %@ 冲突";
+"Assign Anyway" = "仍然分配";
+"Cancel" = "取消";
+"Reserved by %@" = "由 %@ 保留";
+"Ghostty Terminal Keybindings" = "Ghostty 终端快捷键";
+"Terminal keybindings are configured via ~/.config/ghostty/config" = "终端快捷键通过 ~/.config/ghostty/config 配置";
+
+/* Key Binding Categories */
+"Tabs" = "标签页";
+"Panes" = "面板";
+"Tools" = "工具";
+"Worktrees" = "工作树";
+"Other" = "其他";
+"System" = "系统";
+
+/* Key Binding Display Names */
+"keybinding.tabs.newTab" = "新建标签页";
+"keybinding.tabs.closeTab" = "关闭标签页";
+"keybinding.tabs.nextTab" = "下一个标签页";
+"keybinding.tabs.previousTab" = "上一个标签页";
+"keybinding.tabs.gotoTab1" = "跳转到标签页 1";
+"keybinding.tabs.gotoTab2" = "跳转到标签页 2";
+"keybinding.tabs.gotoTab3" = "跳转到标签页 3";
+"keybinding.tabs.gotoTab4" = "跳转到标签页 4";
+"keybinding.tabs.gotoTab5" = "跳转到标签页 5";
+"keybinding.tabs.gotoTab6" = "跳转到标签页 6";
+"keybinding.tabs.gotoTab7" = "跳转到标签页 7";
+"keybinding.tabs.gotoTab8" = "跳转到标签页 8";
+"keybinding.tabs.gotoLastTab" = "最后一个标签页";
+"keybinding.panes.splitRight" = "向右拆分";
+"keybinding.panes.splitDown" = "向下拆分";
+"keybinding.panes.nextPane" = "下一个面板";
+"keybinding.panes.previousPane" = "上一个面板";
+"keybinding.panes.navUp" = "向上导航";
+"keybinding.panes.navDown" = "向下导航";
+"keybinding.panes.navLeft" = "向左导航";
+"keybinding.panes.navRight" = "向右导航";
+"keybinding.panes.resizeUp" = "向上调整大小";
+"keybinding.panes.resizeDown" = "向下调整大小";
+"keybinding.panes.resizeLeft" = "向左调整大小";
+"keybinding.panes.resizeRight" = "向右调整大小";
+"keybinding.panes.equalize" = "均分面板";
+"keybinding.panes.toggleZoom" = "切换面板缩放";
+"keybinding.tools.lazygit" = "打开 Lazygit";
+"keybinding.tools.yazi" = "打开 Yazi";
+"keybinding.window.toggleSidebar" = "切换侧栏";
+"keybinding.window.closeWindow" = "关闭窗口";
+"keybinding.worktrees.create" = "新建工作树";
+"keybinding.worktrees.cycleNext" = "下一个工作树";
+"keybinding.worktrees.cyclePrevious" = "上一个工作树";
+"keybinding.commandPalette.toggle" = "命令面板";
+"keybinding.settings.open" = "设置";
+"keybinding.settings.reload" = "重新加载配置";
+"keybinding.other.openProject" = "打开项目";
+"keybinding.other.agentDashboard" = "代理仪表板";
+"keybinding.system.undo" = "撤销";
+"keybinding.system.redo" = "重做";
+"keybinding.system.cut" = "剪切";
+"keybinding.system.copy" = "拷贝";
+"keybinding.system.paste" = "粘贴";
+"keybinding.system.selectAll" = "全选";
+"keybinding.system.hide" = "隐藏";
+"keybinding.system.hideOthers" = "隐藏其他";
+"keybinding.system.quit" = "退出";
+"keybinding.system.minimize" = "最小化";
+"keybinding.system.toggleFullScreen" = "切换全屏";
+
 /* Tasks+Agents merge */
 "1 agent needs attention" = "1 个代理需要关注";
 "%lld agents need attention" = "%lld 个代理需要关注";

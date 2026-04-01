@@ -148,6 +148,79 @@
 "%lldh ago" = "%lldh ago";
 "%lldd ago" = "%lldd ago";
 
+/* Keyboard Shortcut Settings */
+"Press keys…" = "Press keys…";
+"Unassigned" = "Unassigned";
+"Unassign shortcut" = "Unassign shortcut";
+"Reset" = "Reset";
+"Reset All Shortcuts" = "Reset All Shortcuts";
+"Conflict with %@" = "Conflict with %@";
+"Assign Anyway" = "Assign Anyway";
+"Cancel" = "Cancel";
+"Reserved by %@" = "Reserved by %@";
+"Ghostty Terminal Keybindings" = "Ghostty Terminal Keybindings";
+"Terminal keybindings are configured via ~/.config/ghostty/config" = "Terminal keybindings are configured via ~/.config/ghostty/config";
+
+/* Key Binding Categories */
+"Tabs" = "Tabs";
+"Panes" = "Panes";
+"Tools" = "Tools";
+"Worktrees" = "Worktrees";
+"Other" = "Other";
+"System" = "System";
+
+/* Key Binding Display Names */
+"keybinding.tabs.newTab" = "New Tab";
+"keybinding.tabs.closeTab" = "Close Tab";
+"keybinding.tabs.nextTab" = "Next Tab";
+"keybinding.tabs.previousTab" = "Previous Tab";
+"keybinding.tabs.gotoTab1" = "Go to Tab 1";
+"keybinding.tabs.gotoTab2" = "Go to Tab 2";
+"keybinding.tabs.gotoTab3" = "Go to Tab 3";
+"keybinding.tabs.gotoTab4" = "Go to Tab 4";
+"keybinding.tabs.gotoTab5" = "Go to Tab 5";
+"keybinding.tabs.gotoTab6" = "Go to Tab 6";
+"keybinding.tabs.gotoTab7" = "Go to Tab 7";
+"keybinding.tabs.gotoTab8" = "Go to Tab 8";
+"keybinding.tabs.gotoLastTab" = "Last Tab";
+"keybinding.panes.splitRight" = "Split Right";
+"keybinding.panes.splitDown" = "Split Down";
+"keybinding.panes.nextPane" = "Next Pane";
+"keybinding.panes.previousPane" = "Previous Pane";
+"keybinding.panes.navUp" = "Navigate Up";
+"keybinding.panes.navDown" = "Navigate Down";
+"keybinding.panes.navLeft" = "Navigate Left";
+"keybinding.panes.navRight" = "Navigate Right";
+"keybinding.panes.resizeUp" = "Resize Up";
+"keybinding.panes.resizeDown" = "Resize Down";
+"keybinding.panes.resizeLeft" = "Resize Left";
+"keybinding.panes.resizeRight" = "Resize Right";
+"keybinding.panes.equalize" = "Equalize Panes";
+"keybinding.panes.toggleZoom" = "Toggle Pane Zoom";
+"keybinding.tools.lazygit" = "Open Lazygit";
+"keybinding.tools.yazi" = "Open Yazi";
+"keybinding.window.toggleSidebar" = "Toggle Sidebar";
+"keybinding.window.closeWindow" = "Close Window";
+"keybinding.worktrees.create" = "New Worktree";
+"keybinding.worktrees.cycleNext" = "Next Worktree";
+"keybinding.worktrees.cyclePrevious" = "Previous Worktree";
+"keybinding.commandPalette.toggle" = "Command Palette";
+"keybinding.settings.open" = "Settings";
+"keybinding.settings.reload" = "Reload Config";
+"keybinding.other.openProject" = "Open Project";
+"keybinding.other.agentDashboard" = "Agent Dashboard";
+"keybinding.system.undo" = "Undo";
+"keybinding.system.redo" = "Redo";
+"keybinding.system.cut" = "Cut";
+"keybinding.system.copy" = "Copy";
+"keybinding.system.paste" = "Paste";
+"keybinding.system.selectAll" = "Select All";
+"keybinding.system.hide" = "Hide";
+"keybinding.system.hideOthers" = "Hide Others";
+"keybinding.system.quit" = "Quit";
+"keybinding.system.minimize" = "Minimize";
+"keybinding.system.toggleFullScreen" = "Toggle Full Screen";
+
 /* Tasks+Agents merge */
 "1 agent needs attention" = "1 agent needs attention";
 "%lld agents need attention" = "%lld agents need attention";
