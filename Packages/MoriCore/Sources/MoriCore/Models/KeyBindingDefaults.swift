@@ -80,7 +80,7 @@ public enum KeyBindingDefaults {
 
         // Window
         KeyBinding(id: "window.toggleSidebar", displayNameKey: "keybinding.window.toggleSidebar", category: .window,
-                   shortcut: Shortcut(key: "0", modifiers: .cmd)),
+                   shortcut: Shortcut(key: "b", modifiers: .cmd)),
         KeyBinding(id: "window.closeWindow", displayNameKey: "keybinding.window.closeWindow", category: .window,
                    shortcut: Shortcut(key: "w", modifiers: .cmdShift)),
 

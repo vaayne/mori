@@ -263,6 +263,21 @@ func testKeyBindingDefaultsUniqueIds() {
     assertEqual(ids.count, uniqueIds.count, "All binding IDs must be unique")
 }
 
+func testKeyBindingDefaultsNoShortcutConflicts() {
+    let withShortcuts = KeyBindingDefaults.all.compactMap { binding -> (String, Shortcut)? in
+        guard let shortcut = binding.shortcut else { return nil }
+        return (binding.id, shortcut)
+    }
+    var seen: [String: String] = [:] // "key+mods" -> first binding ID
+    for (id, shortcut) in withShortcuts {
+        let fingerprint = "\(shortcut.key)|\(shortcut.modifiers)"
+        if let existing = seen[fingerprint] {
+            assertTrue(false, "Shortcut conflict: \(id) and \(existing) share \(fingerprint)")
+        }
+        seen[fingerprint] = id
+    }
+}
+
 func testKeyBindingDefaultsByIdLookup() {
     let byId = KeyBindingDefaults.byId
     assertEqual(byId.count, 50)
@@ -407,6 +422,7 @@ func runKeyBindingTests() {
     testKeyBindingDefaultsLockedCount()
     testKeyBindingDefaultsAllCount()
     testKeyBindingDefaultsUniqueIds()
+    testKeyBindingDefaultsNoShortcutConflicts()
     testKeyBindingDefaultsByIdLookup()
     testKeyBindingDefaultsAllConfigurableNotLocked()
     testKeyBindingDefaultsAllLockedAreSystem()
