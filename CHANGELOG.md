@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- **Customizable keyboard shortcuts**: remap, unassign, or reset all Mori app shortcuts via Settings > Keyboard
+- Shortcut conflict detection with locked system shortcuts (blocked) and configurable shortcuts (warn with override option)
+- Sparse JSON persistence for keyboard shortcut overrides (`keybindings.json`)
+
 ## [0.2.2] - 2026-03-31
 
 ### 🐛 Bug Fixes
