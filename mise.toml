@@ -39,7 +39,7 @@ swift build -c release --product Mori 2>&1 | xcbeautify
 
 [tasks.test]
 description = "Run all tests"
-depends = ["test:core", "test:persistence", "test:tmux", "test:ipc"]
+depends = ["test:core", "test:persistence", "test:tmux", "test:ipc", "test:keybindings"]
 
 [tasks."test:core"]
 run = "cd Packages/MoriCore && swift run MoriCoreTests"
@@ -52,6 +52,9 @@ run = "cd Packages/MoriTmux && swift run MoriTmuxTests"
 
 [tasks."test:ipc"]
 run = "cd Packages/MoriIPC && swift run MoriIPCTests"
+
+[tasks."test:keybindings"]
+run = "cd Packages/MoriKeybindings && swift run MoriKeybindingsTests"
 
 [tasks."build:ghostty"]
 description = "Build GhosttyKit XCFramework from source"
