@@ -743,6 +743,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             onKeyBindingResetAll: {
                 store.resetAll()
+            },
+            keyBindingsRefresh: {
+                store.bindings
             }
         )
 
@@ -1483,6 +1486,7 @@ private struct SettingsWindowContent: View {
     var onKeyBindingUpdate: ((KeyBinding) -> Void)?
     var onKeyBindingReset: ((String) -> Void)?
     var onKeyBindingResetAll: (() -> Void)?
+    var keyBindingsRefresh: (() -> [KeyBinding])?
 
     init(
         initial: GhosttySettingsModel,
@@ -1500,7 +1504,8 @@ private struct SettingsWindowContent: View {
         onKeyBindingValidate: ((KeyBinding) -> ConflictResult)? = nil,
         onKeyBindingUpdate: ((KeyBinding) -> Void)? = nil,
         onKeyBindingReset: ((String) -> Void)? = nil,
-        onKeyBindingResetAll: (() -> Void)? = nil
+        onKeyBindingResetAll: (() -> Void)? = nil,
+        keyBindingsRefresh: (() -> [KeyBinding])? = nil
     ) {
         self._model = State(initialValue: initial)
         self._agentHooks = State(initialValue: initialAgentHooks)
@@ -1518,6 +1523,7 @@ private struct SettingsWindowContent: View {
         self.onKeyBindingUpdate = onKeyBindingUpdate
         self.onKeyBindingReset = onKeyBindingReset
         self.onKeyBindingResetAll = onKeyBindingResetAll
+        self.keyBindingsRefresh = keyBindingsRefresh
     }
 
     var body: some View {
@@ -1535,9 +1541,18 @@ private struct SettingsWindowContent: View {
             keyBindings: keyBindings,
             keyBindingDefaults: keyBindingDefaults,
             onKeyBindingValidate: onKeyBindingValidate,
-            onKeyBindingUpdate: onKeyBindingUpdate,
-            onKeyBindingReset: onKeyBindingReset,
-            onKeyBindingResetAll: onKeyBindingResetAll
+            onKeyBindingUpdate: { binding in
+                onKeyBindingUpdate?(binding)
+                if let refresh = keyBindingsRefresh { keyBindings = refresh() }
+            },
+            onKeyBindingReset: { id in
+                onKeyBindingReset?(id)
+                if let refresh = keyBindingsRefresh { keyBindings = refresh() }
+            },
+            onKeyBindingResetAll: {
+                onKeyBindingResetAll?()
+                if let refresh = keyBindingsRefresh { keyBindings = refresh() }
+            }
         )
     }
 }
