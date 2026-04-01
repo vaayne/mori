@@ -84,6 +84,30 @@ windows (tabs), and panes through a native macOS interface.
 |----------|--------|
 | `⌘⇧P` | Toggle Command Palette |
 
+## Customizing Shortcuts
+
+All Mori app shortcuts listed above (except locked system shortcuts) are fully
+customizable via **Settings > Keyboard**. You can remap any configurable shortcut
+to a different key combination, unassign it entirely, or reset it back to the
+default.
+
+Locked shortcuts — such as Edit commands (Cmd+Z, Cmd+C, etc.), Quit (Cmd+Q),
+Hide (Cmd+H), Minimize (Cmd+M), and Toggle Fullscreen (Cmd+Ctrl+F) — cannot be
+changed because they are routed through the macOS AppKit responder chain.
+
+Mori includes conflict detection: if you assign a shortcut that is already used
+by a locked system binding, the assignment is blocked. If the conflict is with
+another configurable binding, Mori warns you and offers to reassign, displacing
+the previous binding. To restore all shortcuts to their original defaults, use
+the **Reset All** button in Settings > Keyboard.
+
+Shortcut overrides are saved to `~/Library/Application Support/Mori/keybindings.json`
+as a sparse file (only modified bindings are stored). Changes take effect
+immediately without restarting the app.
+
+> **Note:** Ghostty terminal keybindings are configured separately — see the
+> section below.
+
 ## Ghostty Terminal
 
 Ghostty keybindings that don't conflict with Mori shortcuts pass through
