@@ -98,3 +98,29 @@
 - `Shortcut.menuKeyEquivalent` and `menuModifierMask` are ready for NSMenuItem integration
 - All 48 MoriKeybindings test assertions pass
 - All 678 MoriCore test assertions still pass
+
+## Phase 4: AppDelegate Wiring
+
+**Status:** complete
+
+**Tasks completed:**
+- 4.1: Added `keyBindingStore`, `configurableMenuItems`, `keyMonitorActionMap` properties to AppDelegate; initialized `KeyBindingStore` with `KeyBindingRepository` in `applicationDidFinishLaunching`
+- 4.2: Refactored `setupMainMenu()` to use `configurableMenuItem()` helper that reads shortcuts from the store; locked items (Edit, Quit, Hide, Minimize, Fullscreen) remain hardcoded
+- 4.3: Refactored `setupCommandPalette()` key monitor to use a `keyMonitorActionMap` dictionary + store binding loop instead of inline if/switch chain
+- 4.4: Added `rebuildMenuKeyBindings()` method and wired to `keyBindingStore.onBindingsChanged` callback
+- 4.5: Verified MoriKeybindings package builds; full Mori target requires GhosttyKit XCFramework (not available in CI-less env); code reviewed for correctness
+
+**Files changed:**
+- `Sources/Mori/App/AppDelegate.swift` — import MoriKeybindings, store initialization, refactored menu and key monitor
+
+**Commits:**
+- `03187d47` — ♻️ refactor: wire KeyBindingStore into AppDelegate for store-driven shortcuts
+
+**Decisions & context for next phase:**
+- `configurableMenuItems: [String: NSMenuItem]` maps binding IDs to menu items for live updates via `rebuildMenuKeyBindings()`
+- `keyMonitorActionMap: [String: () -> Void]` maps all 39 configurable binding IDs to action closures
+- Key monitor loop iterates `store.bindings` (filtered to `!isLocked`), calls `shortcut.matchesEvent(event)`, and dispatches via the action map
+- Not all bindings have corresponding menu items (e.g., `tabs.gotoTab1`-8, `commandPalette.toggle`, worktree cycling, pane nav/resize arrows) — these are handled solely by the key monitor
+- Menu items for these monitor-only bindings were intentionally omitted since they use keyCodes (arrows, tab) that don't map cleanly to `NSMenuItem.keyEquivalent`
+- `onBindingsChanged` callback ensures menu shortcuts stay in sync when bindings are modified at runtime
+- The `configurableMenuItem()` helper sets `item.target = self` for all configurable items (unlike the old `menuItem()` helper which had special logic for system selectors)
