@@ -1,4 +1,5 @@
 import SwiftUI
+import MoriCore
 
 /// Settings model representing user-facing ghostty config options.
 /// Read from and written to ~/.config/ghostty/config.
@@ -175,6 +176,14 @@ public struct GhosttySettingsView: View {
     var onProxyApply: ((ProxySettingsModel) -> Void)?
     var onSystemProxyDetect: (() -> ProxySettingsModel)?
 
+    // Key bindings
+    var keyBindings: [KeyBinding]
+    var keyBindingDefaults: [KeyBinding]
+    var onKeyBindingValidate: ((KeyBinding) -> ConflictResult)?
+    var onKeyBindingUpdate: ((KeyBinding) -> Void)?
+    var onKeyBindingReset: ((String) -> Void)?
+    var onKeyBindingResetAll: (() -> Void)?
+
     @State private var selectedCategory: SettingsCategory = .general
 
     public init(
@@ -187,7 +196,13 @@ public struct GhosttySettingsView: View {
         onAgentHookChanged: ((AgentHookModel) -> Void)? = nil,
         proxySettings: Binding<ProxySettingsModel> = .constant(ProxySettingsModel()),
         onProxyApply: ((ProxySettingsModel) -> Void)? = nil,
-        onSystemProxyDetect: (() -> ProxySettingsModel)? = nil
+        onSystemProxyDetect: (() -> ProxySettingsModel)? = nil,
+        keyBindings: [KeyBinding] = [],
+        keyBindingDefaults: [KeyBinding] = [],
+        onKeyBindingValidate: ((KeyBinding) -> ConflictResult)? = nil,
+        onKeyBindingUpdate: ((KeyBinding) -> Void)? = nil,
+        onKeyBindingReset: ((String) -> Void)? = nil,
+        onKeyBindingResetAll: (() -> Void)? = nil
     ) {
         self._model = model
         self.availableThemes = availableThemes
@@ -199,6 +214,12 @@ public struct GhosttySettingsView: View {
         self._proxySettings = proxySettings
         self.onProxyApply = onProxyApply
         self.onSystemProxyDetect = onSystemProxyDetect
+        self.keyBindings = keyBindings
+        self.keyBindingDefaults = keyBindingDefaults
+        self.onKeyBindingValidate = onKeyBindingValidate
+        self.onKeyBindingUpdate = onKeyBindingUpdate
+        self.onKeyBindingReset = onKeyBindingReset
+        self.onKeyBindingResetAll = onKeyBindingResetAll
     }
 
     public var body: some View {
@@ -291,7 +312,17 @@ public struct GhosttySettingsView: View {
                     case .theme: ThemeSettingsContent(model: $model, availableThemes: availableThemes, onChanged: onChanged)
                     case .fonts: FontSettingsContent(model: $model, onChanged: onChanged)
                     case .cursor: CursorSettingsContent(model: $model, onChanged: onChanged)
-                    case .keyboard: KeyboardSettingsContent(model: $model, onChanged: onChanged, ghosttyDefaults: ghosttyDefaults)
+                    case .keyboard: KeyboardSettingsContent(
+                        model: $model,
+                        onChanged: onChanged,
+                        ghosttyDefaults: ghosttyDefaults,
+                        keyBindings: keyBindings,
+                        keyBindingDefaults: keyBindingDefaults,
+                        onKeyBindingValidate: onKeyBindingValidate,
+                        onKeyBindingUpdate: onKeyBindingUpdate,
+                        onKeyBindingReset: onKeyBindingReset,
+                        onKeyBindingResetAll: onKeyBindingResetAll
+                    )
                     case .mouse: MouseSettingsContent(model: $model, onChanged: onChanged)
                     case .window: WindowSettingsContent(model: $model, onChanged: onChanged)
                     case .network: NetworkSettingsContent(
@@ -812,13 +843,37 @@ private struct KeyboardSettingsContent: View {
     let onChanged: () -> Void
     let ghosttyDefaults: [String]
 
+    // Key bindings data + callbacks
+    var keyBindings: [KeyBinding]
+    var keyBindingDefaults: [KeyBinding]
+    var onKeyBindingValidate: ((KeyBinding) -> ConflictResult)?
+    var onKeyBindingUpdate: ((KeyBinding) -> Void)?
+    var onKeyBindingReset: ((String) -> Void)?
+    var onKeyBindingResetAll: (() -> Void)?
+
     @State private var keybindFilter = ""
     @State private var newKeybind = ""
 
-    init(model: Binding<GhosttySettingsModel>, onChanged: @escaping () -> Void, ghosttyDefaults: [String] = []) {
+    init(
+        model: Binding<GhosttySettingsModel>,
+        onChanged: @escaping () -> Void,
+        ghosttyDefaults: [String] = [],
+        keyBindings: [KeyBinding] = [],
+        keyBindingDefaults: [KeyBinding] = [],
+        onKeyBindingValidate: ((KeyBinding) -> ConflictResult)? = nil,
+        onKeyBindingUpdate: ((KeyBinding) -> Void)? = nil,
+        onKeyBindingReset: ((String) -> Void)? = nil,
+        onKeyBindingResetAll: (() -> Void)? = nil
+    ) {
         self._model = model
         self.onChanged = onChanged
         self.ghosttyDefaults = ghosttyDefaults
+        self.keyBindings = keyBindings
+        self.keyBindingDefaults = keyBindingDefaults
+        self.onKeyBindingValidate = onKeyBindingValidate
+        self.onKeyBindingUpdate = onKeyBindingUpdate
+        self.onKeyBindingReset = onKeyBindingReset
+        self.onKeyBindingResetAll = onKeyBindingResetAll
     }
 
     var body: some View {
@@ -840,13 +895,37 @@ private struct KeyboardSettingsContent: View {
             }
         }
 
-        // All keymaps
+        // Mori key bindings (editable)
+        if !keyBindings.isEmpty {
+            SettingsCard {
+                HStack {
+                    Text(String.localized("Mori App"))
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                }
+
+                KeyBindingsSettingsView(
+                    bindings: keyBindings,
+                    defaults: keyBindingDefaults,
+                    onValidate: { onKeyBindingValidate?($0) ?? .none },
+                    onUpdate: { onKeyBindingUpdate?($0) },
+                    onReset: { onKeyBindingReset?($0) },
+                    onResetAll: { onKeyBindingResetAll?() }
+                )
+            }
+        }
+
+        // Ghostty keybindings (terminal-level, read-only display)
         SettingsCard {
             HStack {
-                Text("Keybindings")
+                Text(String.localized("Ghostty Terminal Keybindings"))
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
             }
+
+            Text(String.localized("Terminal keybindings are configured via ~/.config/ghostty/config"))
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
 
             // Search filter
             HStack {
@@ -881,12 +960,6 @@ private struct KeyboardSettingsContent: View {
                         }
                     }
 
-                    // Mori app shortcuts
-                    keybindSectionHeader(.localized("Mori App"), count: filteredMoriBinds.count)
-                    ForEach(filteredMoriBinds) { entry in
-                        keybindRow(entry)
-                    }
-
                     // Ghostty defaults
                     if !filteredGhosttyBinds.isEmpty {
                         keybindSectionHeader(.localized("Ghostty Defaults"), count: filteredGhosttyBinds.count)
@@ -896,7 +969,7 @@ private struct KeyboardSettingsContent: View {
                     }
                 }
             }
-            .frame(height: 320)
+            .frame(height: 220)
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
@@ -1005,32 +1078,6 @@ private struct KeyboardSettingsContent: View {
 
     // MARK: - Data
 
-    private static let moriKeybinds: [KeybindEntry] = [
-        KeybindEntry(id: "m.new-tab", keys: "⌘T", action: .localized("New Tab"), source: .mori),
-        KeybindEntry(id: "m.close-tab", keys: "⌘W", action: .localized("Close Tab"), source: .mori),
-        KeybindEntry(id: "m.close-window", keys: "⇧⌘W", action: .localized("Close Window"), source: .mori),
-        KeybindEntry(id: "m.next-tab", keys: "⇧⌘]", action: .localized("Next Tab"), source: .mori),
-        KeybindEntry(id: "m.prev-tab", keys: "⇧⌘[", action: .localized("Previous Tab"), source: .mori),
-        KeybindEntry(id: "m.tab-1-8", keys: "⌘1–8", action: .localized("Go to Tab N"), source: .mori),
-        KeybindEntry(id: "m.tab-9", keys: "⌘9", action: .localized("Last Tab"), source: .mori),
-        KeybindEntry(id: "m.split-right", keys: "⌘D", action: .localized("Split Right"), source: .mori),
-        KeybindEntry(id: "m.split-down", keys: "⇧⌘D", action: .localized("Split Down"), source: .mori),
-        KeybindEntry(id: "m.next-pane", keys: "⌘]", action: .localized("Next Pane"), source: .mori),
-        KeybindEntry(id: "m.prev-pane", keys: "⌘[", action: .localized("Previous Pane"), source: .mori),
-        KeybindEntry(id: "m.pane-nav", keys: "⌥⌘↑↓←→", action: .localized("Directional Pane Nav"), source: .mori),
-        KeybindEntry(id: "m.pane-resize", keys: "⌃⌘↑↓←→", action: .localized("Resize Pane"), source: .mori),
-        KeybindEntry(id: "m.equalize", keys: "⌃⌘=", action: .localized("Equalize Panes"), source: .mori),
-        KeybindEntry(id: "m.zoom-pane", keys: "⇧⌘↩", action: .localized("Toggle Pane Zoom"), source: .mori),
-        KeybindEntry(id: "m.cycle-wt", keys: "⌃Tab", action: .localized("Next Worktree"), source: .mori),
-        KeybindEntry(id: "m.cycle-wt-rev", keys: "⌃⇧Tab", action: .localized("Previous Worktree"), source: .mori),
-        KeybindEntry(id: "m.palette", keys: "⇧⌘P", action: .localized("Command Palette"), source: .mori),
-        KeybindEntry(id: "m.lazygit", keys: "⌘G", action: .localized("Open Lazygit"), source: .mori),
-        KeybindEntry(id: "m.yazi", keys: "⌘E", action: .localized("Open Yazi"), source: .mori),
-        KeybindEntry(id: "m.settings", keys: "⌘,", action: .localized("Settings"), source: .mori),
-        KeybindEntry(id: "m.sidebar", keys: "⌘0", action: .localized("Toggle Sidebar"), source: .mori),
-        KeybindEntry(id: "m.open-proj", keys: "⇧⌘O", action: .localized("Open Project"), source: .mori),
-    ]
-
     private var ghosttyEntries: [KeybindEntry] {
         ghosttyDefaults.enumerated().compactMap { index, raw in
             guard let eqIndex = raw.firstIndex(of: "=") else { return nil }
@@ -1047,10 +1094,6 @@ private struct KeyboardSettingsContent: View {
             let action = String(raw[raw.index(after: eqIndex)...])
             return KeybindEntry(id: "u.\(index)", keys: keys, action: action, source: .user)
         }
-    }
-
-    private var filteredMoriBinds: [KeybindEntry] {
-        filterEntries(Self.moriKeybinds)
     }
 
     private var filteredGhosttyBinds: [KeybindEntry] {

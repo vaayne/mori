@@ -687,6 +687,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let ghosttyDefaults = GhosttyConfigFile.defaultKeybinds()
         let themeInfo = terminalAreaController?.themeInfo ?? .fallback
 
+        let store = self.keyBindingStore!
         let settingsView = SettingsWindowContent(
             initial: readSettingsModel(from: cf),
             availableThemes: themes,
@@ -728,6 +729,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             onSystemProxyDetect: {
                 ProxySettingsApplicator.readSystemProxy()
+            },
+            keyBindings: store.bindings,
+            keyBindingDefaults: KeyBindingDefaults.all,
+            onKeyBindingValidate: { binding in
+                store.validate(binding)
+            },
+            onKeyBindingUpdate: { binding in
+                store.update(binding)
+            },
+            onKeyBindingReset: { id in
+                store.resetBinding(id: id)
+            },
+            onKeyBindingResetAll: {
+                store.resetAll()
             }
         )
 
@@ -1461,6 +1476,14 @@ private struct SettingsWindowContent: View {
     var onProxyApply: (ProxySettingsModel) -> Void
     var onSystemProxyDetect: (() -> ProxySettingsModel)?
 
+    // Key bindings
+    @State var keyBindings: [KeyBinding]
+    var keyBindingDefaults: [KeyBinding]
+    var onKeyBindingValidate: ((KeyBinding) -> ConflictResult)?
+    var onKeyBindingUpdate: ((KeyBinding) -> Void)?
+    var onKeyBindingReset: ((String) -> Void)?
+    var onKeyBindingResetAll: (() -> Void)?
+
     init(
         initial: GhosttySettingsModel,
         availableThemes: [String],
@@ -1471,7 +1494,13 @@ private struct SettingsWindowContent: View {
         onOpenConfigFile: @escaping () -> Void,
         onAgentHookChanged: @escaping (AgentHookModel) -> Void = { _ in },
         onProxyApply: @escaping (ProxySettingsModel) -> Void = { _ in },
-        onSystemProxyDetect: (() -> ProxySettingsModel)? = nil
+        onSystemProxyDetect: (() -> ProxySettingsModel)? = nil,
+        keyBindings: [KeyBinding] = [],
+        keyBindingDefaults: [KeyBinding] = [],
+        onKeyBindingValidate: ((KeyBinding) -> ConflictResult)? = nil,
+        onKeyBindingUpdate: ((KeyBinding) -> Void)? = nil,
+        onKeyBindingReset: ((String) -> Void)? = nil,
+        onKeyBindingResetAll: (() -> Void)? = nil
     ) {
         self._model = State(initialValue: initial)
         self._agentHooks = State(initialValue: initialAgentHooks)
@@ -1483,6 +1512,12 @@ private struct SettingsWindowContent: View {
         self.onAgentHookChanged = onAgentHookChanged
         self.onProxyApply = onProxyApply
         self.onSystemProxyDetect = onSystemProxyDetect
+        self._keyBindings = State(initialValue: keyBindings)
+        self.keyBindingDefaults = keyBindingDefaults
+        self.onKeyBindingValidate = onKeyBindingValidate
+        self.onKeyBindingUpdate = onKeyBindingUpdate
+        self.onKeyBindingReset = onKeyBindingReset
+        self.onKeyBindingResetAll = onKeyBindingResetAll
     }
 
     var body: some View {
@@ -1496,7 +1531,13 @@ private struct SettingsWindowContent: View {
             onAgentHookChanged: onAgentHookChanged,
             proxySettings: $proxySettings,
             onProxyApply: onProxyApply,
-            onSystemProxyDetect: onSystemProxyDetect
+            onSystemProxyDetect: onSystemProxyDetect,
+            keyBindings: keyBindings,
+            keyBindingDefaults: keyBindingDefaults,
+            onKeyBindingValidate: onKeyBindingValidate,
+            onKeyBindingUpdate: onKeyBindingUpdate,
+            onKeyBindingReset: onKeyBindingReset,
+            onKeyBindingResetAll: onKeyBindingResetAll
         )
     }
 }
