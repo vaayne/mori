@@ -279,6 +279,8 @@ do {
     try testUIStateOverwrite()
 
     try testJSONStoreFileRoundTrip()
+
+    try runKeyBindingRepositoryTests()
 } catch {
     fputs("ERROR: \(error)\n", stderr)
     failCount += 1
