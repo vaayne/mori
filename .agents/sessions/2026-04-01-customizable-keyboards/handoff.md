@@ -161,3 +161,26 @@
 - The `keyBindings` state in `SettingsWindowContent` is `@State` — note: real-time updates from store require observing the store (currently snapshot at settings window creation). For Phase 6, consider whether re-opening settings should refresh, or observe changes live.
 - All 1100 test assertions pass (678 core + 64 persistence + 48 keybindings + 249 tmux + 61 IPC)
 - MoriUI builds clean in both debug and release mode
+
+## Phase 6: Documentation & Polish
+
+**Status:** complete
+
+**Tasks completed:**
+- 6.1: Updated `docs/keymaps.md` with "Customizing Shortcuts" section explaining Settings > Keyboard, conflict detection, reset, and sparse JSON persistence
+- 6.2: Updated `docs/keymaps.zh-Hans.md` with equivalent Chinese "自定义快捷键" section
+- 6.3: Updated `CHANGELOG.md` with `[Unreleased]` entries for customizable keyboard shortcuts feature
+- 6.4: Ran `mise run test` — all 1100 assertions pass (678 core + 64 persistence + 48 keybindings + 249 tmux + 61 IPC)
+
+**Files changed:**
+- `docs/keymaps.md` — added Customizing Shortcuts section before Ghostty Terminal section
+- `docs/keymaps.zh-Hans.md` — added 自定义快捷键 section (Chinese equivalent)
+- `CHANGELOG.md` — added 3 entries under `[Unreleased]` > `### ✨ Features`
+
+**Test results:**
+- MoriCore: 678 assertions passed
+- MoriPersistence: 64 assertions passed
+- MoriKeybindings: 48 assertions passed
+- MoriTmux: 249 assertions passed
+- MoriIPC: 61 assertions passed
+- Total: 1100 assertions, all passing
