@@ -1530,6 +1530,9 @@ testAgentMessageParseSlashInWorktree()
 testAgentMessageParseInvalid()
 testAgentMessageCodable()
 
+// KeyBinding
+runKeyBindingTests()
+
 printResults()
 
 if failCount > 0 {
