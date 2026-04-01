@@ -1162,6 +1162,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         // Build action map: binding IDs → closures that execute the action.
         // This map is used by the key monitor to dispatch configurable bindings.
+
+        // Helper: wrap an async WorkspaceManager operation into a fire-and-forget closure.
+        func managerAction(_ action: @escaping (WorkspaceManager) async -> Void) -> (() -> Void) {
+            { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await action(manager) }
+            }
+        }
+
         keyMonitorActionMap = [
             "commandPalette.toggle": { [weak palette] in palette?.toggle() },
             "worktrees.create": { [weak self] in self?.showCreateWorktreePanel() },
@@ -1176,80 +1185,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             "tabs.gotoTab7": { [weak self] in self?.workspaceManager?.selectWindowByIndex(7) },
             "tabs.gotoTab8": { [weak self] in self?.workspaceManager?.selectWindowByIndex(8) },
             "tabs.gotoLastTab": { [weak self] in self?.workspaceManager?.selectWindowByIndex(9) },
-            "tabs.newTab": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.createNewWindow() }
-            },
-            "tabs.closeTab": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.closeCurrentPane() }
-            },
+            "tabs.newTab": managerAction { await $0.createNewWindow() },
+            "tabs.closeTab": managerAction { await $0.closeCurrentPane() },
             "tabs.nextTab": { [weak self] in self?.workspaceManager?.nextWindow() },
             "tabs.previousTab": { [weak self] in self?.workspaceManager?.previousWindow() },
-            "panes.splitRight": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.splitCurrentPane(horizontal: true) }
-            },
-            "panes.splitDown": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.splitCurrentPane(horizontal: false) }
-            },
-            "panes.nextPane": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.navigatePane(direction: .next) }
-            },
-            "panes.previousPane": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.navigatePane(direction: .previous) }
-            },
-            "panes.navUp": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.navigatePane(direction: .up) }
-            },
-            "panes.navDown": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.navigatePane(direction: .down) }
-            },
-            "panes.navLeft": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.navigatePane(direction: .left) }
-            },
-            "panes.navRight": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.navigatePane(direction: .right) }
-            },
-            "panes.resizeUp": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.resizePane(direction: .up) }
-            },
-            "panes.resizeDown": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.resizePane(direction: .down) }
-            },
-            "panes.resizeLeft": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.resizePane(direction: .left) }
-            },
-            "panes.resizeRight": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.resizePane(direction: .right) }
-            },
-            "panes.equalize": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.equalizePanes() }
-            },
-            "panes.toggleZoom": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.togglePaneZoom() }
-            },
-            "tools.lazygit": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.openToolWindow(command: "lazygit") }
-            },
-            "tools.yazi": { [weak self] in
-                guard let manager = self?.workspaceManager else { return }
-                Task { @MainActor in await manager.openToolWindow(command: "yazi") }
-            },
+            "panes.splitRight": managerAction { await $0.splitCurrentPane(horizontal: true) },
+            "panes.splitDown": managerAction { await $0.splitCurrentPane(horizontal: false) },
+            "panes.nextPane": managerAction { await $0.navigatePane(direction: .next) },
+            "panes.previousPane": managerAction { await $0.navigatePane(direction: .previous) },
+            "panes.navUp": managerAction { await $0.navigatePane(direction: .up) },
+            "panes.navDown": managerAction { await $0.navigatePane(direction: .down) },
+            "panes.navLeft": managerAction { await $0.navigatePane(direction: .left) },
+            "panes.navRight": managerAction { await $0.navigatePane(direction: .right) },
+            "panes.resizeUp": managerAction { await $0.resizePane(direction: .up) },
+            "panes.resizeDown": managerAction { await $0.resizePane(direction: .down) },
+            "panes.resizeLeft": managerAction { await $0.resizePane(direction: .left) },
+            "panes.resizeRight": managerAction { await $0.resizePane(direction: .right) },
+            "panes.equalize": managerAction { await $0.equalizePanes() },
+            "panes.toggleZoom": managerAction { await $0.togglePaneZoom() },
+            "tools.lazygit": managerAction { await $0.openToolWindow(command: "lazygit") },
+            "tools.yazi": managerAction { await $0.openToolWindow(command: "yazi") },
             "window.toggleSidebar": { [weak self] in self?.rootSplitVC?.toggleSidebar() },
             "window.closeWindow": { [weak self] in self?.mainWindowController?.window?.close() },
             "settings.open": { [weak self] in self?.showSettingsWindow() },

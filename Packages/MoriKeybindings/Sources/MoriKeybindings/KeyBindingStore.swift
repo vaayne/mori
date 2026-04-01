@@ -17,12 +17,16 @@ public final class KeyBindingStore {
     /// The default bindings to merge against.
     private let defaults: [KeyBinding]
 
+    /// Defaults indexed by ID (cached at init — defaults never change).
+    private let defaultsById: [String: KeyBinding]
+
     /// Callback invoked whenever bindings change (after update/reset).
     public var onBindingsChanged: (@MainActor () -> Void)?
 
     public init(storage: KeyBindingStorageProtocol, defaults: [KeyBinding] = KeyBindingDefaults.all) {
         self.storage = storage
         self.defaults = defaults
+        self.defaultsById = Dictionary(uniqueKeysWithValues: defaults.map { ($0.id, $0) })
         let loaded = Self.sanitizeOverrides(storage.loadOverrides(), defaults: defaults)
         self.overrides = loaded
         self.bindings = Self.merge(defaults: defaults, overrides: loaded)
@@ -106,7 +110,6 @@ public final class KeyBindingStore {
 
     private func persist() {
         // Only persist entries that differ from defaults
-        let defaultsById = Dictionary(uniqueKeysWithValues: defaults.map { ($0.id, $0) })
         let sparse = overrides.filter { id, binding in
             defaultsById[id] != binding
         }

@@ -7,9 +7,8 @@ public enum KeyBindingDefaults {
     public static let all: [KeyBinding] = configurable + locked
 
     /// Returns defaults indexed by binding ID for quick lookup.
-    public static var byId: [String: KeyBinding] {
+    public static let byId: [String: KeyBinding] =
         Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
-    }
 
     // MARK: - Configurable Bindings
 
