@@ -124,3 +124,40 @@
 - Menu items for these monitor-only bindings were intentionally omitted since they use keyCodes (arrows, tab) that don't map cleanly to `NSMenuItem.keyEquivalent`
 - `onBindingsChanged` callback ensures menu shortcuts stay in sync when bindings are modified at runtime
 - The `configurableMenuItem()` helper sets `item.target = self` for all configurable items (unlike the old `menuItem()` helper which had special logic for system selectors)
+
+## Phase 5: Settings UI
+
+**Status:** complete
+
+**Tasks completed:**
+- 5.1: Created `ShortcutRecorderView` — inline SwiftUI control for displaying and capturing keyboard shortcuts via `NSEvent.addLocalMonitorForEvents`
+- 5.2: Created `KeyBindingsSettingsView` — pure data + callbacks view with category grouping, per-row reset, locked conflict errors, and configurable conflict warnings with "Assign Anyway"/"Cancel"
+- 5.3: Integrated `KeyBindingsSettingsView` into `KeyboardSettingsContent`, replacing the static `moriKeybinds` list; threaded key binding callbacks through `GhosttySettingsView`
+- 5.4: Wired `KeyBindingStore` callbacks through `SettingsWindowContent` to `KeyBindingsSettingsView` in `AppDelegate.showSettingsWindow()`
+- 5.5: Added 73 new localization strings (en + zh-Hans) for shortcut recorder UI, category names, conflict messages, and all 50 keybinding display names
+
+**Files changed:**
+- `Packages/MoriUI/Sources/MoriUI/ShortcutRecorderView.swift` — new: shortcut recorder + `Shortcut.displayString` formatting
+- `Packages/MoriUI/Sources/MoriUI/KeyBindingsSettingsView.swift` — new: grouped editable binding list with conflict handling
+- `Packages/MoriUI/Sources/MoriUI/GhosttySettingsView.swift` — added `import MoriCore`, key binding parameters to `GhosttySettingsView` and `KeyboardSettingsContent`; replaced static Mori keybinds section with `KeyBindingsSettingsView`; Ghostty terminal keybinds kept as separate read-only section
+- `Sources/Mori/App/AppDelegate.swift` — updated `SettingsWindowContent` with key binding parameters; `showSettingsWindow()` passes `keyBindingStore` callbacks
+- `Packages/MoriUI/Sources/MoriUI/Resources/en.lproj/Localizable.strings` — 73 new entries
+- `Packages/MoriUI/Sources/MoriUI/Resources/zh-Hans.lproj/Localizable.strings` — 73 new entries
+
+**Commits:**
+- `f90f33ca` — ✨ feat: add ShortcutRecorderView for inline key capture
+- `c3c9e9b6` — ✨ feat: add KeyBindingsSettingsView with conflict handling
+- `ceeb5bcd` — ♻️ refactor: integrate KeyBindingsSettingsView into keyboard settings
+- `0a50b66e` — 🌐 i18n: add keyboard shortcut localization strings
+
+**Decisions & context for next phase:**
+- `ShortcutRecorderView` uses `NSEvent.addLocalMonitorForEvents(.keyDown)` — Escape cancels recording, bare modifier keys ignored, at least one modifier required for non-function keys
+- `Shortcut.displayString` formats with modifier symbols (⌃⌥⇧⌘) + key name; special keys mapped (arrows, return, tab, delete)
+- `KeyBindingsSettingsView` is pure (data + callbacks) — no dependency on MoriKeybindings, only MoriCore types
+- Ghostty terminal keybindings moved to separate card with explanatory note about `~/.config/ghostty/config`
+- All parameters are optional with defaults to maintain backward compatibility of `GhosttySettingsView.init()`
+- MoriUI uses `.strings` files (not `.xcstrings`) in `en.lproj` and `zh-Hans.lproj`
+- Display name localization uses `displayNameKey` directly as localization key (e.g., "keybinding.tabs.newTab" -> "New Tab")
+- The `keyBindings` state in `SettingsWindowContent` is `@State` — note: real-time updates from store require observing the store (currently snapshot at settings window creation). For Phase 6, consider whether re-opening settings should refresh, or observe changes live.
+- All 1100 test assertions pass (678 core + 64 persistence + 48 keybindings + 249 tmux + 61 IPC)
+- MoriUI builds clean in both debug and release mode
