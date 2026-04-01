@@ -382,6 +382,10 @@ final class WorkspaceManager {
         rawWindowId(from: runtimeWindow)
     }
 
+    func sessionsForWorktree(_ worktree: Worktree) -> [TmuxSession] {
+        sessionsForEndpoint(of: worktree)
+    }
+
     private func endpointKey(for worktree: Worktree) -> String {
         location(for: worktree).endpointKey
     }

@@ -8,7 +8,5 @@ set_state() {
     local state="$1"
     tmux set-option -p @mori-agent-state "$state"
     tmux set-option -p @mori-agent-name "$AGENT_NAME"
-    # rename-window implicitly disables automatic-rename;
-    # stale cleanup re-enables it so tmux picks up the current process name.
-    tmux rename-window "$AGENT_NAME"
+    tmux select-pane -T "$AGENT_NAME"
 }

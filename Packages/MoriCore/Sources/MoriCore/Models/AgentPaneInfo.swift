@@ -7,6 +7,7 @@ public struct AgentPaneInfo: Codable, Sendable, Equatable {
     public let projectName: String
     public let worktreeName: String
     public let windowName: String
+    public let paneTitle: String?
     public let agentState: AgentState
     public let detectedAgent: String?
 
@@ -16,6 +17,7 @@ public struct AgentPaneInfo: Codable, Sendable, Equatable {
         projectName: String,
         worktreeName: String,
         windowName: String,
+        paneTitle: String? = nil,
         agentState: AgentState,
         detectedAgent: String?
     ) {
@@ -24,6 +26,7 @@ public struct AgentPaneInfo: Codable, Sendable, Equatable {
         self.projectName = projectName
         self.worktreeName = worktreeName
         self.windowName = windowName
+        self.paneTitle = paneTitle
         self.agentState = agentState
         self.detectedAgent = detectedAgent
     }

@@ -276,8 +276,14 @@ struct PaneList: ParsableCommand {
         abstract: .localized("List all panes with project/worktree/window info")
     )
 
+    @Option(name: .long, help: ArgumentHelp(.localized("Project name")))
+    var project: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Worktree name")))
+    var worktree: String?
+
     func run() throws {
-        try runIPCRequest(.paneList)
+        try runIPCRequest(.paneList(project: project, worktree: worktree))
     }
 }
 

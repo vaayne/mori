@@ -44,8 +44,8 @@ final class IPCHandler {
         case .setWorkflowStatus(let project, let worktree, let status):
             return handleSetWorkflowStatus(manager: manager, projectName: project, worktreeName: worktree, statusString: status)
 
-        case .paneList:
-            return handlePaneList(manager: manager)
+        case .paneList(let project, let worktree):
+            return handlePaneList(manager: manager, projectFilter: project, worktreeFilter: worktree)
 
         case .paneRead(let project, let worktree, let window, let lines):
             return await handlePaneRead(manager: manager, projectName: project, worktreeName: worktree, windowName: window, lines: lines)
@@ -195,28 +195,58 @@ final class IPCHandler {
         return .success(payload: nil)
     }
 
-    // TODO: Enumerate individual panes for multi-pane windows.
-    // Currently emits one AgentPaneInfo per window (using activePaneId),
-    // so non-active panes in multi-pane windows are invisible to agents.
-    // Requires expanding RuntimeWindow to carry all pane IDs from the refresh cycle.
-    private func handlePaneList(manager: WorkspaceManager) -> IPCResponse {
+    private func handlePaneList(manager: WorkspaceManager, projectFilter: String?, worktreeFilter: String?) -> IPCResponse {
         var entries: [AgentPaneInfo] = []
         for project in manager.appState.projects {
+            if let projectFilter,
+               project.name.caseInsensitiveCompare(projectFilter) != .orderedSame {
+                continue
+            }
             let worktrees = manager.appState.worktrees.filter { $0.projectId == project.id }
             for worktree in worktrees {
+                if let worktreeFilter,
+                   worktree.name.caseInsensitiveCompare(worktreeFilter) != .orderedSame {
+                    continue
+                }
                 let windows = manager.appState.runtimeWindows.filter { $0.worktreeId == worktree.id }
                 for window in windows {
-                    let paneId = window.activePaneId ?? manager.rawTmuxWindowId(from: window)
-                    let entry = AgentPaneInfo(
-                        endpoint: worktree.resolvedLocation.endpointKey,
-                        tmuxPaneId: paneId,
-                        projectName: project.name,
-                        worktreeName: worktree.name,
-                        windowName: window.title,
-                        agentState: window.agentState,
-                        detectedAgent: window.detectedAgent
-                    )
-                    entries.append(entry)
+                    let endpointKey = worktree.resolvedLocation.endpointKey
+                    let sessions = manager.sessionsForWorktree(worktree)
+                    let rawWindowId = manager.rawTmuxWindowId(from: window)
+
+                    if let (_, tmuxWindow) = sessions
+                        .compactMap({ session in
+                            session.windows.first(where: { $0.windowId == rawWindowId }).map { (session, $0) }
+                        })
+                        .first,
+                       !tmuxWindow.panes.isEmpty {
+                        for pane in tmuxWindow.panes {
+                            let entry = AgentPaneInfo(
+                                endpoint: endpointKey,
+                                tmuxPaneId: pane.paneId,
+                                projectName: project.name,
+                                worktreeName: worktree.name,
+                                windowName: window.title,
+                                paneTitle: pane.title,
+                                agentState: agentState(for: pane, fallback: window.agentState),
+                                detectedAgent: pane.agentName ?? window.detectedAgent
+                            )
+                            entries.append(entry)
+                        }
+                    } else {
+                        let paneId = window.activePaneId ?? rawWindowId
+                        let entry = AgentPaneInfo(
+                            endpoint: endpointKey,
+                            tmuxPaneId: paneId,
+                            projectName: project.name,
+                            worktreeName: worktree.name,
+                            windowName: window.title,
+                            paneTitle: nil,
+                            agentState: window.agentState,
+                            detectedAgent: window.detectedAgent
+                        )
+                        entries.append(entry)
+                    }
                 }
             }
         }
@@ -225,6 +255,25 @@ final class IPCHandler {
             return .success(payload: data)
         } catch {
             return .error(message: "Failed to encode pane list: \(error.localizedDescription)")
+        }
+    }
+
+    private func agentState(for pane: TmuxPane, fallback: AgentState) -> AgentState {
+        guard let hookState = pane.agentState?.lowercased() else {
+            return fallback
+        }
+
+        switch hookState {
+        case "working":
+            return .running
+        case "waiting":
+            return .waitingForInput
+        case "done":
+            return .completed
+        case "error":
+            return .error
+        default:
+            return fallback
         }
     }
 

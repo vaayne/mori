@@ -15,9 +15,7 @@ export default function (pi: any) {
   async function setState(state: string) {
     await tmux("set-option", "-p", "@mori-agent-state", state);
     await tmux("set-option", "-p", "@mori-agent-name", AGENT_NAME);
-    // rename-window implicitly disables automatic-rename;
-    // Mori's stale cleanup re-enables it so tmux picks up the current process name.
-    await tmux("rename-window", AGENT_NAME);
+    await tmux("select-pane", "-T", AGENT_NAME);
   }
 
   pi.on("agent_start", async () => {

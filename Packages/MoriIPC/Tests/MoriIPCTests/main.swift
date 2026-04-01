@@ -82,10 +82,17 @@ func testCommandSetWorkflowStatusFraming() {
 // MARK: - Pane Command Round-trip Tests
 
 func testCommandPaneListRoundTrip() {
-    let cmd = IPCCommand.paneList
+    let cmd = IPCCommand.paneList()
     let data = try! JSONEncoder().encode(cmd)
     let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
     assertEqual(decoded, cmd, "paneList round-trip")
+}
+
+func testCommandPaneListWithFiltersRoundTrip() {
+    let cmd = IPCCommand.paneList(project: "mori", worktree: "main")
+    let data = try! JSONEncoder().encode(cmd)
+    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
+    assertEqual(decoded, cmd, "paneList filtered round-trip")
 }
 
 func testCommandPaneReadRoundTrip() {
@@ -103,7 +110,7 @@ func testCommandPaneReadMaxLines() {
 }
 
 func testCommandPaneListFraming() {
-    let cmd = IPCCommand.paneList
+    let cmd = IPCCommand.paneList()
     let request = IPCRequest(command: cmd, requestId: "pane-1")
     let data = try! IPCFraming.encode(request)
     assertEqual(data.last, 0x0A, "paneList framed request ends with newline")
@@ -303,6 +310,7 @@ testCommandSetWorkflowStatusFraming()
 
 // Pane command round-trips
 testCommandPaneListRoundTrip()
+    testCommandPaneListWithFiltersRoundTrip()
 testCommandPaneReadRoundTrip()
 testCommandPaneReadMaxLines()
 testCommandPaneListFraming()
