@@ -2,6 +2,7 @@ import AppKit
 import MoriCore
 import MoriGit
 import MoriIPC
+import MoriKeybindings
 import MoriPersistence
 import MoriTerminal
 import MoriTmux
@@ -31,6 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var remoteConnectWizardController: RemoteConnectWizardController?
     private var updateController: UpdateController?
     private var agentDashboardPanel: AgentDashboardPanel?
+    private var keyBindingStore: KeyBindingStore!
+    private var configurableMenuItems: [String: NSMenuItem] = [:]
+    private var keyMonitorActionMap: [String: () -> Void] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -269,6 +273,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         // Restore previously saved UI state (project, worktree, window selection)
         manager.restoreState()
+
+        // Initialize key binding store
+        let keybindingsURL = appSupport.appendingPathComponent("keybindings.json")
+        let keyBindingRepo = KeyBindingRepository(fileURL: keybindingsURL)
+        keyBindingStore = KeyBindingStore(storage: keyBindingRepo)
+        keyBindingStore.onBindingsChanged = { [weak self] in
+            self?.rebuildMenuKeyBindings()
+        }
 
         // Set up the main menu bar
         setupMainMenu()
@@ -826,6 +838,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     private func setupMainMenu() {
         let mainMenu = NSMenu()
+        configurableMenuItems.removeAll()
 
         // ── Mori (app) ──────────────────────────────────────────────
         let appMenuItem = NSMenuItem()
@@ -835,11 +848,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         checkForUpdatesItem.target = self
         appMenu.addItem(checkForUpdatesItem)
         appMenu.addItem(.separator())
-        appMenu.addItem(menuItem(.localized("Open Project…"), action: #selector(openProjectMenuAction), key: "o", mods: [.command, .shift]))
+        appMenu.addItem(configurableMenuItem("other.openProject", title: .localized("Open Project…"), action: #selector(openProjectMenuAction)))
         appMenu.addItem(.separator())
-        appMenu.addItem(menuItem(.localized("Settings…"), action: #selector(showSettingsMenuAction), key: ","))
-        appMenu.addItem(menuItem(.localized("Reload Settings"), action: #selector(reloadSettingsMenuAction), key: ",", mods: [.command, .shift]))
+        appMenu.addItem(configurableMenuItem("settings.open", title: .localized("Settings…"), action: #selector(showSettingsMenuAction)))
+        appMenu.addItem(configurableMenuItem("settings.reload", title: .localized("Reload Settings"), action: #selector(reloadSettingsMenuAction)))
         appMenu.addItem(.separator())
+        // Locked: Hide, Hide Others, Show All, Quit
         appMenu.addItem(withTitle: .localized("Hide Mori"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(menuItem(.localized("Hide Others"), action: #selector(NSApplication.hideOtherApplications(_:)), key: "h", mods: [.command, .option]))
         appMenu.addItem(withTitle: .localized("Show All"), action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
@@ -848,7 +862,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
 
-        // ── Edit ─────────────────────────────────────────────────────
+        // ── Edit (all locked — responder chain) ──────────────────────
         let editMenuItem = NSMenuItem()
         let editMenu = NSMenu(title: .localized("Edit"))
         editMenu.addItem(withTitle: .localized("Undo"), action: Selector(("undo:")), keyEquivalent: "z")
@@ -865,22 +879,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let tmuxMenuItem = NSMenuItem()
         let tmuxMenu = NSMenu(title: .localized("Tmux"))
 
-        tmuxMenu.addItem(menuItem(.localized("New Tab"), action: #selector(newTabMenuAction), key: "t"))
-        tmuxMenu.addItem(menuItem(.localized("Close Pane"), action: #selector(closePaneMenuAction), key: "w"))
+        tmuxMenu.addItem(configurableMenuItem("tabs.newTab", title: .localized("New Tab"), action: #selector(newTabMenuAction)))
+        tmuxMenu.addItem(configurableMenuItem("tabs.closeTab", title: .localized("Close Pane"), action: #selector(closePaneMenuAction)))
         tmuxMenu.addItem(.separator())
-        tmuxMenu.addItem(menuItem(.localized("Next Tab"), action: #selector(nextTabMenuAction), key: "]", mods: [.command, .shift]))
-        tmuxMenu.addItem(menuItem(.localized("Previous Tab"), action: #selector(previousTabMenuAction), key: "[", mods: [.command, .shift]))
+        tmuxMenu.addItem(configurableMenuItem("tabs.nextTab", title: .localized("Next Tab"), action: #selector(nextTabMenuAction)))
+        tmuxMenu.addItem(configurableMenuItem("tabs.previousTab", title: .localized("Previous Tab"), action: #selector(previousTabMenuAction)))
         tmuxMenu.addItem(.separator())
-        tmuxMenu.addItem(menuItem(.localized("Split Right"), action: #selector(splitRightMenuAction), key: "d"))
-        tmuxMenu.addItem(menuItem(.localized("Split Down"), action: #selector(splitDownMenuAction), key: "d", mods: [.command, .shift]))
+        tmuxMenu.addItem(configurableMenuItem("panes.splitRight", title: .localized("Split Right"), action: #selector(splitRightMenuAction)))
+        tmuxMenu.addItem(configurableMenuItem("panes.splitDown", title: .localized("Split Down"), action: #selector(splitDownMenuAction)))
         tmuxMenu.addItem(.separator())
-        tmuxMenu.addItem(menuItem(.localized("Next Pane"), action: #selector(nextPaneMenuAction), key: "]"))
-        tmuxMenu.addItem(menuItem(.localized("Previous Pane"), action: #selector(previousPaneMenuAction), key: "["))
-        tmuxMenu.addItem(menuItem(.localized("Toggle Pane Zoom"), action: #selector(togglePaneZoomMenuAction), key: "\r", mods: [.command, .shift]))
-        tmuxMenu.addItem(menuItem(.localized("Equalize Panes"), action: #selector(equalizePanesMenuAction), key: "=", mods: [.command, .control]))
+        tmuxMenu.addItem(configurableMenuItem("panes.nextPane", title: .localized("Next Pane"), action: #selector(nextPaneMenuAction)))
+        tmuxMenu.addItem(configurableMenuItem("panes.previousPane", title: .localized("Previous Pane"), action: #selector(previousPaneMenuAction)))
+        tmuxMenu.addItem(configurableMenuItem("panes.toggleZoom", title: .localized("Toggle Pane Zoom"), action: #selector(togglePaneZoomMenuAction)))
+        tmuxMenu.addItem(configurableMenuItem("panes.equalize", title: .localized("Equalize Panes"), action: #selector(equalizePanesMenuAction)))
         tmuxMenu.addItem(.separator())
-        tmuxMenu.addItem(menuItem(.localized("Open Lazygit"), action: #selector(openLazygitMenuAction), key: "g"))
-        tmuxMenu.addItem(menuItem(.localized("Open Yazi"), action: #selector(openYaziMenuAction), key: "e"))
+        tmuxMenu.addItem(configurableMenuItem("tools.lazygit", title: .localized("Open Lazygit"), action: #selector(openLazygitMenuAction)))
+        tmuxMenu.addItem(configurableMenuItem("tools.yazi", title: .localized("Open Yazi"), action: #selector(openYaziMenuAction)))
 
         tmuxMenuItem.submenu = tmuxMenu
         mainMenu.addItem(tmuxMenuItem)
@@ -888,14 +902,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // ── Window (view + window merged) ────────────────────────────
         let windowMenuItem = NSMenuItem()
         let windowMenu = NSMenu(title: .localized("Window"))
-        windowMenu.addItem(menuItem(.localized("Toggle Sidebar"), action: #selector(toggleSidebarMenuAction), key: "b"))
+        windowMenu.addItem(configurableMenuItem("window.toggleSidebar", title: .localized("Toggle Sidebar"), action: #selector(toggleSidebarMenuAction)))
+        // Locked: Toggle Full Screen (responder chain)
         windowMenu.addItem(menuItem(.localized("Toggle Full Screen"), action: #selector(NSWindow.toggleFullScreen(_:)), key: "f", mods: [.command, .control]))
         windowMenu.addItem(.separator())
+        // Locked: Minimize, Zoom
         windowMenu.addItem(withTitle: .localized("Minimize"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
         windowMenu.addItem(withTitle: .localized("Zoom"), action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
-        windowMenu.addItem(menuItem(.localized("Close Window"), action: #selector(closeWindowMenuAction), key: "w", mods: [.command, .shift]))
+        windowMenu.addItem(configurableMenuItem("window.closeWindow", title: .localized("Close Window"), action: #selector(closeWindowMenuAction)))
         windowMenu.addItem(.separator())
-        windowMenu.addItem(menuItem(.localized("Agent Dashboard"), action: #selector(toggleAgentDashboardAction), key: "a", mods: [.command, .shift]))
+        windowMenu.addItem(configurableMenuItem("other.agentDashboard", title: .localized("Agent Dashboard"), action: #selector(toggleAgentDashboardAction)))
         windowMenuItem.submenu = windowMenu
         mainMenu.addItem(windowMenuItem)
         NSApp.windowsMenu = windowMenu
@@ -903,7 +919,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         NSApp.mainMenu = mainMenu
     }
 
-    /// Helper to create an NSMenuItem with target = self.
+    /// Helper to create an NSMenuItem with target = self (for locked/system items).
     private func menuItem(
         _ title: String,
         action: Selector,
@@ -922,6 +938,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             item.target = self
         }
         return item
+    }
+
+    /// Create a configurable menu item whose shortcut is driven by the key binding store.
+    /// The item is tracked in `configurableMenuItems` so it can be updated when bindings change.
+    private func configurableMenuItem(
+        _ bindingId: String,
+        title: String,
+        action: Selector
+    ) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = self
+
+        if let binding = keyBindingStore.binding(for: bindingId),
+           let shortcut = binding.shortcut {
+            item.keyEquivalent = shortcut.menuKeyEquivalent
+            item.keyEquivalentModifierMask = shortcut.menuModifierMask
+        }
+
+        configurableMenuItems[bindingId] = item
+        return item
+    }
+
+    /// Update all configurable menu items to reflect current key binding store state.
+    private func rebuildMenuKeyBindings() {
+        for binding in keyBindingStore.bindings where !binding.isLocked {
+            guard let menuItem = configurableMenuItems[binding.id] else { continue }
+            if let shortcut = binding.shortcut {
+                menuItem.keyEquivalent = shortcut.menuKeyEquivalent
+                menuItem.keyEquivalentModifierMask = shortcut.menuModifierMask
+            } else {
+                menuItem.keyEquivalent = ""
+                menuItem.keyEquivalentModifierMask = []
+            }
+        }
     }
 
     @objc private func checkForUpdatesMenuAction() {
@@ -1092,102 +1142,117 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             self.handlePaletteSelection(item, manager: manager)
         }
 
-        // Register keyboard shortcuts that can't be expressed as menu key equivalents
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak palette, weak self] event in
-            let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            let key = event.charactersIgnoringModifiers ?? ""
+        // Build action map: binding IDs → closures that execute the action.
+        // This map is used by the key monitor to dispatch configurable bindings.
+        keyMonitorActionMap = [
+            "commandPalette.toggle": { [weak palette] in palette?.toggle() },
+            "worktrees.create": { [weak self] in self?.showCreateWorktreePanel() },
+            "worktrees.cycleNext": { [weak self] in self?.workspaceManager?.cycleWorktree(forward: true) },
+            "worktrees.cyclePrevious": { [weak self] in self?.workspaceManager?.cycleWorktree(forward: false) },
+            "tabs.gotoTab1": { [weak self] in self?.workspaceManager?.selectWindowByIndex(1) },
+            "tabs.gotoTab2": { [weak self] in self?.workspaceManager?.selectWindowByIndex(2) },
+            "tabs.gotoTab3": { [weak self] in self?.workspaceManager?.selectWindowByIndex(3) },
+            "tabs.gotoTab4": { [weak self] in self?.workspaceManager?.selectWindowByIndex(4) },
+            "tabs.gotoTab5": { [weak self] in self?.workspaceManager?.selectWindowByIndex(5) },
+            "tabs.gotoTab6": { [weak self] in self?.workspaceManager?.selectWindowByIndex(6) },
+            "tabs.gotoTab7": { [weak self] in self?.workspaceManager?.selectWindowByIndex(7) },
+            "tabs.gotoTab8": { [weak self] in self?.workspaceManager?.selectWindowByIndex(8) },
+            "tabs.gotoLastTab": { [weak self] in self?.workspaceManager?.selectWindowByIndex(9) },
+            "tabs.newTab": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.createNewWindow() }
+            },
+            "tabs.closeTab": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.closeCurrentPane() }
+            },
+            "tabs.nextTab": { [weak self] in self?.workspaceManager?.nextWindow() },
+            "tabs.previousTab": { [weak self] in self?.workspaceManager?.previousWindow() },
+            "panes.splitRight": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.splitCurrentPane(horizontal: true) }
+            },
+            "panes.splitDown": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.splitCurrentPane(horizontal: false) }
+            },
+            "panes.nextPane": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.navigatePane(direction: .next) }
+            },
+            "panes.previousPane": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.navigatePane(direction: .previous) }
+            },
+            "panes.navUp": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.navigatePane(direction: .up) }
+            },
+            "panes.navDown": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.navigatePane(direction: .down) }
+            },
+            "panes.navLeft": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.navigatePane(direction: .left) }
+            },
+            "panes.navRight": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.navigatePane(direction: .right) }
+            },
+            "panes.resizeUp": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.resizePane(direction: .up) }
+            },
+            "panes.resizeDown": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.resizePane(direction: .down) }
+            },
+            "panes.resizeLeft": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.resizePane(direction: .left) }
+            },
+            "panes.resizeRight": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.resizePane(direction: .right) }
+            },
+            "panes.equalize": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.equalizePanes() }
+            },
+            "panes.toggleZoom": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.togglePaneZoom() }
+            },
+            "tools.lazygit": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.openToolWindow(command: "lazygit") }
+            },
+            "tools.yazi": { [weak self] in
+                guard let manager = self?.workspaceManager else { return }
+                Task { @MainActor in await manager.openToolWindow(command: "yazi") }
+            },
+            "window.toggleSidebar": { [weak self] in self?.rootSplitVC?.toggleSidebar() },
+            "window.closeWindow": { [weak self] in self?.mainWindowController?.window?.close() },
+            "settings.open": { [weak self] in self?.showSettingsWindow() },
+            "settings.reload": { [weak self] in self?.terminalAreaController?.reloadConfig() },
+            "other.openProject": { [weak self] in self?.showAddProjectPanel() },
+            "other.agentDashboard": { [weak self] in self?.toggleAgentDashboardAction() },
+            "other.projectSwitcher": { [weak self] in self?.palette?.showProjectsOnly() },
+        ]
 
-            // Cmd+Shift+P: toggle command palette
-            if mods == [.command, .shift], key == "P" || key == "p" {
-                palette?.toggle()
-                return nil
-            }
+        // Register key monitor that dispatches via the key binding store
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, let store = self.keyBindingStore else { return event }
 
-            // Cmd+P: quick project switcher
-            if mods == [.command], key == "p" {
-                palette?.showProjectsOnly()
-                return nil
-            }
-
-            // Cmd+Shift+N: open worktree creation panel
-            if mods == [.command, .shift], key == "N" || key == "n" {
-                self?.showCreateWorktreePanel()
-                return nil
-            }
-
-            // Cmd+1–9: select tmux window (tab) by index
-            if mods == [.command], let digit = Int(key), digit >= 1, digit <= 9 {
-                self?.workspaceManager?.selectWindowByIndex(digit)
-                return nil
-            }
-
-            // Ctrl+Tab / Ctrl+Shift+Tab: cycle worktrees
-            if event.keyCode == 48 { // Tab key
-                if mods == [.control] {
-                    self?.workspaceManager?.cycleWorktree(forward: true)
-                    return nil
-                }
-                if mods == [.control, .shift] {
-                    self?.workspaceManager?.cycleWorktree(forward: false)
-                    return nil
-                }
-            }
-
-            // Cmd+]/[: next/previous pane (keyCode 30 = ], 33 = [)
-            if mods == [.command], event.keyCode == 30 {
-                Task { @MainActor in await self?.workspaceManager?.navigatePane(direction: .next) }
-                return nil
-            }
-            if mods == [.command], event.keyCode == 33 {
-                Task { @MainActor in await self?.workspaceManager?.navigatePane(direction: .previous) }
-                return nil
-            }
-
-            // Cmd+Shift+]/[: next/previous tab
-            if mods == [.command, .shift], event.keyCode == 30 {
-                self?.workspaceManager?.nextWindow()
-                return nil
-            }
-            if mods == [.command, .shift], event.keyCode == 33 {
-                self?.workspaceManager?.previousWindow()
-                return nil
-            }
-
-            // Cmd+Alt+Arrows: directional pane navigation
-            if mods == [.command, .option] {
-                switch event.keyCode {
-                case 126: // Up
-                    Task { @MainActor in await self?.workspaceManager?.navigatePane(direction: .up) }
-                    return nil
-                case 125: // Down
-                    Task { @MainActor in await self?.workspaceManager?.navigatePane(direction: .down) }
-                    return nil
-                case 123: // Left
-                    Task { @MainActor in await self?.workspaceManager?.navigatePane(direction: .left) }
-                    return nil
-                case 124: // Right
-                    Task { @MainActor in await self?.workspaceManager?.navigatePane(direction: .right) }
-                    return nil
-                default: break
-                }
-            }
-
-            // Cmd+Ctrl+Arrows: resize pane
-            if mods == [.command, .control] {
-                switch event.keyCode {
-                case 126: // Up
-                    Task { @MainActor in await self?.workspaceManager?.resizePane(direction: .up) }
-                    return nil
-                case 125: // Down
-                    Task { @MainActor in await self?.workspaceManager?.resizePane(direction: .down) }
-                    return nil
-                case 123: // Left
-                    Task { @MainActor in await self?.workspaceManager?.resizePane(direction: .left) }
-                    return nil
-                case 124: // Right
-                    Task { @MainActor in await self?.workspaceManager?.resizePane(direction: .right) }
-                    return nil
-                default: break
+            // Loop through configurable bindings and dispatch matching actions
+            for binding in store.bindings where !binding.isLocked {
+                guard let shortcut = binding.shortcut else { continue }
+                if shortcut.matchesEvent(event) {
+                    if let action = self.keyMonitorActionMap[binding.id] {
+                        action()
+                        return nil
+                    }
                 }
             }
 
