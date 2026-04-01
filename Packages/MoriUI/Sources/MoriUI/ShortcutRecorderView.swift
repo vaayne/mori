@@ -92,6 +92,7 @@ struct ShortcutRecorderView: View {
         }
         .buttonStyle(.plain)
         .disabled(isLocked)
+        .onDisappear { stopRecording() }
     }
 
     private var clearButton: some View {
