@@ -145,24 +145,19 @@ private struct KeyBindingRow: View {
                     }
                 )
 
-                // Reset button (visible if differs from default)
-                if isOverridden {
-                    Button {
-                        onReset(binding.id)
-                        conflictResult = .none
-                        pendingBinding = nil
-                    } label: {
-                        Text(String.localized("Reset"))
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    // Placeholder for alignment
-                    Text("")
+                // Reset button (fixed width so layout doesn't shift)
+                Button {
+                    onReset(binding.id)
+                    conflictResult = .none
+                    pendingBinding = nil
+                } label: {
+                    Text(String.localized("Reset"))
                         .font(.system(size: 11))
-                        .frame(width: 36)
+                        .foregroundStyle(.secondary)
                 }
+                .buttonStyle(.plain)
+                .opacity(isOverridden ? 1 : 0)
+                .disabled(!isOverridden)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
