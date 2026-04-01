@@ -110,6 +110,7 @@ struct ShortcutRecorderView: View {
     // MARK: - Recording
 
     private func startRecording() {
+        guard !isRecording else { return }
         isRecording = true
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             handleKeyEvent(event)

@@ -23,8 +23,9 @@ public final class KeyBindingStore {
     public init(storage: KeyBindingStorageProtocol, defaults: [KeyBinding] = KeyBindingDefaults.all) {
         self.storage = storage
         self.defaults = defaults
-        self.overrides = storage.loadOverrides()
-        self.bindings = Self.merge(defaults: defaults, overrides: storage.loadOverrides())
+        let loaded = Self.sanitizeOverrides(storage.loadOverrides(), defaults: defaults)
+        self.overrides = loaded
+        self.bindings = Self.merge(defaults: defaults, overrides: loaded)
     }
 
     // MARK: - Query
@@ -110,6 +111,22 @@ public final class KeyBindingStore {
             defaultsById[id] != binding
         }
         storage.saveOverrides(sparse)
+    }
+
+    /// Strip overrides that would conflict with locked shortcuts or override locked bindings.
+    static func sanitizeOverrides(_ overrides: [String: KeyBinding], defaults: [KeyBinding]) -> [String: KeyBinding] {
+        let lockedShortcuts = Set(
+            defaults.filter(\.isLocked).compactMap(\.shortcut)
+        )
+        let lockedIds = Set(defaults.filter(\.isLocked).map(\.id))
+
+        return overrides.filter { id, binding in
+            // Don't allow overriding locked bindings themselves
+            guard !lockedIds.contains(id) else { return false }
+            // Don't allow assigning a locked shortcut to another action
+            guard let shortcut = binding.shortcut else { return true }
+            return !lockedShortcuts.contains(shortcut)
+        }
     }
 
     /// Merge defaults with overrides: start with defaults, apply overrides on top by ID.
