@@ -1,40 +1,80 @@
-"Branch name" = "Branch name";
-"Create a new window in a worktree" = "Create a new window in a worktree";
-"Create a new worktree" = "Create a new worktree";
-"Error: %@" = "Error: %@";
-"Focus a project and worktree" = "Focus a project and worktree";
-"Keys to send" = "Keys to send";
-"List all projects" = "List all projects";
-"Mori app is not accepting CLI connections. Quit and relaunch Mori, then try again." = "Mori app is not accepting CLI connections. Quit and relaunch Mori, then try again.";
-"Mori app is not running. Launch Mori and try again." = "Mori app is not running. Launch Mori and try again.";
+/* Root command */
 "Mori workspace CLI — communicate with the running Mori app." = "Mori workspace CLI — communicate with the running Mori app.";
-"Open a project from a path" = "Open a project from a path";
-"Path to project directory" = "Path to project directory";
-"Project commands" = "Project commands";
-"Project name" = "Project name";
-"Send keys to a tmux window" = "Send keys to a tmux window";
-"Window name" = "Window name";
-"Worktree commands" = "Worktree commands";
-"Worktree name" = "Worktree name";
+"Requires a running Mori.app instance (communicates via Unix socket)." = "Requires a running Mori.app instance (communicates via Unix socket).";
+"All subcommands accept --json for machine-readable output." = "All subcommands accept --json for machine-readable output.";
+"Shell completions:" = "Shell completions:";
 
-/* Task Mode - Status Command */
+/* Shared options */
+"Output as JSON (default: human-readable)" = "Output as JSON (default: human-readable)";
+
+/* Error messages */
+"Error: %@" = "Error: %@";
+"Mori app is not running. Launch Mori and try again." = "Mori app is not running. Launch Mori and try again.";
+"Mori app is not accepting CLI connections. Quit and relaunch Mori, then try again." = "Mori app is not accepting CLI connections. Quit and relaunch Mori, then try again.";
+
+/* Common argument/option labels */
+"Project name" = "Project name";
+"Worktree name" = "Worktree name";
+"Window name" = "Window name";
+"Branch name" = "Branch name";
+"Examples:" = "Examples:";
+
+/* Project commands */
+"Manage Mori projects" = "Manage Mori projects";
+"List all projects" = "List all projects";
+"Shows all projects tracked by Mori with their names and paths." = "Shows all projects tracked by Mori with their names and paths.";
+
+/* Worktree commands */
+"Manage git worktrees" = "Manage git worktrees";
+"Create a new worktree" = "Create a new worktree";
+"Creates a git worktree and a corresponding tmux session." = "Creates a git worktree and a corresponding tmux session.";
+
+/* Focus */
+"Focus a project and worktree" = "Focus a project and worktree";
+"Switches the Mori UI to show the specified project and worktree." = "Switches the Mori UI to show the specified project and worktree.";
+
+/* Send */
+"Send keys to a tmux window" = "Send keys to a tmux window";
+"Keys use tmux send-keys syntax. Common keys: Enter, Escape, C-c (Ctrl+C), C-d, Space, Tab." = "Keys use tmux send-keys syntax. Common keys: Enter, Escape, C-c (Ctrl+C), C-d, Space, Tab.";
+"Keys to send (tmux send-keys syntax)" = "Keys to send (tmux send-keys syntax)";
+
+/* New Window */
+"Create a new window in a worktree" = "Create a new window in a worktree";
+"Creates a new tmux window (tab) in the worktree's session." = "Creates a new tmux window (tab) in the worktree's session.";
+"Window name (default: shell)" = "Window name (default: shell)";
+
+/* Open */
+"Open a project from a path" = "Open a project from a path";
+"Opens an existing project or creates a new one from the directory. Use '.' for the current directory." = "Opens an existing project or creates a new one from the directory. Use '.' for the current directory.";
+"Path to project directory" = "Path to project directory";
+
+/* Status */
 "Set workflow status for a worktree" = "Set workflow status for a worktree";
-"Valid statuses: todo, inProgress, needsReview, done, cancelled" = "Valid statuses: todo, inProgress, needsReview, done, cancelled";
+"Workflow: todo → inProgress → needsReview → done / cancelled" = "Workflow: todo → inProgress → needsReview → done / cancelled";
+"Status is displayed as a badge in the Mori sidebar." = "Status is displayed as a badge in the Mori sidebar.";
 "Workflow status (todo, inProgress, needsReview, done, cancelled)" = "Workflow status (todo, inProgress, needsReview, done, cancelled)";
 
-/* Pane Commands */
+/* Pane commands */
 "Pane commands for agent communication" = "Pane commands for agent communication";
+"Enables agents to discover, observe, and interact with other panes." = "Enables agents to discover, observe, and interact with other panes.";
 "List all panes with project/worktree/window info" = "List all panes with project/worktree/window info";
+"Shows all panes across projects with agent state and detected agent type." = "Shows all panes across projects with agent state and detected agent type.";
+"Filter by project name" = "Filter by project name";
+"Filter by worktree name" = "Filter by worktree name";
 "Capture output from a pane" = "Capture output from a pane";
+"Reads recent terminal output from a pane without switching to it." = "Reads recent terminal output from a pane without switching to it.";
+"Number of lines to capture (1-200, default: 50)" = "Number of lines to capture (1-200, default: 50)";
 "Send a message to a pane with sender metadata" = "Send a message to a pane with sender metadata";
-"Print the current pane's identity" = "Print the current pane's identity";
+"Sends a message to another pane for inter-agent communication." = "Sends a message to another pane for inter-agent communication.";
+"Sender identity is read from MORI_PROJECT, MORI_WORKTREE, MORI_WINDOW, MORI_PANE_ID environment variables (set automatically in Mori terminals)." = "Sender identity is read from MORI_PROJECT, MORI_WORKTREE, MORI_WINDOW, MORI_PANE_ID environment variables (set automatically in Mori terminals).";
+"Target project name" = "Target project name";
+"Target worktree name" = "Target worktree name";
+"Target window name" = "Target window name";
 "Message text" = "Message text";
-"Number of lines to capture (default: 50, max: 200)" = "Number of lines to capture (default: 50, max: 200)";
+"Print the current pane's identity" = "Print the current pane's identity";
+"Reads MORI_* environment variables to identify the current pane. Does not require Mori.app to be running." = "Reads MORI_* environment variables to identify the current pane. Does not require Mori.app to be running.";
 
-/* Output Options */
-"Output raw JSON" = "Output raw JSON";
-
-/* Formatted Output */
+/* Formatted output */
 "No projects found." = "No projects found.";
 "No panes found." = "No panes found.";
 "Name" = "Name";

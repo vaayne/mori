@@ -8,6 +8,16 @@ struct MoriCLI: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "mori",
         abstract: .localized("Mori workspace CLI — communicate with the running Mori app."),
+        discussion: """
+        \(String.localized("Requires a running Mori.app instance (communicates via Unix socket)."))
+        \(String.localized("All subcommands accept --json for machine-readable output."))
+
+        \(String.localized("Shell completions:"))
+          mori --generate-completion-script zsh
+          mori --generate-completion-script bash
+          mori --generate-completion-script fish
+        """,
+        version: cliVersion(),
         subcommands: [
             Project.self,
             WorktreeCmd.self,
@@ -21,10 +31,28 @@ struct MoriCLI: ParsableCommand {
     )
 }
 
+/// Read version from the app bundle's Info.plist when running inside Mori.app,
+/// otherwise fall back to "dev".
+private func cliVersion() -> String {
+    // When bundled: .../Mori.app/Contents/MacOS/bin/mori
+    let execURL = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+    let contentsURL = execURL
+        .deletingLastPathComponent() // bin/
+        .deletingLastPathComponent() // MacOS/
+        .deletingLastPathComponent() // Contents/
+    let plistURL = contentsURL.appendingPathComponent("Contents/Info.plist")
+    if let data = try? Data(contentsOf: plistURL),
+       let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+       let version = plist["CFBundleShortVersionString"] as? String {
+        return version
+    }
+    return "dev"
+}
+
 // MARK: - Shared Options
 
 struct OutputOptions: ParsableArguments {
-    @Flag(name: .long, help: ArgumentHelp(.localized("Output raw JSON")))
+    @Flag(name: .long, help: ArgumentHelp(.localized("Output as JSON (default: human-readable)")))
     var json = false
 }
 
@@ -135,7 +163,7 @@ private func diagnoseIPCSocket(at path: String) -> IPCSocketStatus {
 
 struct Project: ParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: .localized("Project commands"),
+        abstract: .localized("Manage Mori projects"),
         subcommands: [ProjectList.self]
     )
 }
@@ -143,7 +171,14 @@ struct Project: ParsableCommand {
 struct ProjectList: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "list",
-        abstract: .localized("List all projects")
+        abstract: .localized("List all projects"),
+        discussion: """
+        \(String.localized("Shows all projects tracked by Mori with their names and paths."))
+
+        \(String.localized("Examples:"))
+          mori project list
+          mori project list --json
+        """
     )
 
     @OptionGroup var output: OutputOptions
@@ -159,7 +194,7 @@ struct ProjectList: ParsableCommand {
 struct WorktreeCmd: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "worktree",
-        abstract: .localized("Worktree commands"),
+        abstract: .localized("Manage git worktrees"),
         subcommands: [WorktreeCreate.self]
     )
 }
@@ -167,7 +202,14 @@ struct WorktreeCmd: ParsableCommand {
 struct WorktreeCreate: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "create",
-        abstract: .localized("Create a new worktree")
+        abstract: .localized("Create a new worktree"),
+        discussion: """
+        \(String.localized("Creates a git worktree and a corresponding tmux session."))
+
+        \(String.localized("Examples:"))
+          mori worktree create myproject feature/auth
+          mori worktree create myproject bugfix/login --json
+        """
     )
 
     @Argument(help: ArgumentHelp(.localized("Project name")))
@@ -188,7 +230,14 @@ struct WorktreeCreate: ParsableCommand {
 
 struct Focus: ParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: .localized("Focus a project and worktree")
+        abstract: .localized("Focus a project and worktree"),
+        discussion: """
+        \(String.localized("Switches the Mori UI to show the specified project and worktree."))
+
+        \(String.localized("Examples:"))
+          mori focus myproject main
+          mori focus myproject feature/auth
+        """
     )
 
     @Argument(help: ArgumentHelp(.localized("Project name")))
@@ -210,7 +259,15 @@ struct Focus: ParsableCommand {
 
 struct Send: ParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: .localized("Send keys to a tmux window")
+        abstract: .localized("Send keys to a tmux window"),
+        discussion: """
+        \(String.localized("Keys use tmux send-keys syntax. Common keys: Enter, Escape, C-c (Ctrl+C), C-d, Space, Tab."))
+
+        \(String.localized("Examples:"))
+          mori send myproject main shell "echo hello Enter"
+          mori send myproject main shell "C-c"
+          mori send myproject main shell "mise run test Enter"
+        """
     )
 
     @Argument(help: ArgumentHelp(.localized("Project name")))
@@ -222,7 +279,7 @@ struct Send: ParsableCommand {
     @Argument(help: ArgumentHelp(.localized("Window name")))
     var window: String
 
-    @Argument(help: ArgumentHelp(.localized("Keys to send")))
+    @Argument(help: ArgumentHelp(.localized("Keys to send (tmux send-keys syntax)")))
     var keys: String
 
     @OptionGroup var output: OutputOptions
@@ -239,7 +296,14 @@ struct Send: ParsableCommand {
 struct NewWindow: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "new-window",
-        abstract: .localized("Create a new window in a worktree")
+        abstract: .localized("Create a new window in a worktree"),
+        discussion: """
+        \(String.localized("Creates a new tmux window (tab) in the worktree's session."))
+
+        \(String.localized("Examples:"))
+          mori new-window myproject main
+          mori new-window myproject main --name logs
+        """
     )
 
     @Argument(help: ArgumentHelp(.localized("Project name")))
@@ -248,7 +312,7 @@ struct NewWindow: ParsableCommand {
     @Argument(help: ArgumentHelp(.localized("Worktree name")))
     var worktree: String
 
-    @Option(name: .long, help: ArgumentHelp(.localized("Window name")))
+    @Option(name: .long, help: ArgumentHelp(.localized("Window name (default: shell)")))
     var name: String?
 
     @OptionGroup var output: OutputOptions
@@ -265,7 +329,14 @@ struct NewWindow: ParsableCommand {
 
 struct Open: ParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: .localized("Open a project from a path")
+        abstract: .localized("Open a project from a path"),
+        discussion: """
+        \(String.localized("Opens an existing project or creates a new one from the directory. Use '.' for the current directory."))
+
+        \(String.localized("Examples:"))
+          mori open .
+          mori open ~/workspace/myproject
+        """
     )
 
     @Argument(help: ArgumentHelp(.localized("Path to project directory")))
@@ -285,7 +356,14 @@ struct StatusCmd: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "status",
         abstract: .localized("Set workflow status for a worktree"),
-        discussion: .localized("Valid statuses: todo, inProgress, needsReview, done, cancelled")
+        discussion: """
+        \(String.localized("Workflow: todo → inProgress → needsReview → done / cancelled"))
+        \(String.localized("Status is displayed as a badge in the Mori sidebar."))
+
+        \(String.localized("Examples:"))
+          mori status myproject feature/auth inProgress
+          mori status myproject feature/auth done
+        """
     )
 
     @Argument(help: ArgumentHelp(.localized("Project name")))
@@ -312,6 +390,7 @@ struct PaneCmd: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "pane",
         abstract: .localized("Pane commands for agent communication"),
+        discussion: .localized("Enables agents to discover, observe, and interact with other panes."),
         subcommands: [PaneList.self, PaneRead.self, PaneMessage.self, PaneId.self]
     )
 }
@@ -319,13 +398,21 @@ struct PaneCmd: ParsableCommand {
 struct PaneList: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "list",
-        abstract: .localized("List all panes with project/worktree/window info")
+        abstract: .localized("List all panes with project/worktree/window info"),
+        discussion: """
+        \(String.localized("Shows all panes across projects with agent state and detected agent type."))
+
+        \(String.localized("Examples:"))
+          mori pane list
+          mori pane list --project myproject
+          mori pane list --project myproject --worktree main
+        """
     )
 
-    @Option(name: .long, help: ArgumentHelp(.localized("Project name")))
+    @Option(name: .long, help: ArgumentHelp(.localized("Filter by project name")))
     var project: String?
 
-    @Option(name: .long, help: ArgumentHelp(.localized("Worktree name")))
+    @Option(name: .long, help: ArgumentHelp(.localized("Filter by worktree name")))
     var worktree: String?
 
     @OptionGroup var output: OutputOptions
@@ -339,7 +426,14 @@ struct PaneList: ParsableCommand {
 struct PaneRead: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "read",
-        abstract: .localized("Capture output from a pane")
+        abstract: .localized("Capture output from a pane"),
+        discussion: """
+        \(String.localized("Reads recent terminal output from a pane without switching to it."))
+
+        \(String.localized("Examples:"))
+          mori pane read myproject main shell
+          mori pane read myproject main logs --lines 100
+        """
     )
 
     @Argument(help: ArgumentHelp(.localized("Project name")))
@@ -351,7 +445,7 @@ struct PaneRead: ParsableCommand {
     @Argument(help: ArgumentHelp(.localized("Window name")))
     var window: String
 
-    @Option(name: .long, help: ArgumentHelp(.localized("Number of lines to capture (default: 50, max: 200)")))
+    @Option(name: .long, help: ArgumentHelp(.localized("Number of lines to capture (1-200, default: 50)")))
     var lines: Int = 50
 
     @OptionGroup var output: OutputOptions
@@ -368,16 +462,24 @@ struct PaneRead: ParsableCommand {
 struct PaneMessage: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "message",
-        abstract: .localized("Send a message to a pane with sender metadata")
+        abstract: .localized("Send a message to a pane with sender metadata"),
+        discussion: """
+        \(String.localized("Sends a message to another pane for inter-agent communication."))
+        \(String.localized("Sender identity is read from MORI_PROJECT, MORI_WORKTREE, MORI_WINDOW, MORI_PANE_ID environment variables (set automatically in Mori terminals)."))
+
+        \(String.localized("Examples:"))
+          mori pane message myproject main shell "build completed"
+          mori pane message myproject main editor "please review changes"
+        """
     )
 
-    @Argument(help: ArgumentHelp(.localized("Project name")))
+    @Argument(help: ArgumentHelp(.localized("Target project name")))
     var project: String
 
-    @Argument(help: ArgumentHelp(.localized("Worktree name")))
+    @Argument(help: ArgumentHelp(.localized("Target worktree name")))
     var worktree: String
 
-    @Argument(help: ArgumentHelp(.localized("Window name")))
+    @Argument(help: ArgumentHelp(.localized("Target window name")))
     var window: String
 
     @Argument(help: ArgumentHelp(.localized("Message text")))
@@ -405,7 +507,13 @@ struct PaneMessage: ParsableCommand {
 struct PaneId: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "id",
-        abstract: .localized("Print the current pane's identity")
+        abstract: .localized("Print the current pane's identity"),
+        discussion: """
+        \(String.localized("Reads MORI_* environment variables to identify the current pane. Does not require Mori.app to be running."))
+
+        \(String.localized("Examples:"))
+          mori pane id
+        """
     )
 
     func run() throws {
