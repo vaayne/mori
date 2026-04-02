@@ -1218,6 +1218,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, let store = self.keyBindingStore else { return event }
 
+            // Pass through when the shortcut recorder is capturing input
+            if MoriUI.isRecordingShortcut { return event }
+
             // Loop through configurable bindings and dispatch matching actions
             for binding in store.bindings where !binding.isLocked {
                 guard let shortcut = binding.shortcut else { continue }

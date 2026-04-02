@@ -32,7 +32,12 @@ extension Shortcut {
 // MARK: - ShortcutRecorderView
 
 /// An inline control that displays the current shortcut and allows recording a new one.
+/// Global flag indicating a recorder is actively capturing a shortcut.
+/// Other key monitors (e.g. AppDelegate) should check this and pass events through.
+@MainActor public var isRecordingShortcut = false
+
 struct ShortcutRecorderView: View {
+
     let shortcut: Shortcut?
     let isLocked: Bool
     let onRecord: (Shortcut) -> Void
@@ -112,6 +117,7 @@ struct ShortcutRecorderView: View {
     private func startRecording() {
         guard !isRecording else { return }
         isRecording = true
+        MoriUI.isRecordingShortcut = true
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             handleKeyEvent(event)
             return nil // consume the event
@@ -120,6 +126,7 @@ struct ShortcutRecorderView: View {
 
     private func stopRecording() {
         isRecording = false
+        MoriUI.isRecordingShortcut = false
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
             eventMonitor = nil
