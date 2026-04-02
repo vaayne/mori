@@ -1006,10 +1006,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private weak var installCLIMenuItem: NSMenuItem?
 
     private func cliBinaryPath() -> String? {
+        let fm = FileManager.default
         guard let bundlePath = Bundle.main.executablePath else { return nil }
         let bundleDir = (bundlePath as NSString).deletingLastPathComponent
-        let cliPath = (bundleDir as NSString).appendingPathComponent("bin/mori")
-        return FileManager.default.fileExists(atPath: cliPath) ? cliPath : nil
+
+        // 1. App bundle: .../Mori.app/Contents/MacOS/bin/mori
+        let bundleCLI = (bundleDir as NSString).appendingPathComponent("bin/mori")
+        if fm.fileExists(atPath: bundleCLI) { return bundleCLI }
+
+        // 2. Dev build: .build-cli/{debug,release}/mori (when running via swift run)
+        let projectDir = ((bundleDir as NSString)
+            .deletingLastPathComponent as NSString) // .build
+            .deletingLastPathComponent              // project root
+        for config in ["release", "debug"] {
+            let devCLI = (projectDir as NSString)
+                .appendingPathComponent(".build-cli/\(config)/mori")
+            if fm.fileExists(atPath: devCLI) { return devCLI }
+        }
+
+        return nil
     }
 
     private func cliSymlinkExists() -> Bool {
