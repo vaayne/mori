@@ -21,10 +21,17 @@ struct MoriCLI: ParsableCommand {
     )
 }
 
-// MARK: - Shared Helpers
+// MARK: - Shared Options
 
-/// Send an IPC request and print the result as JSON.
-func runIPCRequest(_ command: IPCCommand) throws {
+struct OutputOptions: ParsableArguments {
+    @Flag(name: .long, help: ArgumentHelp(.localized("Output raw JSON")))
+    var json = false
+}
+
+// MARK: - IPC Helpers
+
+/// Send an IPC request and return the response payload.
+func sendIPCRequest(_ command: IPCCommand) throws -> Data? {
     switch diagnoseIPCSocket(at: IPCServer.defaultSocketPath) {
     case .missing:
         let message = String.localized("Mori app is not running. Launch Mori and try again.")
@@ -44,15 +51,28 @@ func runIPCRequest(_ command: IPCCommand) throws {
 
     switch envelope.response {
     case .success(let payload):
-        if let data = payload, let json = String(data: data, encoding: .utf8) {
-            print(json)
-        } else {
-            print("{\"status\":\"ok\"}")
-        }
+        return payload
     case .error(let message):
         let errorMessage = String.localized("Error: \(message)")
         FileHandle.standardError.write(Data(errorMessage.utf8))
         throw ExitCode.failure
+    }
+}
+
+/// Print payload as raw JSON or using the given formatter.
+func printResult(_ data: Data?, json: Bool, formatter: (Data) -> String, fallback: String = "✓ OK") {
+    guard let data else {
+        if json {
+            print("{\"status\":\"ok\"}")
+        } else {
+            print(fallback)
+        }
+        return
+    }
+    if json {
+        print(OutputFormat.prettyJSON(data))
+    } else {
+        print(formatter(data))
     }
 }
 
@@ -126,8 +146,11 @@ struct ProjectList: ParsableCommand {
         abstract: .localized("List all projects")
     )
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
-        try runIPCRequest(.projectList)
+        let data = try sendIPCRequest(.projectList)
+        printResult(data, json: output.json, formatter: OutputFormat.formatProjectList)
     }
 }
 
@@ -153,8 +176,11 @@ struct WorktreeCreate: ParsableCommand {
     @Argument(help: ArgumentHelp(.localized("Branch name")))
     var branch: String
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
-        try runIPCRequest(.worktreeCreate(project: project, branch: branch))
+        let data = try sendIPCRequest(.worktreeCreate(project: project, branch: branch))
+        printResult(data, json: output.json, formatter: OutputFormat.formatWorktreeCreate)
     }
 }
 
@@ -171,8 +197,12 @@ struct Focus: ParsableCommand {
     @Argument(help: ArgumentHelp(.localized("Worktree name")))
     var worktree: String
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
-        try runIPCRequest(.focus(project: project, worktree: worktree))
+        let data = try sendIPCRequest(.focus(project: project, worktree: worktree))
+        printResult(data, json: output.json, formatter: { _ in "" },
+                    fallback: OutputFormat.formatSuccess(String(format: .localized("Focused %@/%@"), project, worktree)))
     }
 }
 
@@ -195,8 +225,12 @@ struct Send: ParsableCommand {
     @Argument(help: ArgumentHelp(.localized("Keys to send")))
     var keys: String
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
-        try runIPCRequest(.send(project: project, worktree: worktree, window: window, keys: keys))
+        let data = try sendIPCRequest(.send(project: project, worktree: worktree, window: window, keys: keys))
+        printResult(data, json: output.json, formatter: { _ in "" },
+                    fallback: OutputFormat.formatSuccess(String(format: .localized("Sent keys to %@/%@/%@"), project, worktree, window)))
     }
 }
 
@@ -217,8 +251,13 @@ struct NewWindow: ParsableCommand {
     @Option(name: .long, help: ArgumentHelp(.localized("Window name")))
     var name: String?
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
-        try runIPCRequest(.newWindow(project: project, worktree: worktree, name: name))
+        let data = try sendIPCRequest(.newWindow(project: project, worktree: worktree, name: name))
+        let label = name ?? "shell"
+        printResult(data, json: output.json, formatter: { _ in "" },
+                    fallback: OutputFormat.formatSuccess(String(format: .localized("Created window '%@' in %@/%@"), label, project, worktree)))
     }
 }
 
@@ -232,8 +271,11 @@ struct Open: ParsableCommand {
     @Argument(help: ArgumentHelp(.localized("Path to project directory")))
     var path: String
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
-        try runIPCRequest(.open(path: path))
+        let data = try sendIPCRequest(.open(path: path))
+        printResult(data, json: output.json, formatter: OutputFormat.formatProjectOpen)
     }
 }
 
@@ -255,8 +297,12 @@ struct StatusCmd: ParsableCommand {
     @Argument(help: ArgumentHelp(.localized("Workflow status (todo, inProgress, needsReview, done, cancelled)")))
     var status: String
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
-        try runIPCRequest(.setWorkflowStatus(project: project, worktree: worktree, status: status))
+        let data = try sendIPCRequest(.setWorkflowStatus(project: project, worktree: worktree, status: status))
+        printResult(data, json: output.json, formatter: { _ in "" },
+                    fallback: OutputFormat.formatSuccess(String(format: .localized("Set %@/%@ status to '%@'"), project, worktree, status)))
     }
 }
 
@@ -282,8 +328,11 @@ struct PaneList: ParsableCommand {
     @Option(name: .long, help: ArgumentHelp(.localized("Worktree name")))
     var worktree: String?
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
-        try runIPCRequest(.paneList(project: project, worktree: worktree))
+        let data = try sendIPCRequest(.paneList(project: project, worktree: worktree))
+        printResult(data, json: output.json, formatter: OutputFormat.formatPaneList)
     }
 }
 
@@ -305,8 +354,14 @@ struct PaneRead: ParsableCommand {
     @Option(name: .long, help: ArgumentHelp(.localized("Number of lines to capture (default: 50, max: 200)")))
     var lines: Int = 50
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
-        try runIPCRequest(.paneRead(project: project, worktree: worktree, window: window, lines: lines))
+        let data = try sendIPCRequest(.paneRead(project: project, worktree: worktree, window: window, lines: lines))
+        // pane read returns plain text, not JSON — print as-is
+        if let data, let text = String(data: data, encoding: .utf8) {
+            print(text)
+        }
     }
 }
 
@@ -328,6 +383,8 @@ struct PaneMessage: ParsableCommand {
     @Argument(help: ArgumentHelp(.localized("Message text")))
     var text: String
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
         // Read sender identity from environment variables set by Mori in each pane
         let senderProject = ProcessInfo.processInfo.environment["MORI_PROJECT"]
@@ -335,11 +392,13 @@ struct PaneMessage: ParsableCommand {
         let senderWindow = ProcessInfo.processInfo.environment["MORI_WINDOW"]
         let senderPaneId = ProcessInfo.processInfo.environment["MORI_PANE_ID"]
 
-        try runIPCRequest(.paneMessage(
+        let data = try sendIPCRequest(.paneMessage(
             project: project, worktree: worktree, window: window, text: text,
             senderProject: senderProject, senderWorktree: senderWorktree,
             senderWindow: senderWindow, senderPaneId: senderPaneId
         ))
+        printResult(data, json: output.json, formatter: { _ in "" },
+                    fallback: OutputFormat.formatSuccess(String(format: .localized("Message sent to %@/%@/%@"), project, worktree, window)))
     }
 }
 

@@ -21,3 +21,34 @@
 "Set workflow status for a worktree" = "设置工作树的工作流状态";
 "Valid statuses: todo, inProgress, needsReview, done, cancelled" = "有效状态：todo、inProgress、needsReview、done、cancelled";
 "Workflow status (todo, inProgress, needsReview, done, cancelled)" = "工作流状态（todo、inProgress、needsReview、done、cancelled）";
+
+/* Pane Commands */
+"Pane commands for agent communication" = "面板命令（用于 Agent 通信）";
+"List all panes with project/worktree/window info" = "列出所有面板及项目/工作树/窗口信息";
+"Capture output from a pane" = "捕获面板输出";
+"Send a message to a pane with sender metadata" = "向面板发送带发送者元数据的消息";
+"Print the current pane's identity" = "打印当前面板的标识";
+"Message text" = "消息文本";
+"Number of lines to capture (default: 50, max: 200)" = "要捕获的行数（默认：50，最大：200）";
+
+/* Output Options */
+"Output raw JSON" = "输出原始 JSON";
+
+/* Formatted Output */
+"No projects found." = "未找到项目。";
+"No panes found." = "未找到面板。";
+"Name" = "名称";
+"Path" = "路径";
+"Project" = "项目";
+"Worktree" = "工作树";
+"Window" = "窗口";
+"Pane" = "面板";
+"Agent" = "Agent";
+"State" = "状态";
+"Created worktree '%@' on branch '%@' at %@" = "已在 %3$@ 创建工作树 '%1$@'，分支 '%2$@'";
+"Opened project '%@' (%@)" = "已打开项目 '%@'（%@）";
+"Focused %@/%@" = "已聚焦到 %@/%@";
+"Sent keys to %@/%@/%@" = "已发送按键到 %@/%@/%@";
+"Created window '%@' in %@/%@" = "已在 %2$@/%3$@ 中创建窗口 '%1$@'";
+"Set %@/%@ status to '%@'" = "已将 %@/%@ 状态设为 '%@'";
+"Message sent to %@/%@/%@" = "消息已发送到 %@/%@/%@";

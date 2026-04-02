@@ -21,3 +21,34 @@
 "Set workflow status for a worktree" = "Set workflow status for a worktree";
 "Valid statuses: todo, inProgress, needsReview, done, cancelled" = "Valid statuses: todo, inProgress, needsReview, done, cancelled";
 "Workflow status (todo, inProgress, needsReview, done, cancelled)" = "Workflow status (todo, inProgress, needsReview, done, cancelled)";
+
+/* Pane Commands */
+"Pane commands for agent communication" = "Pane commands for agent communication";
+"List all panes with project/worktree/window info" = "List all panes with project/worktree/window info";
+"Capture output from a pane" = "Capture output from a pane";
+"Send a message to a pane with sender metadata" = "Send a message to a pane with sender metadata";
+"Print the current pane's identity" = "Print the current pane's identity";
+"Message text" = "Message text";
+"Number of lines to capture (default: 50, max: 200)" = "Number of lines to capture (default: 50, max: 200)";
+
+/* Output Options */
+"Output raw JSON" = "Output raw JSON";
+
+/* Formatted Output */
+"No projects found." = "No projects found.";
+"No panes found." = "No panes found.";
+"Name" = "Name";
+"Path" = "Path";
+"Project" = "Project";
+"Worktree" = "Worktree";
+"Window" = "Window";
+"Pane" = "Pane";
+"Agent" = "Agent";
+"State" = "State";
+"Created worktree '%@' on branch '%@' at %@" = "Created worktree '%@' on branch '%@' at %@";
+"Opened project '%@' (%@)" = "Opened project '%@' (%@)";
+"Focused %@/%@" = "Focused %@/%@";
+"Sent keys to %@/%@/%@" = "Sent keys to %@/%@/%@";
+"Created window '%@' in %@/%@" = "Created window '%@' in %@/%@";
+"Set %@/%@ status to '%@'" = "Set %@/%@ status to '%@'";
+"Message sent to %@/%@/%@" = "Message sent to %@/%@/%@";
