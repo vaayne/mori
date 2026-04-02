@@ -106,6 +106,8 @@ public enum KeyBindingDefaults {
                    shortcut: Shortcut(key: "o", modifiers: .cmdShift)),
         KeyBinding(id: "other.agentDashboard", displayNameKey: "keybinding.other.agentDashboard", category: .other,
                    shortcut: Shortcut(key: "a", modifiers: .cmdShift)),
+        KeyBinding(id: "other.projectSwitcher", displayNameKey: "keybinding.other.projectSwitcher", category: .other,
+                   shortcut: Shortcut(key: "p", modifiers: .cmd)),
     ]
 
     // MARK: - Locked (System) Bindings

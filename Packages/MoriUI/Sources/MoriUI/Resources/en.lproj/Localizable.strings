@@ -209,6 +209,7 @@
 "keybinding.settings.reload" = "Reload Config";
 "keybinding.other.openProject" = "Open Project";
 "keybinding.other.agentDashboard" = "Agent Dashboard";
+"keybinding.other.projectSwitcher" = "Project Switcher";
 "keybinding.system.undo" = "Undo";
 "keybinding.system.redo" = "Redo";
 "keybinding.system.cut" = "Cut";

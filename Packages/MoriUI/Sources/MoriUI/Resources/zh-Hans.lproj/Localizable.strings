@@ -209,6 +209,7 @@
 "keybinding.settings.reload" = "重新加载配置";
 "keybinding.other.openProject" = "打开项目";
 "keybinding.other.agentDashboard" = "代理仪表板";
+"keybinding.other.projectSwitcher" = "项目切换";
 "keybinding.system.undo" = "撤销";
 "keybinding.system.redo" = "重做";
 "keybinding.system.cut" = "剪切";

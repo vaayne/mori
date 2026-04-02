@@ -246,7 +246,7 @@ func testConflictResultEquatable() {
 // MARK: - KeyBindingDefaults Tests
 
 func testKeyBindingDefaultsConfigurableCount() {
-    assertEqual(KeyBindingDefaults.configurable.count, 39)
+    assertEqual(KeyBindingDefaults.configurable.count, 40)
 }
 
 func testKeyBindingDefaultsLockedCount() {
@@ -254,7 +254,7 @@ func testKeyBindingDefaultsLockedCount() {
 }
 
 func testKeyBindingDefaultsAllCount() {
-    assertEqual(KeyBindingDefaults.all.count, 50)
+    assertEqual(KeyBindingDefaults.all.count, 51)
 }
 
 func testKeyBindingDefaultsUniqueIds() {
@@ -280,7 +280,7 @@ func testKeyBindingDefaultsNoShortcutConflicts() {
 
 func testKeyBindingDefaultsByIdLookup() {
     let byId = KeyBindingDefaults.byId
-    assertEqual(byId.count, 50)
+    assertEqual(byId.count, 51)
 
     let newTab = byId["tabs.newTab"]
     assertNotNil(newTab)
@@ -352,7 +352,7 @@ func testKeyBindingDefaultsCategoryCounts() {
     assertEqual(byCategory[.worktrees]?.count, 3)
     assertEqual(byCategory[.commandPalette]?.count, 1)
     assertEqual(byCategory[.settings]?.count, 2)
-    assertEqual(byCategory[.other]?.count, 2)
+    assertEqual(byCategory[.other]?.count, 3)
     assertEqual(byCategory[.system]?.count, 11)
 }
 
