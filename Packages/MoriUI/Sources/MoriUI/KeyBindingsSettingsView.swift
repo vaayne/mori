@@ -71,7 +71,7 @@ public struct KeyBindingsSettingsView: View {
 
     /// Display categories in a logical order.
     private var orderedCategories: [KeyBindingCategory] {
-        [.tabs, .panes, .tools, .window, .worktrees, .commandPalette, .settings, .other, .system]
+        [.tabs, .panes, .tools, .window, .worktrees, .settings, .other, .system]
     }
 }
 

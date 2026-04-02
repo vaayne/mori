@@ -350,9 +350,9 @@ func testKeyBindingDefaultsCategoryCounts() {
     assertEqual(byCategory[.tools]?.count, 2)
     assertEqual(byCategory[.window]?.count, 2)
     assertEqual(byCategory[.worktrees]?.count, 3)
-    assertEqual(byCategory[.commandPalette]?.count, 1)
+    assertEqual(byCategory[.commandPalette]?.count, nil)
     assertEqual(byCategory[.settings]?.count, 2)
-    assertEqual(byCategory[.other]?.count, 3)
+    assertEqual(byCategory[.other]?.count, 4)
     assertEqual(byCategory[.system]?.count, 11)
 }
 

@@ -91,10 +91,6 @@ public enum KeyBindingDefaults {
         KeyBinding(id: "worktrees.cyclePrevious", displayNameKey: "keybinding.worktrees.cyclePrevious", category: .worktrees,
                    shortcut: Shortcut(key: "(tab)", keyCode: 48, modifiers: .ctrlShift)),
 
-        // Command Palette
-        KeyBinding(id: "commandPalette.toggle", displayNameKey: "keybinding.commandPalette.toggle", category: .commandPalette,
-                   shortcut: Shortcut(key: "p", modifiers: .cmdShift)),
-
         // Settings
         KeyBinding(id: "settings.open", displayNameKey: "keybinding.settings.open", category: .settings,
                    shortcut: Shortcut(key: ",", modifiers: .cmd)),
@@ -106,6 +102,8 @@ public enum KeyBindingDefaults {
                    shortcut: Shortcut(key: "o", modifiers: .cmdShift)),
         KeyBinding(id: "other.agentDashboard", displayNameKey: "keybinding.other.agentDashboard", category: .other,
                    shortcut: Shortcut(key: "a", modifiers: .cmdShift)),
+        KeyBinding(id: "commandPalette.toggle", displayNameKey: "keybinding.commandPalette.toggle", category: .other,
+                   shortcut: Shortcut(key: "p", modifiers: .cmdShift)),
         KeyBinding(id: "other.projectSwitcher", displayNameKey: "keybinding.other.projectSwitcher", category: .other,
                    shortcut: Shortcut(key: "p", modifiers: .cmd)),
     ]
