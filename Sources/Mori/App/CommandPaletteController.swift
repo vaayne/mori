@@ -91,38 +91,33 @@ final class CommandPaletteController: NSWindowController {
             if case .project = item { return true }
             return false
         }
-        guard let panel = window else { return }
-
-        searchField.stringValue = ""
         searchField.placeholderString = .localized("Switch project...")
-        selectedIndex = 0
-        updateResults()
-        positionPanel()
-        panel.makeKeyAndOrderFront(nil)
-        panel.makeFirstResponder(searchField)
+        presentPalette()
     }
 
     func show() {
-        guard let panel = window else { return }
-
         // Clear filter for full palette
         dataSource?.itemFilter = nil
         searchField.placeholderString = .localized("Search projects, worktrees, windows, actions...")
-
-        // Reset state
-        searchField.stringValue = ""
-        selectedIndex = 0
-        updateResults()
-
-        // Center above the main window
-        positionPanel()
-
-        panel.makeKeyAndOrderFront(nil)
-        panel.makeFirstResponder(searchField)
+        presentPalette()
     }
 
     func dismiss() {
         window?.orderOut(nil)
+    }
+
+    // MARK: - Private Helpers
+
+    private func presentPalette() {
+        guard let panel = window else { return }
+
+        searchField.stringValue = ""
+        selectedIndex = 0
+        updateResults()
+        positionPanel()
+
+        panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(searchField)
     }
 
     // MARK: - Setup

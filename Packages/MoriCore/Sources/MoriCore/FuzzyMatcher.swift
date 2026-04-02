@@ -17,127 +17,134 @@ public enum FuzzyMatcher {
 
         let queryChars = Array(query.lowercased())
         let candidateChars = Array(candidate.lowercased())
+        let candidateOriginal = Array(candidate)
 
-        guard let bestScore = bestMatch(
-            queryChars: queryChars,
-            candidateChars: candidateChars,
-            candidateOriginal: Array(candidate)
-        ) else {
-            return 0
-        }
-
-        return bestScore
-    }
-
-    // MARK: - Private
-
-    /// Recursively find the best scoring alignment of query characters in candidate.
-    /// Returns nil if no match is possible.
-    private static func bestMatch(
-        queryChars: [Character],
-        candidateChars: [Character],
-        candidateOriginal: [Character]
-    ) -> Int? {
         let qLen = queryChars.count
         let cLen = candidateChars.count
 
-        guard qLen <= cLen else { return nil }
+        guard qLen <= cLen else { return 0 }
 
-        // Use iterative DP-like approach: try all possible positions for each query char
-        // and track the best score. We use a recursive approach with memoization-like pruning.
-        var best: Int?
-        findBest(
-            queryChars: queryChars,
-            candidateChars: candidateChars,
-            candidateOriginal: candidateOriginal,
-            qIdx: 0,
-            cIdx: 0,
-            currentScore: 0,
-            consecutive: 0,
-            best: &best
-        )
-        return best
-    }
+        // DP approach: dp[q][c] = best score for matching queryChars[0..<q]
+        // ending with the q-th query char matched at candidateChars[c-1].
+        // We also track the consecutive count for proper bonus calculation.
+        //
+        // For each query char q, we try all candidate positions c where
+        // candidateChars[c] == queryChars[q], and take the best score from
+        // any valid previous position.
 
-    private static func findBest(
-        queryChars: [Character],
-        candidateChars: [Character],
-        candidateOriginal: [Character],
-        qIdx: Int,
-        cIdx: Int,
-        currentScore: Int,
-        consecutive: Int,
-        best: inout Int?
-    ) {
-        // All query chars matched
-        if qIdx == queryChars.count {
-            if best == nil || currentScore > best! {
-                best = currentScore
-            }
-            return
-        }
+        // For each (q, c) store the best score and consecutive count
+        // Use Int.min as sentinel for "not reachable"
+        let sentinel = Int.min
 
-        // Not enough candidate chars left
-        let remaining = queryChars.count - qIdx
-        if cIdx + remaining > candidateChars.count {
-            return
-        }
+        // bestEndingAt[c] = (score, consecutive) for current query index,
+        // where the match ends at candidate position c.
+        // We process query chars one at a time, keeping only the current
+        // and previous rows.
+        var prevRow: [(score: Int, consecutive: Int)] = Array(repeating: (sentinel, 0), count: cLen)
+        var currRow: [(score: Int, consecutive: Int)] = Array(repeating: (sentinel, 0), count: cLen)
 
-        // Pruning: even if all remaining chars get max bonus, can we beat best?
-        if let currentBest = best {
-            let maxPossibleRemaining = remaining * (Bonus.prefix + Bonus.wordBoundary + Bonus.consecutive + Bonus.base)
-            if currentScore + maxPossibleRemaining <= currentBest {
-                return
-            }
-        }
-
-        let queryChar = queryChars[qIdx]
-
-        for i in cIdx..<candidateChars.count {
-            // Not enough room for remaining query chars
-            if candidateChars.count - i < remaining {
-                break
-            }
-
-            guard candidateChars[i] == queryChar else { continue }
+        // Fill first query char (q = 0)
+        for c in 0..<cLen {
+            guard candidateChars[c] == queryChars[0] else { continue }
 
             var matchScore = Bonus.base
-            let isConsecutive = (consecutive > 0 && i == cIdx)
 
-            // Prefix bonus: first query char matches first candidate char
-            if qIdx == 0 && i == 0 {
+            // Prefix bonus
+            if c == 0 {
                 matchScore += Bonus.prefix
             }
 
             // Word boundary bonus
-            if isWordBoundary(candidateOriginal: candidateOriginal, index: i) {
+            if isWordBoundary(candidateOriginal: candidateOriginal, index: c) {
                 matchScore += Bonus.wordBoundary
             }
 
-            // Consecutive bonus
-            let newConsecutive = isConsecutive ? consecutive + 1 : 1
-            if isConsecutive {
-                matchScore += Bonus.consecutive * newConsecutive
+            // No gap penalty for first char position choices — we just pick where to start
+            // But penalize distance from start for non-prefix matches
+            if c > 0 {
+                matchScore -= Penalty.gap * min(c, Penalty.maxGap)
             }
 
-            // Gap penalty
-            let gap = i - cIdx
-            if gap > 0 {
-                matchScore -= Penalty.gap * min(gap, Penalty.maxGap)
-            }
-
-            findBest(
-                queryChars: queryChars,
-                candidateChars: candidateChars,
-                candidateOriginal: candidateOriginal,
-                qIdx: qIdx + 1,
-                cIdx: i + 1,
-                currentScore: currentScore + matchScore,
-                consecutive: newConsecutive,
-                best: &best
-            )
+            prevRow[c] = (matchScore, 1)
         }
+
+        // Fill remaining query chars
+        for q in 1..<qLen {
+            // Reset current row
+            for c in 0..<cLen {
+                currRow[c] = (sentinel, 0)
+            }
+
+            // Track the best (score, index) from prevRow up to each position
+            // so we don't need an inner loop over all previous positions.
+            var bestPrevScore = sentinel
+            var bestPrevIndex = -1
+
+            for c in q..<cLen {
+                // Update best previous: prevRow[c-1] could be a valid predecessor
+                if prevRow[c - 1].score > bestPrevScore {
+                    bestPrevScore = prevRow[c - 1].score
+                    bestPrevIndex = c - 1
+                }
+
+                guard candidateChars[c] == queryChars[q] else { continue }
+                guard bestPrevScore != sentinel else { continue }
+
+                // Option A: non-consecutive match (from bestPrevIndex)
+                var scoreA = sentinel
+                if bestPrevScore != sentinel {
+                    let gap = c - bestPrevIndex - 1
+                    var s = bestPrevScore + Bonus.base
+                    if isWordBoundary(candidateOriginal: candidateOriginal, index: c) {
+                        s += Bonus.wordBoundary
+                    }
+                    if gap > 0 {
+                        s -= Penalty.gap * min(gap, Penalty.maxGap)
+                    }
+                    scoreA = s
+                }
+
+                // Option B: consecutive match (from prevRow[c-1] directly, if it exists)
+                var scoreB = sentinel
+                if prevRow[c - 1].score != sentinel {
+                    let prevConsecutive = prevRow[c - 1].consecutive
+                    let newConsecutive = prevConsecutive + 1
+                    let cappedConsecutive = min(newConsecutive, Bonus.maxConsecutive)
+                    var s = prevRow[c - 1].score + Bonus.base + Bonus.consecutive * cappedConsecutive
+                    if isWordBoundary(candidateOriginal: candidateOriginal, index: c) {
+                        s += Bonus.wordBoundary
+                    }
+                    scoreB = s
+                }
+
+                // Pick the best option
+                if scoreB >= scoreA && scoreB != sentinel {
+                    let newConsecutive = prevRow[c - 1].consecutive + 1
+                    currRow[c] = (scoreB, newConsecutive)
+                } else if scoreA != sentinel {
+                    currRow[c] = (scoreA, 1)
+                }
+            }
+
+            // Swap rows
+            let temp = prevRow
+            prevRow = currRow
+            currRow = temp
+        }
+
+        // Find the best score across all ending positions for the last query char
+        var best = sentinel
+        for c in 0..<cLen {
+            if prevRow[c].score > best {
+                best = prevRow[c].score
+            }
+        }
+
+        // Clamp: 0 means no match
+        return best == sentinel ? 0 : max(best, 1)
     }
+
+    // MARK: - Private
 
     /// Check if the character at `index` is at a word boundary.
     /// Word boundaries: start of string, after space/hyphen/underscore/slash/dot,
@@ -162,6 +169,7 @@ public enum FuzzyMatcher {
         static let prefix = 20
         static let wordBoundary = 12
         static let consecutive = 8
+        static let maxConsecutive = 5
     }
 
     private enum Penalty {
