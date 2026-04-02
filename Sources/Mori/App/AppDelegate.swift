@@ -1211,7 +1211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             "settings.reload": { [weak self] in self?.terminalAreaController?.reloadConfig() },
             "other.openProject": { [weak self] in self?.showAddProjectPanel() },
             "other.agentDashboard": { [weak self] in self?.toggleAgentDashboardAction() },
-            "other.projectSwitcher": { [weak self] in self?.palette?.showProjectsOnly() },
+            "other.projectSwitcher": { [weak self] in self?.commandPaletteController?.showProjectsOnly() },
         ]
 
         // Register key monitor that dispatches via the key binding store
