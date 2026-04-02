@@ -1135,7 +1135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     private func shellEscaped(_ s: String) -> String {
-        "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        SSHCommandSupport.shellEscape(s)
     }
 
     private enum AdminPrivilegeResult {
