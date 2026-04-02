@@ -123,10 +123,6 @@ enum OutputFormat {
         )
     }
 
-    static func formatSuccess(_ label: String) -> String {
-        "✓ \(label)"
-    }
-
     // MARK: - Private
 
     private static func formatAgentState(_ raw: String) -> String {

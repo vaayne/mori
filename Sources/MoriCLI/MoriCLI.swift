@@ -31,16 +31,19 @@ struct MoriCLI: ParsableCommand {
     )
 }
 
-/// Read version from the app bundle's Info.plist when running inside Mori.app,
-/// otherwise fall back to "dev".
-private func cliVersion() -> String {
-    // When bundled: .../Mori.app/Contents/MacOS/bin/mori
-    let execURL = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
-    let contentsURL = execURL
+/// Resolve the Mori.app bundle URL relative to the CLI binary.
+/// When bundled: .../Mori.app/Contents/MacOS/bin/mori
+private func appBundleURL() -> URL {
+    URL(fileURLWithPath: CommandLine.arguments[0])
+        .resolvingSymlinksInPath()
         .deletingLastPathComponent() // bin/
         .deletingLastPathComponent() // MacOS/
         .deletingLastPathComponent() // Contents/
-    let plistURL = contentsURL.appendingPathComponent("Contents/Info.plist")
+        .deletingLastPathComponent() // Mori.app/
+}
+
+private func cliVersion() -> String {
+    let plistURL = appBundleURL().appendingPathComponent("Contents/Info.plist")
     if let data = try? Data(contentsOf: plistURL),
        let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
        let version = plist["CFBundleShortVersionString"] as? String {
@@ -57,6 +60,17 @@ struct OutputOptions: ParsableArguments {
 }
 
 // MARK: - IPC Helpers
+
+/// Write a message to stderr.
+private func writeStderr(_ message: String) {
+    FileHandle.standardError.write(Data(message.utf8))
+}
+
+/// Write a localized error to stderr and throw ExitCode.failure.
+private func exitWithError(_ message: String) throws -> Never {
+    writeStderr(String.localized("Error: \(message)"))
+    throw ExitCode.failure
+}
 
 /// Send an IPC request and return the response payload.
 /// Auto-launches Mori.app if not running.
@@ -78,25 +92,19 @@ func sendIPCRequest(_ command: IPCCommand) throws -> Data? {
     case .success(let payload):
         return payload
     case .error(let message):
-        let errorMessage = String.localized("Error: \(message)")
-        FileHandle.standardError.write(Data(errorMessage.utf8))
-        throw ExitCode.failure
+        try exitWithError(message)
     }
 }
 
 // MARK: - App Launcher
 
-/// Find and launch Mori.app, then wait for the IPC socket to become ready.
 private func launchMoriAppAndWait(socketPath: String) throws {
     guard let appURL = findMoriApp() else {
-        let message = String.localized("Mori.app not found. Install Mori and try again.")
-        FileHandle.standardError.write(Data(String.localized("Error: \(message)").utf8))
-        throw ExitCode.failure
+        try exitWithError(.localized("Mori.app not found. Install Mori and try again."))
     }
 
-    FileHandle.standardError.write(Data(String.localized("Launching Mori.app…\n").utf8))
+    writeStderr(String.localized("Launching Mori.app…\n"))
 
-    // Launch via NSWorkspace equivalent: /usr/bin/open
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
     process.arguments = ["-a", appURL.path]
@@ -104,52 +112,39 @@ private func launchMoriAppAndWait(socketPath: String) throws {
     process.waitUntilExit()
 
     guard process.terminationStatus == 0 else {
-        let message = String.localized("Failed to launch Mori.app.")
-        FileHandle.standardError.write(Data(String.localized("Error: \(message)").utf8))
-        throw ExitCode.failure
+        try exitWithError(.localized("Failed to launch Mori.app."))
     }
 
-    // Poll for socket readiness (up to 10 seconds)
+    // Poll for socket readiness (up to 10 seconds, check before sleeping)
     let maxAttempts = 20
     let intervalMicroseconds: useconds_t = 500_000 // 0.5s
     for _ in 0..<maxAttempts {
+        if case .ready = diagnoseIPCSocket(at: socketPath) { return }
         usleep(intervalMicroseconds)
-        if case .ready = diagnoseIPCSocket(at: socketPath) {
-            return
-        }
     }
 
-    let message = String.localized("Mori.app launched but IPC socket not ready after 10s.")
-    FileHandle.standardError.write(Data(String.localized("Error: \(message)").utf8))
-    throw ExitCode.failure
+    try exitWithError(.localized("Mori.app launched but IPC socket not ready after 10s."))
 }
 
-/// Locate Mori.app: first check relative to CLI binary (inside app bundle),
-/// then check common install locations.
 private func findMoriApp() -> URL? {
-    // 1. Relative to CLI binary: .../Mori.app/Contents/MacOS/bin/mori
-    let execURL = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
-    let appCandidate = execURL
-        .deletingLastPathComponent() // bin/
-        .deletingLastPathComponent() // MacOS/
-        .deletingLastPathComponent() // Contents/
-    if appCandidate.lastPathComponent == "Mori.app",
-       FileManager.default.fileExists(atPath: appCandidate.appendingPathComponent("Contents/MacOS/Mori").path) {
-        return appCandidate
+    let fm = FileManager.default
+    func isValidApp(_ url: URL) -> Bool {
+        fm.fileExists(atPath: url.appendingPathComponent("Contents/MacOS/Mori").path)
+    }
+
+    // 1. Relative to CLI binary (inside app bundle)
+    let bundleCandidate = appBundleURL()
+    if bundleCandidate.lastPathComponent == "Mori.app", isValidApp(bundleCandidate) {
+        return bundleCandidate
     }
 
     // 2. /Applications/Mori.app
     let applicationsApp = URL(fileURLWithPath: "/Applications/Mori.app")
-    if FileManager.default.fileExists(atPath: applicationsApp.appendingPathComponent("Contents/MacOS/Mori").path) {
-        return applicationsApp
-    }
+    if isValidApp(applicationsApp) { return applicationsApp }
 
     // 3. ~/Applications/Mori.app
-    let homeApps = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Applications/Mori.app")
-    if FileManager.default.fileExists(atPath: homeApps.appendingPathComponent("Contents/MacOS/Mori").path) {
-        return homeApps
-    }
+    let homeApps = fm.homeDirectoryForCurrentUser.appendingPathComponent("Applications/Mori.app")
+    if isValidApp(homeApps) { return homeApps }
 
     return nil
 }
@@ -169,6 +164,11 @@ func printResult(_ data: Data?, json: Bool, formatter: (Data) -> String, fallbac
     } else {
         print(formatter(data))
     }
+}
+
+/// Convenience for commands that return no structured data.
+func printSuccess(_ data: Data?, json: Bool, label: String) {
+    printResult(data, json: json, formatter: { _ in "" }, fallback: "✓ \(label)")
 }
 
 private enum IPCSocketStatus {
@@ -317,8 +317,7 @@ struct Focus: ParsableCommand {
 
     func run() throws {
         let data = try sendIPCRequest(.focus(project: project, worktree: worktree))
-        printResult(data, json: output.json, formatter: { _ in "" },
-                    fallback: OutputFormat.formatSuccess(String(format: .localized("Focused %@/%@"), project, worktree)))
+        printSuccess(data, json: output.json, label: String(format: .localized("Focused %@/%@"), project, worktree))
     }
 }
 
@@ -353,8 +352,7 @@ struct Send: ParsableCommand {
 
     func run() throws {
         let data = try sendIPCRequest(.send(project: project, worktree: worktree, window: window, keys: keys))
-        printResult(data, json: output.json, formatter: { _ in "" },
-                    fallback: OutputFormat.formatSuccess(String(format: .localized("Sent keys to %@/%@/%@"), project, worktree, window)))
+        printSuccess(data, json: output.json, label: String(format: .localized("Sent keys to %@/%@/%@"), project, worktree, window))
     }
 }
 
@@ -386,9 +384,7 @@ struct NewWindow: ParsableCommand {
 
     func run() throws {
         let data = try sendIPCRequest(.newWindow(project: project, worktree: worktree, name: name))
-        let label = name ?? "shell"
-        printResult(data, json: output.json, formatter: { _ in "" },
-                    fallback: OutputFormat.formatSuccess(String(format: .localized("Created window '%@' in %@/%@"), label, project, worktree)))
+        printSuccess(data, json: output.json, label: String(format: .localized("Created window '%@' in %@/%@"), name ?? "shell", project, worktree))
     }
 }
 
@@ -446,8 +442,7 @@ struct StatusCmd: ParsableCommand {
 
     func run() throws {
         let data = try sendIPCRequest(.setWorkflowStatus(project: project, worktree: worktree, status: status))
-        printResult(data, json: output.json, formatter: { _ in "" },
-                    fallback: OutputFormat.formatSuccess(String(format: .localized("Set %@/%@ status to '%@'"), project, worktree, status)))
+        printSuccess(data, json: output.json, label: String(format: .localized("Set %@/%@ status to '%@'"), project, worktree, status))
     }
 }
 
@@ -555,7 +550,6 @@ struct PaneMessage: ParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() throws {
-        // Read sender identity from environment variables set by Mori in each pane
         let senderProject = ProcessInfo.processInfo.environment["MORI_PROJECT"]
         let senderWorktree = ProcessInfo.processInfo.environment["MORI_WORKTREE"]
         let senderWindow = ProcessInfo.processInfo.environment["MORI_WINDOW"]
@@ -566,8 +560,7 @@ struct PaneMessage: ParsableCommand {
             senderProject: senderProject, senderWorktree: senderWorktree,
             senderWindow: senderWindow, senderPaneId: senderPaneId
         ))
-        printResult(data, json: output.json, formatter: { _ in "" },
-                    fallback: OutputFormat.formatSuccess(String(format: .localized("Message sent to %@/%@/%@"), project, worktree, window)))
+        printSuccess(data, json: output.json, label: String(format: .localized("Message sent to %@/%@/%@"), project, worktree, window))
     }
 }
 
@@ -584,7 +577,6 @@ struct PaneId: ParsableCommand {
     )
 
     func run() throws {
-        // Read identity from environment variables set by Mori
         let project = ProcessInfo.processInfo.environment["MORI_PROJECT"] ?? "unknown"
         let worktree = ProcessInfo.processInfo.environment["MORI_WORKTREE"] ?? "unknown"
         let window = ProcessInfo.processInfo.environment["MORI_WINDOW"] ?? "unknown"

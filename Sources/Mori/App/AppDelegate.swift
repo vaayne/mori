@@ -1013,16 +1013,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     private func cliSymlinkExists() -> Bool {
-        let fm = FileManager.default
-        guard fm.fileExists(atPath: Self.cliSymlinkPath) else { return false }
-        if let dest = try? fm.destinationOfSymbolicLink(atPath: Self.cliSymlinkPath),
-           let ourCLI = cliBinaryPath() {
-            return URL(fileURLWithPath: dest).standardized == URL(fileURLWithPath: ourCLI).standardized
-        }
+        if case .ours = cliSymlinkState() { return true }
         return false
     }
 
-    /// What currently lives at the symlink path, if anything.
     private enum CLISymlinkState {
         case none                      // nothing at the path
         case ours                      // symlink → our bundle CLI
