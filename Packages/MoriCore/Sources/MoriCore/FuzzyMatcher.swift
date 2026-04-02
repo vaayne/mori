@@ -75,46 +75,54 @@ public enum FuzzyMatcher {
                 currRow[c] = (sentinel, 0)
             }
 
-            // Track the best (score, index) from prevRow up to each position
-            // so we don't need an inner loop over all previous positions.
-            var bestPrevScore = sentinel
-            var bestPrevIndex = -1
+            // Track the best score from "far" predecessors (gap >= maxGap,
+            // where the penalty is capped and constant).
+            var bestFarScore = sentinel
 
             for c in q..<cLen {
-                // Update best previous: prevRow[c-1] could be a valid predecessor
-                if prevRow[c - 1].score > bestPrevScore {
-                    bestPrevScore = prevRow[c - 1].score
-                    bestPrevIndex = c - 1
+                // Update far-predecessor tracking: positions where gap to any
+                // future c would be >= maxGap get constant penalty.
+                let farCutoff = c - Penalty.maxGap - 1
+                if farCutoff >= 0 && prevRow[farCutoff].score > bestFarScore {
+                    bestFarScore = prevRow[farCutoff].score
                 }
 
                 guard candidateChars[c] == queryChars[q] else { continue }
-                guard bestPrevScore != sentinel else { continue }
 
-                // Option A: non-consecutive match (from bestPrevIndex)
+                let boundaryBonus = isWordBoundary(candidateOriginal: candidateOriginal, index: c)
+                    ? Bonus.wordBoundary : 0
+
+                // Option A: best non-consecutive match considering gap penalty.
+                // Check nearby predecessors (within maxGap) individually since
+                // each has a different gap penalty, plus the best far predecessor
+                // which pays the capped penalty.
                 var scoreA = sentinel
-                if bestPrevScore != sentinel {
-                    let gap = c - bestPrevIndex - 1
-                    var s = bestPrevScore + Bonus.base
-                    if isWordBoundary(candidateOriginal: candidateOriginal, index: c) {
-                        s += Bonus.wordBoundary
-                    }
-                    if gap > 0 {
-                        s -= Penalty.gap * min(gap, Penalty.maxGap)
-                    }
-                    scoreA = s
+
+                // Far predecessors: gap >= maxGap, constant penalty
+                if bestFarScore != sentinel {
+                    scoreA = bestFarScore + Bonus.base + boundaryBonus
+                        - Penalty.gap * Penalty.maxGap
                 }
 
-                // Option B: consecutive match (from prevRow[c-1] directly, if it exists)
+                // Near predecessors: gap in 1..<maxGap (positions c-maxGap..<c-1)
+                // c-1 is handled by option B (consecutive), so skip it here.
+                let nearStart = max(q - 1, c - Penalty.maxGap)
+                for j in nearStart..<(c - 1) {
+                    guard prevRow[j].score != sentinel else { continue }
+                    let gap = c - j - 1
+                    let s = prevRow[j].score + Bonus.base + boundaryBonus
+                        - Penalty.gap * gap
+                    if s > scoreA { scoreA = s }
+                }
+
+                // Option B: consecutive match (from prevRow[c-1] directly)
                 var scoreB = sentinel
                 if prevRow[c - 1].score != sentinel {
                     let prevConsecutive = prevRow[c - 1].consecutive
                     let newConsecutive = prevConsecutive + 1
                     let cappedConsecutive = min(newConsecutive, Bonus.maxConsecutive)
-                    var s = prevRow[c - 1].score + Bonus.base + Bonus.consecutive * cappedConsecutive
-                    if isWordBoundary(candidateOriginal: candidateOriginal, index: c) {
-                        s += Bonus.wordBoundary
-                    }
-                    scoreB = s
+                    scoreB = prevRow[c - 1].score + Bonus.base
+                        + Bonus.consecutive * cappedConsecutive + boundaryBonus
                 }
 
                 // Pick the best option
