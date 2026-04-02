@@ -185,6 +185,11 @@
 "The symlink at %@ has been removed." = "The symlink at %@ has been removed.";
 "CLI uninstallation failed." = "CLI uninstallation failed.";
 "Failed to remove symlink. Please check your permissions." = "Failed to remove symlink. Please check your permissions.";
+"Existing CLI found" = "Existing CLI found";
+"%@ currently points to %@. Replace it?" = "%@ currently points to %@. Replace it?";
+"A non-symlink file already exists at %@. Please remove it manually." = "A non-symlink file already exists at %@. Please remove it manually.";
+"Replace" = "Replace";
+"Cancel" = "Cancel";
 "OK" = "OK";
 
 /* Agent command palette */

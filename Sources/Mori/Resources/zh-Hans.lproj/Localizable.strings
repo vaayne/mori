@@ -185,6 +185,11 @@
 "The symlink at %@ has been removed." = "%@ 处的符号链接已移除。";
 "CLI uninstallation failed." = "CLI 卸载失败。";
 "Failed to remove symlink. Please check your permissions." = "移除符号链接失败。请检查您的权限。";
+"Existing CLI found" = "发现已有的 CLI";
+"%@ currently points to %@. Replace it?" = "%@ 当前指向 %@。是否替换？";
+"A non-symlink file already exists at %@. Please remove it manually." = "%@ 处已存在非符号链接文件。请手动移除。";
+"Replace" = "替换";
+"Cancel" = "取消";
 "OK" = "好";
 
 /* Agent command palette */
