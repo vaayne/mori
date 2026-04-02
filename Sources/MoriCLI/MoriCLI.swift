@@ -34,12 +34,39 @@ struct MoriCLI: ParsableCommand {
 /// Resolve the Mori.app bundle URL relative to the CLI binary.
 /// When bundled: .../Mori.app/Contents/MacOS/bin/mori
 private func appBundleURL() -> URL {
-    URL(fileURLWithPath: CommandLine.arguments[0])
-        .resolvingSymlinksInPath()
+    // Resolve argv[0] to an absolute path (it may be just "mori" via PATH)
+    let argv0 = CommandLine.arguments[0]
+    let execURL: URL
+    if argv0.hasPrefix("/") {
+        execURL = URL(fileURLWithPath: argv0).resolvingSymlinksInPath()
+    } else if let resolved = resolveExecutableInPATH(argv0) {
+        execURL = resolved
+    } else {
+        execURL = URL(fileURLWithPath: argv0).resolvingSymlinksInPath()
+    }
+    return execURL
         .deletingLastPathComponent() // bin/
         .deletingLastPathComponent() // MacOS/
         .deletingLastPathComponent() // Contents/
         .deletingLastPathComponent() // Mori.app/
+}
+
+private func resolveExecutableInPATH(_ name: String) -> URL? {
+    let fm = FileManager.default
+    // If it contains a slash, resolve relative to cwd
+    if name.contains("/") {
+        let url = URL(fileURLWithPath: name).resolvingSymlinksInPath()
+        return fm.fileExists(atPath: url.path) ? url : nil
+    }
+    // Search PATH
+    guard let pathEnv = ProcessInfo.processInfo.environment["PATH"] else { return nil }
+    for dir in pathEnv.split(separator: ":") {
+        let candidate = URL(fileURLWithPath: String(dir)).appendingPathComponent(name)
+        if fm.isExecutableFile(atPath: candidate.path) {
+            return candidate.resolvingSymlinksInPath()
+        }
+    }
+    return nil
 }
 
 private func cliVersion() -> String {
@@ -514,8 +541,15 @@ struct PaneRead: ParsableCommand {
 
     func run() throws {
         let data = try sendIPCRequest(.paneRead(project: project, worktree: worktree, window: window, lines: lines))
-        // pane read returns plain text, not JSON — print as-is
-        if let data, let text = String(data: data, encoding: .utf8) {
+        guard let data, let text = String(data: data, encoding: .utf8) else { return }
+        if output.json {
+            // Wrap plain text in a JSON object for machine consumption
+            let envelope = ["output": text]
+            if let jsonData = try? JSONSerialization.data(withJSONObject: envelope, options: [.prettyPrinted, .sortedKeys]),
+               let jsonStr = String(data: jsonData, encoding: .utf8) {
+                print(jsonStr)
+            }
+        } else {
             print(text)
         }
     }
