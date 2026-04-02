@@ -1,6 +1,6 @@
 /* Root command */
 "Mori workspace CLI — communicate with the running Mori app." = "Mori 工作区 CLI — 与运行中的 Mori 应用通信。";
-"Requires a running Mori.app instance (communicates via Unix socket)." = "需要运行中的 Mori.app 实例（通过 Unix 套接字通信）。";
+"Communicates with Mori.app via Unix socket. Launches the app automatically if not running." = "通过 Unix 套接字与 Mori.app 通信。若应用未运行，将自动启动。";
 "All subcommands accept --json for machine-readable output." = "所有子命令均支持 --json 输出机器可读格式。";
 "Shell completions:" = "Shell 自动补全：";
 
@@ -9,8 +9,10 @@
 
 /* Error messages */
 "Error: %@" = "错误：%@";
-"Mori app is not running. Launch Mori and try again." = "Mori 应用未运行。请先启动 Mori 后重试。";
-"Mori app is not accepting CLI connections. Quit and relaunch Mori, then try again." = "Mori 应用当前未接受 CLI 连接。请退出并重新启动 Mori 后重试。";
+"Mori.app not found. Install Mori and try again." = "未找到 Mori.app。请安装 Mori 后重试。";
+"Launching Mori.app…\n" = "正在启动 Mori.app…\n";
+"Failed to launch Mori.app." = "启动 Mori.app 失败。";
+"Mori.app launched but IPC socket not ready after 10s." = "Mori.app 已启动，但 IPC 套接字在 10 秒内未就绪。";
 
 /* Common argument/option labels */
 "Project name" = "项目名称";

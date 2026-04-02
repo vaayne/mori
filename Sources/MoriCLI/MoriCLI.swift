@@ -9,7 +9,7 @@ struct MoriCLI: ParsableCommand {
         commandName: "mori",
         abstract: .localized("Mori workspace CLI — communicate with the running Mori app."),
         discussion: """
-        \(String.localized("Requires a running Mori.app instance (communicates via Unix socket)."))
+        \(String.localized("Communicates with Mori.app via Unix socket. Launches the app automatically if not running."))
         \(String.localized("All subcommands accept --json for machine-readable output."))
 
         \(String.localized("Shell completions:"))
@@ -59,16 +59,13 @@ struct OutputOptions: ParsableArguments {
 // MARK: - IPC Helpers
 
 /// Send an IPC request and return the response payload.
+/// Auto-launches Mori.app if not running.
 func sendIPCRequest(_ command: IPCCommand) throws -> Data? {
-    switch diagnoseIPCSocket(at: IPCServer.defaultSocketPath) {
-    case .missing:
-        let message = String.localized("Mori app is not running. Launch Mori and try again.")
-        FileHandle.standardError.write(Data(String.localized("Error: \(message)").utf8))
-        throw ExitCode.failure
-    case .stale:
-        let message = String.localized("Mori app is not accepting CLI connections. Quit and relaunch Mori, then try again.")
-        FileHandle.standardError.write(Data(String.localized("Error: \(message)").utf8))
-        throw ExitCode.failure
+    let socketPath = IPCServer.defaultSocketPath
+
+    switch diagnoseIPCSocket(at: socketPath) {
+    case .missing, .stale:
+        try launchMoriAppAndWait(socketPath: socketPath)
     case .ready, .indeterminate:
         break
     }
@@ -85,6 +82,76 @@ func sendIPCRequest(_ command: IPCCommand) throws -> Data? {
         FileHandle.standardError.write(Data(errorMessage.utf8))
         throw ExitCode.failure
     }
+}
+
+// MARK: - App Launcher
+
+/// Find and launch Mori.app, then wait for the IPC socket to become ready.
+private func launchMoriAppAndWait(socketPath: String) throws {
+    guard let appURL = findMoriApp() else {
+        let message = String.localized("Mori.app not found. Install Mori and try again.")
+        FileHandle.standardError.write(Data(String.localized("Error: \(message)").utf8))
+        throw ExitCode.failure
+    }
+
+    FileHandle.standardError.write(Data(String.localized("Launching Mori.app…\n").utf8))
+
+    // Launch via NSWorkspace equivalent: /usr/bin/open
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+    process.arguments = ["-a", appURL.path]
+    try process.run()
+    process.waitUntilExit()
+
+    guard process.terminationStatus == 0 else {
+        let message = String.localized("Failed to launch Mori.app.")
+        FileHandle.standardError.write(Data(String.localized("Error: \(message)").utf8))
+        throw ExitCode.failure
+    }
+
+    // Poll for socket readiness (up to 10 seconds)
+    let maxAttempts = 20
+    let intervalMicroseconds: useconds_t = 500_000 // 0.5s
+    for _ in 0..<maxAttempts {
+        usleep(intervalMicroseconds)
+        if case .ready = diagnoseIPCSocket(at: socketPath) {
+            return
+        }
+    }
+
+    let message = String.localized("Mori.app launched but IPC socket not ready after 10s.")
+    FileHandle.standardError.write(Data(String.localized("Error: \(message)").utf8))
+    throw ExitCode.failure
+}
+
+/// Locate Mori.app: first check relative to CLI binary (inside app bundle),
+/// then check common install locations.
+private func findMoriApp() -> URL? {
+    // 1. Relative to CLI binary: .../Mori.app/Contents/MacOS/bin/mori
+    let execURL = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+    let appCandidate = execURL
+        .deletingLastPathComponent() // bin/
+        .deletingLastPathComponent() // MacOS/
+        .deletingLastPathComponent() // Contents/
+    if appCandidate.lastPathComponent == "Mori.app",
+       FileManager.default.fileExists(atPath: appCandidate.appendingPathComponent("Contents/MacOS/Mori").path) {
+        return appCandidate
+    }
+
+    // 2. /Applications/Mori.app
+    let applicationsApp = URL(fileURLWithPath: "/Applications/Mori.app")
+    if FileManager.default.fileExists(atPath: applicationsApp.appendingPathComponent("Contents/MacOS/Mori").path) {
+        return applicationsApp
+    }
+
+    // 3. ~/Applications/Mori.app
+    let homeApps = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Applications/Mori.app")
+    if FileManager.default.fileExists(atPath: homeApps.appendingPathComponent("Contents/MacOS/Mori").path) {
+        return homeApps
+    }
+
+    return nil
 }
 
 /// Print payload as raw JSON or using the given formatter.

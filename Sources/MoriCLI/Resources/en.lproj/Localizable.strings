@@ -1,6 +1,6 @@
 /* Root command */
 "Mori workspace CLI — communicate with the running Mori app." = "Mori workspace CLI — communicate with the running Mori app.";
-"Requires a running Mori.app instance (communicates via Unix socket)." = "Requires a running Mori.app instance (communicates via Unix socket).";
+"Communicates with Mori.app via Unix socket. Launches the app automatically if not running." = "Communicates with Mori.app via Unix socket. Launches the app automatically if not running.";
 "All subcommands accept --json for machine-readable output." = "All subcommands accept --json for machine-readable output.";
 "Shell completions:" = "Shell completions:";
 
@@ -9,8 +9,10 @@
 
 /* Error messages */
 "Error: %@" = "Error: %@";
-"Mori app is not running. Launch Mori and try again." = "Mori app is not running. Launch Mori and try again.";
-"Mori app is not accepting CLI connections. Quit and relaunch Mori, then try again." = "Mori app is not accepting CLI connections. Quit and relaunch Mori, then try again.";
+"Mori.app not found. Install Mori and try again." = "Mori.app not found. Install Mori and try again.";
+"Launching Mori.app…\n" = "Launching Mori.app…\n";
+"Failed to launch Mori.app." = "Failed to launch Mori.app.";
+"Mori.app launched but IPC socket not ready after 10s." = "Mori.app launched but IPC socket not ready after 10s.";
 
 /* Common argument/option labels */
 "Project name" = "Project name";

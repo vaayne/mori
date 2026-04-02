@@ -15,17 +15,19 @@ into your PATH.
 
 ## Prerequisites
 
-The Mori app must be running. If it is not, every command exits with:
+The CLI communicates with Mori.app via a Unix socket. If the app is not running,
+the CLI **automatically launches it** and waits for the socket to become ready
+(up to 10 seconds).
+
+The CLI locates Mori.app by checking (in order):
+1. Relative to the CLI binary (inside the app bundle)
+2. `/Applications/Mori.app`
+3. `~/Applications/Mori.app`
+
+If Mori.app cannot be found, the CLI exits with:
 
 ```
-Error: Mori app is not running. Launch Mori and try again.
-```
-
-If the socket file exists but the app is not accepting connections (stale socket
-from a previous crash), the CLI prints:
-
-```
-Error: Mori app is not accepting CLI connections. Quit and relaunch Mori, then try again.
+Error: Mori.app not found. Install Mori and try again.
 ```
 
 ## Commands
