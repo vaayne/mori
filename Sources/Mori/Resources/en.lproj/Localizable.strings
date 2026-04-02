@@ -172,6 +172,21 @@
 "Released:" = "Released:";
 "You're already running the latest version." = "You're already running the latest version.";
 
+/* CLI Installation */
+"Install CLI…" = "Install CLI…";
+"Uninstall CLI…" = "Uninstall CLI…";
+"CLI binary not found in application bundle." = "CLI binary not found in application bundle.";
+"Please reinstall Mori to restore the CLI binary." = "Please reinstall Mori to restore the CLI binary.";
+"CLI installed successfully." = "CLI installed successfully.";
+"The `mori` command is now available at %@." = "The `mori` command is now available at %@.";
+"CLI installation failed." = "CLI installation failed.";
+"Failed to create symlink. Please check your permissions." = "Failed to create symlink. Please check your permissions.";
+"CLI uninstalled successfully." = "CLI uninstalled successfully.";
+"The symlink at %@ has been removed." = "The symlink at %@ has been removed.";
+"CLI uninstallation failed." = "CLI uninstallation failed.";
+"Failed to remove symlink. Please check your permissions." = "Failed to remove symlink. Please check your permissions.";
+"OK" = "OK";
+
 /* Agent command palette */
 "Idle" = "Idle";
 "Done" = "Done";

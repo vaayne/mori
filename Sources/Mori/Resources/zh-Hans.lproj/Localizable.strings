@@ -172,6 +172,21 @@
 "Released:" = "发布日期:";
 "You're already running the latest version." = "您已经在使用最新版本。";
 
+/* CLI Installation */
+"Install CLI…" = "安装 CLI…";
+"Uninstall CLI…" = "卸载 CLI…";
+"CLI binary not found in application bundle." = "应用程序包中未找到 CLI 二进制文件。";
+"Please reinstall Mori to restore the CLI binary." = "请重新安装 Mori 以恢复 CLI 二进制文件。";
+"CLI installed successfully." = "CLI 安装成功。";
+"The `mori` command is now available at %@." = "`mori` 命令现在可在 %@ 使用。";
+"CLI installation failed." = "CLI 安装失败。";
+"Failed to create symlink. Please check your permissions." = "创建符号链接失败。请检查您的权限。";
+"CLI uninstalled successfully." = "CLI 已卸载。";
+"The symlink at %@ has been removed." = "%@ 处的符号链接已移除。";
+"CLI uninstallation failed." = "CLI 卸载失败。";
+"Failed to remove symlink. Please check your permissions." = "移除符号链接失败。请检查您的权限。";
+"OK" = "好";
+
 /* Agent command palette */
 "Idle" = "空闲";
 "Done" = "完成";
