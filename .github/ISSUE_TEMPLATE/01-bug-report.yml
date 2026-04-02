@@ -1,0 +1,117 @@
+name: Bug Report
+description: Report a reproducible problem in Mori
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug.
+
+        Please fill in the details below so we can reproduce it without a long back-and-forth.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find a duplicate
+          required: true
+        - label: I can reproduce this on the latest Mori release, or I included the commit/version I tested
+          required: true
+  - type: input
+    id: mori-version
+    attributes:
+      label: Mori version
+      description: Release version or commit SHA
+      placeholder: "0.3.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: How did you install Mori?
+      options:
+        - Homebrew
+        - GitHub release (.dmg or .zip)
+        - Built from source
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: What area is affected?
+      multiple: true
+      options:
+        - macOS app UI
+        - Terminal rendering
+        - tmux sessions or panes
+        - Git projects or worktrees
+        - SSH remote projects
+        - Command palette or keyboard shortcuts
+        - CLI
+        - MoriRemote iOS app
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      placeholder: "macOS 15.4"
+    validations:
+      required: true
+  - type: input
+    id: tmux-version
+    attributes:
+      label: tmux version
+      description: Run `tmux -V`
+      placeholder: "tmux 3.5a"
+    validations:
+      required: false
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: What happened?
+      description: Describe the actual behavior, error, or broken flow.
+      placeholder: |
+        Example:
+        After creating a worktree from the sidebar, Mori opens the session,
+        but the pane stays blank and never attaches to tmux.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Mori
+        2. Add or select project `...`
+        3. Run / click `...`
+        4. Observe `...`
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: What did you expect to happen?
+      placeholder: Mori should attach to the new tmux session and show the shell prompt.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs, screenshots, or recordings
+      description: Paste logs here and drag screenshots or videos into the issue after the form opens.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: extra-context
+    attributes:
+      label: Anything else?
+      description: Extra context, related issues, unusual setup, or a workaround you found.
+    validations:
+      required: false

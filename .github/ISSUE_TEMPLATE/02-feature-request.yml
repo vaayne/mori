@@ -1,0 +1,80 @@
+name: Feature Request
+description: Suggest an improvement for Mori
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea.
+
+        Keep this focused on the user problem and the simplest useful outcome.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find the same request
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: What area would this improve?
+      multiple: true
+      options:
+        - macOS app
+        - Terminal or tmux workflow
+        - Git projects or worktrees
+        - SSH remote projects
+        - CLI
+        - MoriRemote iOS app
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Start with the pain point, not the implementation.
+      placeholder: |
+        Example:
+        When switching between several worktrees, it is hard to tell which ones
+        still have running agents or background tasks that need attention.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like Mori to do?
+      placeholder: |
+        Example:
+        Add a compact status indicator in the sidebar row so I can see agent or
+        task state without opening each worktree.
+    validations:
+      required: true
+  - type: textarea
+    id: value
+    attributes:
+      label: Why is this useful?
+      description: Tell us what gets faster, easier, or less error-prone.
+      placeholder: |
+        Example:
+        This would make multi-worktree navigation much faster and reduce context switching.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What alternatives have you tried?
+      description: Existing workflow, workaround, plugin, script, or why there is no good workaround.
+    validations:
+      required: false
+  - type: textarea
+    id: extra-context
+    attributes:
+      label: Additional context
+      description: Mockups, references, related issues, or examples from other tools.
+    validations:
+      required: false

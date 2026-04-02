@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 📝 Documentation
+
+- Add practical GitHub issue templates for bug reports and feature requests
+
 ## [0.3.0] - 2026-04-02
 
 ### ✨ Features
