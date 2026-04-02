@@ -7,6 +7,10 @@ final class CommandPaletteDataSource {
 
     private let appState: AppState
 
+    /// Optional filter to restrict which items are shown.
+    /// When set, only items passing this predicate are included.
+    var itemFilter: (@Sendable (CommandPaletteItem) -> Bool)?
+
     init(appState: AppState) {
         self.appState = appState
     }
@@ -95,21 +99,6 @@ final class CommandPaletteDataSource {
             }
         }
 
-        // "Set Worktree Status" actions — only when a worktree is selected
-        if let selectedWorktree = appState.selectedWorktree {
-            for status in WorkflowStatus.allCases {
-                let isCurrent = selectedWorktree.workflowStatus == status
-                let subtitle: String = isCurrent
-                    ? String.localized("Current status for \(selectedWorktree.name)")
-                    : String.localized("Set \(selectedWorktree.name) to \(status.displayName)")
-                items.append(.action(
-                    id: "action.status-\(status.rawValue)",
-                    title: .localized("Status: \(status.displayName)"),
-                    subtitle: subtitle
-                ))
-            }
-        }
-
         return items
     }
 
@@ -118,7 +107,12 @@ final class CommandPaletteDataSource {
     /// Supports `tag:<tagname>` prefix to filter windows by semantic tag.
     /// Supports `agent:` prefix to filter agent windows.
     func search(query: String) -> [CommandPaletteItem] {
-        let items = allItems()
+        var items = allItems()
+
+        // Apply item filter if set
+        if let filter = itemFilter {
+            items = items.filter(filter)
+        }
 
         if query.isEmpty {
             return items

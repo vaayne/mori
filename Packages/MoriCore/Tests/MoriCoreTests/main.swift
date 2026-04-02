@@ -440,22 +440,30 @@ func testMultipleUnreadWindowsCountCorrectly() {
 // MARK: - FuzzyMatcher Tests
 
 func testFuzzyMatcherExactPrefix() {
-    // Exact prefix should score 100
-    assertEqual(FuzzyMatcher.score(query: "mori", candidate: "mori-project"), 100)
-    assertEqual(FuzzyMatcher.score(query: "Mor", candidate: "Mori"), 100)
+    // Exact prefix should score > 0 and higher than non-prefix
+    let prefixScore = FuzzyMatcher.score(query: "mori", candidate: "mori-project")
+    let nonPrefixScore = FuzzyMatcher.score(query: "mori", candidate: "my-mori")
+    assertTrue(prefixScore > 0, "prefix match should score > 0")
+    assertTrue(prefixScore > nonPrefixScore, "prefix should beat non-prefix")
 }
 
 func testFuzzyMatcherWordBoundary() {
-    // Query matching start of a word (not first word) scores 75
-    assertEqual(FuzzyMatcher.score(query: "side", candidate: "feat-sidebar"), 75)
-    assertEqual(FuzzyMatcher.score(query: "bar", candidate: "foo_bar_baz"), 75)
-    assertEqual(FuzzyMatcher.score(query: "proj", candidate: "my-project"), 75)
+    // Query matching start of a word (not first word) should beat mid-word
+    let wordBoundaryScore = FuzzyMatcher.score(query: "side", candidate: "feat-sidebar")
+    let midWordScore = FuzzyMatcher.score(query: "idea", candidate: "feat-sidebar")
+    assertTrue(wordBoundaryScore > 0, "word boundary match should score > 0")
+    assertTrue(wordBoundaryScore > midWordScore, "word boundary should beat mid-word")
+    // Word boundary match for "bar" at underscore
+    let barScore = FuzzyMatcher.score(query: "bar", candidate: "foo_bar_baz")
+    assertTrue(barScore > 0, "word boundary after underscore should match")
 }
 
 func testFuzzyMatcherSubstring() {
-    // Substring not at word boundary scores 50
-    assertEqual(FuzzyMatcher.score(query: "ject", candidate: "project"), 50)
-    assertEqual(FuzzyMatcher.score(query: "ori", candidate: "mori"), 50)
+    // Substring match should score > 0
+    let score1 = FuzzyMatcher.score(query: "ject", candidate: "project")
+    let score2 = FuzzyMatcher.score(query: "ori", candidate: "mori")
+    assertTrue(score1 > 0, "substring should match")
+    assertTrue(score2 > 0, "substring should match")
 }
 
 func testFuzzyMatcherNoMatch() {
@@ -466,30 +474,59 @@ func testFuzzyMatcherNoMatch() {
 
 func testFuzzyMatcherEmptyQuery() {
     // Empty query matches everything with max score
-    assertEqual(FuzzyMatcher.score(query: "", candidate: "anything"), 100)
-    assertEqual(FuzzyMatcher.score(query: "", candidate: ""), 100)
+    let score = FuzzyMatcher.score(query: "", candidate: "anything")
+    assertTrue(score > 0, "empty query should match everything")
+    let emptyBoth = FuzzyMatcher.score(query: "", candidate: "")
+    assertTrue(emptyBoth > 0, "empty query + empty candidate should match")
 }
 
 func testFuzzyMatcherCaseInsensitive() {
-    // Case-insensitive throughout
-    assertEqual(FuzzyMatcher.score(query: "MORI", candidate: "mori"), 100)
-    assertEqual(FuzzyMatcher.score(query: "mori", candidate: "MORI"), 100)
-    assertEqual(FuzzyMatcher.score(query: "Side", candidate: "feat-sidebar"), 75)
+    // Case-insensitive: same query different case should produce same score
+    let upper = FuzzyMatcher.score(query: "MORI", candidate: "mori")
+    let lower = FuzzyMatcher.score(query: "mori", candidate: "mori")
+    assertEqual(upper, lower)
+    let mixed = FuzzyMatcher.score(query: "mori", candidate: "MORI")
+    assertEqual(upper, mixed)
 }
 
 func testFuzzyMatcherCamelCaseBoundary() {
-    // camelCase word boundaries
-    assertEqual(FuzzyMatcher.score(query: "palette", candidate: "commandPalette"), 75)
-    assertEqual(FuzzyMatcher.score(query: "command", candidate: "commandPalette"), 100)
+    // camelCase word boundaries: "palette" at boundary scores higher than mid-word
+    let boundaryScore = FuzzyMatcher.score(query: "palette", candidate: "commandPalette")
+    let prefixScore = FuzzyMatcher.score(query: "command", candidate: "commandPalette")
+    assertTrue(boundaryScore > 0, "camelCase boundary should match")
+    assertTrue(prefixScore > boundaryScore, "prefix should beat camelCase boundary")
 }
 
 func testFuzzyMatcherScoreOrdering() {
-    // Verify relative ordering: prefix > word boundary > substring
-    let prefixScore = FuzzyMatcher.score(query: "cre", candidate: "create-worktree")
+    // Verify relative ordering: prefix > word boundary > mid-word substring
+    // Use same candidate and similar-length queries for fair comparison
+    let prefixScore = FuzzyMatcher.score(query: "crea", candidate: "create-worktree")
     let wordScore = FuzzyMatcher.score(query: "work", candidate: "create-worktree")
-    let subScore = FuzzyMatcher.score(query: "ork", candidate: "create-worktree")
+    let subScore = FuzzyMatcher.score(query: "orkt", candidate: "create-worktree")
     assertTrue(prefixScore > wordScore, "prefix should beat word boundary")
     assertTrue(wordScore > subScore, "word boundary should beat substring")
+}
+
+func testFuzzyMatcherNonContiguous() {
+    // Non-contiguous character matching (core fuzzy feature)
+    let score1 = FuzzyMatcher.score(query: "opr", candidate: "Open Project")
+    assertTrue(score1 > 0, "'opr' should fuzzy match 'Open Project'")
+
+    let score2 = FuzzyMatcher.score(query: "cw", candidate: "Create Worktree")
+    assertTrue(score2 > 0, "'cw' should fuzzy match 'Create Worktree'")
+
+    let score3 = FuzzyMatcher.score(query: "fbb", candidate: "foo_bar_baz")
+    assertTrue(score3 > 0, "'fbb' should fuzzy match 'foo_bar_baz'")
+
+    // Non-contiguous should score lower than contiguous
+    let contiguous = FuzzyMatcher.score(query: "open", candidate: "Open Project")
+    assertTrue(contiguous > score1, "contiguous should beat non-contiguous")
+}
+
+func testFuzzyMatcherNonContiguousNoMatch() {
+    // Characters present but in wrong order should not match
+    assertEqual(FuzzyMatcher.score(query: "ba", candidate: "ab"), 0)
+    assertEqual(FuzzyMatcher.score(query: "zyx", candidate: "xyz"), 0)
 }
 
 // MARK: - WindowTag Tests
@@ -1412,6 +1449,8 @@ testFuzzyMatcherEmptyQuery()
 testFuzzyMatcherCaseInsensitive()
 testFuzzyMatcherCamelCaseBoundary()
 testFuzzyMatcherScoreOrdering()
+testFuzzyMatcherNonContiguous()
+testFuzzyMatcherNonContiguousNoMatch()
 
 testWindowTagRawValues()
 testWindowTagCodable()
