@@ -85,8 +85,29 @@ final class CommandPaletteController: NSWindowController {
         }
     }
 
+    /// Show palette filtered to projects only (Cmd+P).
+    func showProjectsOnly() {
+        dataSource?.itemFilter = { item in
+            if case .project = item { return true }
+            return false
+        }
+        guard let panel = window else { return }
+
+        searchField.stringValue = ""
+        searchField.placeholderString = .localized("Switch project...")
+        selectedIndex = 0
+        updateResults()
+        positionPanel()
+        panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(searchField)
+    }
+
     func show() {
         guard let panel = window else { return }
+
+        // Clear filter for full palette
+        dataSource?.itemFilter = nil
+        searchField.placeholderString = .localized("Search projects, worktrees, windows, actions...")
 
         // Reset state
         searchField.stringValue = ""

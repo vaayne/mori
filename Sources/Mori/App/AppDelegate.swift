@@ -1103,6 +1103,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 return nil
             }
 
+            // Cmd+P: quick project switcher
+            if mods == [.command], key == "p" {
+                palette?.showProjectsOnly()
+                return nil
+            }
+
             // Cmd+Shift+N: open worktree creation panel
             if mods == [.command, .shift], key == "N" || key == "n" {
                 self?.showCreateWorktreePanel()
