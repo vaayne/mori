@@ -77,8 +77,9 @@ final class CommandPaletteController: NSWindowController {
     // MARK: - Public
 
     /// Toggle palette visibility.
+    /// If the project-only filter is active, switch to full palette instead of dismissing.
     func toggle() {
-        if let panel = window, panel.isVisible {
+        if let panel = window, panel.isVisible, dataSource?.itemFilter == nil {
             dismiss()
         } else {
             show()

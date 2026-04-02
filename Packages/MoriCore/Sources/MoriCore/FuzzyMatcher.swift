@@ -36,7 +36,7 @@ public enum FuzzyMatcher {
         // Use Int.min as sentinel for "not reachable"
         let sentinel = Int.min
 
-        // bestEndingAt[c] = (score, consecutive) for current query index,
+        // prevRow[c] = (score, consecutive) for current query index,
         // where the match ends at candidate position c.
         // We process query chars one at a time, keeping only the current
         // and previous rows.
