@@ -227,3 +227,6 @@
 "%lld agents need attention" = "%lld agents need attention";
 "Idle" = "Idle";
 "Done" = "Done";
+
+/* Agent mode toggle */
+"Agents only" = "Agents only";

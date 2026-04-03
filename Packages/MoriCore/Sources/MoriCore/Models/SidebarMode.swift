@@ -3,6 +3,7 @@ import Foundation
 public enum SidebarMode: String, Codable, Sendable {
     case workspaces
     case tasks
+    case agentTasks
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -12,9 +13,11 @@ public enum SidebarMode: String, Codable, Sendable {
             self = .workspaces
         case "tasks":
             self = .tasks
+        case "agentTasks":
+            self = .agentTasks
         case "agents":
-            // Backward compat: fold agents into tasks
-            self = .tasks
+            // Backward compat: fold agents into agentTasks
+            self = .agentTasks
         case "worktrees", "search":
             self = .workspaces
         default:

@@ -1338,10 +1338,19 @@ func testSidebarModeBackwardsCompatSearch() {
 }
 
 func testSidebarModeBackwardsCompatAgents() {
-    // Old "agents" value should map to .tasks
+    // Old "agents" value should map to .agentTasks
     let json = "\"agents\"".data(using: .utf8)!
     let decoded = try! JSONDecoder().decode(SidebarMode.self, from: json)
-    assertEqual(decoded, .tasks)
+    assertEqual(decoded, .agentTasks)
+}
+
+func testSidebarModeAgentTasksRoundTrip() {
+    let json = "\"agentTasks\"".data(using: .utf8)!
+    let decoded = try! JSONDecoder().decode(SidebarMode.self, from: json)
+    assertEqual(decoded, .agentTasks)
+    let encoded = try! JSONEncoder().encode(decoded)
+    let roundTripped = String(data: encoded, encoding: .utf8)!
+    assertEqual(roundTripped, "\"agentTasks\"")
 }
 
 // MARK: - AgentMessage Tests
@@ -1515,6 +1524,7 @@ testSidebarModeNewValuesRoundTrip()
 testSidebarModeBackwardsCompatWorktrees()
 testSidebarModeBackwardsCompatSearch()
 testSidebarModeBackwardsCompatAgents()
+testSidebarModeAgentTasksRoundTrip()
 
 testSSHControlSocketPathLengthLimit()
 testSSHExecutionConfigTargetFormatting()

@@ -227,3 +227,6 @@
 "%lld agents need attention" = "%lld 个代理需要关注";
 "Idle" = "空闲";
 "Done" = "完成";
+
+/* Agent mode toggle */
+"Agents only" = "仅代理";
