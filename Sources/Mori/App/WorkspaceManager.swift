@@ -1229,6 +1229,8 @@ final class WorkspaceManager {
     }
 
     /// Refresh runtime windows/panes from tmux into AppState.
+    /// Also re-runs agent detection immediately so ad-hoc refreshes don't wipe
+    /// agent state until the next polling tick.
     func refreshRuntimeState() async {
         let sessionsByEndpoint = await scanSessionsByEndpoint()
         latestSessionsByEndpoint = sessionsByEndpoint
@@ -1272,6 +1274,9 @@ final class WorkspaceManager {
         }
 
         appState.runtimeWindows = runtimeWindows
+        await detectAgentStates(sessionsByEndpoint: sessionsByEndpoint)
+        updateUnreadCounts()
+        updateAggregatedBadges()
     }
 
     // MARK: - Persistence
@@ -1444,15 +1449,19 @@ final class WorkspaceManager {
     /// Also cleans up stale agent state when the agent has exited.
     private func detectAgentStates(sessionsByEndpoint: [String: [TmuxSession]]) async {
         let now = Date().timeIntervalSince1970
+        var updatedWorktrees = appState.worktrees
+        var updatedWindows = appState.runtimeWindows
 
-        // Reset worktree agentState before re-aggregating from windows
-        for i in appState.worktrees.indices {
-            appState.worktrees[i].agentState = .none
+        // Reset worktree agentState before re-aggregating from windows.
+        // Reassigning the full arrays at the end ensures Swift Observation
+        // notices the change and refreshes SwiftUI rows.
+        for i in updatedWorktrees.indices {
+            updatedWorktrees[i].agentState = .none
         }
 
-        for i in appState.runtimeWindows.indices {
-            let rw = appState.runtimeWindows[i]
-            guard let worktree = appState.worktrees.first(where: { $0.id == rw.worktreeId }) else { continue }
+        for i in updatedWindows.indices {
+            let rw = updatedWindows[i]
+            guard let worktree = updatedWorktrees.first(where: { $0.id == rw.worktreeId }) else { continue }
             let endpointKey = endpointKey(for: worktree)
             let sessions = sessionsByEndpoint[endpointKey] ?? []
             let rawWindowId = rawWindowId(from: rw)
@@ -1468,6 +1477,7 @@ final class WorkspaceManager {
             var windowIsLongRunning = false
             var windowAgentState: AgentState = .none
             var windowDetectedAgent: String? = nil
+            var windowTag = rw.tag
 
             for pane in tmuxWindow.panes {
                 let isShell = PaneStateDetector.isShellProcess(pane.currentCommand)
@@ -1498,14 +1508,9 @@ final class WorkspaceManager {
             }
 
             // Auto-upgrade tag to .agent when a coding agent is detected
-            if windowDetectedAgent != nil && rw.tag != .agent {
-                appState.runtimeWindows[i].tag = .agent
+            if windowDetectedAgent != nil && windowTag != .agent {
+                windowTag = .agent
             }
-
-            appState.runtimeWindows[i].isRunning = windowIsRunning
-            appState.runtimeWindows[i].isLongRunning = windowIsLongRunning
-            appState.runtimeWindows[i].agentState = windowAgentState
-            appState.runtimeWindows[i].detectedAgent = windowDetectedAgent
 
             let badge = StatusAggregator.windowBadge(
                 hasUnreadOutput: rw.hasUnreadOutput,
@@ -1513,15 +1518,25 @@ final class WorkspaceManager {
                 isLongRunning: windowIsLongRunning,
                 agentState: windowAgentState
             )
-            appState.runtimeWindows[i].badge = badge
 
-            if windowAgentState != .none {
-                updateWorktreeAgentState(
-                    worktreeId: rw.worktreeId,
-                    agentState: windowAgentState
-                )
+            updatedWindows[i].tag = windowTag
+            updatedWindows[i].isRunning = windowIsRunning
+            updatedWindows[i].isLongRunning = windowIsLongRunning
+            updatedWindows[i].agentState = windowAgentState
+            updatedWindows[i].detectedAgent = windowDetectedAgent
+            updatedWindows[i].badge = badge
+
+            if windowAgentState != .none,
+               let worktreeIndex = updatedWorktrees.firstIndex(where: { $0.id == rw.worktreeId }) {
+                let current = updatedWorktrees[worktreeIndex].agentState
+                if agentStatePriority(windowAgentState) > agentStatePriority(current) {
+                    updatedWorktrees[worktreeIndex].agentState = windowAgentState
+                }
             }
         }
+
+        appState.worktrees = updatedWorktrees
+        appState.runtimeWindows = updatedWindows
     }
 
     /// Find a tmux window by ID across all sessions.

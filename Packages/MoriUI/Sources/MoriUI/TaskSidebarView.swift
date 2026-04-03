@@ -196,7 +196,9 @@ public struct TaskSidebarView: View {
             .filter { $0.worktreeId == worktree.id }
             .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
         let projectName = projectMap[worktree.projectId]?.name ?? ""
-        let agentName = worktreeWindows.first(where: { $0.detectedAgent != nil })?.detectedAgent
+        let agentName = worktreeWindows.first(where: {
+            $0.detectedAgent != nil || $0.agentState != .none
+        })?.detectedAgent
 
         VStack(alignment: .leading, spacing: 0) {
             TaskWorktreeRowView(
@@ -247,7 +249,7 @@ public struct TaskSidebarView: View {
             if !worktreeWindows.isEmpty {
                 ForEach(Array(worktreeWindows.enumerated()), id: \.element.id) { index, window in
                     Group {
-                        if window.detectedAgent != nil {
+                        if window.detectedAgent != nil || window.agentState != .none {
                             AgentWindowRowView(
                                 window: window,
                                 projectName: projectName,

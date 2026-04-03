@@ -281,7 +281,9 @@ public struct WorktreeSidebarView: View {
         let worktreeWindows = windows
             .filter { $0.worktreeId == worktree.id }
             .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
-        let agentName = worktreeWindows.first(where: { $0.detectedAgent != nil })?.detectedAgent
+        let agentName = worktreeWindows.first(where: {
+            $0.detectedAgent != nil || $0.agentState != .none
+        })?.detectedAgent
 
         VStack(alignment: .leading, spacing: 0) {
             WorktreeRowView(
@@ -332,7 +334,7 @@ public struct WorktreeSidebarView: View {
             if !worktreeWindows.isEmpty {
                 ForEach(Array(worktreeWindows.enumerated()), id: \.element.id) { index, window in
                     Group {
-                        if window.detectedAgent != nil {
+                        if window.detectedAgent != nil || window.agentState != .none {
                             AgentWindowRowView(
                                 window: window,
                                 projectName: projects.first(where: { $0.id == worktree.projectId })?.name ?? "",
