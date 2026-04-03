@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-04-03
+
+### ✨ Features
+
+- Add "Remote Connect" menu item in the app menu for quick remote host access
+- Add project rename from sidebar context menu
+- Skip git polling for non-git directories, show house icon, and display tool install hints
+- Improve onboarding with default Home workspace and tool detection
+
+### 🐛 Bug Fixes
+
+- Non-git directories no longer show "main" branch; deduplicate worktree rows
+
+### ♻️ Refactoring
+
+- Open project now goes directly to folder picker (skips intermediate dialog)
+
+**Full Changelog**: [v0.3.1...v0.3.2](https://github.com/vaayne/mori/compare/v0.3.1...v0.3.2)
+
 ## [0.3.1] - 2026-04-03
 
 ### 📝 Documentation
@@ -251,7 +270,9 @@ Initial release of Mori — a macOS native workspace terminal organized around P
 
 **Full Changelog**: [v0.1.0](https://github.com/vaayne/mori/commits/v0.1.0)
 
-[Unreleased]: https://github.com/vaayne/mori/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/vaayne/mori/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/vaayne/mori/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/vaayne/mori/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/vaayne/mori/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/vaayne/mori/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/vaayne/mori/compare/v0.2.0...v0.2.1
