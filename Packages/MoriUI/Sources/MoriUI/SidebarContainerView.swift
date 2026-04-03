@@ -1,9 +1,9 @@
 import SwiftUI
 import MoriCore
 
-/// Container view with a segmented control toggle (Tasks | Workspaces) at top.
-/// Conditionally renders `TaskSidebarView`, `AgentSidebarView`, or `WorktreeSidebarView`,
-/// passing through all callbacks.
+/// Container view with a segmented control toggle (Tasks | Workspaces) at top,
+/// plus an agent-mode toggle button. When agent mode is active, `AgentSidebarView`
+/// replaces the content regardless of which base mode is selected.
 public struct SidebarContainerView: View {
     private let sidebarMode: SidebarMode
     private let onToggleSidebarMode: (SidebarMode) -> Void
@@ -83,10 +83,12 @@ public struct SidebarContainerView: View {
         self.onSendKeys = onSendKeys
     }
 
-    /// Whether the current mode is tasks-like (tasks or agentTasks).
-    private var isTasksMode: Bool {
-        sidebarMode == .tasks || sidebarMode == .agentTasks
-    }
+    /// Whether agent mode is active.
+    private var isAgentMode: Bool { sidebarMode == .agentTasks }
+
+    /// The base mode for the picker (strips agentTasks → last non-agent mode).
+    /// Tracks which picker segment to highlight when not in agent mode.
+    @State private var lastBaseMode: SidebarMode = .tasks
 
     /// Count of active agent windows (running, waiting, or error).
     private var activeAgentCount: Int {
@@ -104,26 +106,23 @@ public struct SidebarContainerView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // Segmented control toggle — map .agentTasks → .tasks for display
-            Picker("", selection: Binding(
-                get: { isTasksMode ? SidebarMode.tasks : sidebarMode },
-                set: { onToggleSidebarMode($0) }
-            )) {
-                Text(String.localized("Tasks")).tag(SidebarMode.tasks)
-                Text(String.localized("Workspaces")).tag(SidebarMode.workspaces)
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, MoriTokens.Spacing.xl)
-            .padding(.top, MoriTokens.Spacing.lg)
-            .padding(.bottom, MoriTokens.Spacing.sm)
+            headerRow
 
-            // Agent mode toggle pill — visible in tasks mode
-            if isTasksMode {
-                agentModePill
-            }
-
-            // Conditional view
+            // Content
             switch sidebarMode {
+            case .agentTasks:
+                AgentSidebarView(
+                    projects: projects,
+                    worktrees: worktrees,
+                    windows: windows,
+                    selectedWindowId: selectedWindowId,
+                    onSelectWindow: onSelectWindow,
+                    onRequestPaneOutput: onRequestPaneOutput,
+                    onSendKeys: onSendKeys,
+                    onAddProject: onAddProject,
+                    onOpenSettings: onOpenSettings,
+                    onOpenCommandPalette: onOpenCommandPalette
+                )
             case .tasks:
                 TaskSidebarView(
                     projects: projects,
@@ -141,19 +140,6 @@ public struct SidebarContainerView: View {
                     onOpenCommandPalette: onOpenCommandPalette,
                     onRequestPaneOutput: onRequestPaneOutput,
                     onSendKeys: onSendKeys
-                )
-            case .agentTasks:
-                AgentSidebarView(
-                    projects: projects,
-                    worktrees: worktrees,
-                    windows: windows,
-                    selectedWindowId: selectedWindowId,
-                    onSelectWindow: onSelectWindow,
-                    onRequestPaneOutput: onRequestPaneOutput,
-                    onSendKeys: onSendKeys,
-                    onAddProject: onAddProject,
-                    onOpenSettings: onOpenSettings,
-                    onOpenCommandPalette: onOpenCommandPalette
                 )
             case .workspaces:
                 WorktreeSidebarView(
@@ -182,59 +168,91 @@ public struct SidebarContainerView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: sidebarMode) { _, newValue in
+            if newValue != .agentTasks {
+                lastBaseMode = newValue
+            }
+        }
+        .onAppear {
+            if sidebarMode != .agentTasks {
+                lastBaseMode = sidebarMode
+            }
+        }
     }
 
-    // MARK: - Agent Mode Pill
+    // MARK: - Header
 
-    private var agentModePill: some View {
-        let isActive = sidebarMode == .agentTasks
-        let pillColor: Color = isActive
-            ? (hasAgentAttention ? MoriTokens.Color.attention : MoriTokens.Color.success)
-            : MoriTokens.Color.muted
+    /// Picker + agent toggle in a single row.
+    private var headerRow: some View {
+        HStack(spacing: MoriTokens.Spacing.md) {
+            // Segmented control — deselects both segments when in agent mode
+            Picker("", selection: Binding(
+                get: { isAgentMode ? nil : sidebarMode },
+                set: { newValue in
+                    if let mode = newValue {
+                        onToggleSidebarMode(mode)
+                    }
+                }
+            )) {
+                Text(String.localized("Tasks")).tag(Optional(SidebarMode.tasks))
+                Text(String.localized("Workspaces")).tag(Optional(SidebarMode.workspaces))
+            }
+            .pickerStyle(.segmented)
+
+            // Agent toggle button
+            agentToggleButton
+        }
+        .padding(.horizontal, MoriTokens.Spacing.xl)
+        .padding(.top, MoriTokens.Spacing.lg)
+        .padding(.bottom, MoriTokens.Spacing.sm)
+    }
+
+    // MARK: - Agent Toggle Button
+
+    private var agentToggleButton: some View {
+        let badgeColor: Color = hasAgentAttention
+            ? MoriTokens.Color.attention
+            : (activeAgentCount > 0 ? MoriTokens.Color.success : MoriTokens.Color.muted)
 
         return Button {
             withAnimation(.easeInOut(duration: 0.15)) {
-                onToggleSidebarMode(isActive ? .tasks : .agentTasks)
-            }
-        } label: {
-            HStack(spacing: MoriTokens.Spacing.sm) {
-                Image(systemName: "bolt.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(pillColor)
-
-                Text(String.localized("Agents only"))
-                    .font(MoriTokens.Font.caption)
-                    .foregroundStyle(pillColor)
-
-                if activeAgentCount > 0 {
-                    Text("\(activeAgentCount)")
-                        .font(MoriTokens.Font.badgeCount)
-                        .foregroundStyle(isActive ? pillColor : MoriTokens.Color.muted)
-                        .padding(.horizontal, MoriTokens.Spacing.sm)
-                        .padding(.vertical, 1)
-                        .background(
-                            Capsule()
-                                .fill(pillColor.opacity(isActive ? 0.15 : 0.08))
-                        )
+                if isAgentMode {
+                    // Return to last base mode
+                    onToggleSidebarMode(lastBaseMode)
+                } else {
+                    onToggleSidebarMode(.agentTasks)
                 }
             }
-            .padding(.horizontal, MoriTokens.Spacing.lg)
-            .padding(.vertical, MoriTokens.Spacing.sm)
-            .background(
-                Capsule()
-                    .fill(isActive ? pillColor.opacity(0.1) : Color.clear)
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(
-                                isActive ? pillColor.opacity(0.35) : MoriTokens.Color.muted.opacity(0.2),
-                                lineWidth: 1
-                            )
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: isAgentMode ? "bolt.fill" : "bolt")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(isAgentMode ? badgeColor : MoriTokens.Color.muted)
+                    .frame(width: 26, height: 22)
+                    .background(
+                        RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
+                            .fill(isAgentMode ? badgeColor.opacity(0.12) : Color.clear)
                     )
-            )
-            .contentShape(Capsule())
+
+                // Live count badge
+                if activeAgentCount > 0 {
+                    Text("\(activeAgentCount)")
+                        .font(.system(size: 8, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 3)
+                        .frame(minWidth: 14, minHeight: 14)
+                        .background(
+                            Capsule()
+                                .fill(badgeColor)
+                        )
+                        .offset(x: 5, y: -5)
+                }
+            }
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, MoriTokens.Spacing.xl)
-        .padding(.bottom, MoriTokens.Spacing.sm)
+        .help(isAgentMode
+            ? String.localized("Exit agent mode")
+            : String.localized("Show agents only"))
+        .accessibilityLabel(String.localized("Agent mode"))
     }
 }

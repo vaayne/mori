@@ -230,3 +230,7 @@
 
 /* Agent mode toggle */
 "Agents only" = "仅代理";
+"Show agents only" = "仅显示代理";
+"Exit agent mode" = "退出代理模式";
+"Agent mode" = "代理模式";
+"No agents running" = "没有运行中的代理";

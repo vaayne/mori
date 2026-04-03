@@ -230,3 +230,7 @@
 
 /* Agent mode toggle */
 "Agents only" = "Agents only";
+"Show agents only" = "Show agents only";
+"Exit agent mode" = "Exit agent mode";
+"Agent mode" = "Agent mode";
+"No agents running" = "No agents running";

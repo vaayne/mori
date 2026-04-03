@@ -41,7 +41,7 @@ public struct AgentSidebarView: View {
         self.onOpenCommandPalette = onOpenCommandPalette
     }
 
-    /// Agent windows: those with a detected agent or non-none agentState.
+    /// Agent windows: those with a detected agent or active agent state.
     private var agentWindows: [RuntimeWindow] {
         windows.filter { $0.detectedAgent != nil || $0.agentState != .none }
     }
@@ -105,13 +105,17 @@ public struct AgentSidebarView: View {
                     .foregroundStyle(MoriTokens.Color.muted)
                     .frame(width: 12)
 
+                Image(systemName: group.iconName)
+                    .font(.system(size: 11))
+                    .foregroundStyle(group.color)
+
                 Text(group.title)
                     .font(MoriTokens.Font.sectionTitle)
-                    .foregroundStyle(MoriTokens.Color.muted)
+                    .foregroundStyle(group.color)
 
                 Text("\(windows.count)")
                     .font(MoriTokens.Font.badgeCount)
-                    .foregroundStyle(MoriTokens.Color.muted)
+                    .foregroundStyle(group.color.opacity(0.7))
 
                 Spacer()
             }
@@ -142,7 +146,7 @@ public struct AgentSidebarView: View {
 
     private var emptyState: some View {
         VStack(spacing: MoriTokens.Spacing.lg) {
-            Image(systemName: "person.2.slash")
+            Image(systemName: "bolt.slash")
                 .font(.system(size: 24))
                 .foregroundStyle(MoriTokens.Color.muted)
             Text(String.localized("No agents running"))
@@ -207,17 +211,31 @@ enum AgentGroupKey: String, Hashable, CaseIterable {
     case attention
     case running
     case completed
-    case idle
 
-    /// Display order: attention first, then running, completed, idle.
-    static let displayOrder: [AgentGroupKey] = [.attention, .running, .completed, .idle]
+    /// Display order: attention first, then running, completed.
+    static let displayOrder: [AgentGroupKey] = [.attention, .running, .completed]
 
     var title: String {
         switch self {
         case .attention: return String.localized("Attention")
         case .running: return String.localized("Running")
         case .completed: return String.localized("Completed")
-        case .idle: return String.localized("Idle")
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .attention: return "exclamationmark.bubble.fill"
+        case .running: return "bolt.fill"
+        case .completed: return "checkmark.circle.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .attention: return MoriTokens.Color.attention
+        case .running: return MoriTokens.Color.success
+        case .completed: return MoriTokens.Color.muted
         }
     }
 
@@ -228,9 +246,7 @@ enum AgentGroupKey: String, Hashable, CaseIterable {
         case .running:
             return window.agentState == .running
         case .completed:
-            return window.agentState == .completed
-        case .idle:
-            return window.agentState == .none
+            return window.agentState == .completed || window.agentState == .none
         }
     }
 }
