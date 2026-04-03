@@ -1451,6 +1451,7 @@ final class WorkspaceManager {
         let now = Date().timeIntervalSince1970
         var updatedWorktrees = appState.worktrees
         var updatedWindows = appState.runtimeWindows
+        var stalePaneCleanups: [(worktree: Worktree, paneId: String)] = []
 
         // Reset worktree agentState before re-aggregating from windows.
         // Reassigning the full arrays at the end ensures Swift Observation
@@ -1501,8 +1502,8 @@ final class WorkspaceManager {
                     }
 
                     if isShell {
-                        // Agent exited — clean up stale options after processing
-                        await clearStaleAgentState(worktree: worktree, paneId: pane.paneId)
+                        // Agent exited — queue stale option cleanup after state updates
+                        stalePaneCleanups.append((worktree: worktree, paneId: pane.paneId))
                     }
                 }
             }
@@ -1537,6 +1538,10 @@ final class WorkspaceManager {
 
         appState.worktrees = updatedWorktrees
         appState.runtimeWindows = updatedWindows
+
+        for cleanup in stalePaneCleanups {
+            await clearStaleAgentState(worktree: cleanup.worktree, paneId: cleanup.paneId)
+        }
     }
 
     /// Find a tmux window by ID across all sessions.
