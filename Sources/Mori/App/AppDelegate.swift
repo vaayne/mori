@@ -209,6 +209,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 Task {
                     try? await tmux.sendKeys(sessionId: sessionName, paneId: targetPaneId, keys: text)
                 }
+            },
+            onUpdateProject: { [weak manager] project in
+                manager?.updateProject(project)
             }
         )
 

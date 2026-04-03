@@ -29,7 +29,8 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         onToggleSidebarMode: ((SidebarMode) -> Void)? = nil,
         onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)? = nil,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
-        onSendKeys: ((String, String) -> Void)? = nil
+        onSendKeys: ((String, String) -> Void)? = nil,
+        onUpdateProject: ((Project) -> Void)? = nil
     ) {
         self.appState = appState
         let rootView = SidebarContentView(
@@ -49,7 +50,8 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
             onToggleSidebarMode: onToggleSidebarMode,
             onSetWorkflowStatus: onSetWorkflowStatus,
             onRequestPaneOutput: onRequestPaneOutput,
-            onSendKeys: onSendKeys
+            onSendKeys: onSendKeys,
+            onUpdateProject: onUpdateProject
         )
         super.init(rootView: rootView)
         // Prevent SwiftUI's layout from dictating the view size.
@@ -90,6 +92,7 @@ struct SidebarContentView: View {
     let onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)?
     let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     let onSendKeys: ((String, String) -> Void)?
+    let onUpdateProject: ((Project) -> Void)?
 
     var body: some View {
         SidebarContainerView(
@@ -117,7 +120,8 @@ struct SidebarContentView: View {
             onOpenCommandPalette: onOpenCommandPalette,
             onSetWorkflowStatus: onSetWorkflowStatus,
             onRequestPaneOutput: onRequestPaneOutput,
-            onSendKeys: onSendKeys
+            onSendKeys: onSendKeys,
+            onUpdateProject: onUpdateProject
         )
     }
 }

@@ -25,6 +25,7 @@ public struct WorktreeSidebarView: View {
     private let onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)?
     private let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     private let onSendKeys: ((String, String) -> Void)?
+    private let onUpdateProject: ((Project) -> Void)?
 
     public init(
         projects: [Project] = [],
@@ -47,7 +48,8 @@ public struct WorktreeSidebarView: View {
         onOpenCommandPalette: (() -> Void)? = nil,
         onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)? = nil,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
-        onSendKeys: ((String, String) -> Void)? = nil
+        onSendKeys: ((String, String) -> Void)? = nil,
+        onUpdateProject: ((Project) -> Void)? = nil
     ) {
         self.projects = projects
         self.selectedProjectId = selectedProjectId
@@ -70,6 +72,7 @@ public struct WorktreeSidebarView: View {
         self.onSetWorkflowStatus = onSetWorkflowStatus
         self.onRequestPaneOutput = onRequestPaneOutput
         self.onSendKeys = onSendKeys
+        self.onUpdateProject = onUpdateProject
     }
 
     /// Count of agent windows needing attention across all worktrees.
@@ -99,11 +102,31 @@ public struct WorktreeSidebarView: View {
             sidebarFooter
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .alert("Rename Project", isPresented: Binding(
+            get: { renamingProjectId != nil },
+            set: { if !$0 { renamingProjectId = nil } }
+        )) {
+            TextField("Project name", text: $renameText)
+            Button("Rename") {
+                if let id = renamingProjectId,
+                   var project = projects.first(where: { $0.id == id }),
+                   !renameText.trimmingCharacters(in: .whitespaces).isEmpty {
+                    project.name = renameText.trimmingCharacters(in: .whitespaces)
+                    onUpdateProject?(project)
+                }
+                renamingProjectId = nil
+            }
+            Button("Cancel", role: .cancel) {
+                renamingProjectId = nil
+            }
+        }
     }
 
     // MARK: - Project Section
 
     @State private var hoveredProjectId: UUID?
+    @State private var renamingProjectId: UUID?
+    @State private var renameText: String = ""
 
     @ViewBuilder
     private func projectSection(_ project: Project) -> some View {
@@ -163,6 +186,15 @@ public struct WorktreeSidebarView: View {
                             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.repoRootPath)
                         } label: {
                             Label("Reveal in Finder", systemImage: "folder")
+                        }
+
+                        Divider()
+
+                        Button {
+                            renameText = project.name
+                            renamingProjectId = project.id
+                        } label: {
+                            Label("Rename Project…", systemImage: "pencil")
                         }
 
                         if case .ssh = (project.location ?? .local), let onEditRemoteProject {
@@ -235,6 +267,15 @@ public struct WorktreeSidebarView: View {
                 NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.repoRootPath)
             } label: {
                 Label("Reveal in Finder", systemImage: "folder")
+            }
+
+            Divider()
+
+            Button {
+                renameText = project.name
+                renamingProjectId = project.id
+            } label: {
+                Label("Rename Project…", systemImage: "pencil")
             }
 
             if case .ssh = (project.location ?? .local), let onEditRemoteProject {

@@ -554,6 +554,15 @@ final class WorkspaceManager {
         updateDockBadge()
     }
 
+    // MARK: - Update Project
+
+    /// Update a project's mutable fields (name, iconName) and persist.
+    func updateProject(_ project: Project) {
+        guard let idx = appState.projects.firstIndex(where: { $0.id == project.id }) else { return }
+        appState.projects[idx] = project
+        try? projectRepo.save(project)
+    }
+
     // MARK: - Add Project
 
     /// Add a new project from a directory path. Creates Project, default Worktree,
