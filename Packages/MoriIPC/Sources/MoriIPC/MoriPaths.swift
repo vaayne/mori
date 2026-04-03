@@ -26,7 +26,8 @@ public enum MoriPaths {
     /// Uses `MORI_SOCKET_PATH` env var if set, otherwise derives from app support directory.
     public static var socketPath: String {
         // 1. Check explicit socket path override first
-        if let envSocketPath = ProcessInfo.processInfo.environment[socketPathEnvKey] {
+        if let envSocketPath = ProcessInfo.processInfo.environment[socketPathEnvKey],
+           !envSocketPath.isEmpty {
             return envSocketPath
         }
         
@@ -38,17 +39,21 @@ public enum MoriPaths {
     /// Uses `MORI_APP_SUPPORT_DIR` env var if set, otherwise auto-detects based on bundle type.
     public static var appSupportDirectory: URL {
         // 1. Check explicit directory override
-        if let envDirPath = ProcessInfo.processInfo.environment[appSupportDirEnvKey] {
+        if let envDirPath = ProcessInfo.processInfo.environment[appSupportDirEnvKey],
+           !envDirPath.isEmpty {
             return URL(fileURLWithPath: envDirPath)
         }
         
         // 2. Auto-detect based on bundle type
         let dirName = isBundledApp ? productionDirName : devDirName
         
-        return FileManager.default.urls(
+        guard let baseDir = FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
-        ).first!.appendingPathComponent(dirName, isDirectory: true)
+        ).first else {
+            fatalError("[MoriPaths] Could not resolve Application Support directory")
+        }
+        return baseDir.appendingPathComponent(dirName, isDirectory: true)
     }
     
     /// Ensures the app support directory exists, creating it if necessary.
@@ -87,8 +92,9 @@ public enum MoriPaths {
             return false
         }
         
-        // Must NOT be in build directories
-        let buildIndicators = [".build", ".build-cli", "DerivedData"]
+        // Must NOT be in build directories (use path-segment matching to avoid
+        // false positives on user paths like /Users/DerivedDataUser/)
+        let buildIndicators = ["/.build/", "/.build-cli/", "/DerivedData/"]
         for indicator in buildIndicators {
             if bundlePath.contains(indicator) {
                 return false
