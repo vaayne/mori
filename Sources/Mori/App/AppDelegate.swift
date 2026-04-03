@@ -370,25 +370,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     // MARK: - Add Project (Task 3.6)
 
     private func showAddProjectPanel() {
-        guard let window = mainWindowController?.window else { return }
-        let choiceAlert = NSAlert()
-        choiceAlert.alertStyle = .informational
-        choiceAlert.messageText = "Add Project"
-        choiceAlert.informativeText = "Choose where to add the project from."
-        choiceAlert.addButton(withTitle: "Local Folder")
-        choiceAlert.addButton(withTitle: "Remote Project (SSH)")
-        choiceAlert.addButton(withTitle: "Cancel")
-
-        choiceAlert.beginSheetModal(for: window) { [weak self] response in
-            switch response {
-            case .alertFirstButtonReturn:
-                self?.showLocalProjectPanel()
-            case .alertSecondButtonReturn:
-                self?.showRemoteConnectWizard()
-            default:
-                break
-            }
-        }
+        showLocalProjectPanel()
     }
 
     private func showLocalProjectPanel() {
