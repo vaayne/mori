@@ -890,23 +890,6 @@ func testWorktreeAggregationWithGitAndRunning() {
     )
 }
 
-func testTemplateRegistryTags() {
-    // Basic template tags (single shell window)
-    assertEqual(TemplateRegistry.basic.windows.count, 1)
-    assertEqual(TemplateRegistry.basic.windows[0].tag, .shell)
-
-    // Go template tags
-    assertEqual(TemplateRegistry.go.windows[0].tag, .editor)
-    assertEqual(TemplateRegistry.go.windows[1].tag, .server)
-    assertEqual(TemplateRegistry.go.windows[2].tag, .tests)
-    assertEqual(TemplateRegistry.go.windows[3].tag, .logs)
-
-    // Agent template tags
-    assertEqual(TemplateRegistry.agent.windows[0].tag, .editor)
-    assertEqual(TemplateRegistry.agent.windows[1].tag, .agent)
-    assertEqual(TemplateRegistry.agent.windows[2].tag, .server)
-    assertEqual(TemplateRegistry.agent.windows[3].tag, .logs)
-}
 
 // MARK: - NotificationDebouncer Tests
 
@@ -1482,8 +1465,6 @@ testWindowBadgeAllInputCombinations()
 testWorktreeAggregationWithRunningErrorLongRunning()
 testAlertStateMappingForLongRunning()
 testWorktreeAggregationWithGitAndRunning()
-
-testTemplateRegistryTags()
 
 testDebouncerIdleToWaiting()
 testDebouncerIdleToError()

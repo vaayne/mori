@@ -307,6 +307,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 terminalArea.tmuxBinaryPath = tmuxPath
             }
 
+            // On first launch, create a default Home workspace at $HOME
+            await manager.createHomeWorkspaceIfNeeded()
+            manager.restoreState()
+
             // Initial runtime state load
             await manager.refreshRuntimeState()
 
@@ -1461,8 +1465,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             updateController?.checkForUpdates()
 
         default:
+            // Handle tool launch actions
+            if actionId.hasPrefix("action.tool-") {
+                let toolId = String(actionId.dropFirst("action.tool-".count))
+                if let tool = ToolDetector.detectAll().first(where: { $0.id == toolId }) {
+                    Task { @MainActor in
+                        await manager.launchToolInCurrentSession(command: tool.command, windowName: tool.name.lowercased())
+                    }
+                }
+            }
             // Handle "action.status-<rawValue>" patterns
-            if actionId.hasPrefix("action.status-") {
+            else if actionId.hasPrefix("action.status-") {
                 let rawValue = String(actionId.dropFirst("action.status-".count))
                 if let status = WorkflowStatus(rawValue: rawValue),
                    let worktreeId = appState?.uiState.selectedWorktreeId {

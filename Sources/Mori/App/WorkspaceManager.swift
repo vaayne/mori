@@ -154,6 +154,19 @@ final class WorkspaceManager {
         validateProjectPaths()
     }
 
+    /// On first launch (no projects), create a default "Home" workspace at $HOME.
+    func createHomeWorkspaceIfNeeded() async {
+        guard appState.projects.isEmpty else { return }
+        let homePath = NSHomeDirectory()
+        let project = try? await addProject(path: homePath)
+        // Rename to "Home" for a friendlier first impression
+        if var p = project, let idx = appState.projects.firstIndex(where: { $0.id == p.id }) {
+            p.name = "Home"
+            appState.projects[idx] = p
+            try? projectRepo.save(p)
+        }
+    }
+
     private func backfillWorktreeSessionNamesIfNeeded() {
         for i in appState.worktrees.indices {
             let existing = appState.worktrees[i].tmuxSessionName?
@@ -802,14 +815,12 @@ final class WorkspaceManager {
     ///   - branchName: The branch name (existing or new).
     ///   - createBranch: Whether to create a new branch (`true`) or use an existing one (`false`).
     ///   - baseBranch: Base branch for new branch creation (only used when `createBranch` is `true`).
-    ///   - template: Session template to apply after tmux session creation.
     @discardableResult
     func createWorktree(
         projectId: UUID,
         branchName: String,
         createBranch: Bool = true,
-        baseBranch: String? = nil,
-        template: SessionTemplate = TemplateRegistry.basic
+        baseBranch: String? = nil
     ) async throws -> Worktree {
         // Validate inputs
         let trimmed = branchName.trimmingCharacters(in: .whitespaces)
@@ -895,16 +906,10 @@ final class WorkspaceManager {
         )
         try worktreeRepo.save(worktree)
 
-        // Step 3: Create tmux session + apply template (partial failure tolerant)
+        // Step 3: Create tmux session (partial failure tolerant)
         do {
             _ = try await tmux.createSession(name: sessionName, cwd: worktreePath)
             await onSessionCreated?(tmux)
-            let applicator = TemplateApplicator(tmux: tmux)
-            try await applicator.apply(
-                template: template,
-                sessionId: sessionName,
-                cwd: worktreePath
-            )
         } catch {
             // tmux failure is non-fatal — session will be created on next select
         }
@@ -948,8 +953,7 @@ final class WorkspaceManager {
                 projectId: projectId,
                 branchName: trimmed,
                 createBranch: request.isNewBranch,
-                baseBranch: request.baseBranch,
-                template: request.template
+                baseBranch: request.baseBranch
             )
             await refreshRuntimeState()
         } catch {
@@ -1890,6 +1894,28 @@ final class WorkspaceManager {
             }
         } catch {
             showErrorAlert(title: .localized("Failed to close window"), message: error.localizedDescription)
+        }
+    }
+
+    /// Launch a CLI tool in the currently selected worktree's tmux session.
+    func launchToolInCurrentSession(command: String, windowName: String) async {
+        guard let worktree = appState.selectedWorktree,
+              let sessionName = worktree.tmuxSessionName else { return }
+        let tmux = tmuxBackend(for: worktree)
+        do {
+            let newWindow = try await tmux.createWindow(
+                sessionId: sessionName,
+                name: windowName,
+                cwd: worktree.path
+            )
+            try await tmux.sendKeys(
+                sessionId: sessionName,
+                paneId: newWindow.windowId,
+                keys: command
+            )
+            await refreshRuntimeState()
+        } catch {
+            // Best effort — tool may not be available in tmux PATH
         }
     }
 

@@ -373,16 +373,13 @@ final class WorktreeCreationController: NSWindowController {
         let branchText = branchNameField.stringValue.trimmingCharacters(in: .whitespaces)
         guard !branchText.isEmpty else { return }
 
-        let template = TemplateRegistry.basic
-
         // Check if typed text exactly matches an existing branch
         if let match = dataSource?.exactMatch(for: branchText) {
             dismiss()
             onCreateWorktree?(WorktreeCreationRequest(
                 branchName: match.name,
                 isNewBranch: false,
-                baseBranch: nil,
-                template: template
+                baseBranch: nil
             ))
             return
         }
@@ -393,8 +390,7 @@ final class WorktreeCreationController: NSWindowController {
         onCreateWorktree?(WorktreeCreationRequest(
             branchName: branchText,
             isNewBranch: true,
-            baseBranch: baseBranch,
-            template: template
+            baseBranch: baseBranch
         ))
     }
 

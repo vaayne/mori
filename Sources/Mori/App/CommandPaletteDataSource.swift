@@ -84,6 +84,15 @@ final class CommandPaletteDataSource {
             ))
         }
 
+        // Tool launch actions — only show available tools
+        for tool in ToolDetector.detectAll() where tool.isAvailable {
+            items.append(.action(
+                id: "action.tool-\(tool.id)",
+                title: .localized("Open \(tool.name)"),
+                subtitle: tool.description
+            ))
+        }
+
         // "Set Worktree Status" actions — only when a worktree is selected
         if let selectedWorktree = appState.selectedWorktree {
             for status in WorkflowStatus.allCases {

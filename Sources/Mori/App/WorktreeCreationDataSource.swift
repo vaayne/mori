@@ -1,6 +1,6 @@
 import Foundation
 import MoriGit
-import MoriCore
+
 
 // MARK: - Types
 
@@ -9,7 +9,6 @@ struct WorktreeCreationRequest: Sendable {
     let branchName: String
     let isNewBranch: Bool
     let baseBranch: String?
-    let template: SessionTemplate
 }
 
 // MARK: - DataSource
