@@ -53,12 +53,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let state = AppState()
         self.appState = state
 
-        let appSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first!.appendingPathComponent("Mori", isDirectory: true)
-        try? FileManager.default.createDirectory(at: appSupport, withIntermediateDirectories: true)
-        let storeURL = appSupport.appendingPathComponent("mori.json")
+        // Resolve app support directory using MoriPaths (handles dev/prod isolation)
+        try? MoriPaths.ensureAppSupportDirectoryExists()
+        let appSupport = MoriPaths.appSupportDirectory
+        print("[Mori] Using app support directory: \(appSupport.path)")
+
+        let storeURL = MoriPaths.fileURL(for: "mori.json")
         let store = JSONStore(fileURL: storeURL)
 
         let projectRepo = ProjectRepository(store: store)
@@ -275,7 +275,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         manager.restoreState()
 
         // Initialize key binding store
-        let keybindingsURL = appSupport.appendingPathComponent("keybindings.json")
+        let keybindingsURL = MoriPaths.fileURL(for: "keybindings.json")
         let keyBindingRepo = KeyBindingRepository(fileURL: keybindingsURL)
         keyBindingStore = KeyBindingStore(storage: keyBindingRepo)
         keyBindingStore.onBindingsChanged = { [weak self] in

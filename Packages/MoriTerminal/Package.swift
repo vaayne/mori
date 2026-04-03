@@ -14,6 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.13.0"),
+        .package(path: "../MoriIPC"),
     ],
     targets: [
         .target(
@@ -22,6 +23,7 @@ let package = Package(
                 .target(name: "GhosttyKit", condition: .when(platforms: [.macOS])),
                 .product(name: "SwiftTerm", package: "SwiftTerm",
                          condition: .when(platforms: [.iOS])),
+                .product(name: "MoriIPC", package: "MoriIPC"),
             ],
             path: "Sources/MoriTerminal",
             linkerSettings: [

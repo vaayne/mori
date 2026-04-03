@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 import GhosttyKit
+import MoriIPC
 
 public extension Notification.Name {
     static let ghosttySurfaceDidClose = Notification.Name("MoriTerminal.GhosttySurfaceDidClose")
@@ -141,7 +142,7 @@ final class GhosttyApp {
         }
 
         // 2. Apply Mori embedding overrides (window-decoration, etc.)
-        let overridePath = GhosttyConfigWriter.write()
+        let overridePath = GhosttyConfigWriter.write(appSupportDirectory: MoriPaths.appSupportDirectory)
         ghostty_config_load_file(config, overridePath)
 
         ghostty_config_finalize(config)

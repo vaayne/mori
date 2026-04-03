@@ -14,13 +14,10 @@ public actor IPCServer {
     private let handler: Handler
     private let socketPath: String
 
-    /// Default socket path in Application Support.
+    /// Default socket path using MoriPaths resolution.
+    /// Respects MORI_SOCKET_PATH and MORI_APP_SUPPORT_DIR env vars.
     public static var defaultSocketPath: String {
-        let appSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first!.appendingPathComponent("Mori", isDirectory: true)
-        return appSupport.appendingPathComponent("mori.sock").path
+        MoriPaths.socketPath
     }
 
     /// Create an IPC server.
