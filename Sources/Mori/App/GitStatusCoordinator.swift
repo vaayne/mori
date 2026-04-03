@@ -15,7 +15,7 @@ final class GitStatusCoordinator {
         worktrees: [Worktree],
         backendForWorktree: @escaping @MainActor (Worktree) -> GitBackend
     ) async -> [UUID: GitStatusInfo] {
-        let activeWorktrees = worktrees.filter { $0.status != .unavailable }
+        let activeWorktrees = worktrees.filter { $0.status != .unavailable && $0.branch != nil }
         guard !activeWorktrees.isEmpty else { return [:] }
         return await withTaskGroup(of: (UUID, GitStatusInfo?).self) { group in
             for worktree in activeWorktrees {

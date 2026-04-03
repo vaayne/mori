@@ -13,20 +13,21 @@ struct ToolDetector: Sendable {
     }
 
     /// Well-known tools that Mori can detect and offer to launch.
-    static let knownTools: [(id: String, name: String, command: String, description: String)] = [
-        ("lazygit", "Lazygit", "lazygit", "Terminal UI for git"),
-        ("yazi", "Yazi", "yazi", "Terminal file manager"),
+    static let knownTools: [(id: String, name: String, command: String, description: String, installHint: String)] = [
+        ("lazygit", "Lazygit", "lazygit", "Terminal UI for git", "brew install lazygit"),
+        ("yazi", "Yazi", "yazi", "Terminal file manager", "brew install yazi"),
     ]
 
     /// Detect all known tools and return their availability status.
     static func detectAll() -> [Tool] {
         knownTools.map { tool in
-            Tool(
+            let available = isInPath(tool.command)
+            return Tool(
                 id: tool.id,
                 name: tool.name,
                 command: tool.command,
-                description: tool.description,
-                isAvailable: isInPath(tool.command)
+                description: available ? tool.description : "Not installed — \(tool.installHint)",
+                isAvailable: available
             )
         }
     }

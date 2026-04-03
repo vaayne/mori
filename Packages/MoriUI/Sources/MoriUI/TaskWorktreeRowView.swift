@@ -28,7 +28,7 @@ public struct TaskWorktreeRowView: View {
     public var body: some View {
         Button(action: onSelect) {
             HStack(alignment: .center, spacing: MoriTokens.Spacing.md) {
-                Image(systemName: worktree.isMainWorktree ? "star.fill" : "arrow.triangle.branch")
+                Image(systemName: worktreeIcon)
                     .font(MoriTokens.Font.label)
                     .foregroundStyle(worktree.isMainWorktree ? MoriTokens.Color.attention : MoriTokens.Color.muted)
 
@@ -79,6 +79,15 @@ public struct TaskWorktreeRowView: View {
                 isHovered = hovering
             }
         }
+    }
+
+    // MARK: - Icon
+
+    private var worktreeIcon: String {
+        if worktree.branch == nil {
+            return "house.fill"
+        }
+        return worktree.isMainWorktree ? "star.fill" : "arrow.triangle.branch"
     }
 
     // MARK: - Row Background

@@ -1465,8 +1465,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             updateController?.checkForUpdates()
 
         default:
+            // Handle tool install hints — copy install command to clipboard
+            if actionId.hasPrefix("action.tool-install-") {
+                let toolId = String(actionId.dropFirst("action.tool-install-".count))
+                if let tool = ToolDetector.knownTools.first(where: { $0.id == toolId }) {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(tool.installHint, forType: .string)
+                }
+            }
             // Handle tool launch actions
-            if actionId.hasPrefix("action.tool-") {
+            else if actionId.hasPrefix("action.tool-") {
                 let toolId = String(actionId.dropFirst("action.tool-".count))
                 if let tool = ToolDetector.detectAll().first(where: { $0.id == toolId }) {
                     Task { @MainActor in

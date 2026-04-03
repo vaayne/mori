@@ -84,10 +84,10 @@ final class CommandPaletteDataSource {
             ))
         }
 
-        // Tool launch actions — only show available tools
-        for tool in ToolDetector.detectAll() where tool.isAvailable {
+        // Tool launch actions — show all tools, with install hints for unavailable ones
+        for tool in ToolDetector.detectAll() {
             items.append(.action(
-                id: "action.tool-\(tool.id)",
+                id: tool.isAvailable ? "action.tool-\(tool.id)" : "action.tool-install-\(tool.id)",
                 title: .localized("Open \(tool.name)"),
                 subtitle: tool.description
             ))
