@@ -26,6 +26,7 @@ public struct WorktreeSidebarView: View {
     private let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     private let onSendKeys: ((String, String) -> Void)?
     private let onUpdateProject: ((Project) -> Void)?
+    private let shortcutHintsVisible: Bool
 
     public init(
         projects: [Project] = [],
@@ -34,6 +35,7 @@ public struct WorktreeSidebarView: View {
         windows: [RuntimeWindow],
         selectedWorktreeId: UUID?,
         selectedWindowId: String?,
+        shortcutHintsVisible: Bool = false,
         onSelectProject: ((UUID) -> Void)? = nil,
         onSelectWorktree: @escaping (UUID) -> Void,
         onSelectWindow: @escaping (String) -> Void,
@@ -73,6 +75,7 @@ public struct WorktreeSidebarView: View {
         self.onRequestPaneOutput = onRequestPaneOutput
         self.onSendKeys = onSendKeys
         self.onUpdateProject = onUpdateProject
+        self.shortcutHintsVisible = shortcutHintsVisible
     }
 
     /// Count of agent windows needing attention across all worktrees.
@@ -390,6 +393,7 @@ public struct WorktreeSidebarView: View {
                                 window: window,
                                 isActive: isSelected && window.tmuxWindowId == selectedWindowId,
                                 shortcutIndex: isSelected && index < 9 ? index + 1 : nil,
+                                shortcutHintsVisible: shortcutHintsVisible,
                                 onSelect: { onSelectWindow(window.tmuxWindowId) },
                                 onRequestPaneOutput: onRequestPaneOutput,
                                 onSendKeys: onSendKeys
@@ -469,6 +473,14 @@ public struct WorktreeSidebarView: View {
                     .buttonStyle(.plain)
                     .help("Command Palette (⇧⌘P)")
                     .accessibilityLabel("Command Palette")
+                    .overlay(alignment: .top) {
+                        if shortcutHintsVisible {
+                            ShortcutHintPill("⇧⌘P")
+                                .offset(y: -22)
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
                 }
 
                 if let onOpenSettings {
@@ -480,6 +492,14 @@ public struct WorktreeSidebarView: View {
                     .buttonStyle(.plain)
                     .help("Settings (⌘,)")
                     .accessibilityLabel("Settings")
+                    .overlay(alignment: .top) {
+                        if shortcutHintsVisible {
+                            ShortcutHintPill("⌘,")
+                                .offset(y: -22)
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
                 }
             }
             .padding(.horizontal, MoriTokens.Spacing.xl)

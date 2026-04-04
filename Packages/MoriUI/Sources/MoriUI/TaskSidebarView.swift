@@ -19,6 +19,7 @@ public struct TaskSidebarView: View {
     private let onOpenCommandPalette: (() -> Void)?
     private let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     private let onSendKeys: ((String, String) -> Void)?
+    private let shortcutHintsVisible: Bool
 
     @State private var showCancelled = false
     @State private var collapsedGroups: Set<WorkflowStatus> = [.done]
@@ -40,6 +41,7 @@ public struct TaskSidebarView: View {
         onAddProject: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
         onOpenCommandPalette: (() -> Void)? = nil,
+        shortcutHintsVisible: Bool = false,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil
     ) {
@@ -56,6 +58,7 @@ public struct TaskSidebarView: View {
         self.onAddProject = onAddProject
         self.onOpenSettings = onOpenSettings
         self.onOpenCommandPalette = onOpenCommandPalette
+        self.shortcutHintsVisible = shortcutHintsVisible
         self.onRequestPaneOutput = onRequestPaneOutput
         self.onSendKeys = onSendKeys
     }
@@ -341,6 +344,14 @@ public struct TaskSidebarView: View {
                     .buttonStyle(.plain)
                     .help("Command Palette (⇧⌘P)")
                     .accessibilityLabel("Command Palette")
+                    .overlay(alignment: .top) {
+                        if shortcutHintsVisible {
+                            ShortcutHintPill("⇧⌘P")
+                                .offset(y: -22)
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
                 }
 
                 if let onOpenSettings {
@@ -352,6 +363,14 @@ public struct TaskSidebarView: View {
                     .buttonStyle(.plain)
                     .help("Settings (⌘,)")
                     .accessibilityLabel("Settings")
+                    .overlay(alignment: .top) {
+                        if shortcutHintsVisible {
+                            ShortcutHintPill("⌘,")
+                                .offset(y: -22)
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
                 }
             }
             .padding(.horizontal, MoriTokens.Spacing.xl)
