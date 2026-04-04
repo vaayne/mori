@@ -384,6 +384,8 @@ public struct WorktreeSidebarView: View {
                                 projectName: projects.first(where: { $0.id == worktree.projectId })?.name ?? "",
                                 worktreeName: worktree.name,
                                 isSelected: isSelected && window.tmuxWindowId == selectedWindowId,
+                                shortcutIndex: isSelected && index < 9 ? index + 1 : nil,
+                                shortcutHintsVisible: shortcutHintsVisible,
                                 onSelect: { onSelectWindow(window.tmuxWindowId) },
                                 onRequestPaneOutput: onRequestPaneOutput,
                                 onSendKeys: onSendKeys
