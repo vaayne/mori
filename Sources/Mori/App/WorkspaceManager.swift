@@ -2079,21 +2079,53 @@ final class WorkspaceManager {
         }
     }
 
+    // MARK: - Project Index Navigation
+
+    /// Select a project by 1-based index (⌘1 through ⌘9).
+    /// ⌘9 selects the last project regardless of count.
+    func selectProjectByIndex(_ index: Int) {
+        let projects = appState.projects
+        guard !projects.isEmpty else { return }
+
+        let targetIndex = index == 9 ? projects.count - 1 : index - 1
+        guard targetIndex >= 0, targetIndex < projects.count else { return }
+        selectProject(projects[targetIndex].id)
+    }
+
     // MARK: - Window Index Navigation
 
-    /// Select a tmux window by 1-based index (Cmd+1 through Cmd+9).
-    /// Cmd+9 selects the last window regardless of count.
+    /// Select a tmux window by 1-based global index across all worktrees (⌘⌥1 through ⌘⌥9).
+    /// ⌘⌥9 selects the last window regardless of count.
+    /// Windows are ordered by worktree, then by tmux window index within each worktree.
+    func selectWindowByGlobalIndex(_ index: Int) {
+        guard let projectId = appState.uiState.selectedProjectId else { return }
+        let projectWorktrees = appState.worktrees
+            .filter { $0.projectId == projectId && $0.status != .unavailable }
+        let allWindows = projectWorktrees.flatMap { worktree in
+            appState.runtimeWindows
+                .filter { $0.worktreeId == worktree.id }
+                .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
+        }
+        guard !allWindows.isEmpty else { return }
+
+        let targetIndex = index == 9 ? allWindows.count - 1 : index - 1
+        guard targetIndex >= 0, targetIndex < allWindows.count else { return }
+
+        let window = allWindows[targetIndex]
+        // Also select the owning worktree if different
+        if window.worktreeId != appState.uiState.selectedWorktreeId {
+            selectWorktree(window.worktreeId)
+        }
+        selectWindow(window.tmuxWindowId)
+    }
+
+    /// Select a tmux window by 1-based index within the selected worktree.
+    /// Index 9 selects the last window regardless of count.
     func selectWindowByIndex(_ index: Int) {
         let windows = appState.windowsForSelectedWorktree
         guard !windows.isEmpty else { return }
 
-        let targetIndex: Int
-        if index == 9 {
-            targetIndex = windows.count - 1
-        } else {
-            targetIndex = index - 1
-        }
-
+        let targetIndex = index == 9 ? windows.count - 1 : index - 1
         guard targetIndex >= 0, targetIndex < windows.count else { return }
         selectWindow(windows[targetIndex].tmuxWindowId)
     }

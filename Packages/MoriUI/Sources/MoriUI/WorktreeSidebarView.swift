@@ -83,6 +83,28 @@ public struct WorktreeSidebarView: View {
         windows.filter { $0.agentState == .waitingForInput || $0.agentState == .error }.count
     }
 
+    /// Global 1-based index for each window across all worktrees in the selected project.
+    /// Used for ⌘⌥1-9 tab switching hints.
+    private var globalWindowIndices: [String: Int] {
+        guard let projectId = selectedProjectId ?? projects.first?.id else { return [:] }
+        let projectWorktrees = worktrees
+            .filter { $0.projectId == projectId && $0.status != .unavailable }
+        var result: [String: Int] = [:]
+        var globalIndex = 1
+        for worktree in projectWorktrees {
+            let worktreeWindows = windows
+                .filter { $0.worktreeId == worktree.id }
+                .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
+            for window in worktreeWindows {
+                if globalIndex <= 9 {
+                    result[window.tmuxWindowId] = globalIndex
+                }
+                globalIndex += 1
+            }
+        }
+        return result
+    }
+
     public var body: some View {
         VStack(spacing: 0) {
             ScrollView(.vertical) {
@@ -94,7 +116,7 @@ public struct WorktreeSidebarView: View {
                             Divider()
                                 .padding(.horizontal, MoriTokens.Spacing.xl)
                         }
-                        projectSection(project)
+                        projectSection(project, projectIndex: index)
                     }
                 }
                 .padding(.top, MoriTokens.Spacing.lg)
@@ -132,7 +154,7 @@ public struct WorktreeSidebarView: View {
     @State private var renameText: String = ""
 
     @ViewBuilder
-    private func projectSection(_ project: Project) -> some View {
+    private func projectSection(_ project: Project, projectIndex: Int) -> some View {
         // Section header: chevron + name + hover-reveal + button
         HStack(spacing: MoriTokens.Spacing.md) {
             Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down")
@@ -143,6 +165,11 @@ public struct WorktreeSidebarView: View {
             Text(project.name)
                 .font(MoriTokens.Font.sectionTitle)
                 .foregroundStyle(MoriTokens.Color.muted)
+
+            if shortcutHintsVisible, projectIndex < 9 {
+                ShortcutHintPill("\u{2318}\(projectIndex + 1)")
+                    .transition(.opacity)
+            }
 
             Spacer()
 
@@ -233,6 +260,7 @@ public struct WorktreeSidebarView: View {
         .padding(.top, MoriTokens.Spacing.xl)
         .padding(.bottom, MoriTokens.Spacing.sm)
         .contentShape(Rectangle())
+        .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
         .onTapGesture {
             onToggleCollapse?(project.id)
             onSelectProject?(project.id)
@@ -378,13 +406,14 @@ public struct WorktreeSidebarView: View {
             if !worktreeWindows.isEmpty {
                 ForEach(Array(worktreeWindows.enumerated()), id: \.element.id) { index, window in
                     Group {
+                        let globalIdx = globalWindowIndices[window.tmuxWindowId]
                         if window.detectedAgent != nil || window.agentState != .none {
                             AgentWindowRowView(
                                 window: window,
                                 projectName: projects.first(where: { $0.id == worktree.projectId })?.name ?? "",
                                 worktreeName: worktree.name,
                                 isSelected: isSelected && window.tmuxWindowId == selectedWindowId,
-                                shortcutIndex: isSelected && index < 9 ? index + 1 : nil,
+                                shortcutIndex: globalIdx,
                                 shortcutHintsVisible: shortcutHintsVisible,
                                 onSelect: { onSelectWindow(window.tmuxWindowId) },
                                 onRequestPaneOutput: onRequestPaneOutput,
@@ -394,7 +423,7 @@ public struct WorktreeSidebarView: View {
                             WindowRowView(
                                 window: window,
                                 isActive: isSelected && window.tmuxWindowId == selectedWindowId,
-                                shortcutIndex: isSelected && index < 9 ? index + 1 : nil,
+                                shortcutIndex: globalIdx,
                                 shortcutHintsVisible: shortcutHintsVisible,
                                 onSelect: { onSelectWindow(window.tmuxWindowId) },
                                 onRequestPaneOutput: onRequestPaneOutput,

@@ -67,6 +67,7 @@ public struct Shortcut: Codable, Sendable, Hashable {
 
 /// Categories for grouping key bindings in the settings UI.
 public enum KeyBindingCategory: String, Codable, Sendable, CaseIterable {
+    case projects
     case tabs
     case panes
     case tools

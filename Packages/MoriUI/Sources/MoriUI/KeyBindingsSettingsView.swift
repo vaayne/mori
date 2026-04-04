@@ -256,6 +256,7 @@ private struct KeyBindingRow: View {
 extension KeyBindingCategory {
     var localizedName: String {
         switch self {
+        case .projects: return .localized("Projects")
         case .tabs: return .localized("Tabs")
         case .panes: return .localized("Panes")
         case .tools: return .localized("Tools")

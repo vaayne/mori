@@ -258,8 +258,6 @@ public struct TaskSidebarView: View {
                                 projectName: projectName,
                                 worktreeName: worktree.name,
                                 isSelected: isSelected && window.tmuxWindowId == selectedWindowId,
-                                shortcutIndex: isSelected && index < 9 ? index + 1 : nil,
-                                shortcutHintsVisible: shortcutHintsVisible,
                                 onSelect: { onSelectWindow(window.tmuxWindowId) },
                                 onRequestPaneOutput: onRequestPaneOutput,
                                 onSendKeys: onSendKeys
@@ -268,8 +266,6 @@ public struct TaskSidebarView: View {
                             WindowRowView(
                                 window: window,
                                 isActive: isSelected && window.tmuxWindowId == selectedWindowId,
-                                shortcutIndex: isSelected && index < 9 ? index + 1 : nil,
-                                shortcutHintsVisible: shortcutHintsVisible,
                                 onSelect: { onSelectWindow(window.tmuxWindowId) },
                                 onRequestPaneOutput: onRequestPaneOutput,
                                 onSendKeys: onSendKeys

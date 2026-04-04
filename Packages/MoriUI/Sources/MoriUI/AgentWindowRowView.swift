@@ -112,9 +112,9 @@ public struct AgentWindowRowView: View {
                 Spacer()
 
                 if let shortcutIndex, shortcutHintsVisible {
-                    ShortcutHintPill("\u{2318}\(shortcutIndex)")
+                    ShortcutHintPill("⌘⌥\(shortcutIndex)")
                         .transition(.opacity)
-                        .accessibilityLabel("Command \(shortcutIndex)")
+                        .accessibilityLabel("Command Option \(shortcutIndex)")
                 }
 
                 if window.badge == .waiting, onSendKeys != nil {
