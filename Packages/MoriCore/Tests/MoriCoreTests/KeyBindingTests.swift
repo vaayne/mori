@@ -117,14 +117,13 @@ func testKeyBindingCategoryRawValues() {
     assertEqual(KeyBindingCategory.window.rawValue, "window")
     assertEqual(KeyBindingCategory.worktrees.rawValue, "worktrees")
     assertEqual(KeyBindingCategory.commandPalette.rawValue, "commandPalette")
-    assertEqual(KeyBindingCategory.projects.rawValue, "projects")
     assertEqual(KeyBindingCategory.settings.rawValue, "settings")
     assertEqual(KeyBindingCategory.other.rawValue, "other")
     assertEqual(KeyBindingCategory.system.rawValue, "system")
 }
 
 func testKeyBindingCategoryAllCases() {
-    assertEqual(KeyBindingCategory.allCases.count, 10)
+    assertEqual(KeyBindingCategory.allCases.count, 9)
 }
 
 func testKeyBindingCategoryCodable() {
@@ -247,7 +246,7 @@ func testConflictResultEquatable() {
 // MARK: - KeyBindingDefaults Tests
 
 func testKeyBindingDefaultsConfigurableCount() {
-    assertEqual(KeyBindingDefaults.configurable.count, 49)
+    assertEqual(KeyBindingDefaults.configurable.count, 40)
 }
 
 func testKeyBindingDefaultsLockedCount() {
@@ -255,7 +254,7 @@ func testKeyBindingDefaultsLockedCount() {
 }
 
 func testKeyBindingDefaultsAllCount() {
-    assertEqual(KeyBindingDefaults.all.count, 60)
+    assertEqual(KeyBindingDefaults.all.count, 51)
 }
 
 func testKeyBindingDefaultsUniqueIds() {
@@ -281,7 +280,7 @@ func testKeyBindingDefaultsNoShortcutConflicts() {
 
 func testKeyBindingDefaultsByIdLookup() {
     let byId = KeyBindingDefaults.byId
-    assertEqual(byId.count, 60)
+    assertEqual(byId.count, 51)
 
     let newTab = byId["tabs.newTab"]
     assertNotNil(newTab)
@@ -346,14 +345,14 @@ func testKeyBindingDefaultsToggleZoomHasKeyCode() {
 
 func testKeyBindingDefaultsCategoryCounts() {
     let byCategory = Dictionary(grouping: KeyBindingDefaults.all, by: { $0.category })
-    assertEqual(byCategory[.tabs]?.count, 13)
+    assertEqual(byCategory[.tabs]?.count, 4)
     assertEqual(byCategory[.panes]?.count, 14)
     assertEqual(byCategory[.tools]?.count, 2)
     assertEqual(byCategory[.window]?.count, 2)
     assertEqual(byCategory[.worktrees]?.count, 3)
     assertEqual(byCategory[.commandPalette]?.count, nil)
     assertEqual(byCategory[.settings]?.count, 2)
-    assertEqual(byCategory[.other]?.count, 4)
+    assertEqual(byCategory[.other]?.count, 13)
     assertEqual(byCategory[.system]?.count, 11)
 }
 

@@ -7,6 +7,8 @@ public struct TaskWorktreeRowView: View {
     let projectName: String
     let agentName: String?
     let isSelected: Bool
+    let shortcutIndex: Int?
+    let shortcutHintsVisible: Bool
     let onSelect: () -> Void
 
     @State private var isHovered = false
@@ -16,12 +18,16 @@ public struct TaskWorktreeRowView: View {
         projectName: String,
         agentName: String? = nil,
         isSelected: Bool,
+        shortcutIndex: Int? = nil,
+        shortcutHintsVisible: Bool = false,
         onSelect: @escaping () -> Void
     ) {
         self.worktree = worktree
         self.projectName = projectName
         self.agentName = agentName
         self.isSelected = isSelected
+        self.shortcutIndex = shortcutIndex
+        self.shortcutHintsVisible = shortcutHintsVisible
         self.onSelect = onSelect
     }
 
@@ -65,6 +71,12 @@ public struct TaskWorktreeRowView: View {
 
                 Spacer(minLength: 0)
 
+                if let shortcutIndex, shortcutHintsVisible {
+                    ShortcutHintPill("⌘\(shortcutIndex)")
+                        .transition(.opacity)
+                        .accessibilityLabel("Command \(shortcutIndex)")
+                }
+
                 alertBadgeView
             }
             .padding(.vertical, MoriTokens.Spacing.md)
@@ -74,6 +86,7 @@ public struct TaskWorktreeRowView: View {
         .buttonStyle(.plain)
         .background(rowBackground)
         .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
+        .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering

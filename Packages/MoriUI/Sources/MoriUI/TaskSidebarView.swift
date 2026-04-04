@@ -85,23 +85,18 @@ public struct TaskSidebarView: View {
         }
     }
 
-    /// Global 1-based index for each window across all worktrees in the selected project.
-    /// Matches the workspace view ordering for consistent ⌘⌥1-9 hints.
-    private var globalWindowIndices: [String: Int] {
-        // Use the first project's worktrees as canonical ordering
-        let projectWorktrees = availableWorktrees
-        var result: [String: Int] = [:]
-        var globalIndex = 1
-        for worktree in projectWorktrees {
-            let worktreeWindows = windows
-                .filter { $0.worktreeId == worktree.id }
-                .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
-            for window in worktreeWindows {
-                if globalIndex <= 9 {
-                    result[window.tmuxWindowId] = globalIndex
-                }
-                globalIndex += 1
-            }
+    /// Global 1-based index for each worktree, ordered by status group (matching visible order).
+    /// Used for ⌘1-9 quick jump hints in Tasks mode.
+    private var globalWorktreeIndices: [UUID: Int] {
+        let statusOrder: [WorkflowStatus] = [.inProgress, .needsReview, .todo, .done, .cancelled]
+        let ordered = availableWorktrees.sorted { a, b in
+            let ai = statusOrder.firstIndex(of: a.workflowStatus) ?? statusOrder.count
+            let bi = statusOrder.firstIndex(of: b.workflowStatus) ?? statusOrder.count
+            return ai < bi
+        }
+        var result: [UUID: Int] = [:]
+        for (i, worktree) in ordered.enumerated() where i < 9 {
+            result[worktree.id] = i + 1
         }
         return result
     }
@@ -230,6 +225,8 @@ public struct TaskSidebarView: View {
                 projectName: projectName,
                 agentName: agentName,
                 isSelected: isSelected,
+                shortcutIndex: globalWorktreeIndices[worktree.id],
+                shortcutHintsVisible: shortcutHintsVisible,
                 onSelect: { onSelectWorktree(worktree.id) }
             )
             .contextMenu {
@@ -273,15 +270,12 @@ public struct TaskSidebarView: View {
             if !worktreeWindows.isEmpty {
                 ForEach(Array(worktreeWindows.enumerated()), id: \.element.id) { index, window in
                     Group {
-                        let globalIdx = globalWindowIndices[window.tmuxWindowId]
                         if window.detectedAgent != nil || window.agentState != .none {
                             AgentWindowRowView(
                                 window: window,
                                 projectName: projectName,
                                 worktreeName: worktree.name,
                                 isSelected: isSelected && window.tmuxWindowId == selectedWindowId,
-                                shortcutIndex: globalIdx,
-                                shortcutHintsVisible: shortcutHintsVisible,
                                 onSelect: { onSelectWindow(window.tmuxWindowId) },
                                 onRequestPaneOutput: onRequestPaneOutput,
                                 onSendKeys: onSendKeys
@@ -290,8 +284,6 @@ public struct TaskSidebarView: View {
                             WindowRowView(
                                 window: window,
                                 isActive: isSelected && window.tmuxWindowId == selectedWindowId,
-                                shortcutIndex: globalIdx,
-                                shortcutHintsVisible: shortcutHintsVisible,
                                 onSelect: { onSelectWindow(window.tmuxWindowId) },
                                 onRequestPaneOutput: onRequestPaneOutput,
                                 onSendKeys: onSendKeys

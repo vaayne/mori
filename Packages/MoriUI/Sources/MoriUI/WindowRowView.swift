@@ -98,11 +98,11 @@ public struct WindowRowView: View {
 
                 if let shortcutIndex {
                     if shortcutHintsVisible {
-                        ShortcutHintPill("⌘⌥\(shortcutIndex)")
+                        ShortcutHintPill("⌘\(shortcutIndex)")
                             .transition(.opacity)
                             .accessibilityLabel("Command Option \(shortcutIndex)")
                     } else {
-                        Text("⌘⌥\(shortcutIndex)")
+                        Text("⌘\(shortcutIndex)")
                             .font(MoriTokens.Font.monoSmall)
                             .foregroundStyle(MoriTokens.Color.muted)
                             .accessibilityLabel("Command Option \(shortcutIndex)")

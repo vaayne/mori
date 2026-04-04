@@ -13,27 +13,27 @@ public enum KeyBindingDefaults {
     // MARK: - Configurable Bindings
 
     public static let configurable: [KeyBinding] = [
-        // Projects (⌘1-9: switch project by index)
-        KeyBinding(id: "projects.goto1", displayNameKey: "keybinding.projects.goto1", category: .projects,
+        // Quick Jump (⌘1-9: context-aware, switches primary item in current sidebar mode)
+        KeyBinding(id: "quickJump.goto1", displayNameKey: "keybinding.quickJump.goto1", category: .other,
                    shortcut: Shortcut(key: "1", modifiers: .cmd)),
-        KeyBinding(id: "projects.goto2", displayNameKey: "keybinding.projects.goto2", category: .projects,
+        KeyBinding(id: "quickJump.goto2", displayNameKey: "keybinding.quickJump.goto2", category: .other,
                    shortcut: Shortcut(key: "2", modifiers: .cmd)),
-        KeyBinding(id: "projects.goto3", displayNameKey: "keybinding.projects.goto3", category: .projects,
+        KeyBinding(id: "quickJump.goto3", displayNameKey: "keybinding.quickJump.goto3", category: .other,
                    shortcut: Shortcut(key: "3", modifiers: .cmd)),
-        KeyBinding(id: "projects.goto4", displayNameKey: "keybinding.projects.goto4", category: .projects,
+        KeyBinding(id: "quickJump.goto4", displayNameKey: "keybinding.quickJump.goto4", category: .other,
                    shortcut: Shortcut(key: "4", modifiers: .cmd)),
-        KeyBinding(id: "projects.goto5", displayNameKey: "keybinding.projects.goto5", category: .projects,
+        KeyBinding(id: "quickJump.goto5", displayNameKey: "keybinding.quickJump.goto5", category: .other,
                    shortcut: Shortcut(key: "5", modifiers: .cmd)),
-        KeyBinding(id: "projects.goto6", displayNameKey: "keybinding.projects.goto6", category: .projects,
+        KeyBinding(id: "quickJump.goto6", displayNameKey: "keybinding.quickJump.goto6", category: .other,
                    shortcut: Shortcut(key: "6", modifiers: .cmd)),
-        KeyBinding(id: "projects.goto7", displayNameKey: "keybinding.projects.goto7", category: .projects,
+        KeyBinding(id: "quickJump.goto7", displayNameKey: "keybinding.quickJump.goto7", category: .other,
                    shortcut: Shortcut(key: "7", modifiers: .cmd)),
-        KeyBinding(id: "projects.goto8", displayNameKey: "keybinding.projects.goto8", category: .projects,
+        KeyBinding(id: "quickJump.goto8", displayNameKey: "keybinding.quickJump.goto8", category: .other,
                    shortcut: Shortcut(key: "8", modifiers: .cmd)),
-        KeyBinding(id: "projects.gotoLast", displayNameKey: "keybinding.projects.gotoLast", category: .projects,
+        KeyBinding(id: "quickJump.gotoLast", displayNameKey: "keybinding.quickJump.gotoLast", category: .other,
                    shortcut: Shortcut(key: "9", modifiers: .cmd)),
 
-        // Tabs (⌘⌥1-9: switch tab by global index across all worktrees)
+        // Tabs
         KeyBinding(id: "tabs.newTab", displayNameKey: "keybinding.tabs.newTab", category: .tabs,
                    shortcut: Shortcut(key: "t", modifiers: .cmd)),
         KeyBinding(id: "tabs.closeTab", displayNameKey: "keybinding.tabs.closeTab", category: .tabs,
@@ -42,24 +42,6 @@ public enum KeyBindingDefaults {
                    shortcut: Shortcut(key: "]", modifiers: .cmdShift)),
         KeyBinding(id: "tabs.previousTab", displayNameKey: "keybinding.tabs.previousTab", category: .tabs,
                    shortcut: Shortcut(key: "[", modifiers: .cmdShift)),
-        KeyBinding(id: "tabs.gotoTab1", displayNameKey: "keybinding.tabs.gotoTab1", category: .tabs,
-                   shortcut: Shortcut(key: "1", modifiers: .cmdOption)),
-        KeyBinding(id: "tabs.gotoTab2", displayNameKey: "keybinding.tabs.gotoTab2", category: .tabs,
-                   shortcut: Shortcut(key: "2", modifiers: .cmdOption)),
-        KeyBinding(id: "tabs.gotoTab3", displayNameKey: "keybinding.tabs.gotoTab3", category: .tabs,
-                   shortcut: Shortcut(key: "3", modifiers: .cmdOption)),
-        KeyBinding(id: "tabs.gotoTab4", displayNameKey: "keybinding.tabs.gotoTab4", category: .tabs,
-                   shortcut: Shortcut(key: "4", modifiers: .cmdOption)),
-        KeyBinding(id: "tabs.gotoTab5", displayNameKey: "keybinding.tabs.gotoTab5", category: .tabs,
-                   shortcut: Shortcut(key: "5", modifiers: .cmdOption)),
-        KeyBinding(id: "tabs.gotoTab6", displayNameKey: "keybinding.tabs.gotoTab6", category: .tabs,
-                   shortcut: Shortcut(key: "6", modifiers: .cmdOption)),
-        KeyBinding(id: "tabs.gotoTab7", displayNameKey: "keybinding.tabs.gotoTab7", category: .tabs,
-                   shortcut: Shortcut(key: "7", modifiers: .cmdOption)),
-        KeyBinding(id: "tabs.gotoTab8", displayNameKey: "keybinding.tabs.gotoTab8", category: .tabs,
-                   shortcut: Shortcut(key: "8", modifiers: .cmdOption)),
-        KeyBinding(id: "tabs.gotoLastTab", displayNameKey: "keybinding.tabs.gotoLastTab", category: .tabs,
-                   shortcut: Shortcut(key: "9", modifiers: .cmdOption)),
 
         // Panes
         KeyBinding(id: "panes.splitRight", displayNameKey: "keybinding.panes.splitRight", category: .panes,

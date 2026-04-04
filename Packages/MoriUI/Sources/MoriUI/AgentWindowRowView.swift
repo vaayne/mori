@@ -112,7 +112,7 @@ public struct AgentWindowRowView: View {
                 Spacer()
 
                 if let shortcutIndex, shortcutHintsVisible {
-                    ShortcutHintPill("⌘⌥\(shortcutIndex)")
+                    ShortcutHintPill("⌘\(shortcutIndex)")
                         .transition(.opacity)
                         .accessibilityLabel("Command Option \(shortcutIndex)")
                 }

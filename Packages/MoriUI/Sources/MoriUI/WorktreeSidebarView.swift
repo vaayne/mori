@@ -116,7 +116,7 @@ public struct WorktreeSidebarView: View {
                             Divider()
                                 .padding(.horizontal, MoriTokens.Spacing.xl)
                         }
-                        projectSection(project, projectIndex: index)
+                        projectSection(project)
                     }
                 }
                 .padding(.top, MoriTokens.Spacing.lg)
@@ -154,7 +154,7 @@ public struct WorktreeSidebarView: View {
     @State private var renameText: String = ""
 
     @ViewBuilder
-    private func projectSection(_ project: Project, projectIndex: Int) -> some View {
+    private func projectSection(_ project: Project) -> some View {
         // Section header: chevron + name + hover-reveal + button
         HStack(spacing: MoriTokens.Spacing.md) {
             Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down")
@@ -165,11 +165,6 @@ public struct WorktreeSidebarView: View {
             Text(project.name)
                 .font(MoriTokens.Font.sectionTitle)
                 .foregroundStyle(MoriTokens.Color.muted)
-
-            if shortcutHintsVisible, projectIndex < 9 {
-                ShortcutHintPill("\u{2318}\(projectIndex + 1)")
-                    .transition(.opacity)
-            }
 
             Spacer()
 
