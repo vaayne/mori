@@ -544,11 +544,23 @@ public struct WorktreeSidebarView: View {
 // MARK: - Tree Connector
 
 /// Wraps child window rows with a vertical tree connector line and horizontal branches.
+/// Draws a 1pt vertical line on the left, aligned with the worktree icon center.
 struct TreeConnectorGroup<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        content
-            .padding(.leading, MoriTokens.Spacing.xxl)
+        HStack(alignment: .top, spacing: 0) {
+            // Vertical connector line — positioned to align with icon center
+            Rectangle()
+                .fill(Color.primary.opacity(0.06))
+                .frame(width: 1)
+                .padding(.leading, 24) // align with center of 28pt icon box (10pt row padding + 14pt)
+                .padding(.bottom, 14)
+
+            VStack(alignment: .leading, spacing: 0) {
+                content
+            }
+            .padding(.leading, MoriTokens.Spacing.sm)
+        }
     }
 }

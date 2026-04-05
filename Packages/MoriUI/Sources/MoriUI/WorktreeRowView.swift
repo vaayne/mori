@@ -54,7 +54,11 @@ public struct WorktreeRowView: View {
 
                 Spacer(minLength: 0)
 
-                alertBadgeView
+                // Right column: diff stats + agent badge
+                VStack(alignment: .trailing, spacing: MoriTokens.Spacing.xs) {
+                    diffStatsView
+                    alertBadgeView
+                }
 
                 if isHovered {
                     overflowMenu
@@ -123,6 +127,30 @@ public struct WorktreeRowView: View {
             return AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
         } else {
             return AnyShapeStyle(Color.clear)
+        }
+    }
+
+    // MARK: - Diff Stats
+
+    /// Shows +N -N in green/red when there are staged or modified files.
+    @ViewBuilder
+    private var diffStatsView: some View {
+        let staged = worktree.stagedCount
+        let modified = worktree.modifiedCount
+        if staged > 0 || modified > 0 {
+            HStack(spacing: MoriTokens.Spacing.xs) {
+                if staged > 0 {
+                    Text("+\(staged)")
+                        .font(MoriTokens.Font.monoSmall)
+                        .foregroundStyle(MoriTokens.Color.success)
+                }
+                if modified > 0 {
+                    Text("-\(modified)")
+                        .font(MoriTokens.Font.monoSmall)
+                        .foregroundStyle(MoriTokens.Color.error)
+                }
+            }
+            .accessibilityLabel("\(staged) staged, \(modified) modified")
         }
     }
 
