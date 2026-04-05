@@ -57,16 +57,14 @@ public struct AgentSidebarView: View {
         Dictionary(uniqueKeysWithValues: worktrees.map { ($0.id, $0) })
     }
 
-    /// Global 1-based index for each window across all worktrees.
-    private var globalWindowIndices: [String: Int] {
-        let availableWorktrees = worktrees.filter { $0.status != .unavailable }
+    /// Global 1-based index for agent windows in display order (attention → running → completed).
+    /// Only indexes agent windows, matching what's actually rendered in the sidebar.
+    private var agentWindowIndices: [String: Int] {
         var result: [String: Int] = [:]
         var globalIndex = 1
-        for worktree in availableWorktrees {
-            let worktreeWindows = windows
-                .filter { $0.worktreeId == worktree.id }
-                .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
-            for window in worktreeWindows {
+        for group in AgentGroupKey.displayOrder where !collapsedGroups.contains(group) {
+            let groupWindows = agentWindows.filter { group.matches($0) }
+            for window in groupWindows {
                 if globalIndex <= 9 {
                     result[window.tmuxWindowId] = globalIndex
                 }
@@ -157,7 +155,7 @@ public struct AgentSidebarView: View {
                     projectName: project?.name ?? "?",
                     worktreeName: worktree?.name ?? "?",
                     isSelected: window.tmuxWindowId == selectedWindowId,
-                    shortcutIndex: globalWindowIndices[window.tmuxWindowId],
+                    shortcutIndex: agentWindowIndices[window.tmuxWindowId],
                     shortcutHintsVisible: shortcutHintsVisible,
                     onSelect: { onSelectWindow(window.tmuxWindowId) },
                     onRequestPaneOutput: onRequestPaneOutput,

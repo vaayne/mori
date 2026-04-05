@@ -170,6 +170,15 @@
 "System" = "系统";
 
 /* Key Binding Display Names */
+"keybinding.quickJump.goto1" = "快速跳转 1";
+"keybinding.quickJump.goto2" = "快速跳转 2";
+"keybinding.quickJump.goto3" = "快速跳转 3";
+"keybinding.quickJump.goto4" = "快速跳转 4";
+"keybinding.quickJump.goto5" = "快速跳转 5";
+"keybinding.quickJump.goto6" = "快速跳转 6";
+"keybinding.quickJump.goto7" = "快速跳转 7";
+"keybinding.quickJump.goto8" = "快速跳转 8";
+"keybinding.quickJump.gotoLast" = "快速跳转到最后";
 "keybinding.tabs.newTab" = "新建标签页";
 "keybinding.tabs.closeTab" = "关闭标签页";
 "keybinding.tabs.nextTab" = "下一个标签页";

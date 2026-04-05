@@ -2141,22 +2141,44 @@ final class WorkspaceManager {
     }
 
     /// Select an agent window by 1-based visible index (Agents mode).
-    /// Only considers windows with detected agents or active agent state.
+    /// Orders by display group (attention → running → completed) to match AgentSidebarView.
     private func selectAgentWindowByIndex(_ index: Int) {
-        let agentWindows = appState.runtimeWindows.filter {
+        let allAgentWindows = appState.runtimeWindows.filter {
             $0.detectedAgent != nil || $0.agentState != .none
         }
-        guard !agentWindows.isEmpty else { return }
+        // Build ordered list matching AgentGroupKey.displayOrder
+        let ordered = agentGroupOrder.flatMap { group in
+            allAgentWindows.filter { group.matches($0) }
+        }
+        guard !ordered.isEmpty else { return }
 
-        let targetIndex = index == 9 ? agentWindows.count - 1 : index - 1
-        guard targetIndex >= 0, targetIndex < agentWindows.count else { return }
+        let targetIndex = index == 9 ? ordered.count - 1 : index - 1
+        guard targetIndex >= 0, targetIndex < ordered.count else { return }
 
-        let window = agentWindows[targetIndex]
+        let window = ordered[targetIndex]
         if window.worktreeId != appState.uiState.selectedWorktreeId {
             selectWorktree(window.worktreeId)
         }
         selectWindow(window.tmuxWindowId)
     }
+
+    /// Agent group display order matching AgentSidebarView's AgentGroupKey.displayOrder.
+    private enum AgentGroup {
+        case attention, running, completed
+
+        func matches(_ window: RuntimeWindow) -> Bool {
+            switch self {
+            case .attention:
+                return window.agentState == .waitingForInput || window.agentState == .error
+            case .running:
+                return window.agentState == .running
+            case .completed:
+                return window.agentState == .completed || window.agentState == .none
+            }
+        }
+    }
+
+    private let agentGroupOrder: [AgentGroup] = [.attention, .running, .completed]
 
     /// Select a tmux window by 1-based index within the selected worktree.
     /// Index 9 selects the last window regardless of count.
