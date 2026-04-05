@@ -28,21 +28,28 @@ public struct WorktreeRowView: View {
 
     public var body: some View {
         Button(action: onSelect) {
-            HStack(alignment: .center, spacing: MoriTokens.Spacing.md) {
-                Image(systemName: worktreeIcon)
-                    .font(MoriTokens.Font.label)
-                    .foregroundStyle(worktree.isMainWorktree ? MoriTokens.Color.attention : MoriTokens.Color.muted)
+            HStack(alignment: .center, spacing: MoriTokens.Spacing.lg) {
+                // Icon box
+                ZStack {
+                    RoundedRectangle(cornerRadius: MoriTokens.Icon.worktreeBoxRadius)
+                        .fill(isSelected
+                            ? MoriTokens.Color.active.opacity(MoriTokens.Opacity.light)
+                            : MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+                        .frame(width: MoriTokens.Icon.worktreeBox, height: MoriTokens.Icon.worktreeBox)
+                    Image(systemName: worktreeIcon)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(isSelected ? MoriTokens.Color.active : MoriTokens.Color.muted)
+                }
 
                 VStack(alignment: .leading, spacing: MoriTokens.Spacing.xxs) {
-                    HStack(spacing: MoriTokens.Spacing.sm) {
-                        Text(worktree.name)
-                            .font(.system(.body, weight: .semibold))
-                            .lineLimit(1)
+                    Text(worktree.name)
+                        .font(MoriTokens.Font.rowTitle)
+                        .lineLimit(1)
 
+                    HStack(spacing: MoriTokens.Spacing.sm) {
+                        statusLine
                         gitStatusBadges
                     }
-
-                    statusLine
                 }
 
                 Spacer(minLength: 0)
@@ -54,7 +61,7 @@ public struct WorktreeRowView: View {
                         .transition(.opacity)
                 }
             }
-            .padding(.vertical, MoriTokens.Spacing.md)
+            .padding(.vertical, 9)
             .padding(.horizontal, MoriTokens.Spacing.lg)
             .contentShape(Rectangle())
         }
@@ -135,7 +142,7 @@ public struct WorktreeRowView: View {
             // Show branch only when it differs from the worktree name
             if let branch = worktree.branch, branch != worktree.name {
                 Text(branch)
-                    .font(MoriTokens.Font.caption)
+                    .font(MoriTokens.Font.monoBranch)
                     .foregroundStyle(MoriTokens.Color.muted)
                     .lineLimit(1)
             }

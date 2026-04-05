@@ -85,9 +85,10 @@ public struct WindowRowView: View {
                 onSelect()
             }) {
             HStack(spacing: MoriTokens.Spacing.md) {
-                Image(systemName: window.tag?.symbolName ?? "terminal")
-                    .font(MoriTokens.Font.label)
-                    .foregroundStyle(isActive ? MoriTokens.Color.active : MoriTokens.Color.muted)
+                // Colored type dot
+                Circle()
+                    .fill(windowDotColor)
+                    .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
 
                 Text(window.title.isEmpty ? .localized("Window \(window.tmuxWindowIndex)") : window.title)
                     .font(MoriTokens.Font.windowTitle)
@@ -96,6 +97,8 @@ public struct WindowRowView: View {
 
                 Spacer()
 
+                windowBadgeView
+
                 if let shortcutIndex {
                     if shortcutHintsVisible {
                         ShortcutHintPill("⌘\(shortcutIndex)")
@@ -103,22 +106,17 @@ public struct WindowRowView: View {
                             .accessibilityLabel("Command Option \(shortcutIndex)")
                     } else {
                         Text("⌘\(shortcutIndex)")
-                            .font(MoriTokens.Font.monoSmall)
+                            .font(MoriTokens.Font.monoShortcut)
                             .foregroundStyle(MoriTokens.Color.muted)
+                            .padding(.horizontal, MoriTokens.Spacing.sm)
+                            .padding(.vertical, MoriTokens.Spacing.xxs)
+                            .background(MoriTokens.Color.muted.opacity(0.04))
+                            .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
                             .accessibilityLabel("Command Option \(shortcutIndex)")
                     }
                 }
-
-                windowBadgeView
-
-                if isActive {
-                    Circle()
-                        .fill(MoriTokens.Color.active)
-                        .frame(width: MoriTokens.Icon.indicator, height: MoriTokens.Icon.indicator)
-                        .accessibilityLabel("Active window")
-                }
             }
-            .padding(.vertical, MoriTokens.Spacing.xs)
+            .padding(.vertical, MoriTokens.Spacing.md)
             .padding(.horizontal, MoriTokens.Spacing.lg)
             .contentShape(Rectangle())
         }
@@ -126,6 +124,17 @@ public struct WindowRowView: View {
         .background(rowBackground)
         .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
         .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
+    }
+
+    /// Color of the dot indicator based on window type/state.
+    private var windowDotColor: Color {
+        if isActive { return MoriTokens.Color.active }
+        if window.detectedAgent != nil || window.agentState != .none { return .purple }
+        switch window.tag {
+        case .server: return MoriTokens.Color.success
+        case .agent: return .purple
+        default: return MoriTokens.Color.inactive
+        }
     }
 
     @ViewBuilder

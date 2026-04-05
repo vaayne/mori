@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mori Sidebar — Redesign Spec</title>
+<style>
+  /* ═══════════════════════════════════════════════
+     Design direction: macOS-native utilitarian.
+     No gradients, no glow, no glassmorphism.
+     Just precise spacing, clear hierarchy, quiet confidence.
+     ═══════════════════════════════════════════════ */
+
+  :root {
+    /* Surface palette — warm-tinted darks, not pure gray */
+    --bg-canvas: #141416;
+    --bg-surface: #1c1c1f;
+    --bg-surface-raised: #232327;
+    --bg-hover: rgba(255, 255, 255, 0.04);
+    --bg-active: rgba(255, 255, 255, 0.07);
+    --bg-selected: rgba(88, 140, 210, 0.13);
+
+    /* Text hierarchy */
+    --text-primary: #e8e8ec;
+    --text-secondary: #9d9da5;
+    --text-tertiary: #66666e;
+    --text-quaternary: #4a4a52;
+
+    /* Semantic */
+    --accent: #5e9de0;
+    --green: #5ec26a;
+    --red: #e05e6a;
+    --amber: #d4a24e;
+    --purple: #9b7fd4;
+
+    /* Borders */
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --border-muted: rgba(255, 255, 255, 0.09);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  *::selection { background: rgba(88, 140, 210, 0.3); }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    background: var(--bg-canvas);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ── Page layout ── */
+  .page {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 56px 40px 80px;
+  }
+
+  .page-header {
+    margin-bottom: 48px;
+  }
+  .page-header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+  .page-header p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+    max-width: 520px;
+  }
+
+  /* ── Comparison grid ── */
+  .comparison {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 40px;
+    justify-content: start;
+    margin-bottom: 56px;
+  }
+
+  .panel-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .panel-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-tertiary);
+    padding-left: 2px;
+  }
+  .panel-label span {
+    font-weight: 400;
+    color: var(--text-quaternary);
+    margin-left: 4px;
+  }
+
+  /* ── Window chrome ── */
+  .window {
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+  }
+  .window-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 14px 11px;
+  }
+  .traffic { width: 12px; height: 12px; border-radius: 50%; }
+  .traffic-close { background: #ff5f57; }
+  .traffic-min   { background: #febc2e; }
+  .traffic-max   { background: #28c840; }
+
+  /* ════════════════════════════════════════════════
+     BEFORE — Current sidebar (240pt)
+     ════════════════════════════════════════════════ */
+  .before { width: 240px; }
+  .before .content { padding: 2px 12px 12px; }
+
+  /* Before: section header */
+  .before .sec-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0 4px;
+  }
+  .before .sec-head .lbl {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .before .sec-head .act {
+    font-size: 12px;
+    color: var(--text-quaternary);
+  }
+
+  /* Before: project header */
+  .before .proj {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 0 2px;
+  }
+  .before .proj .chev {
+    font-size: 9px;
+    color: var(--text-quaternary);
+    width: 10px;
+    text-align: center;
+  }
+  .before .proj .nm {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .before .proj .cnt {
+    font-size: 10px;
+    color: var(--text-quaternary);
+    margin-left: auto;
+  }
+
+  /* Before: worktree row */
+  .before .wt {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    padding: 5px 8px;
+    border-radius: 4px;
+    cursor: default;
+  }
+  .before .wt.sel { background: var(--bg-selected); }
+  .before .wt .col { flex: 1; min-width: 0; }
+  .before .wt .nm {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.25;
+  }
+  .before .wt .br {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .before .wt .tag {
+    font-size: 8px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-top: 3px;
+    flex-shrink: 0;
+  }
+  .before .wt .tag.dirty { color: var(--amber); background: rgba(212, 162, 78, 0.12); }
+  .before .wt .tag.agent { color: var(--accent); background: rgba(94, 157, 224, 0.12); }
+
+  /* Before: window row */
+  .before .win {
+    display: flex;
+    align-items: center;
+    padding: 2px 8px 2px 22px;
+    border-radius: 3px;
+    cursor: default;
+  }
+  .before .win.sel { background: rgba(88, 140, 210, 0.08); }
+  .before .win .pip {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-right: 6px;
+    flex-shrink: 0;
+  }
+  .before .win .t {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .before .sep {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 4px 0;
+  }
+
+  .before .fill { flex: 1; }
+  .before .content { display: flex; flex-direction: column; min-height: 580px; }
+
+  .before .foot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 0 0;
+    border-top: 1px solid var(--border-subtle);
+    margin-top: auto;
+  }
+  .before .foot .fb {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    cursor: default;
+  }
+
+  /* ════════════════════════════════════════════════
+     AFTER — Proposed sidebar (280pt)
+     ════════════════════════════════════════════════ */
+  .after { width: 280px; }
+  .after .content { padding: 2px 16px 16px; display: flex; flex-direction: column; min-height: 580px; }
+
+  /* After: mode tabs */
+  .after .modes {
+    display: flex;
+    gap: 1px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 7px;
+    padding: 3px;
+    margin-bottom: 6px;
+  }
+  .after .modes .m {
+    flex: 1;
+    text-align: center;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    padding: 4.5px 0;
+    border-radius: 5px;
+    cursor: default;
+    transition: color 0.12s, background 0.12s;
+  }
+  .after .modes .m.on {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  /* After: section header */
+  .after .sec-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0 6px;
+  }
+  .after .sec-head .lbl {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  .after .sec-head .act {
+    font-size: 15px;
+    color: var(--text-quaternary);
+    cursor: default;
+    line-height: 1;
+    transition: color 0.12s;
+  }
+
+  /* After: project header */
+  .after .proj {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 12px 0 5px;
+  }
+  .after .proj .chev {
+    font-size: 10px;
+    color: var(--text-quaternary);
+    width: 12px;
+    text-align: center;
+    transition: transform 0.15s;
+  }
+  .after .proj .nm {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    flex: 1;
+    letter-spacing: -0.1px;
+  }
+  .after .proj .cnt {
+    font-size: 11px;
+    color: var(--text-quaternary);
+    font-weight: 500;
+    min-width: 14px;
+    text-align: right;
+  }
+  .after .proj .plus {
+    font-size: 15px;
+    color: var(--text-quaternary);
+    cursor: default;
+    line-height: 1;
+    margin-left: 2px;
+    transition: color 0.12s;
+  }
+
+  /* After: worktree row */
+  .after .wt {
+    display: flex;
+    align-items: center;
+    padding: 9px 10px;
+    border-radius: 7px;
+    cursor: default;
+    margin: 1px 0;
+    transition: background 0.1s;
+  }
+  .after .wt:hover { background: var(--bg-hover); }
+  .after .wt.sel { background: var(--bg-selected); }
+  .after .wt .ic {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: var(--bg-hover);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .after .wt .ic svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: var(--text-tertiary);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .after .wt.sel .ic {
+    background: rgba(88, 140, 210, 0.12);
+  }
+  .after .wt.sel .ic svg { stroke: var(--accent); }
+  .after .wt .col { flex: 1; min-width: 0; }
+  .after .wt .nm {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+    letter-spacing: -0.1px;
+  }
+  .after .wt .meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 1px;
+  }
+  .after .wt .br {
+    font-size: 11px;
+    font-family: "SF Mono", ui-monospace, monospace;
+    color: var(--text-quaternary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.35;
+  }
+  .after .wt .tag {
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .after .wt .tag.dirty { color: var(--amber); background: rgba(212, 162, 78, 0.13); }
+  .after .wt .tag.agent { color: var(--purple); background: rgba(155, 127, 212, 0.13); }
+  .after .wt .right { flex-shrink: 0; margin-left: 6px; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .after .wt .diff {
+    font-size: 10.5px;
+    font-family: "SF Mono", ui-monospace, monospace;
+    display: flex;
+    gap: 3px;
+    line-height: 1;
+  }
+  .after .wt .diff .p { color: var(--green); }
+  .after .wt .diff .mi { color: var(--red); }
+
+  /* After: window row — with tree connector */
+  .after .win-group {
+    position: relative;
+    padding-left: 23px;
+    margin-left: 14px;
+  }
+  .after .win-group::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 14px;
+    width: 1px;
+    background: var(--border-subtle);
+  }
+  .after .win {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px 6px 16px;
+    border-radius: 5px;
+    cursor: default;
+    position: relative;
+    margin: 0;
+    transition: background 0.1s;
+  }
+  .after .win:hover { background: var(--bg-hover); }
+  .after .win.sel { background: rgba(88, 140, 210, 0.08); }
+  .after .win::before {
+    content: '';
+    position: absolute;
+    left: -23px;
+    top: 50%;
+    width: 15px;
+    height: 1px;
+    background: var(--border-subtle);
+  }
+  .after .win .pip {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 8px;
+    flex-shrink: 0;
+  }
+  .after .win .pip.shell   { background: var(--text-quaternary); }
+  .after .win .pip.active  { background: var(--accent); }
+  .after .win .pip.agent   { background: var(--purple); }
+  .after .win .pip.server  { background: var(--green); }
+  .after .win .t {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+  }
+  .after .win.sel .t { color: var(--text-primary); }
+  .after .win .kbd {
+    font-size: 10px;
+    font-family: "SF Mono", ui-monospace, monospace;
+    color: var(--text-quaternary);
+    background: rgba(255, 255, 255, 0.04);
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-left: 6px;
+    flex-shrink: 0;
+    line-height: 1.4;
+  }
+  .after .win .st {
+    font-size: 9px;
+    margin-left: 5px;
+    flex-shrink: 0;
+  }
+  .after .win .st.running { color: var(--purple); }
+  .after .win .st.done    { color: var(--green); }
+
+  .after .sep {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 6px 0;
+  }
+
+  .after .foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0 0;
+    border-top: 1px solid var(--border-muted);
+    margin-top: auto;
+  }
+  .after .foot .fb {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    cursor: default;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 6px;
+    border-radius: 5px;
+    transition: background 0.1s, color 0.1s;
+  }
+  .after .foot .fb:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+  }
+  .after .foot .fb svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* ════════════════════════════════════════════════
+     SPEC TABLE
+     ════════════════════════════════════════════════ */
+  .spec {
+    max-width: 600px;
+  }
+  .spec h2 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    letter-spacing: -0.2px;
+  }
+  .spec table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .spec th {
+    text-align: left;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-quaternary);
+    padding: 0 0 8px;
+    border-bottom: 1px solid var(--border-muted);
+  }
+  .spec td {
+    font-size: 13px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    vertical-align: top;
+  }
+  .spec td:first-child {
+    color: var(--text-primary);
+    font-weight: 500;
+    width: 40%;
+    padding-right: 16px;
+  }
+  .spec .old {
+    color: var(--text-quaternary);
+    text-decoration: line-through;
+    text-decoration-color: rgba(255,255,255,0.15);
+  }
+  .spec .new {
+    color: var(--green);
+  }
+  .spec .addition td {
+    border-bottom-color: rgba(94, 194, 106, 0.08);
+  }
+  .spec .addition td:first-child {
+    color: var(--green);
+  }
+
+  .spec-group {
+    margin-bottom: 36px;
+  }
+  .spec-group h3 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  /* ── Callout ── */
+  .callout {
+    padding: 14px 16px;
+    background: rgba(94, 157, 224, 0.06);
+    border-left: 2px solid rgba(94, 157, 224, 0.3);
+    border-radius: 0 6px 6px 0;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+    margin-top: 40px;
+    max-width: 600px;
+  }
+  .callout strong { color: var(--text-primary); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="page-header">
+    <h1>Sidebar Redesign</h1>
+    <p>Addressing <a href="https://github.com/vaayne/mori/issues/47" style="color: var(--accent); text-decoration: none;">#47</a> — spacing, typography, and visual hierarchy improvements. Same information density, more room to breathe.</p>
+  </div>
+
+  <!-- ═══ Side-by-side ═══ -->
+  <div class="comparison">
+
+    <!-- BEFORE -->
+    <div class="panel-wrapper">
+      <div class="panel-label">Before <span>240pt</span></div>
+      <div class="window before">
+        <div class="window-bar">
+          <div class="traffic traffic-close"></div>
+          <div class="traffic traffic-min"></div>
+          <div class="traffic traffic-max"></div>
+        </div>
+        <div class="content">
+
+          <div class="sec-head">
+            <span class="lbl">Workspaces</span>
+            <span class="act">+</span>
+          </div>
+
+          <!-- mori -->
+          <div class="proj">
+            <span class="chev">▾</span>
+            <span class="nm">mori</span>
+            <span class="cnt">(3)</span>
+          </div>
+
+          <div class="wt sel">
+            <div class="col">
+              <div class="nm">main</div>
+              <div class="br">main</div>
+            </div>
+            <span class="tag dirty">●</span>
+          </div>
+          <div class="win sel">
+            <div class="pip"></div>
+            <span class="t">shell</span>
+          </div>
+          <div class="win">
+            <span class="t" style="padding-left:11px">editor</span>
+          </div>
+          <div class="win">
+            <span class="t" style="padding-left:11px">logs</span>
+          </div>
+
+          <div class="wt">
+            <div class="col">
+              <div class="nm">feat/sidebar-ui</div>
+              <div class="br">feat/sidebar-ui</div>
+            </div>
+            <span class="tag agent">⚡</span>
+          </div>
+          <div class="win">
+            <span class="t" style="padding-left:11px">shell</span>
+          </div>
+          <div class="win">
+            <span class="t" style="padding-left:11px">⚡ claude</span>
+          </div>
+
+          <div class="wt">
+            <div class="col">
+              <div class="nm">fix/tmux-crash</div>
+              <div class="br">fix/tmux-crash</div>
+            </div>
+          </div>
+          <div class="win">
+            <span class="t" style="padding-left:11px">shell</span>
+          </div>
+
+          <div class="sep"></div>
+
+          <!-- dotfiles -->
+          <div class="proj">
+            <span class="chev">▾</span>
+            <span class="nm">dotfiles</span>
+            <span class="cnt">(1)</span>
+          </div>
+          <div class="wt">
+            <div class="col">
+              <div class="nm">main</div>
+              <div class="br">main</div>
+            </div>
+          </div>
+          <div class="win">
+            <span class="t" style="padding-left:11px">shell</span>
+          </div>
+
+          <div class="sep"></div>
+
+          <!-- api-server collapsed -->
+          <div class="proj">
+            <span class="chev">▸</span>
+            <span class="nm">api-server</span>
+            <span class="cnt">(2)</span>
+          </div>
+
+          <div class="fill"></div>
+
+          <div class="foot">
+            <span class="fb">⚙ Settings</span>
+            <span class="fb" style="margin-left: auto">⌘⇧P</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AFTER -->
+    <div class="panel-wrapper">
+      <div class="panel-label">After <span>280pt</span></div>
+      <div class="window after">
+        <div class="window-bar">
+          <div class="traffic traffic-close"></div>
+          <div class="traffic traffic-min"></div>
+          <div class="traffic traffic-max"></div>
+        </div>
+        <div class="content">
+
+          <div class="modes">
+            <div class="m on">Workspaces</div>
+            <div class="m">Tasks</div>
+            <div class="m">Agents</div>
+          </div>
+
+          <div class="sec-head">
+            <span class="lbl">Projects</span>
+            <span class="act">+</span>
+          </div>
+
+          <!-- mori -->
+          <div class="proj">
+            <span class="chev">▾</span>
+            <span class="nm">mori</span>
+            <span class="cnt">3</span>
+            <span class="plus">+</span>
+          </div>
+
+          <div class="wt sel">
+            <div class="ic">
+              <svg viewBox="0 0 16 16"><path d="M4 1v14"/><path d="M4 5h4c2 0 3 1 3 3s-1 3-3 3H4"/></svg>
+            </div>
+            <div class="col">
+              <div class="nm">main</div>
+              <div class="meta">
+                <span class="br">main</span>
+                <span class="tag dirty">dirty</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="win-group">
+            <div class="win sel">
+              <div class="pip active"></div>
+              <span class="t">shell</span>
+              <span class="kbd">⌘1</span>
+            </div>
+            <div class="win">
+              <div class="pip shell"></div>
+              <span class="t">editor</span>
+              <span class="kbd">⌘2</span>
+            </div>
+            <div class="win">
+              <div class="pip shell"></div>
+              <span class="t">logs</span>
+              <span class="kbd">⌘3</span>
+            </div>
+          </div>
+
+          <div class="wt">
+            <div class="ic">
+              <svg viewBox="0 0 16 16"><path d="M4 1v14"/><path d="M4 8h8"/><path d="M12 4v8"/></svg>
+            </div>
+            <div class="col">
+              <div class="nm">feat/sidebar-ui</div>
+              <div class="meta">
+                <span class="br">feat/sidebar-ui</span>
+              </div>
+            </div>
+            <div class="right">
+              <div class="diff"><span class="p">+394</span><span class="mi">-23</span></div>
+              <span class="tag agent">⚡ agent</span>
+            </div>
+          </div>
+
+          <div class="win-group">
+            <div class="win">
+              <div class="pip shell"></div>
+              <span class="t">shell</span>
+              <span class="kbd">⌘4</span>
+            </div>
+            <div class="win">
+              <div class="pip agent"></div>
+              <span class="t">⚡ claude</span>
+              <span class="st running">●</span>
+              <span class="kbd">⌘5</span>
+            </div>
+          </div>
+
+          <div class="wt">
+            <div class="ic">
+              <svg viewBox="0 0 16 16"><path d="M4 1v14"/><path d="M4 8h8"/><path d="M12 4v8"/></svg>
+            </div>
+            <div class="col">
+              <div class="nm">fix/tmux-crash</div>
+              <div class="meta">
+                <span class="br">fix/tmux-crash</span>
+              </div>
+            </div>
+            <div class="right">
+              <div class="diff"><span class="p">+12</span><span class="mi">-4</span></div>
+            </div>
+          </div>
+
+          <div class="win-group">
+            <div class="win">
+              <div class="pip shell"></div>
+              <span class="t">shell</span>
+              <span class="kbd">⌘6</span>
+            </div>
+          </div>
+
+          <div class="sep"></div>
+
+          <!-- dotfiles -->
+          <div class="proj">
+            <span class="chev">▾</span>
+            <span class="nm">dotfiles</span>
+            <span class="cnt">1</span>
+            <span class="plus">+</span>
+          </div>
+
+          <div class="wt">
+            <div class="ic">
+              <svg viewBox="0 0 16 16"><path d="M4 1v14"/><path d="M4 5h4c2 0 3 1 3 3s-1 3-3 3H4"/></svg>
+            </div>
+            <div class="col">
+              <div class="nm">main</div>
+              <div class="meta">
+                <span class="br">main</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="win-group">
+            <div class="win">
+              <div class="pip shell"></div>
+              <span class="t">shell</span>
+              <span class="kbd">⌘7</span>
+            </div>
+          </div>
+
+          <div class="sep"></div>
+
+          <!-- api-server collapsed -->
+          <div class="proj">
+            <span class="chev">▸</span>
+            <span class="nm">api-server</span>
+            <span class="cnt">2</span>
+            <span class="plus">+</span>
+          </div>
+
+          <div class="foot">
+            <div class="fb">
+              <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg>
+              Settings
+            </div>
+            <div class="fb">
+              <span class="kbd" style="margin:0; background: none; padding:0;">⌘⇧P</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Spec tables ═══ -->
+  <div class="spec">
+    <h2>Change Specification</h2>
+
+    <div class="spec-group">
+      <h3>Dimensions</h3>
+      <table>
+        <tr><th>Property</th><th>Before</th><th>After</th></tr>
+        <tr><td>Default sidebar width</td><td><span class="old">240pt</span></td><td><span class="new">280pt</span></td></tr>
+        <tr><td>Worktree row height</td><td><span class="old">~38pt</span></td><td><span class="new">~50pt</span></td></tr>
+        <tr><td>Window row height</td><td><span class="old">~22pt</span></td><td><span class="new">~30pt</span></td></tr>
+        <tr><td>Horizontal content padding</td><td><span class="old">12pt</span></td><td><span class="new">16pt</span></td></tr>
+        <tr><td>Row inner padding (wt)</td><td><span class="old">5pt 8pt</span></td><td><span class="new">9pt 10pt</span></td></tr>
+        <tr><td>Row inner padding (win)</td><td><span class="old">2pt 8pt</span></td><td><span class="new">6pt 10pt</span></td></tr>
+        <tr><td>Row corner radius</td><td><span class="old">4pt</span></td><td><span class="new">7pt</span></td></tr>
+        <tr><td>Window indent</td><td><span class="old">22pt flat</span></td><td><span class="new">37pt + tree line</span></td></tr>
+        <tr><td>Section header top gap</td><td><span class="old">10pt</span></td><td><span class="new">14pt</span></td></tr>
+        <tr><td>Project header top gap</td><td><span class="old">7pt</span></td><td><span class="new">12pt</span></td></tr>
+      </table>
+    </div>
+
+    <div class="spec-group">
+      <h3>Typography</h3>
+      <table>
+        <tr><th>Element</th><th>Before</th><th>After</th></tr>
+        <tr><td>Worktree name</td><td><span class="old">13pt semibold</span></td><td><span class="new">13.5pt semibold</span></td></tr>
+        <tr><td>Branch name</td><td><span class="old">11pt system</span></td><td><span class="new">11pt SF Mono</span></td></tr>
+        <tr><td>Window title</td><td><span class="old">12pt</span></td><td><span class="new">12.5pt</span></td></tr>
+        <tr><td>Badge text</td><td><span class="old">8pt bold</span></td><td><span class="new">9.5pt semibold</span></td></tr>
+        <tr><td>Section header</td><td><span class="old">11pt semibold</span></td><td><span class="new">11pt bold, wider tracking</span></td></tr>
+        <tr><td>Project name</td><td><span class="old">13pt semibold</span></td><td><span class="new">14pt bold</span></td></tr>
+      </table>
+    </div>
+
+    <div class="spec-group">
+      <h3>New Elements</h3>
+      <table>
+        <tr><th>Addition</th><th colspan="2">Description</th></tr>
+        <tr class="addition"><td>Worktree icon</td><td colspan="2">28pt rounded square with SVG branch glyph. Tints to accent color when selected.</td></tr>
+        <tr class="addition"><td>Tree connector</td><td colspan="2">1pt vertical line + horizontal branches connecting windows to parent worktree.</td></tr>
+        <tr class="addition"><td>Window type dots</td><td colspan="2">6pt colored dots: shell (gray), active (blue), agent (purple), server (green).</td></tr>
+        <tr class="addition"><td>Diff stats</td><td colspan="2">Monospace +N -N (green/red) on worktree rows with uncommitted changes.</td></tr>
+        <tr class="addition"><td>Keyboard hints</td><td colspan="2">Always-visible ⌘N pills on window rows (was Cmd-hold only).</td></tr>
+        <tr class="addition"><td>Per-project add button</td><td colspan="2">+ button on each project header for quick worktree creation.</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Design intent:</strong> The changes are conservative — no new layout paradigms, no structural rethink. The hierarchy (Project → Worktree → Window) stays the same. We're just giving each element enough space to be scannable at a glance, and adding visual connectors so the tree structure reads without relying solely on indentation.
+  </div>
+
+</div>
+
+</body>
+</html>

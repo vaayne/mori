@@ -164,10 +164,15 @@ public struct WorktreeSidebarView: View {
                 .frame(width: 12)
 
             Text(project.name)
-                .font(MoriTokens.Font.sectionTitle)
+                .font(MoriTokens.Font.projectTitle)
                 .foregroundStyle(MoriTokens.Color.muted)
 
             Spacer()
+
+            let projectWorktreeCount = worktrees.filter { $0.projectId == project.id && $0.status != .unavailable }.count
+            Text("\(projectWorktreeCount)")
+                .font(MoriTokens.Font.caption)
+                .foregroundStyle(MoriTokens.Color.inactive)
 
             if hoveredProjectId == project.id {
                 HStack(spacing: MoriTokens.Spacing.sm) {
@@ -177,7 +182,7 @@ public struct WorktreeSidebarView: View {
                             onShowCreatePanel?()
                         } label: {
                             Image(systemName: "plus")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(MoriTokens.Color.muted)
                         }
                         .buttonStyle(.plain)
@@ -253,7 +258,7 @@ public struct WorktreeSidebarView: View {
             }
         }
         .padding(.horizontal, MoriTokens.Spacing.xl)
-        .padding(.top, MoriTokens.Spacing.xl)
+        .padding(.top, 14)
         .padding(.bottom, MoriTokens.Spacing.sm)
         .contentShape(Rectangle())
         .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
@@ -398,42 +403,43 @@ public struct WorktreeSidebarView: View {
                 }
             }
 
-            // Show windows (tabs) under every worktree that has them
+            // Show windows (tabs) under every worktree that has them — tree connector
             if !worktreeWindows.isEmpty {
-                ForEach(Array(worktreeWindows.enumerated()), id: \.element.id) { index, window in
-                    Group {
-                        let globalIdx = globalWindowIndices[window.tmuxWindowId]
-                        if window.detectedAgent != nil || window.agentState != .none {
-                            AgentWindowRowView(
-                                window: window,
-                                projectName: projects.first(where: { $0.id == worktree.projectId })?.name ?? "",
-                                worktreeName: worktree.name,
-                                isSelected: isSelected && window.tmuxWindowId == selectedWindowId,
-                                shortcutIndex: globalIdx,
-                                shortcutHintsVisible: shortcutHintsVisible,
-                                onSelect: { onSelectWindow(window.tmuxWindowId) },
-                                onRequestPaneOutput: onRequestPaneOutput,
-                                onSendKeys: onSendKeys
-                            )
-                        } else {
-                            WindowRowView(
-                                window: window,
-                                isActive: isSelected && window.tmuxWindowId == selectedWindowId,
-                                shortcutIndex: globalIdx,
-                                shortcutHintsVisible: shortcutHintsVisible,
-                                onSelect: { onSelectWindow(window.tmuxWindowId) },
-                                onRequestPaneOutput: onRequestPaneOutput,
-                                onSendKeys: onSendKeys
-                            )
+                TreeConnectorGroup {
+                    ForEach(Array(worktreeWindows.enumerated()), id: \.element.id) { index, window in
+                        Group {
+                            let globalIdx = globalWindowIndices[window.tmuxWindowId]
+                            if window.detectedAgent != nil || window.agentState != .none {
+                                AgentWindowRowView(
+                                    window: window,
+                                    projectName: projects.first(where: { $0.id == worktree.projectId })?.name ?? "",
+                                    worktreeName: worktree.name,
+                                    isSelected: isSelected && window.tmuxWindowId == selectedWindowId,
+                                    shortcutIndex: globalIdx,
+                                    shortcutHintsVisible: shortcutHintsVisible,
+                                    onSelect: { onSelectWindow(window.tmuxWindowId) },
+                                    onRequestPaneOutput: onRequestPaneOutput,
+                                    onSendKeys: onSendKeys
+                                )
+                            } else {
+                                WindowRowView(
+                                    window: window,
+                                    isActive: isSelected && window.tmuxWindowId == selectedWindowId,
+                                    shortcutIndex: globalIdx,
+                                    shortcutHintsVisible: shortcutHintsVisible,
+                                    onSelect: { onSelectWindow(window.tmuxWindowId) },
+                                    onRequestPaneOutput: onRequestPaneOutput,
+                                    onSendKeys: onSendKeys
+                                )
+                            }
                         }
-                    }
-                    .padding(.leading, MoriTokens.Spacing.xxl)
-                    .contextMenu {
-                        if let onCloseWindow {
-                            Button(role: .destructive) {
-                                onCloseWindow(window.tmuxWindowId)
-                            } label: {
-                                Label("Close Tab", systemImage: "xmark")
+                        .contextMenu {
+                            if let onCloseWindow {
+                                Button(role: .destructive) {
+                                    onCloseWindow(window.tmuxWindowId)
+                                } label: {
+                                    Label("Close Tab", systemImage: "xmark")
+                                }
                             }
                         }
                     }
@@ -532,5 +538,17 @@ public struct WorktreeSidebarView: View {
             .padding(.horizontal, MoriTokens.Spacing.xl)
             .padding(.vertical, MoriTokens.Spacing.lg)
         }
+    }
+}
+
+// MARK: - Tree Connector
+
+/// Wraps child window rows with a vertical tree connector line and horizontal branches.
+struct TreeConnectorGroup<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content
+            .padding(.leading, MoriTokens.Spacing.xxl)
     }
 }

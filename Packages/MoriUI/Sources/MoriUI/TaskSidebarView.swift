@@ -172,11 +172,11 @@ public struct TaskSidebarView: View {
                 .frame(width: 12)
 
             Image(systemName: status.iconName)
-                .font(.system(size: 11))
+                .font(.system(size: 12))
                 .foregroundStyle(MoriTokens.Color.muted)
 
             Text(String.localized(String.LocalizationValue(stringLiteral: status.displayName)))
-                .font(MoriTokens.Font.sectionTitle)
+                .font(MoriTokens.Font.projectTitle)
                 .foregroundStyle(MoriTokens.Color.muted)
 
             Text("\(worktrees.count)")
@@ -186,7 +186,7 @@ public struct TaskSidebarView: View {
             Spacer()
         }
         .padding(.horizontal, MoriTokens.Spacing.xl)
-        .padding(.top, MoriTokens.Spacing.xl)
+        .padding(.top, 14)
         .padding(.bottom, MoriTokens.Spacing.sm)
         .contentShape(Rectangle())
         .onTapGesture {

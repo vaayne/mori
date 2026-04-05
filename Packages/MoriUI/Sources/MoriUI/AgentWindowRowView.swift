@@ -131,7 +131,7 @@ public struct AgentWindowRowView: View {
                     .help(String.localized("Reply"))
                 }
             }
-            .padding(.vertical, MoriTokens.Spacing.sm)
+            .padding(.vertical, MoriTokens.Spacing.md)
             .padding(.horizontal, MoriTokens.Spacing.lg)
             .contentShape(Rectangle())
         }
