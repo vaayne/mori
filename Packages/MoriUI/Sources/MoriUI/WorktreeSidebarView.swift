@@ -83,23 +83,24 @@ public struct WorktreeSidebarView: View {
         windows.filter { $0.agentState == .waitingForInput || $0.agentState == .error }.count
     }
 
-    /// Global 1-based index for each window across all worktrees in the selected project.
-    /// Used for ⌘⌥1-9 tab switching hints.
+    /// Global 1-based index for each window across all projects and worktrees.
+    /// Iterates projects in display order so indices match ⌘1-9 quick jump.
     private var globalWindowIndices: [String: Int] {
-        guard let projectId = selectedProjectId ?? projects.first?.id else { return [:] }
-        let projectWorktrees = worktrees
-            .filter { $0.projectId == projectId && $0.status != .unavailable }
         var result: [String: Int] = [:]
         var globalIndex = 1
-        for worktree in projectWorktrees {
-            let worktreeWindows = windows
-                .filter { $0.worktreeId == worktree.id }
-                .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
-            for window in worktreeWindows {
-                if globalIndex <= 9 {
-                    result[window.tmuxWindowId] = globalIndex
+        for project in projects where !project.isCollapsed {
+            let projectWorktrees = worktrees
+                .filter { $0.projectId == project.id && $0.status != .unavailable }
+            for worktree in projectWorktrees {
+                let worktreeWindows = windows
+                    .filter { $0.worktreeId == worktree.id }
+                    .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
+                for window in worktreeWindows {
+                    if globalIndex <= 9 {
+                        result[window.tmuxWindowId] = globalIndex
+                    }
+                    globalIndex += 1
                 }
-                globalIndex += 1
             }
         }
         return result

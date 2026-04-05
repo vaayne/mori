@@ -2096,17 +2096,21 @@ final class WorkspaceManager {
         }
     }
 
-    /// Select a tmux window by 1-based global index across all worktrees in the selected project.
+    /// Select a tmux window by 1-based global index across all projects and worktrees.
+    /// Iterates projects in display order, skipping collapsed ones, to match sidebar hints.
     /// Index 9 selects the last window regardless of count.
     private func selectWindowByGlobalIndex(_ index: Int) {
-        guard let projectId = appState.uiState.selectedProjectId else { return }
-        let projectWorktrees = appState.worktrees
-            .filter { $0.projectId == projectId && $0.status != .unavailable }
-        let allWindows = projectWorktrees.flatMap { worktree in
-            appState.runtimeWindows
-                .filter { $0.worktreeId == worktree.id }
-                .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
-        }
+        let allWindows = appState.projects
+            .filter { !$0.isCollapsed }
+            .flatMap { project in
+                appState.worktrees
+                    .filter { $0.projectId == project.id && $0.status != .unavailable }
+                    .flatMap { worktree in
+                        appState.runtimeWindows
+                            .filter { $0.worktreeId == worktree.id }
+                            .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
+                    }
+            }
         guard !allWindows.isEmpty else { return }
 
         let targetIndex = index == 9 ? allWindows.count - 1 : index - 1
