@@ -14,7 +14,7 @@ final class RootSplitViewController: NSViewController {
     private let sidebarContainer = NSView()
     private let dividerView = NSView()
     private let contentContainer = NSView()
-    private var sidebarWidth: CGFloat = 240
+    private var sidebarWidth: CGFloat = 280
     private var isDragging = false
     private var collapsed = false
 

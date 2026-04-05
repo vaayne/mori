@@ -26,14 +26,14 @@ public enum MoriTokens {
         public static let xs: CGFloat = 2
         /// 4pt — compact spacing (e.g., between badges, inner padding)
         public static let sm: CGFloat = 4
-        /// 6pt — default element spacing (e.g., HStack items in a row)
-        public static let md: CGFloat = 6
-        /// 8pt — section/group spacing (e.g., vertical padding, rail items)
-        public static let lg: CGFloat = 8
-        /// 12pt — generous padding (e.g., header horizontal padding)
-        public static let xl: CGFloat = 12
-        /// 16pt — indent/large gaps (e.g., window row indent under worktree)
-        public static let xxl: CGFloat = 16
+        /// 8pt — default element spacing (e.g., HStack items in a row)
+        public static let md: CGFloat = 8
+        /// 10pt — section/group spacing (e.g., vertical padding, rail items)
+        public static let lg: CGFloat = 10
+        /// 16pt — generous padding (e.g., header horizontal padding, content inset)
+        public static let xl: CGFloat = 16
+        /// 20pt — indent/large gaps (e.g., window row indent under worktree)
+        public static let xxl: CGFloat = 20
         /// 40pt — large empty state offset
         public static let emptyState: CGFloat = 40
     }
@@ -41,21 +41,27 @@ public enum MoriTokens {
     // MARK: - Corner Radius
 
     public enum Radius {
-        /// 4pt — default for rows, badges, previews
-        public static let small: CGFloat = 4
-        /// 8pt — cards, panels
-        public static let medium: CGFloat = 8
+        /// 3pt — badges, small pills
+        public static let badge: CGFloat = 3
+        /// 7pt — default for rows, previews
+        public static let small: CGFloat = 7
+        /// 10pt — cards, panels
+        public static let medium: CGFloat = 10
     }
 
     // MARK: - Icon Sizes
 
     public enum Icon {
-        /// 10pt — badge icons (error, waiting, running, etc.)
-        public static let badge: CGFloat = 10
+        /// 11pt — badge icons (error, waiting, running, etc.)
+        public static let badge: CGFloat = 11
         /// 8pt — status indicator dots, arrow icons
         public static let indicator: CGFloat = 8
         /// 6pt — small dots (unread, active marker, dirty)
         public static let dot: CGFloat = 6
+        /// 28pt — worktree icon box size
+        public static let worktreeBox: CGFloat = 28
+        /// 6pt — worktree icon box corner radius
+        public static let worktreeBoxRadius: CGFloat = 6
     }
 
     // MARK: - Sizes
@@ -76,20 +82,28 @@ public enum MoriTokens {
     // MARK: - Typography
 
     public enum Font {
-        /// Section header (e.g., "Worktrees")
-        public static let sectionTitle = SwiftUI.Font.subheadline.weight(.semibold)
-        /// Worktree row name
-        public static let rowTitle = SwiftUI.Font.headline
-        /// Window row name
-        public static let windowTitle = SwiftUI.Font.body
-        /// Small labels, icons, branch icon
+        /// Section header (e.g., "Worktrees") — 11pt bold, uppercase with tracking
+        public static let sectionTitle = SwiftUI.Font.system(size: 11, weight: .bold)
+        /// Project header name — 14pt bold
+        public static let projectTitle = SwiftUI.Font.system(size: 14, weight: .bold)
+        /// Worktree row name — 13.5pt semibold
+        public static let rowTitle = SwiftUI.Font.system(size: 13.5, weight: .semibold)
+        /// Window row name — 12.5pt regular
+        public static let windowTitle = SwiftUI.Font.system(size: 12.5)
+        /// Small labels, icons, branch icon — 12pt
         public static let label = SwiftUI.Font.caption
-        /// Smallest labels (project name under avatar)
+        /// Smallest labels (project name under avatar) — 11pt
         public static let caption = SwiftUI.Font.caption2
+        /// Badge text — 9.5pt semibold
+        public static let badgeText = SwiftUI.Font.system(size: 9.5, weight: .semibold)
         /// Badge count text
         public static let badgeCount = SwiftUI.Font.system(size: 9, weight: .bold, design: .rounded)
-        /// Ahead/behind count
-        public static let monoSmall = SwiftUI.Font.system(size: 10, design: .monospaced)
+        /// Monospace branch name — 11pt
+        public static let monoBranch = SwiftUI.Font.system(size: 11, design: .monospaced)
+        /// Ahead/behind count / diff stats — 10.5pt mono
+        public static let monoSmall = SwiftUI.Font.system(size: 10.5, design: .monospaced)
+        /// Keyboard shortcut pills — 10pt mono
+        public static let monoShortcut = SwiftUI.Font.system(size: 10, design: .monospaced)
         /// Ahead/behind arrow
         public static let arrowIcon = SwiftUI.Font.system(size: 8)
     }

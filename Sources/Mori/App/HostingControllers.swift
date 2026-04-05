@@ -58,6 +58,8 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         // Without this, the hosting controller sets a preferred content size
         // that locks the split view sidebar to a fixed width.
         sizingOptions = []
+        // Ensure the view is layer-backed so the theme background color shows through.
+        view.wantsLayer = true
     }
 
     @available(*, unavailable)
@@ -68,8 +70,9 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
     /// Sync the hosting controller's view appearance with the ghostty theme.
     func updateAppearance(themeInfo: GhosttyThemeInfo) {
         view.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
-        view.wantsLayer = true
         view.layer?.backgroundColor = themeInfo.background.cgColor
+        // Force SwiftUI to re-render with the updated appearance context.
+        view.needsDisplay = true
     }
 }
 

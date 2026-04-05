@@ -112,6 +112,29 @@ public struct WorktreeSidebarView: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     attentionBanner
 
+                    // "PROJECTS" section header
+                    HStack {
+                        Text(String.localized("PROJECTS"))
+                            .font(.system(size: 11, weight: .bold))
+                            .tracking(1.2)
+                            .foregroundStyle(MoriTokens.Color.muted)
+
+                        Spacer()
+
+                        if let onAddProject {
+                            Button(action: onAddProject) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(MoriTokens.Color.muted)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Add Project")
+                        }
+                    }
+                    .padding(.horizontal, MoriTokens.Spacing.xl)
+                    .padding(.top, MoriTokens.Spacing.lg)
+                    .padding(.bottom, MoriTokens.Spacing.sm)
+
                     ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
                         if index > 0 {
                             Divider()
@@ -164,10 +187,15 @@ public struct WorktreeSidebarView: View {
                 .frame(width: 12)
 
             Text(project.name)
-                .font(MoriTokens.Font.sectionTitle)
+                .font(MoriTokens.Font.projectTitle)
                 .foregroundStyle(MoriTokens.Color.muted)
 
             Spacer()
+
+            let projectWorktreeCount = worktrees.filter { $0.projectId == project.id && $0.status != .unavailable }.count
+            Text("\(projectWorktreeCount)")
+                .font(MoriTokens.Font.caption)
+                .foregroundStyle(MoriTokens.Color.inactive)
 
             if hoveredProjectId == project.id {
                 HStack(spacing: MoriTokens.Spacing.sm) {
@@ -177,7 +205,7 @@ public struct WorktreeSidebarView: View {
                             onShowCreatePanel?()
                         } label: {
                             Image(systemName: "plus")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(MoriTokens.Color.muted)
                         }
                         .buttonStyle(.plain)
@@ -253,7 +281,7 @@ public struct WorktreeSidebarView: View {
             }
         }
         .padding(.horizontal, MoriTokens.Spacing.xl)
-        .padding(.top, MoriTokens.Spacing.xl)
+        .padding(.top, 14)
         .padding(.bottom, MoriTokens.Spacing.sm)
         .contentShape(Rectangle())
         .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
@@ -398,11 +426,11 @@ public struct WorktreeSidebarView: View {
                 }
             }
 
-            // Show windows (tabs) under every worktree that has them
+            // Show windows (tabs) under every worktree that has them — tree connector
             if !worktreeWindows.isEmpty {
-                ForEach(Array(worktreeWindows.enumerated()), id: \.element.id) { index, window in
+                TreeConnectorGroup(data: worktreeWindows) { window in
+                    let globalIdx = globalWindowIndices[window.tmuxWindowId]
                     Group {
-                        let globalIdx = globalWindowIndices[window.tmuxWindowId]
                         if window.detectedAgent != nil || window.agentState != .none {
                             AgentWindowRowView(
                                 window: window,
@@ -427,7 +455,6 @@ public struct WorktreeSidebarView: View {
                             )
                         }
                     }
-                    .padding(.leading, MoriTokens.Spacing.xxl)
                     .contextMenu {
                         if let onCloseWindow {
                             Button(role: .destructive) {
@@ -476,61 +503,85 @@ public struct WorktreeSidebarView: View {
     private var sidebarFooter: some View {
         VStack(spacing: 0) {
             Divider()
+                .padding(.horizontal, MoriTokens.Spacing.xl)
 
-            HStack(spacing: MoriTokens.Spacing.xl) {
-                if let onAddProject {
-                    Button(action: onAddProject) {
-                        Image(systemName: "plus.rectangle.on.folder")
-                            .font(.system(size: 13))
-                            .foregroundStyle(MoriTokens.Color.muted)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Add Repository")
-                    .accessibilityLabel("Add Repository")
-                }
-
-                Spacer()
-
-                if let onOpenCommandPalette {
-                    Button(action: onOpenCommandPalette) {
-                        Image(systemName: "text.magnifyingglass")
-                            .font(.system(size: 13))
-                            .foregroundStyle(MoriTokens.Color.muted)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Command Palette (⇧⌘P)")
-                    .accessibilityLabel("Command Palette")
-                    .overlay(alignment: .top) {
-                        if shortcutHintsVisible {
-                            ShortcutHintPill("⇧⌘P")
-                                .offset(y: -22)
-                                .transition(.opacity)
-                        }
-                    }
-                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
-                }
-
-                if let onOpenSettings {
-                    Button(action: onOpenSettings) {
+            if let onOpenSettings {
+                Button(action: onOpenSettings) {
+                    HStack(spacing: MoriTokens.Spacing.md) {
                         Image(systemName: "gearshape")
-                            .font(.system(size: 13))
+                            .font(.system(size: 12))
                             .foregroundStyle(MoriTokens.Color.muted)
+
+                        Text(String.localized("Settings"))
+                            .font(MoriTokens.Font.windowTitle)
+                            .foregroundStyle(MoriTokens.Color.muted)
+
+                        Spacer()
+
+                        Text("⌘,")
+                            .font(MoriTokens.Font.monoShortcut)
+                            .foregroundStyle(MoriTokens.Color.inactive)
                     }
-                    .buttonStyle(.plain)
-                    .help("Settings (⌘,)")
-                    .accessibilityLabel("Settings")
-                    .overlay(alignment: .top) {
-                        if shortcutHintsVisible {
-                            ShortcutHintPill("⌘,")
-                                .offset(y: -22)
-                                .transition(.opacity)
-                        }
+                    .padding(.horizontal, MoriTokens.Spacing.xl)
+                    .padding(.vertical, MoriTokens.Spacing.lg)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Settings (⌘,)")
+                .accessibilityLabel("Settings")
+            }
+        }
+    }
+}
+
+// MARK: - Tree Connector
+
+/// Draws L-shaped tree connector branches (├── for middle rows, └── for last row).
+/// Each child row gets a horizontal branch from the vertical line.
+struct TreeConnectorGroup<Data: RandomAccessCollection, Row: View>: View where Data.Element: Identifiable {
+    let data: Data
+    let row: (Data.Element) -> Row
+
+    init(data: Data, @ViewBuilder row: @escaping (Data.Element) -> Row) {
+        self.data = data
+        self.row = row
+    }
+
+    /// Horizontal offset to align with center of 28pt icon box (row padding + half box).
+    private let lineX: CGFloat = 24
+
+    /// Length of horizontal branch from vertical line to content.
+    private let branchLength: CGFloat = 10
+
+    private let lineColor = Color.primary.opacity(0.10)
+
+    var body: some View {
+        let items = Array(data)
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                let isLast = index == items.count - 1
+                HStack(alignment: .top, spacing: 0) {
+                    // Branch connector: vertical segment + horizontal arm
+                    Canvas { ctx, size in
+                        let midX: CGFloat = 0.5
+                        let midY = size.height / 2
+
+                        var path = Path()
+                        // Vertical segment: from top to midY (last) or full height (middle)
+                        path.move(to: CGPoint(x: midX, y: 0))
+                        path.addLine(to: CGPoint(x: midX, y: isLast ? midY : size.height))
+                        // Horizontal arm from midY
+                        path.move(to: CGPoint(x: midX, y: midY))
+                        path.addLine(to: CGPoint(x: branchLength, y: midY))
+
+                        ctx.stroke(path, with: .color(lineColor), lineWidth: 1)
                     }
-                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
+                    .frame(width: branchLength)
+                    .padding(.leading, lineX)
+
+                    row(item)
                 }
             }
-            .padding(.horizontal, MoriTokens.Spacing.xl)
-            .padding(.vertical, MoriTokens.Spacing.lg)
         }
     }
 }

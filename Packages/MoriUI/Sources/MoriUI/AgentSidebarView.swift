@@ -126,11 +126,11 @@ public struct AgentSidebarView: View {
                     .frame(width: 12)
 
                 Image(systemName: group.iconName)
-                    .font(.system(size: 11))
+                    .font(.system(size: 12))
                     .foregroundStyle(group.color)
 
                 Text(group.title)
-                    .font(MoriTokens.Font.sectionTitle)
+                    .font(MoriTokens.Font.projectTitle)
                     .foregroundStyle(group.color)
 
                 Text("\(windows.count)")
@@ -140,7 +140,7 @@ public struct AgentSidebarView: View {
                 Spacer()
             }
             .padding(.horizontal, MoriTokens.Spacing.xl)
-            .padding(.top, MoriTokens.Spacing.xl)
+            .padding(.top, 14)
             .padding(.bottom, MoriTokens.Spacing.sm)
             .contentShape(Rectangle())
         }

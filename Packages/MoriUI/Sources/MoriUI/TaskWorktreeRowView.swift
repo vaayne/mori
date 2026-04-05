@@ -33,25 +33,31 @@ public struct TaskWorktreeRowView: View {
 
     public var body: some View {
         Button(action: onSelect) {
-            HStack(alignment: .center, spacing: MoriTokens.Spacing.md) {
-                Image(systemName: worktreeIcon)
-                    .font(MoriTokens.Font.label)
-                    .foregroundStyle(worktree.isMainWorktree ? MoriTokens.Color.attention : MoriTokens.Color.muted)
+            HStack(alignment: .center, spacing: MoriTokens.Spacing.lg) {
+                // Icon box
+                ZStack {
+                    RoundedRectangle(cornerRadius: MoriTokens.Icon.worktreeBoxRadius)
+                        .fill(isSelected
+                            ? MoriTokens.Color.active.opacity(MoriTokens.Opacity.light)
+                            : MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+                        .frame(width: MoriTokens.Icon.worktreeBox, height: MoriTokens.Icon.worktreeBox)
+                    Image(systemName: worktreeIcon)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(isSelected ? MoriTokens.Color.active : MoriTokens.Color.muted)
+                }
 
                 VStack(alignment: .leading, spacing: MoriTokens.Spacing.xxs) {
-                    HStack(spacing: MoriTokens.Spacing.sm) {
-                        Text(worktree.name)
-                            .font(.system(.body, weight: .semibold))
-                            .lineLimit(1)
-
-                        gitStatusBadges
-                    }
+                    Text(worktree.name)
+                        .font(MoriTokens.Font.rowTitle)
+                        .lineLimit(1)
 
                     HStack(spacing: MoriTokens.Spacing.sm) {
                         Text(projectName)
-                            .font(MoriTokens.Font.caption)
+                            .font(MoriTokens.Font.monoBranch)
                             .foregroundStyle(MoriTokens.Color.muted)
                             .lineLimit(1)
+
+                        gitStatusBadges
 
                         if worktree.status == .active {
                             Circle()
@@ -71,15 +77,20 @@ public struct TaskWorktreeRowView: View {
 
                 Spacer(minLength: 0)
 
-                if let shortcutIndex, shortcutHintsVisible {
-                    ShortcutHintPill("⌘\(shortcutIndex)")
-                        .transition(.opacity)
-                        .accessibilityLabel("Command \(shortcutIndex)")
-                }
+                // Right column: diff stats + agent badge
+                VStack(alignment: .trailing, spacing: MoriTokens.Spacing.xs) {
+                    diffStatsView
 
-                alertBadgeView
+                    if let shortcutIndex, shortcutHintsVisible {
+                        ShortcutHintPill("⌘\(shortcutIndex)")
+                            .transition(.opacity)
+                            .accessibilityLabel("Command \(shortcutIndex)")
+                    }
+
+                    alertBadgeView
+                }
             }
-            .padding(.vertical, MoriTokens.Spacing.md)
+            .padding(.vertical, 9)
             .padding(.horizontal, MoriTokens.Spacing.lg)
             .contentShape(Rectangle())
         }
@@ -91,6 +102,29 @@ public struct TaskWorktreeRowView: View {
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
             }
+        }
+    }
+
+    // MARK: - Diff Stats
+
+    @ViewBuilder
+    private var diffStatsView: some View {
+        let staged = worktree.stagedCount
+        let modified = worktree.modifiedCount
+        if staged > 0 || modified > 0 {
+            HStack(spacing: MoriTokens.Spacing.xs) {
+                if staged > 0 {
+                    Text("+\(staged)")
+                        .font(MoriTokens.Font.monoSmall)
+                        .foregroundStyle(MoriTokens.Color.success)
+                }
+                if modified > 0 {
+                    Text("-\(modified)")
+                        .font(MoriTokens.Font.monoSmall)
+                        .foregroundStyle(MoriTokens.Color.error)
+                }
+            }
+            .accessibilityLabel(String.localized("\(staged) staged, \(modified) modified"))
         }
     }
 
