@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-04-05
+
+### ✨ Features
+
+- Cmd-hold shortcut hints & context-aware ⌘1-9 quick jump ([#49](https://github.com/vaayne/mori/pull/49))
+- Sidebar redesign — spacing, typography, and visual hierarchy ([#50](https://github.com/vaayne/mori/pull/50))
+
+**Full Changelog**: [v0.3.2...v0.3.3](https://github.com/vaayne/mori/compare/v0.3.2...v0.3.3)
+
 ## [0.3.2] - 2026-04-03
 
 ### ✨ Features
@@ -270,7 +279,8 @@ Initial release of Mori — a macOS native workspace terminal organized around P
 
 **Full Changelog**: [v0.1.0](https://github.com/vaayne/mori/commits/v0.1.0)
 
-[Unreleased]: https://github.com/vaayne/mori/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/vaayne/mori/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/vaayne/mori/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/vaayne/mori/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/vaayne/mori/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/vaayne/mori/compare/v0.2.2...v0.3.0
