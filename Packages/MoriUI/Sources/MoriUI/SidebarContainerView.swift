@@ -86,6 +86,9 @@ public struct SidebarContainerView: View {
         self.onUpdateProject = onUpdateProject
     }
 
+    /// Shared Cmd-hold shortcut hint monitor — one instance for the entire sidebar.
+    @StateObject private var shortcutHintMonitor = ShortcutHintModifierMonitor()
+
     /// Whether agent mode is active.
     private var isAgentMode: Bool { sidebarMode == .agentTasks }
 
@@ -119,6 +122,7 @@ public struct SidebarContainerView: View {
                     worktrees: worktrees,
                     windows: windows,
                     selectedWindowId: selectedWindowId,
+                    shortcutHintsVisible: shortcutHintMonitor.areHintsVisible,
                     onSelectWindow: onSelectWindow,
                     onRequestPaneOutput: onRequestPaneOutput,
                     onSendKeys: onSendKeys,
@@ -141,6 +145,7 @@ public struct SidebarContainerView: View {
                     onAddProject: onAddProject,
                     onOpenSettings: onOpenSettings,
                     onOpenCommandPalette: onOpenCommandPalette,
+                    shortcutHintsVisible: shortcutHintMonitor.areHintsVisible,
                     onRequestPaneOutput: onRequestPaneOutput,
                     onSendKeys: onSendKeys
                 )
@@ -152,6 +157,7 @@ public struct SidebarContainerView: View {
                     windows: windows,
                     selectedWorktreeId: selectedWorktreeId,
                     selectedWindowId: selectedWindowId,
+                    shortcutHintsVisible: shortcutHintMonitor.areHintsVisible,
                     onSelectProject: onSelectProject,
                     onSelectWorktree: onSelectWorktree,
                     onSelectWindow: onSelectWindow,
@@ -181,6 +187,10 @@ public struct SidebarContainerView: View {
             if sidebarMode != .agentTasks {
                 lastBaseMode = sidebarMode
             }
+            shortcutHintMonitor.start()
+        }
+        .onDisappear {
+            shortcutHintMonitor.stop()
         }
     }
 

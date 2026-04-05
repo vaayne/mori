@@ -170,6 +170,15 @@
 "System" = "System";
 
 /* Key Binding Display Names */
+"keybinding.quickJump.goto1" = "Quick Jump 1";
+"keybinding.quickJump.goto2" = "Quick Jump 2";
+"keybinding.quickJump.goto3" = "Quick Jump 3";
+"keybinding.quickJump.goto4" = "Quick Jump 4";
+"keybinding.quickJump.goto5" = "Quick Jump 5";
+"keybinding.quickJump.goto6" = "Quick Jump 6";
+"keybinding.quickJump.goto7" = "Quick Jump 7";
+"keybinding.quickJump.goto8" = "Quick Jump 8";
+"keybinding.quickJump.gotoLast" = "Quick Jump Last";
 "keybinding.tabs.newTab" = "New Tab";
 "keybinding.tabs.closeTab" = "Close Tab";
 "keybinding.tabs.nextTab" = "Next Tab";

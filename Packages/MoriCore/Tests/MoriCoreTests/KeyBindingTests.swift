@@ -345,14 +345,14 @@ func testKeyBindingDefaultsToggleZoomHasKeyCode() {
 
 func testKeyBindingDefaultsCategoryCounts() {
     let byCategory = Dictionary(grouping: KeyBindingDefaults.all, by: { $0.category })
-    assertEqual(byCategory[.tabs]?.count, 13)
+    assertEqual(byCategory[.tabs]?.count, 4)
     assertEqual(byCategory[.panes]?.count, 14)
     assertEqual(byCategory[.tools]?.count, 2)
     assertEqual(byCategory[.window]?.count, 2)
     assertEqual(byCategory[.worktrees]?.count, 3)
     assertEqual(byCategory[.commandPalette]?.count, nil)
     assertEqual(byCategory[.settings]?.count, 2)
-    assertEqual(byCategory[.other]?.count, 4)
+    assertEqual(byCategory[.other]?.count, 13)
     assertEqual(byCategory[.system]?.count, 11)
 }
 

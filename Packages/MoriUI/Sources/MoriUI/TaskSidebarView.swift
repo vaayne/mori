@@ -19,6 +19,7 @@ public struct TaskSidebarView: View {
     private let onOpenCommandPalette: (() -> Void)?
     private let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     private let onSendKeys: ((String, String) -> Void)?
+    private let shortcutHintsVisible: Bool
 
     @State private var showCancelled = false
     @State private var collapsedGroups: Set<WorkflowStatus> = [.done]
@@ -40,6 +41,7 @@ public struct TaskSidebarView: View {
         onAddProject: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
         onOpenCommandPalette: (() -> Void)? = nil,
+        shortcutHintsVisible: Bool = false,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil
     ) {
@@ -56,6 +58,7 @@ public struct TaskSidebarView: View {
         self.onAddProject = onAddProject
         self.onOpenSettings = onOpenSettings
         self.onOpenCommandPalette = onOpenCommandPalette
+        self.shortcutHintsVisible = shortcutHintsVisible
         self.onRequestPaneOutput = onRequestPaneOutput
         self.onSendKeys = onSendKeys
     }
@@ -80,6 +83,22 @@ public struct TaskSidebarView: View {
             (window.detectedAgent != nil || window.agentState != .none)
             && !worktreeIds.contains(window.worktreeId)
         }
+    }
+
+    /// Global 1-based index for each worktree, ordered by status group (matching visible order).
+    /// Used for ⌘1-9 quick jump hints in Tasks mode.
+    private var globalWorktreeIndices: [UUID: Int] {
+        let statusOrder: [WorkflowStatus] = [.inProgress, .needsReview, .todo, .done, .cancelled]
+        let ordered = availableWorktrees.sorted { a, b in
+            let ai = statusOrder.firstIndex(of: a.workflowStatus) ?? statusOrder.count
+            let bi = statusOrder.firstIndex(of: b.workflowStatus) ?? statusOrder.count
+            return ai < bi
+        }
+        var result: [UUID: Int] = [:]
+        for (i, worktree) in ordered.enumerated() where i < 9 {
+            result[worktree.id] = i + 1
+        }
+        return result
     }
 
     /// Count of agent windows needing attention across all worktrees.
@@ -206,6 +225,8 @@ public struct TaskSidebarView: View {
                 projectName: projectName,
                 agentName: agentName,
                 isSelected: isSelected,
+                shortcutIndex: globalWorktreeIndices[worktree.id],
+                shortcutHintsVisible: shortcutHintsVisible,
                 onSelect: { onSelectWorktree(worktree.id) }
             )
             .contextMenu {
@@ -263,7 +284,6 @@ public struct TaskSidebarView: View {
                             WindowRowView(
                                 window: window,
                                 isActive: isSelected && window.tmuxWindowId == selectedWindowId,
-                                shortcutIndex: isSelected && index < 9 ? index + 1 : nil,
                                 onSelect: { onSelectWindow(window.tmuxWindowId) },
                                 onRequestPaneOutput: onRequestPaneOutput,
                                 onSendKeys: onSendKeys
@@ -341,6 +361,14 @@ public struct TaskSidebarView: View {
                     .buttonStyle(.plain)
                     .help("Command Palette (⇧⌘P)")
                     .accessibilityLabel("Command Palette")
+                    .overlay(alignment: .top) {
+                        if shortcutHintsVisible {
+                            ShortcutHintPill("⇧⌘P")
+                                .offset(y: -22)
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
                 }
 
                 if let onOpenSettings {
@@ -352,6 +380,14 @@ public struct TaskSidebarView: View {
                     .buttonStyle(.plain)
                     .help("Settings (⌘,)")
                     .accessibilityLabel("Settings")
+                    .overlay(alignment: .top) {
+                        if shortcutHintsVisible {
+                            ShortcutHintPill("⌘,")
+                                .offset(y: -22)
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
                 }
             }
             .padding(.horizontal, MoriTokens.Spacing.xl)

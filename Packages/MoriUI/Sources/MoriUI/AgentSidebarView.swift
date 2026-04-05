@@ -14,6 +14,7 @@ public struct AgentSidebarView: View {
     private let onAddProject: (() -> Void)?
     private let onOpenSettings: (() -> Void)?
     private let onOpenCommandPalette: (() -> Void)?
+    private let shortcutHintsVisible: Bool
 
     @State private var collapsedGroups: Set<AgentGroupKey> = []
 
@@ -22,6 +23,7 @@ public struct AgentSidebarView: View {
         worktrees: [Worktree],
         windows: [RuntimeWindow],
         selectedWindowId: String?,
+        shortcutHintsVisible: Bool = false,
         onSelectWindow: @escaping (String) -> Void,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil,
@@ -33,6 +35,7 @@ public struct AgentSidebarView: View {
         self.worktrees = worktrees
         self.windows = windows
         self.selectedWindowId = selectedWindowId
+        self.shortcutHintsVisible = shortcutHintsVisible
         self.onSelectWindow = onSelectWindow
         self.onRequestPaneOutput = onRequestPaneOutput
         self.onSendKeys = onSendKeys
@@ -52,6 +55,23 @@ public struct AgentSidebarView: View {
 
     private var worktreeMap: [UUID: Worktree] {
         Dictionary(uniqueKeysWithValues: worktrees.map { ($0.id, $0) })
+    }
+
+    /// Global 1-based index for agent windows in display order (attention → running → completed).
+    /// Only indexes agent windows, matching what's actually rendered in the sidebar.
+    private var agentWindowIndices: [String: Int] {
+        var result: [String: Int] = [:]
+        var globalIndex = 1
+        for group in AgentGroupKey.displayOrder where !collapsedGroups.contains(group) {
+            let groupWindows = agentWindows.filter { group.matches($0) }
+            for window in groupWindows {
+                if globalIndex <= 9 {
+                    result[window.tmuxWindowId] = globalIndex
+                }
+                globalIndex += 1
+            }
+        }
+        return result
     }
 
     public var body: some View {
@@ -135,6 +155,8 @@ public struct AgentSidebarView: View {
                     projectName: project?.name ?? "?",
                     worktreeName: worktree?.name ?? "?",
                     isSelected: window.tmuxWindowId == selectedWindowId,
+                    shortcutIndex: agentWindowIndices[window.tmuxWindowId],
+                    shortcutHintsVisible: shortcutHintsVisible,
                     onSelect: { onSelectWindow(window.tmuxWindowId) },
                     onRequestPaneOutput: onRequestPaneOutput,
                     onSendKeys: onSendKeys
@@ -186,6 +208,14 @@ public struct AgentSidebarView: View {
                     .buttonStyle(.plain)
                     .help(String.localized("Command Palette (⇧⌘P)"))
                     .accessibilityLabel(String.localized("Command Palette"))
+                    .overlay(alignment: .top) {
+                        if shortcutHintsVisible {
+                            ShortcutHintPill("⇧⌘P")
+                                .offset(y: -22)
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
                 }
 
                 if let onOpenSettings {
@@ -197,6 +227,14 @@ public struct AgentSidebarView: View {
                     .buttonStyle(.plain)
                     .help(String.localized("Settings (⌘,)"))
                     .accessibilityLabel(String.localized("Settings"))
+                    .overlay(alignment: .top) {
+                        if shortcutHintsVisible {
+                            ShortcutHintPill("⌘,")
+                                .offset(y: -22)
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
                 }
             }
             .padding(.horizontal, MoriTokens.Spacing.xl)

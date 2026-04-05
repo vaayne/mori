@@ -6,6 +6,7 @@ public struct WindowRowView: View {
     let window: RuntimeWindow
     let isActive: Bool
     let shortcutIndex: Int?
+    let shortcutHintsVisible: Bool
     let onSelect: () -> Void
     let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     let onSendKeys: ((String, String) -> Void)?
@@ -21,6 +22,7 @@ public struct WindowRowView: View {
         window: RuntimeWindow,
         isActive: Bool,
         shortcutIndex: Int? = nil,
+        shortcutHintsVisible: Bool = false,
         onSelect: @escaping () -> Void,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil
@@ -28,6 +30,7 @@ public struct WindowRowView: View {
         self.window = window
         self.isActive = isActive
         self.shortcutIndex = shortcutIndex
+        self.shortcutHintsVisible = shortcutHintsVisible
         self.onSelect = onSelect
         self.onRequestPaneOutput = onRequestPaneOutput
         self.onSendKeys = onSendKeys
@@ -94,10 +97,16 @@ public struct WindowRowView: View {
                 Spacer()
 
                 if let shortcutIndex {
-                    Text("\u{2318}\(shortcutIndex)")
-                        .font(MoriTokens.Font.monoSmall)
-                        .foregroundStyle(MoriTokens.Color.muted)
-                        .accessibilityLabel("Command \(shortcutIndex)")
+                    if shortcutHintsVisible {
+                        ShortcutHintPill("⌘\(shortcutIndex)")
+                            .transition(.opacity)
+                            .accessibilityLabel("Command Option \(shortcutIndex)")
+                    } else {
+                        Text("⌘\(shortcutIndex)")
+                            .font(MoriTokens.Font.monoSmall)
+                            .foregroundStyle(MoriTokens.Color.muted)
+                            .accessibilityLabel("Command Option \(shortcutIndex)")
+                    }
                 }
 
                 windowBadgeView
@@ -116,6 +125,7 @@ public struct WindowRowView: View {
         .buttonStyle(.plain)
         .background(rowBackground)
         .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
+        .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
     }
 
     @ViewBuilder

@@ -26,6 +26,7 @@ public struct WorktreeSidebarView: View {
     private let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     private let onSendKeys: ((String, String) -> Void)?
     private let onUpdateProject: ((Project) -> Void)?
+    private let shortcutHintsVisible: Bool
 
     public init(
         projects: [Project] = [],
@@ -34,6 +35,7 @@ public struct WorktreeSidebarView: View {
         windows: [RuntimeWindow],
         selectedWorktreeId: UUID?,
         selectedWindowId: String?,
+        shortcutHintsVisible: Bool = false,
         onSelectProject: ((UUID) -> Void)? = nil,
         onSelectWorktree: @escaping (UUID) -> Void,
         onSelectWindow: @escaping (String) -> Void,
@@ -73,11 +75,35 @@ public struct WorktreeSidebarView: View {
         self.onRequestPaneOutput = onRequestPaneOutput
         self.onSendKeys = onSendKeys
         self.onUpdateProject = onUpdateProject
+        self.shortcutHintsVisible = shortcutHintsVisible
     }
 
     /// Count of agent windows needing attention across all worktrees.
     private var attentionCount: Int {
         windows.filter { $0.agentState == .waitingForInput || $0.agentState == .error }.count
+    }
+
+    /// Global 1-based index for each window across all projects and worktrees.
+    /// Iterates projects in display order so indices match ⌘1-9 quick jump.
+    private var globalWindowIndices: [String: Int] {
+        var result: [String: Int] = [:]
+        var globalIndex = 1
+        for project in projects where !project.isCollapsed {
+            let projectWorktrees = worktrees
+                .filter { $0.projectId == project.id && $0.status != .unavailable }
+            for worktree in projectWorktrees {
+                let worktreeWindows = windows
+                    .filter { $0.worktreeId == worktree.id }
+                    .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
+                for window in worktreeWindows {
+                    if globalIndex <= 9 {
+                        result[window.tmuxWindowId] = globalIndex
+                    }
+                    globalIndex += 1
+                }
+            }
+        }
+        return result
     }
 
     public var body: some View {
@@ -230,6 +256,7 @@ public struct WorktreeSidebarView: View {
         .padding(.top, MoriTokens.Spacing.xl)
         .padding(.bottom, MoriTokens.Spacing.sm)
         .contentShape(Rectangle())
+        .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
         .onTapGesture {
             onToggleCollapse?(project.id)
             onSelectProject?(project.id)
@@ -375,12 +402,15 @@ public struct WorktreeSidebarView: View {
             if !worktreeWindows.isEmpty {
                 ForEach(Array(worktreeWindows.enumerated()), id: \.element.id) { index, window in
                     Group {
+                        let globalIdx = globalWindowIndices[window.tmuxWindowId]
                         if window.detectedAgent != nil || window.agentState != .none {
                             AgentWindowRowView(
                                 window: window,
                                 projectName: projects.first(where: { $0.id == worktree.projectId })?.name ?? "",
                                 worktreeName: worktree.name,
                                 isSelected: isSelected && window.tmuxWindowId == selectedWindowId,
+                                shortcutIndex: globalIdx,
+                                shortcutHintsVisible: shortcutHintsVisible,
                                 onSelect: { onSelectWindow(window.tmuxWindowId) },
                                 onRequestPaneOutput: onRequestPaneOutput,
                                 onSendKeys: onSendKeys
@@ -389,7 +419,8 @@ public struct WorktreeSidebarView: View {
                             WindowRowView(
                                 window: window,
                                 isActive: isSelected && window.tmuxWindowId == selectedWindowId,
-                                shortcutIndex: isSelected && index < 9 ? index + 1 : nil,
+                                shortcutIndex: globalIdx,
+                                shortcutHintsVisible: shortcutHintsVisible,
                                 onSelect: { onSelectWindow(window.tmuxWindowId) },
                                 onRequestPaneOutput: onRequestPaneOutput,
                                 onSendKeys: onSendKeys
@@ -469,6 +500,14 @@ public struct WorktreeSidebarView: View {
                     .buttonStyle(.plain)
                     .help("Command Palette (⇧⌘P)")
                     .accessibilityLabel("Command Palette")
+                    .overlay(alignment: .top) {
+                        if shortcutHintsVisible {
+                            ShortcutHintPill("⇧⌘P")
+                                .offset(y: -22)
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
                 }
 
                 if let onOpenSettings {
@@ -480,6 +519,14 @@ public struct WorktreeSidebarView: View {
                     .buttonStyle(.plain)
                     .help("Settings (⌘,)")
                     .accessibilityLabel("Settings")
+                    .overlay(alignment: .top) {
+                        if shortcutHintsVisible {
+                            ShortcutHintPill("⌘,")
+                                .offset(y: -22)
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
                 }
             }
             .padding(.horizontal, MoriTokens.Spacing.xl)

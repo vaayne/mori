@@ -7,6 +7,8 @@ public struct AgentWindowRowView: View {
     let projectName: String
     let worktreeName: String
     let isSelected: Bool
+    let shortcutIndex: Int?
+    let shortcutHintsVisible: Bool
     let onSelect: () -> Void
     let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     let onSendKeys: ((String, String) -> Void)?
@@ -23,6 +25,8 @@ public struct AgentWindowRowView: View {
         projectName: String,
         worktreeName: String,
         isSelected: Bool,
+        shortcutIndex: Int? = nil,
+        shortcutHintsVisible: Bool = false,
         onSelect: @escaping () -> Void,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil
@@ -31,6 +35,8 @@ public struct AgentWindowRowView: View {
         self.projectName = projectName
         self.worktreeName = worktreeName
         self.isSelected = isSelected
+        self.shortcutIndex = shortcutIndex
+        self.shortcutHintsVisible = shortcutHintsVisible
         self.onSelect = onSelect
         self.onRequestPaneOutput = onRequestPaneOutput
         self.onSendKeys = onSendKeys
@@ -105,6 +111,12 @@ public struct AgentWindowRowView: View {
 
                 Spacer()
 
+                if let shortcutIndex, shortcutHintsVisible {
+                    ShortcutHintPill("⌘\(shortcutIndex)")
+                        .transition(.opacity)
+                        .accessibilityLabel("Command Option \(shortcutIndex)")
+                }
+
                 if window.badge == .waiting, onSendKeys != nil {
                     Button {
                         withAnimation(.easeInOut(duration: 0.15)) {
@@ -126,6 +138,7 @@ public struct AgentWindowRowView: View {
         .buttonStyle(.plain)
         .background(rowBackground)
         .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
+        .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
     }
 
     @ViewBuilder

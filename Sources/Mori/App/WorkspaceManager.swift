@@ -2079,21 +2079,114 @@ final class WorkspaceManager {
         }
     }
 
-    // MARK: - Window Index Navigation
+    // MARK: - Quick Jump (⌘1-9, context-aware)
 
-    /// Select a tmux window by 1-based index (Cmd+1 through Cmd+9).
-    /// Cmd+9 selects the last window regardless of count.
+    /// Context-aware ⌘1-9: dispatches to the primary item type of the current sidebar mode.
+    /// - Workspaces: select tab by global index across all worktrees
+    /// - Tasks: select worktree by visible index
+    /// - Agents: select agent window by visible index
+    func quickJump(index: Int) {
+        switch appState.uiState.sidebarMode {
+        case .workspaces:
+            selectWindowByGlobalIndex(index)
+        case .tasks:
+            selectWorktreeByIndex(index)
+        case .agentTasks:
+            selectAgentWindowByIndex(index)
+        }
+    }
+
+    /// Select a tmux window by 1-based global index across all projects and worktrees.
+    /// Iterates projects in display order, skipping collapsed ones, to match sidebar hints.
+    /// Index 9 selects the last window regardless of count.
+    private func selectWindowByGlobalIndex(_ index: Int) {
+        let allWindows = appState.projects
+            .filter { !$0.isCollapsed }
+            .flatMap { project in
+                appState.worktrees
+                    .filter { $0.projectId == project.id && $0.status != .unavailable }
+                    .flatMap { worktree in
+                        appState.runtimeWindows
+                            .filter { $0.worktreeId == worktree.id }
+                            .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
+                    }
+            }
+        guard !allWindows.isEmpty else { return }
+
+        let targetIndex = index == 9 ? allWindows.count - 1 : index - 1
+        guard targetIndex >= 0, targetIndex < allWindows.count else { return }
+
+        let window = allWindows[targetIndex]
+        if window.worktreeId != appState.uiState.selectedWorktreeId {
+            selectWorktree(window.worktreeId)
+        }
+        selectWindow(window.tmuxWindowId)
+    }
+
+    /// Select a worktree by 1-based visible index (Tasks mode).
+    /// Orders worktrees by status group, matching TaskSidebarView display order.
+    private func selectWorktreeByIndex(_ index: Int) {
+        let available = appState.worktrees.filter { $0.status != .unavailable }
+        let statusOrder: [WorkflowStatus] = [.inProgress, .needsReview, .todo, .done, .cancelled]
+        let ordered = available.sorted { a, b in
+            let ai = statusOrder.firstIndex(of: a.workflowStatus) ?? statusOrder.count
+            let bi = statusOrder.firstIndex(of: b.workflowStatus) ?? statusOrder.count
+            return ai < bi
+        }
+        guard !ordered.isEmpty else { return }
+
+        let targetIndex = index == 9 ? ordered.count - 1 : index - 1
+        guard targetIndex >= 0, targetIndex < ordered.count else { return }
+        selectWorktree(ordered[targetIndex].id)
+    }
+
+    /// Select an agent window by 1-based visible index (Agents mode).
+    /// Orders by display group (attention → running → completed) to match AgentSidebarView.
+    private func selectAgentWindowByIndex(_ index: Int) {
+        let allAgentWindows = appState.runtimeWindows.filter {
+            $0.detectedAgent != nil || $0.agentState != .none
+        }
+        // Build ordered list matching AgentGroupKey.displayOrder
+        let ordered = agentGroupOrder.flatMap { group in
+            allAgentWindows.filter { group.matches($0) }
+        }
+        guard !ordered.isEmpty else { return }
+
+        let targetIndex = index == 9 ? ordered.count - 1 : index - 1
+        guard targetIndex >= 0, targetIndex < ordered.count else { return }
+
+        let window = ordered[targetIndex]
+        if window.worktreeId != appState.uiState.selectedWorktreeId {
+            selectWorktree(window.worktreeId)
+        }
+        selectWindow(window.tmuxWindowId)
+    }
+
+    /// Agent group display order matching AgentSidebarView's AgentGroupKey.displayOrder.
+    private enum AgentGroup {
+        case attention, running, completed
+
+        func matches(_ window: RuntimeWindow) -> Bool {
+            switch self {
+            case .attention:
+                return window.agentState == .waitingForInput || window.agentState == .error
+            case .running:
+                return window.agentState == .running
+            case .completed:
+                return window.agentState == .completed || window.agentState == .none
+            }
+        }
+    }
+
+    private let agentGroupOrder: [AgentGroup] = [.attention, .running, .completed]
+
+    /// Select a tmux window by 1-based index within the selected worktree.
+    /// Index 9 selects the last window regardless of count.
     func selectWindowByIndex(_ index: Int) {
         let windows = appState.windowsForSelectedWorktree
         guard !windows.isEmpty else { return }
 
-        let targetIndex: Int
-        if index == 9 {
-            targetIndex = windows.count - 1
-        } else {
-            targetIndex = index - 1
-        }
-
+        let targetIndex = index == 9 ? windows.count - 1 : index - 1
         guard targetIndex >= 0, targetIndex < windows.count else { return }
         selectWindow(windows[targetIndex].tmuxWindowId)
     }
