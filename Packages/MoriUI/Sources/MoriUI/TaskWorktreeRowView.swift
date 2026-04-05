@@ -124,7 +124,7 @@ public struct TaskWorktreeRowView: View {
                         .foregroundStyle(MoriTokens.Color.error)
                 }
             }
-            .accessibilityLabel("\(staged) staged, \(modified) modified")
+            .accessibilityLabel(String.localized("\(staged) staged, \(modified) modified"))
         }
     }
 

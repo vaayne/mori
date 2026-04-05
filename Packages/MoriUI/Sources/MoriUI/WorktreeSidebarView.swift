@@ -428,8 +428,7 @@ public struct WorktreeSidebarView: View {
 
             // Show windows (tabs) under every worktree that has them — tree connector
             if !worktreeWindows.isEmpty {
-                TreeConnectorGroup(data: Array(worktreeWindows.enumerated()), row: { _, enumItem in
-                    let (_, window) = enumItem
+                TreeConnectorGroup(data: worktreeWindows) { window in
                     let globalIdx = globalWindowIndices[window.tmuxWindowId]
                     Group {
                         if window.detectedAgent != nil || window.agentState != .none {
@@ -465,7 +464,7 @@ public struct WorktreeSidebarView: View {
                             }
                         }
                     }
-                })
+                }
             }
         }
         .padding(.horizontal, MoriTokens.Spacing.sm)
@@ -519,7 +518,7 @@ public struct WorktreeSidebarView: View {
 
                         Spacer()
 
-                        Text("⌘⇧P")
+                        Text("⌘,")
                             .font(MoriTokens.Font.monoShortcut)
                             .foregroundStyle(MoriTokens.Color.inactive)
                     }
@@ -539,18 +538,13 @@ public struct WorktreeSidebarView: View {
 
 /// Draws L-shaped tree connector branches (├── for middle rows, └── for last row).
 /// Each child row gets a horizontal branch from the vertical line.
-struct TreeConnectorGroup: View {
-    let count: Int
-    let content: (Int) -> AnyView
+struct TreeConnectorGroup<Data: RandomAccessCollection, Row: View>: View where Data.Element: Identifiable {
+    let data: Data
+    let row: (Data.Element) -> Row
 
-    init<Data: RandomAccessCollection, Row: View>(
-        data: Data,
-        @ViewBuilder row: @escaping (Data.Index, Data.Element) -> Row
-    ) where Data.Index == Int {
-        self.count = data.count
-        self.content = { index in
-            AnyView(row(index, data[data.startIndex + index]))
-        }
+    init(data: Data, @ViewBuilder row: @escaping (Data.Element) -> Row) {
+        self.data = data
+        self.row = row
     }
 
     /// Horizontal offset to align with center of 28pt icon box (row padding + half box).
@@ -562,9 +556,10 @@ struct TreeConnectorGroup: View {
     private let lineColor = Color.primary.opacity(0.10)
 
     var body: some View {
+        let items = Array(data)
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(0..<count, id: \.self) { index in
-                let isLast = index == count - 1
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                let isLast = index == items.count - 1
                 HStack(alignment: .top, spacing: 0) {
                     // Branch connector: vertical segment + horizontal arm
                     Canvas { ctx, size in
@@ -584,7 +579,7 @@ struct TreeConnectorGroup: View {
                     .frame(width: branchLength)
                     .padding(.leading, lineX)
 
-                    content(index)
+                    row(item)
                 }
             }
         }
