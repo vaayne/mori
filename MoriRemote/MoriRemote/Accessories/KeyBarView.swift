@@ -256,7 +256,10 @@ final class KeyBarView: UIView {
 
     @objc private func backTapped() {
         UIDevice.current.playInputClick()
-        onBackTapped?()
+        dismissKeyboardForDeferredUITransition()
+        DispatchQueue.main.async { [weak self] in
+            self?.onBackTapped?()
+        }
     }
 
     private func makeTmuxMenuButton() -> UIButton {
@@ -280,7 +283,10 @@ final class KeyBarView: UIView {
 
     @objc private func tmuxMenuTapped() {
         UIDevice.current.playInputClick()
-        onTmuxMenuTapped?()
+        dismissKeyboardForDeferredUITransition()
+        DispatchQueue.main.async { [weak self] in
+            self?.onTmuxMenuTapped?()
+        }
     }
 
     private func makeKeyboardDismissButton() -> UIButton {
@@ -327,7 +333,14 @@ final class KeyBarView: UIView {
     }
 
     @objc private func gearTapped() {
-        onCustomizeTapped?()
+        dismissKeyboardForDeferredUITransition()
+        DispatchQueue.main.async { [weak self] in
+            self?.onCustomizeTapped?()
+        }
+    }
+
+    private func dismissKeyboardForDeferredUITransition() {
+        _ = terminalView?.resignFirstResponder()
     }
 
     @objc private func keyDown(_ sender: UIButton) {
