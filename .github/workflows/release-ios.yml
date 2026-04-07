@@ -10,9 +10,8 @@ on:
         description: "Version (e.g. 0.1.0)"
         required: true
       build_number:
-        description: "Build number"
-        required: true
-        default: "1"
+        description: "Optional build number override (defaults to UTC timestamp, e.g. 202604071105)"
+        required: false
 
 permissions:
   contents: write
@@ -34,12 +33,16 @@ jobs:
       - name: Resolve version
         id: version
         run: |
+          DEFAULT_BUILD_NUMBER="$(date -u +%Y%m%d%H%M)"
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             VERSION="${{ github.event.inputs.version }}"
             BUILD_NUMBER="${{ github.event.inputs.build_number }}"
+            if [[ -z "$BUILD_NUMBER" ]]; then
+              BUILD_NUMBER="$DEFAULT_BUILD_NUMBER"
+            fi
           else
             VERSION="${GITHUB_REF_NAME#ios-v}"
-            BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+            BUILD_NUMBER="$DEFAULT_BUILD_NUMBER"
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "build_number=${BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
