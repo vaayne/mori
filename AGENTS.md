@@ -73,6 +73,14 @@ See [release skill](.agents/skills/release/SKILL.md) for the full release workfl
 - **`CHANGELOG.md`** — entry under `[Unreleased]` for every user-visible change
 - **`AGENTS.md`** — update if build commands or conventions change
 - **`README.md`** — update if features, install steps, or usage change
+- **`DESIGN.md`** — update when Mori’s visual language, tokens, or cross-device UI guidance changes
+
+## UI / UX Design Guardrails
+
+- **`DESIGN.md` is mandatory context for UI work** — before changing iPhone, iPad, Mac, SwiftUI, or AppKit UI, read `DESIGN.md` and follow it as the source of truth for visual and interaction decisions
+- **Mac-first product language** — adapt mobile UI from the existing Mori Mac app instead of inventing a separate visual identity for MoriRemote
+- **Prefer Mori tokens and semantic styling** — reuse existing spacing, radius, typography, and semantic color patterns before introducing new UI constants or decorative treatments
+- **Preserve layout hierarchy across devices** — keep the rail/sidebar/workspace mental model even when it collapses on iPhone into stacked navigation
 
 ## i18n / Localization
 
@@ -91,3 +99,4 @@ See [release skill](.agents/skills/release/SKILL.md) for the full release workfl
 - [Architecture](docs/architecture.md) — packages, data flow, UI structure, terminal rendering
 - [Agent Hooks](docs/agent-hooks.md) — hook-based agent status tracking setup
 - [Keymaps](docs/keymaps.md) — keyboard shortcuts reference
+- [Design System](DESIGN.md) — canonical UI/UX guidance for Mac, iPhone, and iPad work
