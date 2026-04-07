@@ -46,6 +46,8 @@ final class ShellCoordinator {
     var lastError: Error?
     var activeServer: Server?
 
+    private var connectionGeneration: UInt64 = 0
+
     // Tmux state (observable for sidebar)
     var tmuxSessions: [TmuxSession] = []
     var tmuxActiveSession: TmuxSession?
@@ -66,7 +68,11 @@ final class ShellCoordinator {
     // MARK: - Connect / Disconnect
 
     func connect(server: Server) async {
+        let generation = beginConnectionGeneration()
         await resetConnection()
+
+        guard isCurrentConnection(generation) else { return }
+
         activeServer = server
         state = .connecting
         lastError = nil
@@ -79,16 +85,24 @@ final class ShellCoordinator {
                 user: server.username.trimmingCharacters(in: .whitespacesAndNewlines),
                 auth: .password(server.password)
             )
+
+            guard isCurrentConnection(generation) else {
+                await manager.disconnect()
+                return
+            }
+
             sshManager = manager
             state = .connected
         } catch {
             await manager.disconnect()
+            guard isCurrentConnection(generation) else { return }
             lastError = error
             state = .disconnected
         }
     }
 
     func disconnect() async {
+        invalidateConnectionGeneration()
         await resetConnection()
         state = .disconnected
     }
@@ -96,8 +110,10 @@ final class ShellCoordinator {
     // MARK: - Shell
 
     func openShell(renderer: SwiftTermRenderer) async {
+        let generation = connectionGeneration
+
         guard case .connected = state else {
-            if case .shell = state {
+            if case .shell = state, isCurrentConnection(generation) {
                 wireRenderer(renderer)
                 renderer.activateKeyboard()
             }
@@ -117,25 +133,36 @@ final class ShellCoordinator {
 
         do {
             let channel = try await sshManager.openShellChannel(cols: cols, rows: rows)
+
+            guard isCurrentConnection(generation), activeServer != nil else {
+                await channel.close()
+                return
+            }
+
             shellChannel = channel
 
             outputTask = Task { [weak self] in
                 do {
                     for try await chunk in channel.inbound {
                         guard let self else { return }
-                        self.renderer?.feedBytes(chunk)
+                        guard await self.isCurrentConnection(generation) else { return }
+                        await MainActor.run {
+                            self.renderer?.feedBytes(chunk)
+                        }
                     }
                 } catch {
                     log.error("Shell inbound error: \(error)")
                 }
                 guard let self, !Task.isCancelled else { return }
-                await self.handleShellClosed()
+                guard await self.isCurrentConnection(generation) else { return }
+                await self.handleShellClosed(generation: generation)
             }
 
             state = .shell
             renderer.activateKeyboard()
-            startTmuxPolling()
+            startTmuxPolling(generation: generation)
         } catch {
+            guard isCurrentConnection(generation) else { return }
             await resetConnection()
             lastError = error
             state = .disconnected
@@ -148,6 +175,10 @@ final class ShellCoordinator {
     var accessoryBar: TerminalAccessoryBar?
 
     private func wireRenderer(_ renderer: SwiftTermRenderer) {
+        if let previousRenderer = self.renderer, previousRenderer !== renderer {
+            detachAccessoryBar(from: previousRenderer)
+        }
+
         self.renderer = renderer
         renderer.inputHandler = { [weak self] data in
             self?.sendInput(data)
@@ -156,17 +187,45 @@ final class ShellCoordinator {
             self?.sendResize(Int(newCols), Int(newRows))
         }
 
-        // Wire the custom accessory bar — must set before activateKeyboard
+        // Wire the custom accessory bar — must set before activateKeyboard.
+        // Reusing the same accessory view across terminal responders is fine,
+        // but UIKit stays happier if we explicitly detach it from the previous
+        // responder before reassigning it during host switches and reconnects.
         if let bar = accessoryBar {
             let tv = renderer.swiftTermView
             bar.terminalView = tv
-            tv.inputAccessoryView = bar
-            // Force the keyboard to pick up the new accessory view
-            tv.reloadInputViews()
+            if tv.inputAccessoryView !== bar {
+                tv.inputAccessoryView = bar
+            }
+            if tv.window != nil || tv.isFirstResponder {
+                tv.reloadInputViews()
+            }
             bar.onTmuxCommand = { [weak self] cmd in
                 self?.handleTmuxCommand(cmd)
             }
         }
+    }
+
+    private func detachAccessoryBar(from renderer: SwiftTermRenderer?) {
+        guard let accessoryBar else { return }
+
+        if let renderer {
+            let terminalView = renderer.swiftTermView
+            if terminalView.inputAccessoryView != nil {
+                terminalView.inputAccessoryView = nil
+                if terminalView.window != nil || terminalView.isFirstResponder {
+                    terminalView.reloadInputViews()
+                }
+            }
+
+            if accessoryBar.terminalView === terminalView {
+                accessoryBar.terminalView = nil
+            }
+        } else {
+            accessoryBar.terminalView = nil
+        }
+
+        accessoryBar.onTmuxCommand = nil
     }
 
     private func sendInput(_ data: Data) {
@@ -192,6 +251,13 @@ final class ShellCoordinator {
     private var tmuxPollTask: Task<Void, Never>?
 
     func handleTmuxCommand(_ command: TmuxCommand) {
+        guard state == .shell, shellChannel != nil else {
+            log.debug("Ignoring tmux command while shell is inactive")
+            return
+        }
+
+        let generation = connectionGeneration
+
         // Send tmux CLI commands through the shell channel (not exec).
         // The shell is running INSIDE tmux, so $TMUX is set and commands
         // correctly target the current session/window/pane.
@@ -201,29 +267,34 @@ final class ShellCoordinator {
         let sequence = "\u{15}\(cmd)\n"
         sendInput(Data(sequence.utf8))
 
-        // Refresh tmux state after a short delay
-        Task {
+        // Refresh tmux state after a short delay.
+        Task { [weak self] in
             try? await Task.sleep(nanoseconds: 500_000_000)
-            await self.pollTmuxState()
+            guard let self, await self.isCurrentConnection(generation) else { return }
+            await self.pollTmuxState(generation: generation)
         }
     }
 
-    func startTmuxPolling() {
+    func startTmuxPolling(generation: UInt64) {
         tmuxPollTask?.cancel()
-        tmuxPollTask = Task {
+        tmuxPollTask = Task { [weak self] in
+            guard let self else { return }
+            guard await self.isCurrentConnection(generation) else { return }
+
             // Detect tmux path first
-            await self.detectTmuxPath()
+            await self.detectTmuxPath(generation: generation)
+            guard await self.isCurrentConnection(generation) else { return }
 
             // Initial poll after shell starts
             try? await Task.sleep(nanoseconds: 1_500_000_000)
-            guard !Task.isCancelled else { return }
-            await self.pollTmuxState()
+            guard !Task.isCancelled, await self.isCurrentConnection(generation) else { return }
+            await self.pollTmuxState(generation: generation)
 
             // Poll every 5 seconds using NoPTY exec channels
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
-                guard !Task.isCancelled else { return }
-                await self.pollTmuxState()
+                guard !Task.isCancelled, await self.isCurrentConnection(generation) else { return }
+                await self.pollTmuxState(generation: generation)
             }
         }
     }
@@ -231,8 +302,8 @@ final class ShellCoordinator {
     /// Resolved full path to tmux binary (exec channels don't have user's PATH).
     private var tmuxPath: String = "tmux"
 
-    private func detectTmuxPath() async {
-        guard let sshManager, await sshManager.isConnected else { return }
+    private func detectTmuxPath(generation: UInt64) async {
+        guard isCurrentConnection(generation), let sshManager, await sshManager.isConnected else { return }
         // Try common paths — exec channels don't source .zshrc/.bashrc
         let candidates = [
             "/opt/homebrew/bin/tmux",
@@ -270,7 +341,11 @@ final class ShellCoordinator {
         log.info("Could not detect tmux path, using default: tmux")
     }
 
-    private func pollTmuxState() async {
+    private func pollTmuxState(generation: UInt64? = nil) async {
+        if let generation, !isCurrentConnection(generation) {
+            return
+        }
+
         guard let sshManager, await sshManager.isConnected else {
             log.debug("tmux poll: no SSH manager or disconnected")
             return
@@ -290,6 +365,10 @@ final class ShellCoordinator {
                     "\(tmuxPath) list-sessions -F '#{session_name}:#{session_windows}:#{session_attached}' 2>/dev/null"
                 )
             }
+            if let generation, !isCurrentConnection(generation) {
+                return
+            }
+
             log.info("tmux sessions raw: '\(sessionsRaw)'")
             guard !sessionsRaw.isEmpty else {
                 accessoryBar?.updateTmux(session: nil, windows: [])
@@ -336,6 +415,10 @@ final class ShellCoordinator {
                     )
                 }
 
+                if let generation, !isCurrentConnection(generation) {
+                    return
+                }
+
                 let windows = windowsRaw.split(separator: "\n").compactMap { line -> TmuxWindow? in
                     let parts = line.split(separator: ":", maxSplits: 3)
                     guard parts.count >= 3 else { return nil }
@@ -355,6 +438,10 @@ final class ShellCoordinator {
                 if session.name == activeSession.name {
                     activeWindows = windows
                 }
+            }
+
+            if let generation, !isCurrentConnection(generation) {
+                return
             }
 
             accessoryBar?.updateTmux(session: activeSession, windows: activeWindows)
@@ -421,12 +508,22 @@ final class ShellCoordinator {
 
     /// Force a tmux state refresh.
     func refreshTmuxState() {
-        Task { await pollTmuxState() }
+        let generation = connectionGeneration
+        Task { [weak self] in
+            guard let self, await self.isCurrentConnection(generation) else { return }
+            await self.pollTmuxState(generation: generation)
+        }
     }
 
     /// Attach to a tmux session via the shell channel.
     /// Used when not currently inside tmux (switch-client won't work).
     private func attachTmuxSession(_ sessionName: String, selectWindow: Int? = nil) {
+        guard state == .shell, shellChannel != nil else {
+            log.debug("Ignoring tmux attach while shell is inactive")
+            return
+        }
+
+        let generation = connectionGeneration
         var cmd = "tmux attach-session -t '\(sessionName)'"
         if let win = selectWindow {
             // Select the target window first, then attach
@@ -435,43 +532,60 @@ final class ShellCoordinator {
         log.info("Tmux attach via shell: \(cmd)")
         let sequence = "\u{15}\(cmd)\n"
         sendInput(Data(sequence.utf8))
-        Task {
+        Task { [weak self] in
             try? await Task.sleep(nanoseconds: 1_000_000_000)
-            await self.pollTmuxState()
+            guard let self, await self.isCurrentConnection(generation) else { return }
+            await self.pollTmuxState(generation: generation)
         }
     }
 
     /// Run a tmux command via NoPTY exec channel and refresh state.
     private func runTmuxCommand(_ cmd: String) {
+        guard state == .shell else {
+            log.debug("Ignoring tmux exec while shell is inactive")
+            return
+        }
         guard let sshManager else {
             log.error("runTmuxCommand: no SSH manager")
             return
         }
+
+        let generation = connectionGeneration
         log.info("Tmux exec: \(cmd)")
-        Task {
+        Task { [weak self] in
             do {
                 _ = try await sshManager.runCommandNoPTY(cmd)
             } catch {
                 log.error("Tmux exec failed: \(error)")
             }
             try? await Task.sleep(nanoseconds: 300_000_000)
-            await self.pollTmuxState()
+            guard let self, await self.isCurrentConnection(generation) else { return }
+            await self.pollTmuxState(generation: generation)
         }
     }
 
     /// Send a tmux command through the shell channel and refresh state.
     private func sendTmuxShellCommand(_ cmd: String) {
+        guard state == .shell, shellChannel != nil else {
+            log.debug("Ignoring tmux shell command while shell is inactive")
+            return
+        }
+
+        let generation = connectionGeneration
         log.info("Tmux shell command: \(cmd)")
         let sequence = "\u{15}\(cmd)\n"
         sendInput(Data(sequence.utf8))
-        Task {
+        Task { [weak self] in
             try? await Task.sleep(nanoseconds: 500_000_000)
-            await self.pollTmuxState()
+            guard let self, await self.isCurrentConnection(generation) else { return }
+            await self.pollTmuxState(generation: generation)
         }
     }
 
-    private func handleShellClosed() async {
+    private func handleShellClosed(generation: UInt64) async {
+        guard isCurrentConnection(generation) else { return }
         await resetConnection()
+        guard isCurrentConnection(generation) else { return }
         lastError = ShellError.shellFailed("Shell session ended.")
         state = .disconnected
     }
@@ -484,6 +598,8 @@ final class ShellCoordinator {
 
         renderer?.inputHandler = nil
         renderer?.sizeChangeHandler = nil
+        detachAccessoryBar(from: renderer)
+        renderer?.deactivateKeyboard()
         renderer = nil
 
         if let shellChannel {
@@ -500,5 +616,19 @@ final class ShellCoordinator {
         tmuxSessions = []
         tmuxActiveSession = nil
         tmuxWindows = []
+        tmuxPath = "tmux"
+    }
+
+    private func beginConnectionGeneration() -> UInt64 {
+        connectionGeneration &+= 1
+        return connectionGeneration
+    }
+
+    private func invalidateConnectionGeneration() {
+        connectionGeneration &+= 1
+    }
+
+    private func isCurrentConnection(_ generation: UInt64) -> Bool {
+        generation == connectionGeneration
     }
 }

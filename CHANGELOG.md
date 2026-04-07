@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **MoriRemote**: make the regular-width terminal sidebar collapsible again and replace the crashing iPad keyboard-accessory tmux menu with a stable confirmation dialog
 - **MoriRemote**: move compact terminal navigation into the accessory row by adding a back control beside tmux, keeping the terminal viewport free of extra chrome
+- **MoriRemote**: harden terminal session lifecycle handling so disconnects, host switches, stale shell callbacks, and accessory-bar reuse no longer race into broken shell/tmux state
 
 ### ♻️ Changes
 

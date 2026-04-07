@@ -48,6 +48,13 @@ final class KeyBarView: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    deinit {
+        MainActor.assumeIsolated {
+            cancelAutoRepeat()
+            NotificationCenter.default.removeObserver(self)
+        }
+    }
+
     private func setup() {
         backgroundColor = barBg
 

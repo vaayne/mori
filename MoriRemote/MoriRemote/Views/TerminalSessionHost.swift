@@ -49,12 +49,16 @@ final class TerminalSessionHost {
                 hostedSessionState = .idle
                 lastOpenRequest = nil
             }
+            showKeyBarCustomize = false
+            showTmuxCommands = false
 
         case .connected:
             hostedSessionState = activeServerID.map(HostedSessionState.waitingForShell) ?? .idle
             if lastOpenRequest?.serverID != activeServerID {
                 lastOpenRequest = nil
             }
+            showKeyBarCustomize = false
+            showTmuxCommands = false
 
         case .shell:
             hostedSessionState = activeServerID.map(HostedSessionState.shellOpen) ?? .idle
