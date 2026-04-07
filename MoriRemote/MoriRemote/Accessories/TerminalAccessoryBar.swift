@@ -16,6 +16,9 @@ final class TerminalAccessoryBar: UIInputView, UIInputViewAudioFeedback {
     /// Callback for tmux commands from the key bar.
     var onTmuxCommand: ((TmuxCommand) -> Void)?
 
+    /// Called when the user taps the back button.
+    var onBackTapped: (() -> Void)?
+
     /// Called when the user taps the tmux menu button.
     var onTmuxMenuTapped: (() -> Void)?
 
@@ -46,6 +49,9 @@ final class TerminalAccessoryBar: UIInputView, UIInputViewAudioFeedback {
         addSubview(topBorder)
         addSubview(keyBar)
 
+        keyBar.onBackTapped = { [weak self] in
+            self?.onBackTapped?()
+        }
         keyBar.onCustomizeTapped = { [weak self] in
             self?.onCustomizeTapped?()
         }

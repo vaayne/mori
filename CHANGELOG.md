@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🐛 Bug Fixes
 
 - **MoriRemote**: make the regular-width terminal sidebar collapsible again and replace the crashing iPad keyboard-accessory tmux menu with a stable confirmation dialog
-- **MoriRemote**: move compact terminal navigation out of the top content area and add a bottom-left back control that returns to the server list
+- **MoriRemote**: move compact terminal navigation into the accessory row by adding a back control beside tmux, keeping the terminal viewport free of extra chrome
 
 ### ♻️ Changes
 

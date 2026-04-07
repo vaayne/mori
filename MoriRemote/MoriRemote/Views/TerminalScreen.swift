@@ -45,6 +45,7 @@ struct TerminalScreen: View {
             Button(String(localized: "Cancel"), role: .cancel) { }
         }
         .onAppear {
+            sessionHost.accessoryBar.onBackTapped = onSwitchHost
             sessionHost.handleCoordinatorStateChange(
                 coordinator.state,
                 activeServerID: coordinator.activeServer?.id
@@ -152,32 +153,6 @@ struct TerminalScreen: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
         }
-        .safeAreaInset(edge: .bottom, alignment: .leading) {
-            if showsCompactChrome && coordinator.state == .shell {
-                HStack {
-                    compactBackButton
-                    Spacer(minLength: 0)
-                }
-                .padding(.leading, 12)
-                .padding(.trailing, 12)
-                .padding(.bottom, 8)
-            }
-        }
-    }
-
-    private var compactBackButton: some View {
-        Button(action: onSwitchHost) {
-            Label(String(localized: "Servers"), systemImage: "chevron.backward")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.textPrimary)
-                .padding(.horizontal, 12)
-                .frame(height: 34)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9))
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: 9)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        )
     }
 
     private var regularSidebarRevealButton: some View {

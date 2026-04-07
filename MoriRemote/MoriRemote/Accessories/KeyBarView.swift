@@ -7,6 +7,7 @@ import UIKit
 final class KeyBarView: UIView {
 
     weak var terminalView: SwiftTerm.TerminalView?
+    var onBackTapped: (() -> Void)?
     var onCustomizeTapped: (() -> Void)?
     var onTmuxMenuTapped: (() -> Void)?
     var onTmuxAction: ((TmuxCommand) -> Void)?
@@ -107,6 +108,14 @@ final class KeyBarView: UIView {
     private func rebuildKeys() {
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
         keyButtons = []
+
+        let back = makeBackButton()
+        stackView.addArrangedSubview(back)
+        keyButtons.append(back)
+
+        let divBack = makeDivider()
+        stackView.addArrangedSubview(divBack)
+        keyButtons.append(divBack)
 
         let tmux = makeTmuxMenuButton()
         stackView.addArrangedSubview(tmux)
@@ -217,6 +226,30 @@ final class KeyBarView: UIView {
 
     private func action(for button: UIButton) -> KeyAction? {
         objc_getAssociatedObject(button, &KeyBarView.actionKey) as? KeyAction
+    }
+
+    private func makeBackButton() -> UIButton {
+        let button = UIButton(type: .system)
+        let config = UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
+        button.setImage(UIImage(systemName: "chevron.backward", withConfiguration: config), for: .normal)
+        button.tintColor = textDim
+        button.backgroundColor = keySpecialBg
+        button.layer.cornerRadius = 7
+        button.layer.borderWidth = 1
+        button.layer.borderColor = keyBorder.cgColor
+        button.clipsToBounds = true
+        button.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            button.heightAnchor.constraint(equalToConstant: 30),
+            button.widthAnchor.constraint(equalToConstant: 30),
+        ])
+        return button
+    }
+
+    @objc private func backTapped() {
+        UIDevice.current.playInputClick()
+        onBackTapped?()
     }
 
     private func makeTmuxMenuButton() -> UIButton {
