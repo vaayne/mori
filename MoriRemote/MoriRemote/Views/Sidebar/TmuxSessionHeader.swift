@@ -1,9 +1,7 @@
 #if os(iOS)
 import SwiftUI
 
-/// Flat uppercase session label with attached badge and long-press context menu.
-///
-/// Matches the design mockup's non-expandable session header style.
+/// Flat uppercase session label with compact attached badge and context menu actions.
 struct TmuxSessionHeader: View {
     let session: TmuxSession
     let isActive: Bool
@@ -12,37 +10,35 @@ struct TmuxSessionHeader: View {
     let onKill: () -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "hexagon")
-                .font(.system(size: 10))
-                .foregroundStyle(Color.white.opacity(0.2))
+        HStack(spacing: 8) {
+            Circle()
+                .fill(isActive ? Theme.accent : Theme.textTertiary)
+                .frame(width: 6, height: 6)
 
             Text(session.name)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.3))
-                .textCase(.uppercase)
-                .tracking(0.5)
+                .moriSectionHeaderStyle()
+                .foregroundStyle(isActive ? Theme.textSecondary : Theme.textTertiary)
 
-            Spacer()
+            Spacer(minLength: 8)
 
             if session.isAttached {
-                Text("attached")
-                    .font(.system(size: 10, weight: .medium))
+                Text(String(localized: "Connected"))
+                    .font(Theme.shortcutFont)
                     .foregroundStyle(Theme.accent)
                     .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(Theme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
+                    .padding(.vertical, 3)
+                    .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 5))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 6)
+        .padding(.horizontal, 14)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
         .contentShape(Rectangle())
         .contextMenu {
             Button {
                 onSwitch()
             } label: {
-                Label("Switch to Session", systemImage: "arrow.right.square")
+                Label(String(localized: "Switch to Session"), systemImage: "arrow.right.square")
             }
 
             Divider()
@@ -50,7 +46,7 @@ struct TmuxSessionHeader: View {
             Button {
                 onRename()
             } label: {
-                Label("Rename Session", systemImage: "pencil")
+                Label(String(localized: "Rename Session"), systemImage: "pencil")
             }
 
             Divider()
@@ -58,7 +54,7 @@ struct TmuxSessionHeader: View {
             Button(role: .destructive) {
                 onKill()
             } label: {
-                Label("Kill Session", systemImage: "xmark.circle")
+                Label(String(localized: "Kill Session"), systemImage: "xmark.circle")
             }
         }
     }

@@ -114,7 +114,7 @@ struct RegularWidthServerBrowserView: View {
 
     private var sidebar: some View {
         ZStack {
-            Theme.bg.ignoresSafeArea()
+            Theme.sidebarBg.ignoresSafeArea()
 
             ServerListContentView(
                 servers: store.servers,
@@ -127,16 +127,22 @@ struct RegularWidthServerBrowserView: View {
             )
         }
         .navigationTitle(String(localized: "Servers"))
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showingAddSheet = true
                 } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(Theme.accent)
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                        .frame(width: 32, height: 32)
+                        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.rowRadius))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.rowRadius)
+                                .strokeBorder(Theme.accentBorder, lineWidth: 1)
+                        )
                 }
             }
         }
@@ -146,10 +152,24 @@ struct RegularWidthServerBrowserView: View {
     private var detail: some View {
         switch detailState {
         case .empty:
-            ServerBrowserEmptyDetail(onAdd: { showingAddSheet = true })
+            ServerBrowserInfoState(
+                icon: "server.rack",
+                title: String(localized: "No Servers"),
+                message: String(localized: "Add a server to start browsing your remote workspaces on iPad."),
+                actionTitle: String(localized: "Add Server"),
+                actionSystemImage: "plus",
+                action: { showingAddSheet = true }
+            )
 
         case .placeholder:
-            ServerBrowserPlaceholderDetail()
+            ServerBrowserInfoState(
+                icon: "sidebar.left",
+                title: String(localized: "Select a Server"),
+                message: String(localized: "Choose a server from the sidebar to review its connection details before connecting."),
+                actionTitle: nil,
+                actionSystemImage: nil,
+                action: nil
+            )
 
         case .selected(let server):
             ServerBrowserSelectedDetail(
@@ -249,34 +269,40 @@ struct RegularWidthServerBrowserView: View {
     }
 }
 
-private struct ServerBrowserEmptyDetail: View {
-    let onAdd: () -> Void
+private struct ServerBrowserInfoState: View {
+    let icon: String
+    let title: String
+    let message: String
+    let actionTitle: String?
+    let actionSystemImage: String?
+    let action: (() -> Void)?
 
     var body: some View {
-        ServerBrowserDetailCard(icon: "server.rack", title: String(localized: "No Servers")) {
-            Text(String(localized: "Add a server to start browsing your remote workspaces on iPad."))
-                .font(.body)
-                .foregroundStyle(Theme.textSecondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 360)
+        ServerBrowserDetailLayout {
+            VStack(alignment: .leading, spacing: 14) {
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
 
-            Button(action: onAdd) {
-                Label(String(localized: "Add Server"), systemImage: "plus")
+                Text(title)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+
+                Text(message)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let actionTitle, let actionSystemImage, let action {
+                    Button(action: action) {
+                        Label(actionTitle, systemImage: actionSystemImage)
+                    }
+                    .buttonStyle(Theme.PrimaryButtonStyle())
+                    .frame(maxWidth: 220)
+                    .padding(.top, 4)
+                }
             }
-            .buttonStyle(Theme.PrimaryButtonStyle())
-            .frame(maxWidth: 240)
-        }
-    }
-}
-
-private struct ServerBrowserPlaceholderDetail: View {
-    var body: some View {
-        ServerBrowserDetailCard(icon: "rectangle.and.hand.point.up.left.filled", title: String(localized: "Select a Server")) {
-            Text(String(localized: "Choose a server from the sidebar to review its connection details before connecting."))
-                .font(.body)
-                .foregroundStyle(Theme.textSecondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 380)
+            .cardStyle(padding: 24)
         }
     }
 }
@@ -288,109 +314,129 @@ private struct ServerBrowserSelectedDetail: View {
     let onEdit: () -> Void
 
     var body: some View {
-        ServerBrowserDetailCard(icon: "terminal", title: server.displayName) {
-            VStack(spacing: 20) {
-                statusSummary
-                detailRows
+        ServerBrowserDetailLayout {
+            VStack(alignment: .leading, spacing: 16) {
+                header
+                actionRow
+                connectionSection
+                sessionSection
+            }
+        }
+    }
 
-                HStack(spacing: 12) {
-                    Button(action: onConnect) {
-                        Label(String(localized: "Connect"), systemImage: "arrow.up.right.circle.fill")
-                    }
-                    .buttonStyle(Theme.PrimaryButtonStyle(disabled: !canConnect))
-                    .disabled(!canConnect)
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(String(localized: "Connection"))
+                .moriSectionHeaderStyle()
 
-                    Button(action: onEdit) {
-                        Label(String(localized: "Edit"), systemImage: "pencil")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(Theme.textPrimary)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                            .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.buttonRadius))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: Theme.buttonRadius)
-                                    .strokeBorder(Theme.cardBorder, lineWidth: 1)
-                            )
+            HStack(alignment: .top, spacing: 14) {
+                RoundedRectangle(cornerRadius: Theme.cardRadius)
+                    .fill(canConnect ? Theme.accentSoft : Theme.mutedSurface)
+                    .frame(width: 42, height: 42)
+                    .overlay {
+                        Image(systemName: "terminal")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(canConnect ? Theme.accent : Theme.textSecondary)
                     }
-                    .buttonStyle(.plain)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(server.displayName)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+
+                    Text(server.subtitle)
+                        .font(Theme.monoDetailFont)
+                        .foregroundStyle(Theme.textSecondary)
                 }
 
-                Text(canConnect
+                Spacer(minLength: 12)
+
+                ConnectionBadge(
+                    title: canConnect ? String(localized: "Ready to connect") : String(localized: "Connection busy"),
+                    color: canConnect ? Theme.accent : Theme.textTertiary
+                )
+            }
+        }
+        .cardStyle(padding: 20)
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 12) {
+            Button(action: onConnect) {
+                Label(String(localized: "Connect"), systemImage: "arrow.up.right.circle.fill")
+            }
+            .buttonStyle(Theme.PrimaryButtonStyle(disabled: !canConnect))
+            .disabled(!canConnect)
+
+            Button(action: onEdit) {
+                Label(String(localized: "Edit"), systemImage: "pencil")
+            }
+            .buttonStyle(Theme.SecondaryButtonStyle())
+        }
+    }
+
+    private var connectionSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(String(localized: "CONNECTION"))
+                .moriSectionHeaderStyle()
+
+            VStack(spacing: 0) {
+                detailRow(label: String(localized: "Host"), value: server.host)
+                detailDivider
+                detailRow(label: String(localized: "Port"), value: String(server.port), useMonospace: true)
+                detailDivider
+                detailRow(label: String(localized: "Username"), value: server.username, useMonospace: true)
+            }
+            .cardStyle(padding: 0)
+        }
+    }
+
+    private var sessionSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(String(localized: "TMUX SESSION"))
+                .moriSectionHeaderStyle()
+
+            VStack(spacing: 0) {
+                detailRow(label: String(localized: "Default Session"), value: server.defaultSession, useMonospace: true)
+                detailDivider
+                detailNote(canConnect
                     ? String(localized: "Review the server settings, then connect when you're ready.")
                     : String(localized: "A connection is already in progress. Finish or cancel it before starting another one."))
-                    .font(.footnote)
-                    .foregroundStyle(Theme.textTertiary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 360)
             }
-            .frame(maxWidth: 440)
+            .cardStyle(padding: 0)
         }
     }
 
-    private var statusSummary: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(canConnect ? Theme.accent : Theme.textTertiary)
-                .frame(width: 10, height: 10)
-
-            Text(canConnect ? String(localized: "Ready to connect") : String(localized: "Connection busy"))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.textPrimary)
-
-            Spacer()
-
-            Text(server.subtitle)
-                .font(.caption)
-                .foregroundStyle(Theme.textSecondary)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Theme.accent.opacity(canConnect ? 0.10 : 0.04), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(canConnect ? Theme.accent.opacity(0.22) : Theme.cardBorder, lineWidth: 1)
-        )
-    }
- 
-    private var detailRows: some View {
-        VStack(spacing: 0) {
-            detailRow(label: String(localized: "Host"), value: server.host)
-            divider
-            detailRow(label: String(localized: "Port"), value: String(server.port))
-            divider
-            detailRow(label: String(localized: "Username"), value: server.username)
-            divider
-            detailRow(label: String(localized: "Default Session"), value: server.defaultSession)
-        }
-        .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.cardRadius)
-                .strokeBorder(Theme.cardBorder, lineWidth: 1)
-        )
-    }
-
-    private var divider: some View {
+    private var detailDivider: some View {
         Rectangle()
-            .fill(Theme.cardBorder)
+            .fill(Theme.divider)
             .frame(height: 1)
     }
 
-    private func detailRow(label: String, value: String) -> some View {
-        HStack(spacing: 16) {
+    private func detailRow(label: String, value: String, useMonospace: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
             Text(label)
-                .font(.subheadline.weight(.medium))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Theme.textSecondary)
 
-            Spacer()
+            Spacer(minLength: 12)
 
             Text(value)
-                .font(.subheadline)
+                .font(useMonospace ? Theme.monoDetailFont : .system(size: 14))
                 .foregroundStyle(Theme.textPrimary)
                 .multilineTextAlignment(.trailing)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 16)
         .padding(.vertical, 14)
+    }
+
+    private func detailNote(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 13))
+            .foregroundStyle(Theme.textSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
     }
 }
 
@@ -398,25 +444,37 @@ private struct ServerBrowserConnectingDetail: View {
     let server: Server
 
     var body: some View {
-        ServerBrowserDetailCard(icon: "bolt.horizontal.circle", title: String(localized: "Connecting…")) {
-            VStack(spacing: 16) {
-                ProgressView()
-                    .tint(Theme.accent)
-                    .scaleEffect(1.2)
+        ServerBrowserDetailLayout {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(String(localized: "Connection"))
+                    .moriSectionHeaderStyle()
 
-                Text(server.displayName)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Theme.textPrimary)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        ProgressView()
+                            .tint(Theme.accent)
 
-                Text(server.subtitle)
-                    .font(.body)
-                    .foregroundStyle(Theme.textSecondary)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(String(localized: "Connecting…"))
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundStyle(Theme.textPrimary)
 
-                Text(String(localized: "MoriRemote is opening the SSH connection. You can keep browsing servers while this attempt finishes."))
-                    .font(.footnote)
-                    .foregroundStyle(Theme.textTertiary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 360)
+                            Text(server.displayName)
+                                .font(Theme.rowTitleFont)
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                    }
+
+                    Text(server.subtitle)
+                        .font(Theme.monoDetailFont)
+                        .foregroundStyle(Theme.textSecondary)
+
+                    Text(String(localized: "MoriRemote is opening the SSH connection. You can keep browsing servers while this attempt finishes."))
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .cardStyle(padding: 20)
             }
         }
     }
@@ -429,19 +487,35 @@ private struct ServerBrowserFailureDetail: View {
     let onEdit: () -> Void
 
     var body: some View {
-        ServerBrowserDetailCard(icon: "exclamationmark.triangle", title: String(localized: "Connection Failed")) {
-            VStack(spacing: 20) {
-                VStack(spacing: 8) {
-                    Text(server.displayName)
-                        .font(.title3.weight(.semibold))
+        ServerBrowserDetailLayout {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(String(localized: "Connection Failed"))
+                        .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(Theme.textPrimary)
 
                     Text(server.subtitle)
-                        .font(.body)
+                        .font(Theme.monoDetailFont)
                         .foregroundStyle(Theme.textSecondary)
                 }
+                .cardStyle(padding: 20)
 
-                failureMessage
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(String(localized: "SSH couldn’t connect with the current settings."), systemImage: "exclamationmark.triangle.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.warning)
+
+                    Text(message)
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(16)
+                .background(Color(red: 0.18, green: 0.14, blue: 0.08), in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.cardRadius)
+                        .strokeBorder(Theme.warning.opacity(0.24), lineWidth: 1)
+                )
 
                 HStack(spacing: 12) {
                     Button(action: onRetry) {
@@ -451,78 +525,55 @@ private struct ServerBrowserFailureDetail: View {
 
                     Button(action: onEdit) {
                         Label(String(localized: "Edit Server"), systemImage: "slider.horizontal.3")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(Theme.textPrimary)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                            .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.buttonRadius))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: Theme.buttonRadius)
-                                    .strokeBorder(Theme.cardBorder, lineWidth: 1)
-                            )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(Theme.SecondaryButtonStyle())
                 }
             }
-            .frame(maxWidth: 440)
         }
-    }
-
-    private var failureMessage: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(String(localized: "SSH couldn’t connect with the current settings."), systemImage: "exclamationmark.triangle.fill")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.yellow)
-
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(Theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color(red: 0.15, green: 0.12, blue: 0.08), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(Color.yellow.opacity(0.25), lineWidth: 1)
-        )
     }
 }
 
-private struct ServerBrowserDetailCard<Content: View>: View {
-    let icon: String
-    let title: String
-    @ViewBuilder let content: Content
+private struct ServerBrowserDetailLayout<Content: View>: View {
+    let content: Content
 
-    init(icon: String, title: String, @ViewBuilder content: () -> Content) {
-        self.icon = icon
-        self.title = title
+    init(@ViewBuilder content: () -> Content) {
         self.content = content()
     }
 
     var body: some View {
-        ZStack {
-            Theme.bg.ignoresSafeArea()
-
-            VStack(spacing: 24) {
-                Image(systemName: icon)
-                    .font(.system(size: 36, weight: .semibold))
-                    .foregroundStyle(Theme.accent)
-
-                Text(title)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(Theme.textPrimary)
-
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
                 content
             }
-            .padding(32)
-            .frame(maxWidth: 560)
-            .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: 28))
-            .overlay(
-                RoundedRectangle(cornerRadius: 28)
-                    .strokeBorder(Theme.cardBorder, lineWidth: 1)
-            )
-            .padding(24)
+            .frame(maxWidth: 640, alignment: .leading)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 24)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(Theme.bg.ignoresSafeArea())
+    }
+}
+
+private struct ConnectionBadge: View {
+    let title: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+
+            Text(title)
+                .font(Theme.shortcutFont)
+                .foregroundStyle(color)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Theme.mutedSurface, in: RoundedRectangle(cornerRadius: 6))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(Theme.cardBorder, lineWidth: 1)
+        )
     }
 }

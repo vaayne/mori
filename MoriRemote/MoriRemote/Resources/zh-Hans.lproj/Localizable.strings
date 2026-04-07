@@ -12,9 +12,11 @@
 "Connected" = "已连接";
 "Connecting..." = "连接中...";
 "Connecting…" = "正在连接…";
+"Connection" = "连接";
 "CONNECTION" = "连接信息";
 "Connection Failed" = "连接失败";
 "Connection busy" = "连接繁忙";
+"Close Window" = "关闭窗口";
 "Default Session" = "默认会话";
 "Delete" = "删除";
 "Delete %@?" = "删除 %@？";
@@ -28,12 +30,14 @@
 "main" = "main";
 "Mori Remote" = "Mori 远程";
 "MoriRemote is opening the SSH connection. You can keep browsing servers while this attempt finishes." = "MoriRemote 正在建立 SSH 连接。等待本次尝试完成期间，你仍然可以继续浏览其他服务器。";
+"New Window After" = "在后方新建窗口";
 "My Server" = "我的服务器";
 "New Session" = "新建会话";
 "No Servers" = "没有服务器";
 "No tmux sessions" = "没有 tmux 会话";
 "Not Connected" = "未连接";
 "Offline" = "离线";
+"Opening shell…" = "正在打开 shell…";
 "password" = "密码";
 "Password" = "密码";
 "Port" = "端口";
@@ -43,6 +47,8 @@
 "Rename Session" = "重命名会话";
 "Retry" = "重试";
 "Review the server settings, then connect when you're ready." = "先检查服务器设置，准备好后再发起连接。";
+"Switch to Session" = "切换到会话";
+"Switch to Window" = "切换到窗口";
 "Save Changes" = "保存更改";
 "Select a Server" = "选择一个服务器";
 "Send" = "发送";
@@ -56,8 +62,10 @@
 "Start tmux to manage\nwindows from here." = "启动 tmux 后，即可在这里管理\n窗口。";
 "Switch Host" = "切换主机";
 "Terminal renderer is not ready yet." = "终端渲染器尚未就绪。";
+"Window" = "窗口";
 "TMUX SESSION" = "TMUX 会话";
 "tmux did not report a pane ID." = "tmux 没有返回 pane ID。";
+"Kill Session" = "结束会话";
 "tmux session exited." = "tmux 会话已退出。";
 "username" = "用户名";
 "Username" = "用户名";

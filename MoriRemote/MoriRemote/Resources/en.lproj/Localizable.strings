@@ -12,9 +12,11 @@
 "Connected" = "Connected";
 "Connecting..." = "Connecting...";
 "Connecting…" = "Connecting…";
+"Connection" = "Connection";
 "CONNECTION" = "CONNECTION";
 "Connection Failed" = "Connection Failed";
 "Connection busy" = "Connection busy";
+"Close Window" = "Close Window";
 "Default Session" = "Default Session";
 "Delete" = "Delete";
 "Delete %@?" = "Delete %@?";
@@ -28,12 +30,14 @@
 "main" = "main";
 "Mori Remote" = "Mori Remote";
 "MoriRemote is opening the SSH connection. You can keep browsing servers while this attempt finishes." = "MoriRemote is opening the SSH connection. You can keep browsing servers while this attempt finishes.";
+"New Window After" = "New Window After";
 "My Server" = "My Server";
 "New Session" = "New Session";
 "No Servers" = "No Servers";
 "No tmux sessions" = "No tmux sessions";
 "Not Connected" = "Not Connected";
 "Offline" = "Offline";
+"Opening shell…" = "Opening shell…";
 "password" = "password";
 "Password" = "Password";
 "Port" = "Port";
@@ -43,6 +47,8 @@
 "Rename Session" = "Rename Session";
 "Retry" = "Retry";
 "Review the server settings, then connect when you're ready." = "Review the server settings, then connect when you're ready.";
+"Switch to Session" = "Switch to Session";
+"Switch to Window" = "Switch to Window";
 "Save Changes" = "Save Changes";
 "Select a Server" = "Select a Server";
 "Send" = "Send";
@@ -56,8 +62,10 @@
 "Start tmux to manage\nwindows from here." = "Start tmux to manage\nwindows from here.";
 "Switch Host" = "Switch Host";
 "Terminal renderer is not ready yet." = "Terminal renderer is not ready yet.";
+"Window" = "Window";
 "TMUX SESSION" = "TMUX SESSION";
 "tmux did not report a pane ID." = "tmux did not report a pane ID.";
+"Kill Session" = "Kill Session";
 "tmux session exited." = "tmux session exited.";
 "username" = "username";
 "Username" = "Username";

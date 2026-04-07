@@ -53,23 +53,23 @@ struct TerminalScreen: View {
         SidebarContainer(isOpen: $showSidebar) {
             sidebarContent(presentation: .overlay, onDismiss: { showSidebar = false })
         } content: {
-            terminalContent(showsSidebarButton: true)
+            terminalContent(showsCompactChrome: true)
         }
     }
 
     private var regularWorkspace: some View {
         HStack(spacing: 0) {
             sidebarContent(presentation: .persistent, onDismiss: nil)
-                .frame(width: 320)
-                .background(Color(red: 0.07, green: 0.07, blue: 0.10))
+                .frame(width: 304)
+                .background(Theme.sidebarBg)
 
             Rectangle()
-                .fill(Color.white.opacity(0.06))
+                .fill(Theme.divider)
                 .frame(width: 1)
 
-            terminalContent(showsSidebarButton: false)
+            terminalContent(showsCompactChrome: false)
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(Theme.terminalBg.ignoresSafeArea())
     }
 
     private func sidebarContent(
@@ -91,9 +91,9 @@ struct TerminalScreen: View {
         )
     }
 
-    private func terminalContent(showsSidebarButton: Bool) -> some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+    private func terminalContent(showsCompactChrome: Bool) -> some View {
+        ZStack(alignment: .topLeading) {
+            Theme.terminalBg.ignoresSafeArea()
 
             TerminalView(
                 onRendererReady: { renderer in
@@ -103,37 +103,63 @@ struct TerminalScreen: View {
             .ignoresSafeArea(.container, edges: .bottom)
 
             if coordinator.state != .shell {
-                VStack(spacing: 14) {
+                VStack(spacing: 12) {
                     ProgressView()
                         .tint(Theme.accent)
-                        .scaleEffect(1.2)
+                        .scaleEffect(1.05)
 
-                    Text("Opening shell…")
-                        .font(.subheadline.weight(.medium))
+                    Text(String(localized: "Opening shell…"))
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Theme.textSecondary)
                 }
-                .padding(24)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
-        }
-        .overlay(alignment: .topLeading) {
-            if showsSidebarButton && coordinator.state == .shell && !showSidebar {
-                sidebarButton
+
+            if showsCompactChrome && coordinator.state == .shell {
+                compactTopBar
+                    .padding(.top, 8)
+                    .padding(.leading, 12)
             }
         }
     }
 
-    private var sidebarButton: some View {
-        Button {
-            showSidebar = true
-        } label: {
-            Image(systemName: "sidebar.left")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(.white.opacity(0.7))
-                .frame(width: 44, height: 44)
-                .background(.ultraThinMaterial, in: Circle())
+    private var compactTopBar: some View {
+        HStack(spacing: 10) {
+            Button {
+                showSidebar = true
+            } label: {
+                Image(systemName: "sidebar.left")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .frame(width: 32, height: 32)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(serverName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1)
+
+                Text(coordinator.activeServer?.subtitle ?? "")
+                    .font(Theme.monoCaptionFont)
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1)
+            }
+            .padding(.trailing, 12)
         }
-        .padding(.leading, 12)
-        .padding(.top, 8)
+        .padding(6)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+        )
     }
 }

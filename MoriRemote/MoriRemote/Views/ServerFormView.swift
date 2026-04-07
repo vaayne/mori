@@ -67,17 +67,15 @@ struct ServerFormView: View {
         horizontalSizeClass == .regular ? 560 : .infinity
     }
 
-    private var regularWidthHorizontalPadding: CGFloat {
-        horizontalSizeClass == .regular ? 24 : 0
-    }
-
     var body: some View {
         NavigationStack {
             ZStack {
                 Theme.bg.ignoresSafeArea()
 
                 ScrollView {
-                    VStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        formSummary
+
                         fieldSection(String(localized: "LABEL")) {
                             field(String(localized: "My Server"), text: $name)
                         }
@@ -88,21 +86,24 @@ struct ServerFormView: View {
                                 .autocorrectionDisabled()
                                 .keyboardType(.URL)
 
-                            Divider().overlay(Theme.cardBorder)
+                            Divider().overlay(Theme.divider)
 
                             HStack(spacing: 12) {
                                 Text(String(localized: "Port"))
+                                    .font(.system(size: 13, weight: .medium))
                                     .foregroundStyle(Theme.textSecondary)
-                                    .font(.subheadline)
+
                                 Spacer()
+
                                 TextField(String(localized: "22"), text: $port)
                                     .keyboardType(.numberPad)
                                     .multilineTextAlignment(.trailing)
-                                    .frame(width: 80)
+                                    .frame(width: 92)
+                                    .font(Theme.monoDetailFont)
                                     .foregroundStyle(Theme.textPrimary)
                             }
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 12)
                         }
 
                         fieldSection(String(localized: "AUTHENTICATION")) {
@@ -110,7 +111,7 @@ struct ServerFormView: View {
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
 
-                            Divider().overlay(Theme.cardBorder)
+                            Divider().overlay(Theme.divider)
 
                             SecureField(String(localized: "password"), text: $password)
                                 .padding(.horizontal, 14)
@@ -131,14 +132,14 @@ struct ServerFormView: View {
                         }
                         .buttonStyle(Theme.PrimaryButtonStyle(disabled: !isValid))
                         .disabled(!isValid)
-                        .padding(.top, 4)
+                        .padding(.top, 2)
                     }
-                    .frame(maxWidth: formMaxWidth)
-                    .padding(16)
-                    .padding(.bottom, 16)
+                    .frame(maxWidth: formMaxWidth, alignment: .leading)
+                    .padding(.horizontal, Theme.contentInset)
+                    .padding(.top, 16)
+                    .padding(.bottom, 24)
                     .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, regularWidthHorizontalPadding)
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
@@ -146,7 +147,7 @@ struct ServerFormView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "Cancel")) { dismiss() }
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Theme.textSecondary)
                 }
             }
         }
@@ -157,27 +158,38 @@ struct ServerFormView: View {
         .preferredColorScheme(.dark)
     }
 
+    private var formSummary: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+
+            Text(mode.isAdd
+                ? String(localized: "Add a server to get started.")
+                : String(localized: "Review the server settings, then connect when you're ready."))
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textSecondary)
+        }
+        .cardStyle(padding: 18)
+    }
+
     @ViewBuilder
     private func fieldSection(_ header: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(header)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.textTertiary)
-                .padding(.leading, 4)
+                .moriSectionHeaderStyle()
+                .padding(.leading, 2)
 
             VStack(spacing: 0) {
                 content()
             }
-            .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.cardRadius)
-                    .strokeBorder(Theme.cardBorder, lineWidth: 1)
-            )
+            .cardStyle(padding: 0)
         }
     }
 
     private func field(_ placeholder: String, text: Binding<String>) -> some View {
         TextField(placeholder, text: text)
+            .font(.system(size: 14))
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .foregroundStyle(Theme.textPrimary)

@@ -1,10 +1,7 @@
 #if os(iOS)
 import SwiftUI
 
-/// Single tmux window row with left accent bar, index, icon, name, and active dot.
-///
-/// Active window shows a 3px teal left bar and highlighted background.
-/// Long-press shows a context menu with Switch / New Window After / Close.
+/// Compact tmux window row aligned with the Mac sidebar row language.
 struct TmuxWindowRow: View {
     let window: TmuxWindow
     let isActiveSession: Bool
@@ -12,7 +9,6 @@ struct TmuxWindowRow: View {
     let onNewAfter: () -> Void
     let onClose: () -> Void
 
-    /// Only highlight if this window is active AND belongs to the attached session.
     private var isHighlighted: Bool {
         window.isActive && isActiveSession
     }
@@ -20,79 +16,47 @@ struct TmuxWindowRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 10) {
-                // Window index
                 Text("\(window.index)")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(
-                        isHighlighted
-                            ? Theme.accent.opacity(0.5)
-                            : Color.white.opacity(0.2)
-                    )
-                    .frame(width: 16, alignment: .center)
+                    .font(Theme.shortcutFont)
+                    .foregroundStyle(isHighlighted ? Theme.accent : Theme.textTertiary)
+                    .frame(width: 20, alignment: .center)
 
-                // Window icon
-                Image(systemName: isHighlighted ? "square.fill" : "square")
-                    .font(.system(size: 13))
-                    .foregroundStyle(
-                        isHighlighted ? Theme.accent : Color.white.opacity(0.25)
-                    )
+                Image(systemName: window.isActive ? "rectangle.inset.filled" : "rectangle")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(isHighlighted ? Theme.accent : Theme.textSecondary)
 
-                // Window name + path
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(window.name)
-                        .font(.system(size: 14, weight: isHighlighted ? .semibold : .medium))
-                        .foregroundStyle(
-                            isHighlighted ? Theme.textPrimary : Color.white.opacity(0.55)
-                        )
+                        .font(isHighlighted ? Theme.rowTitleFont : .system(size: 13.5, weight: .medium))
+                        .foregroundStyle(isHighlighted ? Theme.textPrimary : Theme.textSecondary)
                         .lineLimit(1)
 
                     if !window.shortPath.isEmpty {
                         Text(window.shortPath)
-                            .font(.system(size: 10))
-                            .foregroundStyle(
-                                isHighlighted
-                                    ? Theme.accent.opacity(0.5)
-                                    : Color.white.opacity(0.2)
-                            )
+                            .font(Theme.monoCaptionFont)
+                            .foregroundStyle(isHighlighted ? Theme.textSecondary : Theme.textTertiary)
                             .lineLimit(1)
                     }
                 }
 
-                Spacer()
+                Spacer(minLength: 8)
 
-                // Active dot
                 if isHighlighted {
                     Circle()
                         .fill(Theme.accent)
-                        .frame(width: 5, height: 5)
+                        .frame(width: 6, height: 6)
                 }
             }
-            .padding(.horizontal, 16)
-            .frame(minHeight: 44)
-            .background(
-                isHighlighted
-                    ? Theme.accent.opacity(0.08)
-                    : Color.clear
-            )
-            // Left accent bar for active window
-            .overlay(alignment: .leading) {
-                if isHighlighted {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Theme.accent)
-                        .frame(width: 3)
-                        .padding(.vertical, 8)
-                }
-            }
-            .contentShape(Rectangle())
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .rowSurfaceStyle(selected: isHighlighted)
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 8)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
         .contextMenu {
             Button {
                 onSelect()
             } label: {
-                Label("Switch to Window", systemImage: "arrow.up.right.square")
+                Label(String(localized: "Switch to Window"), systemImage: "arrow.up.right.square")
             }
 
             Divider()
@@ -100,7 +64,7 @@ struct TmuxWindowRow: View {
             Button {
                 onNewAfter()
             } label: {
-                Label("New Window After", systemImage: "plus.rectangle")
+                Label(String(localized: "New Window After"), systemImage: "plus.rectangle")
             }
 
             Divider()
@@ -108,7 +72,7 @@ struct TmuxWindowRow: View {
             Button(role: .destructive) {
                 onClose()
             } label: {
-                Label("Close Window", systemImage: "xmark.circle")
+                Label(String(localized: "Close Window"), systemImage: "xmark.circle")
             }
         }
     }
