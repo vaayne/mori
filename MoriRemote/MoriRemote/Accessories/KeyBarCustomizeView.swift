@@ -14,8 +14,27 @@ struct KeyBarCustomizeView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Current Bar") {
-                    currentBarPreview
+                Section("Active Keys") {
+                    let activeKeys = layout.filter { $0 != .divider }
+                    if activeKeys.isEmpty {
+                        Text("No keys added")
+                            .foregroundStyle(.secondary)
+                            .font(.subheadline)
+                    } else {
+                        ForEach(activeKeys, id: \.self) { action in
+                            activeKeyRow(action)
+                        }
+                        .onMove { from, to in
+                            var keys = layout.filter { $0 != .divider }
+                            keys.move(fromOffsets: from, toOffset: to)
+                            applyLayout(keys)
+                        }
+                        .onDelete { offsets in
+                            var keys = layout.filter { $0 != .divider }
+                            keys.remove(atOffsets: offsets)
+                            applyLayout(keys)
+                        }
+                    }
                 }
 
                 ForEach(KeyAction.Category.allCases, id: \.self) { category in
@@ -31,6 +50,9 @@ struct KeyBarCustomizeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
+                    EditButton()
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("Reset") {
                         applyLayout(KeyAction.defaultLayout)
                     }
@@ -54,27 +76,21 @@ struct KeyBarCustomizeView: View {
         KeyBarLayout.save(newLayout)
     }
 
-    // MARK: - Current Bar Preview
+    // MARK: - Active Key Row
 
-    private var currentBarPreview: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
-                ForEach(Array(layout.enumerated()), id: \.offset) { _, action in
-                    if action == .divider {
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.white.opacity(0.1))
-                            .frame(width: 1, height: 22)
-                    } else {
-                        Text(action.label)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(keyColor(action))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(keyBackground(action), in: RoundedRectangle(cornerRadius: 5))
-                    }
-                }
-            }
-            .padding(.vertical, 4)
+    private func activeKeyRow(_ action: KeyAction) -> some View {
+        HStack {
+            Text(action.label)
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .foregroundStyle(keyColor(action))
+                .frame(width: 48, height: 28)
+                .background(keyBackground(action), in: RoundedRectangle(cornerRadius: 5))
+
+            Text(actionDescription(action))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer()
         }
     }
 
@@ -83,16 +99,11 @@ struct KeyBarCustomizeView: View {
     private func keyToggleRow(_ action: KeyAction) -> some View {
         let isInBar = layout.contains(action)
         return Button {
-            var newLayout = layout
+            var newLayout = layout.filter { $0 != .divider }
             if isInBar {
                 newLayout.removeAll { $0 == action }
             } else {
-                // Insert before the last divider or at end
-                if let lastDivider = newLayout.lastIndex(of: .divider) {
-                    newLayout.insert(action, at: lastDivider)
-                } else {
-                    newLayout.append(action)
-                }
+                newLayout.append(action)
             }
             applyLayout(newLayout)
         } label: {
