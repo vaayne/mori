@@ -27,12 +27,18 @@ enum ShellState: Equatable, Sendable {
 
 enum ShellError: LocalizedError {
     case notConnected
+    case missingCredentials
+    case connectionTimedOut
     case shellFailed(String)
 
     var errorDescription: String? {
         switch self {
         case .notConnected:
             return String.localized("SSH connection is not available.")
+        case .missingCredentials:
+            return String.localized("Saved server credentials are incomplete. Edit the server and enter the password again.")
+        case .connectionTimedOut:
+            return String.localized("SSH connection timed out. Check the host, password, and network, then try again.")
         case .shellFailed(let reason):
             return String.localized("Shell failed: \(reason)")
         }
@@ -77,14 +83,22 @@ final class ShellCoordinator {
         state = .connecting
         lastError = nil
 
+        guard !server.password.isEmpty else {
+            lastError = ShellError.missingCredentials
+            state = .disconnected
+            return
+        }
+
         let manager = SSHConnectionManager()
         do {
-            try await manager.connect(
-                host: server.host.trimmingCharacters(in: .whitespacesAndNewlines),
-                port: server.port,
-                user: server.username.trimmingCharacters(in: .whitespacesAndNewlines),
-                auth: .password(server.password)
-            )
+            try await withTimeout(seconds: 15) {
+                try await manager.connect(
+                    host: server.host.trimmingCharacters(in: .whitespacesAndNewlines),
+                    port: server.port,
+                    user: server.username.trimmingCharacters(in: .whitespacesAndNewlines),
+                    auth: .password(server.password)
+                )
+            }
 
             guard isCurrentConnection(generation) else {
                 await manager.disconnect()
@@ -627,5 +641,21 @@ final class ShellCoordinator {
 
     private func isCurrentConnection(_ generation: UInt64) -> Bool {
         generation == connectionGeneration
+    }
+
+    private func withTimeout<T: Sendable>(seconds: Double, operation: @escaping @Sendable () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(seconds))
+                throw ShellError.connectionTimedOut
+            }
+
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
     }
 }
