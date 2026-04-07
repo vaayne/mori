@@ -59,7 +59,7 @@ struct TerminalScreen: View {
                     }
                 }
             )
-            .ignoresSafeArea(edges: .bottom)
+            .ignoresSafeArea(.container, edges: .bottom)
 
             if coordinator.state != .shell {
                 VStack(spacing: 14) {

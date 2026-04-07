@@ -149,6 +149,15 @@ final class KeyBarView: UIView {
             }
         }
 
+        // Keyboard dismiss button
+        let divEnd = makeDivider()
+        stackView.addArrangedSubview(divEnd)
+        keyButtons.append(divEnd)
+
+        let kbdBtn = makeKeyboardDismissButton()
+        stackView.addArrangedSubview(kbdBtn)
+        keyButtons.append(kbdBtn)
+
         // Gear button at the end for customization
         let gear = makeGearButton()
         stackView.addArrangedSubview(gear)
@@ -276,6 +285,29 @@ final class KeyBarView: UIView {
         }
 
         return UIMenu(title: "", children: actions)
+    }
+
+    private func makeKeyboardDismissButton() -> UIButton {
+        let btn = UIButton(type: .system)
+        let config = UIImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+        let img = UIImage(systemName: "keyboard.chevron.compact.down", withConfiguration: config)
+        btn.setImage(img, for: .normal)
+        btn.tintColor = textDim
+        btn.backgroundColor = keySpecialBg
+        btn.layer.cornerRadius = 6
+        btn.clipsToBounds = true
+        btn.addTarget(self, action: #selector(keyboardDismissTapped), for: .touchUpInside)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            btn.heightAnchor.constraint(equalToConstant: 32),
+            btn.widthAnchor.constraint(equalToConstant: 36),
+        ])
+        return btn
+    }
+
+    @objc private func keyboardDismissTapped() {
+        UIDevice.current.playInputClick()
+        terminalView?.resignFirstResponder()
     }
 
     private func makeGearButton() -> UIButton {
