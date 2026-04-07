@@ -152,48 +152,30 @@ struct TerminalScreen: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
         }
-        .safeAreaInset(edge: .top, alignment: .leading) {
+        .safeAreaInset(edge: .bottom, alignment: .leading) {
             if showsCompactChrome && coordinator.state == .shell {
                 HStack {
-                    compactTopBar
+                    compactBackButton
                     Spacer(minLength: 0)
                 }
-                .padding(.top, 4)
                 .padding(.leading, 12)
                 .padding(.trailing, 12)
+                .padding(.bottom, 8)
             }
         }
     }
 
-    private var compactTopBar: some View {
-        HStack(spacing: 10) {
-            Button {
-                showSidebar = true
-            } label: {
-                Image(systemName: "sidebar.left")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.textPrimary)
-                    .frame(width: 32, height: 32)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(serverName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.textPrimary)
-                    .lineLimit(1)
-
-                Text(coordinator.activeServer?.subtitle ?? "")
-                    .font(Theme.monoCaptionFont)
-                    .foregroundStyle(Theme.textSecondary)
-                    .lineLimit(1)
-            }
-            .padding(.trailing, 12)
+    private var compactBackButton: some View {
+        Button(action: onSwitchHost) {
+            Label(String(localized: "Servers"), systemImage: "chevron.backward")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .padding(.horizontal, 12)
+                .frame(height: 34)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9))
         }
-        .padding(6)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: 9)
                 .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
         )
     }
