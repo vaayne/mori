@@ -11,6 +11,7 @@ struct TerminalScreen: View {
     let onSwitchHost: () -> Void
 
     @State private var showSidebar = false
+    @State private var showRegularSidebar = true
 
     var body: some View {
         Group {
@@ -25,6 +26,23 @@ struct TerminalScreen: View {
         .sheet(isPresented: keyBarCustomizeBinding) {
             KeyBarCustomizeView(keyBar: sessionHost.accessoryBar.keyBar)
                 .presentationDetents([.medium, .large])
+        }
+        .confirmationDialog(
+            String(localized: "Tmux Shortcuts"),
+            isPresented: tmuxCommandsBinding,
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "New Tab")) { coordinator.handleTmuxCommand(.newWindow) }
+            Button(String(localized: "Next Tab")) { coordinator.handleTmuxCommand(.nextWindow) }
+            Button(String(localized: "Previous Tab")) { coordinator.handleTmuxCommand(.prevWindow) }
+            Button(String(localized: "Split Right")) { coordinator.handleTmuxCommand(.splitRight) }
+            Button(String(localized: "Split Down")) { coordinator.handleTmuxCommand(.splitDown) }
+            Button(String(localized: "Next Pane")) { coordinator.handleTmuxCommand(.nextPane) }
+            Button(String(localized: "Previous Pane")) { coordinator.handleTmuxCommand(.prevPane) }
+            Button(String(localized: "Toggle Zoom")) { coordinator.handleTmuxCommand(.toggleZoom) }
+            Button(String(localized: "Close Pane"), role: .destructive) { coordinator.handleTmuxCommand(.closePane) }
+            Button(String(localized: "Detach"), role: .destructive) { coordinator.handleTmuxCommand(.detach) }
+            Button(String(localized: "Cancel"), role: .cancel) { }
         }
         .onAppear {
             sessionHost.handleCoordinatorStateChange(
@@ -58,16 +76,29 @@ struct TerminalScreen: View {
     }
 
     private var regularWorkspace: some View {
-        HStack(spacing: 0) {
-            sidebarContent(presentation: .persistent, onDismiss: nil)
-                .frame(width: 304)
-                .background(Theme.sidebarBg)
+        ZStack(alignment: .topLeading) {
+            HStack(spacing: 0) {
+                if showRegularSidebar {
+                    sidebarContent(
+                        presentation: .persistent,
+                        onDismiss: { showRegularSidebar = false }
+                    )
+                    .frame(width: 304)
+                    .background(Theme.sidebarBg)
 
-            Rectangle()
-                .fill(Theme.divider)
-                .frame(width: 1)
+                    Rectangle()
+                        .fill(Theme.divider)
+                        .frame(width: 1)
+                }
 
-            terminalContent(showsCompactChrome: false)
+                terminalContent(showsCompactChrome: false)
+            }
+
+            if coordinator.state == .shell && !showRegularSidebar {
+                regularSidebarRevealButton
+                    .padding(.top, 12)
+                    .padding(.leading, 12)
+            }
         }
         .background(Theme.terminalBg.ignoresSafeArea())
     }
@@ -88,6 +119,13 @@ struct TerminalScreen: View {
         Binding(
             get: { sessionHost.showKeyBarCustomize },
             set: { sessionHost.showKeyBarCustomize = $0 }
+        )
+    }
+
+    private var tmuxCommandsBinding: Binding<Bool> {
+        Binding(
+            get: { sessionHost.showTmuxCommands },
+            set: { sessionHost.showTmuxCommands = $0 }
         )
     }
 
@@ -148,6 +186,22 @@ struct TerminalScreen: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+        )
+    }
+
+    private var regularSidebarRevealButton: some View {
+        Button {
+            showRegularSidebar = true
+        } label: {
+            Image(systemName: "sidebar.left")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .frame(width: 32, height: 32)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
         )
     }

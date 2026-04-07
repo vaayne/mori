@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MoriRemote**: restyle the terminal accessory bar and key customization sheet with compact Mori tokens, semantic accent usage, and localized tmux actions
 - **MoriRemote**: polish terminal connection microstates with richer iPad connection/failure detail states and a calmer in-terminal shell preparation overlay
 
+### 🐛 Bug Fixes
+
+- **MoriRemote**: make the regular-width terminal sidebar collapsible again and replace the crashing iPad keyboard-accessory tmux menu with a stable confirmation dialog
+
 ### ♻️ Changes
 
 - Remove legacy workflow-status and sidebar-mode code paths after the unified sidebar redesign, including the `mori status` CLI command and manual sidebar status controls

@@ -6,6 +6,7 @@ import SwiftUI
 @Observable
 final class TerminalSessionHost {
     var showKeyBarCustomize = false
+    var showTmuxCommands = false
     let accessoryBar = TerminalAccessoryBar()
 
     private weak var renderer: SwiftTermRenderer?
@@ -17,6 +18,9 @@ final class TerminalSessionHost {
         coordinator.accessoryBar = accessoryBar
         accessoryBar.onCustomizeTapped = { [weak self] in
             self?.showKeyBarCustomize = true
+        }
+        accessoryBar.onTmuxMenuTapped = { [weak self] in
+            self?.showTmuxCommands = true
         }
 
         renderer.initialLayoutHandler = { [weak self, weak renderer] _, _ in
@@ -38,6 +42,7 @@ final class TerminalSessionHost {
             renderer?.initialLayoutHandler = nil
             renderer = nil
             showKeyBarCustomize = false
+            showTmuxCommands = false
 
         case .connecting:
             if hostedSessionState.serverID != activeServerID {

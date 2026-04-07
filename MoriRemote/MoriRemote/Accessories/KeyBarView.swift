@@ -8,6 +8,7 @@ final class KeyBarView: UIView {
 
     weak var terminalView: SwiftTerm.TerminalView?
     var onCustomizeTapped: (() -> Void)?
+    var onTmuxMenuTapped: (() -> Void)?
     var onTmuxAction: ((TmuxCommand) -> Void)?
 
     private let scrollView = UIScrollView()
@@ -218,8 +219,6 @@ final class KeyBarView: UIView {
         objc_getAssociatedObject(button, &KeyBarView.actionKey) as? KeyAction
     }
 
-    private var tmuxMenuButton: UIButton?
-
     private func makeTmuxMenuButton() -> UIButton {
         let button = UIButton(type: .system)
         button.setTitle(String(localized: "tmux"), for: .normal)
@@ -235,34 +234,13 @@ final class KeyBarView: UIView {
         NSLayoutConstraint.activate([
             button.heightAnchor.constraint(equalToConstant: 30),
         ])
-
-        button.menu = buildTmuxMenu()
-        button.showsMenuAsPrimaryAction = true
-        tmuxMenuButton = button
+        button.addTarget(self, action: #selector(tmuxMenuTapped), for: .touchUpInside)
         return button
     }
 
-    private func buildTmuxMenu() -> UIMenu {
-        let items: [(TmuxCommand, String, String)] = [
-            (.newWindow, String(localized: "New Tab"), "plus.square"),
-            (.nextWindow, String(localized: "Next Tab"), "arrow.right.square"),
-            (.prevWindow, String(localized: "Previous Tab"), "arrow.left.square"),
-            (.splitRight, String(localized: "Split Right"), "rectangle.split.2x1"),
-            (.splitDown, String(localized: "Split Down"), "rectangle.split.1x2"),
-            (.nextPane, String(localized: "Next Pane"), "arrow.right.circle"),
-            (.prevPane, String(localized: "Previous Pane"), "arrow.left.circle"),
-            (.toggleZoom, String(localized: "Toggle Zoom"), "arrow.up.left.and.arrow.down.right"),
-            (.closePane, String(localized: "Close Pane"), "xmark.square"),
-            (.detach, String(localized: "Detach"), "eject"),
-        ]
-
-        let actions = items.map { command, title, icon in
-            UIAction(title: title, image: UIImage(systemName: icon)) { [weak self] _ in
-                self?.onTmuxAction?(command)
-            }
-        }
-
-        return UIMenu(title: "", children: actions)
+    @objc private func tmuxMenuTapped() {
+        UIDevice.current.playInputClick()
+        onTmuxMenuTapped?()
     }
 
     private func makeKeyboardDismissButton() -> UIButton {

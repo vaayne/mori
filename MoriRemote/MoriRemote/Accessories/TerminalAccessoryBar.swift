@@ -13,8 +13,11 @@ final class TerminalAccessoryBar: UIInputView, UIInputViewAudioFeedback {
         didSet { keyBar.terminalView = terminalView }
     }
 
-    /// Callback for tmux commands from the tmux popup menu in the key bar.
+    /// Callback for tmux commands from the key bar.
     var onTmuxCommand: ((TmuxCommand) -> Void)?
+
+    /// Called when the user taps the tmux menu button.
+    var onTmuxMenuTapped: (() -> Void)?
 
     /// Called when the user taps the gear button to customize the key bar.
     var onCustomizeTapped: (() -> Void)?
@@ -45,6 +48,9 @@ final class TerminalAccessoryBar: UIInputView, UIInputViewAudioFeedback {
 
         keyBar.onCustomizeTapped = { [weak self] in
             self?.onCustomizeTapped?()
+        }
+        keyBar.onTmuxMenuTapped = { [weak self] in
+            self?.onTmuxMenuTapped?()
         }
         keyBar.onTmuxAction = { [weak self] cmd in
             self?.onTmuxCommand?(cmd)
