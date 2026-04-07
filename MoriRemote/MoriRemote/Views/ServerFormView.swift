@@ -17,6 +17,7 @@ struct ServerFormView: View {
     let onSave: (Server) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @State private var name: String
     @State private var host: String
@@ -49,8 +50,8 @@ struct ServerFormView: View {
 
     private var title: String {
         switch mode {
-        case .add: return "Add Server"
-        case .edit: return "Edit Server"
+        case .add: return String(localized: "Add Server")
+        case .edit: return String(localized: "Edit Server")
         }
     }
 
@@ -62,6 +63,14 @@ struct ServerFormView: View {
             p > 0 && p <= 65535
     }
 
+    private var formMaxWidth: CGFloat {
+        horizontalSizeClass == .regular ? 560 : .infinity
+    }
+
+    private var regularWidthHorizontalPadding: CGFloat {
+        horizontalSizeClass == .regular ? 24 : 0
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -69,14 +78,12 @@ struct ServerFormView: View {
 
                 ScrollView {
                     VStack(spacing: 20) {
-                        // Name (optional)
-                        fieldSection("LABEL") {
-                            field("My Server", text: $name)
+                        fieldSection(String(localized: "LABEL")) {
+                            field(String(localized: "My Server"), text: $name)
                         }
 
-                        // Connection
-                        fieldSection("CONNECTION") {
-                            field("hostname or IP", text: $host)
+                        fieldSection(String(localized: "CONNECTION")) {
+                            field(String(localized: "hostname or IP"), text: $host)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
                                 .keyboardType(.URL)
@@ -84,11 +91,11 @@ struct ServerFormView: View {
                             Divider().overlay(Theme.cardBorder)
 
                             HStack(spacing: 12) {
-                                Text("Port")
+                                Text(String(localized: "Port"))
                                     .foregroundStyle(Theme.textSecondary)
                                     .font(.subheadline)
                                 Spacer()
-                                TextField("22", text: $port)
+                                TextField(String(localized: "22"), text: $port)
                                     .keyboardType(.numberPad)
                                     .multilineTextAlignment(.trailing)
                                     .frame(width: 80)
@@ -98,57 +105,57 @@ struct ServerFormView: View {
                             .padding(.vertical, 10)
                         }
 
-                        // Auth
-                        fieldSection("AUTHENTICATION") {
-                            field("username", text: $username)
+                        fieldSection(String(localized: "AUTHENTICATION")) {
+                            field(String(localized: "username"), text: $username)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
 
                             Divider().overlay(Theme.cardBorder)
 
-                            SecureField("password", text: $password)
+                            SecureField(String(localized: "password"), text: $password)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 12)
                                 .foregroundStyle(Theme.textPrimary)
                         }
 
-                        // tmux
-                        fieldSection("TMUX SESSION") {
-                            field("main", text: $defaultSession)
+                        fieldSection(String(localized: "TMUX SESSION")) {
+                            field(String(localized: "main"), text: $defaultSession)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
                         }
 
-                        // Save
                         Button {
                             save()
                         } label: {
-                            Text(mode.isAdd ? "Add Server" : "Save Changes")
+                            Text(mode.isAdd ? String(localized: "Add Server") : String(localized: "Save Changes"))
                         }
                         .buttonStyle(Theme.PrimaryButtonStyle(disabled: !isValid))
                         .disabled(!isValid)
                         .padding(.top, 4)
                     }
+                    .frame(maxWidth: formMaxWidth)
                     .padding(16)
                     .padding(.bottom, 16)
+                    .frame(maxWidth: .infinity)
                 }
+                .padding(.horizontal, regularWidthHorizontalPadding)
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(String(localized: "Cancel")) { dismiss() }
                         .foregroundStyle(Theme.accent)
                 }
             }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .presentationCornerRadius(Theme.sheetRadius)
+        .presentationBackground(Theme.bg)
         .preferredColorScheme(.dark)
     }
-
-    // MARK: - Helpers
 
     @ViewBuilder
     private func fieldSection(_ header: String, @ViewBuilder content: () -> some View) -> some View {
@@ -178,6 +185,11 @@ struct ServerFormView: View {
 
     private func save() {
         let portValue = Int(port) ?? 22
+        let normalizedDefaultSession = {
+            let trimmed = defaultSession.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "main" : trimmed
+        }()
+
         switch mode {
         case .add:
             let server = Server(
@@ -186,7 +198,7 @@ struct ServerFormView: View {
                 port: portValue,
                 username: username.trimmingCharacters(in: .whitespacesAndNewlines),
                 password: password,
-                defaultSession: defaultSession.trimmingCharacters(in: .whitespacesAndNewlines)
+                defaultSession: normalizedDefaultSession
             )
             onSave(server)
         case .edit(var server):
@@ -195,7 +207,7 @@ struct ServerFormView: View {
             server.port = portValue
             server.username = username.trimmingCharacters(in: .whitespacesAndNewlines)
             server.password = password
-            server.defaultSession = defaultSession.trimmingCharacters(in: .whitespacesAndNewlines)
+            server.defaultSession = normalizedDefaultSession
             onSave(server)
         }
         dismiss()

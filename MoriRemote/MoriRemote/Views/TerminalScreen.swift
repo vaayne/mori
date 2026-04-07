@@ -2,61 +2,102 @@ import MoriTerminal
 import SwiftUI
 
 struct TerminalScreen: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(ShellCoordinator.self) private var coordinator
 
+    let sessionHost: TerminalSessionHost
     let serverName: String
     let onDisconnect: () -> Void
+    let onSwitchHost: () -> Void
 
-    @State private var shellStarted = false
-    @State private var showKeyBarCustomize = false
-    @State private var renderer: SwiftTermRendererBox?
-    @State private var accessoryBar = TerminalAccessoryBar()
     @State private var showSidebar = false
 
     var body: some View {
-        SidebarContainer(isOpen: $showSidebar) {
-            TmuxSidebarView(
-                onDismiss: { showSidebar = false },
-                onDisconnect: onDisconnect,
-                onSwitchHost: onDisconnect
-            )
-        } content: {
-            terminalContent
+        Group {
+            if horizontalSizeClass == .regular {
+                regularWorkspace
+            } else {
+                compactWorkspace
+            }
         }
         .statusBarHidden(true)
         .preferredColorScheme(.dark)
-        .sheet(isPresented: $showKeyBarCustomize) {
-            KeyBarCustomizeView(keyBar: accessoryBar.keyBar)
+        .sheet(isPresented: keyBarCustomizeBinding) {
+            KeyBarCustomizeView(keyBar: sessionHost.accessoryBar.keyBar)
                 .presentationDetents([.medium, .large])
         }
+        .onAppear {
+            sessionHost.handleCoordinatorStateChange(
+                coordinator.state,
+                activeServerID: coordinator.activeServer?.id
+            )
+        }
         .onChange(of: coordinator.state) { _, newState in
-            if newState == .shell {
-                renderer?.value.activateKeyboard()
+            sessionHost.handleCoordinatorStateChange(
+                newState,
+                activeServerID: coordinator.activeServer?.id
+            )
+
+            if newState != .shell {
+                showSidebar = false
+            }
+        }
+        .onChange(of: horizontalSizeClass) { _, newSizeClass in
+            if newSizeClass == .regular {
+                showSidebar = false
             }
         }
     }
 
-    // MARK: - Terminal Content
+    private var compactWorkspace: some View {
+        SidebarContainer(isOpen: $showSidebar) {
+            sidebarContent(presentation: .overlay, onDismiss: { showSidebar = false })
+        } content: {
+            terminalContent(showsSidebarButton: true)
+        }
+    }
 
-    private var terminalContent: some View {
+    private var regularWorkspace: some View {
+        HStack(spacing: 0) {
+            sidebarContent(presentation: .persistent, onDismiss: nil)
+                .frame(width: 320)
+                .background(Color(red: 0.07, green: 0.07, blue: 0.10))
+
+            Rectangle()
+                .fill(Color.white.opacity(0.06))
+                .frame(width: 1)
+
+            terminalContent(showsSidebarButton: false)
+        }
+        .background(Color.black.ignoresSafeArea())
+    }
+
+    private func sidebarContent(
+        presentation: TmuxSidebarPresentation,
+        onDismiss: (() -> Void)?
+    ) -> some View {
+        TmuxSidebarView(
+            presentation: presentation,
+            onDismiss: onDismiss,
+            onDisconnect: onDisconnect,
+            onSwitchHost: onSwitchHost
+        )
+    }
+
+    private var keyBarCustomizeBinding: Binding<Bool> {
+        Binding(
+            get: { sessionHost.showKeyBarCustomize },
+            set: { sessionHost.showKeyBarCustomize = $0 }
+        )
+    }
+
+    private func terminalContent(showsSidebarButton: Bool) -> some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
             TerminalView(
-                onRendererReady: { r in
-                    renderer = SwiftTermRendererBox(r)
-
-                    guard !shellStarted else { return }
-
-                    r.initialLayoutHandler = { [weak r] cols, rows in
-                        guard let r else { return }
-                        startShellOnce(renderer: r)
-                    }
-
-                    let size = r.gridSize()
-                    if size.cols > 0 && size.rows > 0 {
-                        startShellOnce(renderer: r)
-                    }
+                onRendererReady: { renderer in
+                    sessionHost.handleRendererReady(renderer, coordinator: coordinator)
                 }
             )
             .ignoresSafeArea(.container, edges: .bottom)
@@ -74,28 +115,13 @@ struct TerminalScreen: View {
                 .padding(24)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
             }
-
         }
         .overlay(alignment: .topLeading) {
-            if coordinator.state == .shell && !showSidebar {
+            if showsSidebarButton && coordinator.state == .shell && !showSidebar {
                 sidebarButton
             }
         }
     }
-
-    private func startShellOnce(renderer r: SwiftTermRenderer) {
-        guard !shellStarted else { return }
-        shellStarted = true
-        coordinator.accessoryBar = accessoryBar
-        accessoryBar.onCustomizeTapped = {
-            showKeyBarCustomize = true
-        }
-        Task {
-            await coordinator.openShell(renderer: r)
-        }
-    }
-
-    // MARK: - Sidebar Button
 
     private var sidebarButton: some View {
         Button {
@@ -110,12 +136,4 @@ struct TerminalScreen: View {
         .padding(.leading, 12)
         .padding(.top, 8)
     }
-
-
-}
-
-@MainActor
-private final class SwiftTermRendererBox {
-    let value: SwiftTermRenderer
-    init(_ value: SwiftTermRenderer) { self.value = value }
 }

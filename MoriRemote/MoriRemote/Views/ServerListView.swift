@@ -12,11 +12,15 @@ struct ServerListView: View {
             ZStack {
                 Theme.bg.ignoresSafeArea()
 
-                if store.servers.isEmpty {
-                    emptyState
-                } else {
-                    serverList
-                }
+                ServerListContentView(
+                    servers: store.servers,
+                    selectedServerID: nil,
+                    connectingServerID: connectingServerID,
+                    onSelect: connectToServer,
+                    onAdd: { showingAddSheet = true },
+                    onEdit: { editingServer = $0 },
+                    onDelete: deleteServer
+                )
             }
             .navigationTitle("Servers")
             .navigationBarTitleDisplayMode(.large)
@@ -34,12 +38,12 @@ struct ServerListView: View {
             }
             .sheet(isPresented: $showingAddSheet) {
                 ServerFormView(mode: .add) { server in
-                    store.add(server)
+                    addServer(server)
                 }
             }
             .sheet(item: $editingServer) { server in
                 ServerFormView(mode: .edit(server)) { updated in
-                    store.update(updated)
+                    updateServer(updated)
                 }
             }
             .overlay(alignment: .bottom) {
@@ -56,9 +60,73 @@ struct ServerListView: View {
         .preferredColorScheme(.dark)
     }
 
-    // MARK: - Empty State
+    private var connectingServerID: Server.ID? {
+        coordinator.state == .connecting ? coordinator.activeServer?.id : nil
+    }
 
-    private var emptyState: some View {
+    private func connectToServer(_ server: Server) {
+        guard coordinator.state == .disconnected else { return }
+        Task { await coordinator.connect(server: server) }
+    }
+
+    private func addServer(_ server: Server) {
+        coordinator.lastError = nil
+        store.add(server)
+    }
+
+    private func updateServer(_ server: Server) {
+        if coordinator.activeServer?.id == server.id {
+            coordinator.lastError = nil
+        }
+        store.update(server)
+    }
+
+    private func deleteServer(_ server: Server) {
+        if coordinator.activeServer?.id == server.id {
+            coordinator.lastError = nil
+        }
+        store.delete(server)
+    }
+}
+
+struct ServerListContentView: View {
+    let servers: [Server]
+    let selectedServerID: Server.ID?
+    let connectingServerID: Server.ID?
+    let onSelect: (Server) -> Void
+    let onAdd: () -> Void
+    let onEdit: (Server) -> Void
+    let onDelete: (Server) -> Void
+
+    var body: some View {
+        if servers.isEmpty {
+            ServerListEmptyState(onAdd: onAdd)
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 10) {
+                    ForEach(servers) { server in
+                        ServerRow(
+                            server: server,
+                            isSelected: server.id == selectedServerID,
+                            isConnecting: server.id == connectingServerID,
+                            onTap: { onSelect(server) },
+                            onEdit: { onEdit(server) },
+                            onDelete: { onDelete(server) }
+                        )
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 32)
+            }
+        }
+    }
+}
+
+private struct ServerListEmptyState: View {
+    let onAdd: () -> Void
+
+    var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "server.rack")
                 .font(.system(size: 48))
@@ -72,9 +140,7 @@ struct ServerListView: View {
                 .font(.subheadline)
                 .foregroundStyle(Theme.textSecondary)
 
-            Button {
-                showingAddSheet = true
-            } label: {
+            Button(action: onAdd) {
                 Label("Add Server", systemImage: "plus")
             }
             .buttonStyle(Theme.PrimaryButtonStyle())
@@ -82,40 +148,11 @@ struct ServerListView: View {
             .padding(.top, 8)
         }
     }
-
-    // MARK: - Server List
-
-    private var serverList: some View {
-        ScrollView {
-            LazyVStack(spacing: 10) {
-                ForEach(store.servers) { server in
-                    ServerRow(
-                        server: server,
-                        isConnecting: coordinator.state == .connecting && coordinator.activeServer?.id == server.id,
-                        onTap: { connectToServer(server) },
-                        onEdit: { editingServer = server },
-                        onDelete: { store.delete(server) }
-                    )
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
-        }
-    }
-
-    // MARK: - Connect
-
-    private func connectToServer(_ server: Server) {
-        guard coordinator.state == .disconnected else { return }
-        Task { await coordinator.connect(server: server) }
-    }
 }
-
-// MARK: - Server Row
 
 private struct ServerRow: View {
     let server: Server
+    let isSelected: Bool
     let isConnecting: Bool
     let onTap: () -> Void
     let onEdit: () -> Void
@@ -128,7 +165,7 @@ private struct ServerRow: View {
             HStack(spacing: 14) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Theme.accent.opacity(0.12))
+                        .fill(iconBackground)
                         .frame(width: 42, height: 42)
 
                     if isConnecting {
@@ -160,22 +197,41 @@ private struct ServerRow: View {
                     .foregroundStyle(Theme.textTertiary)
             }
         }
-        .cardStyle()
+        .buttonStyle(.plain)
+        .padding(16)
+        .background(rowBackground, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.cardRadius)
+                .strokeBorder(rowBorder, lineWidth: 1)
+        )
         .contextMenu {
             Button { onEdit() } label: {
-                Label("Edit", systemImage: "pencil")
+                Label(String(localized: "Edit"), systemImage: "pencil")
             }
             Button(role: .destructive) { showDeleteConfirm = true } label: {
-                Label("Delete", systemImage: "trash")
+                Label(String(localized: "Delete"), systemImage: "trash")
             }
         }
-        .confirmationDialog("Delete \(server.displayName)?", isPresented: $showDeleteConfirm) {
-            Button("Delete", role: .destructive) { onDelete() }
+        .confirmationDialog(String(
+            format: String(localized: "Delete %@?"),
+            server.displayName
+        ), isPresented: $showDeleteConfirm) {
+            Button(String(localized: "Delete"), role: .destructive) { onDelete() }
         }
     }
-}
 
-// MARK: - Error Banner
+    private var iconBackground: Color {
+        isSelected ? Theme.accent.opacity(0.18) : Theme.accent.opacity(0.12)
+    }
+
+    private var rowBackground: Color {
+        isSelected ? Theme.accent.opacity(0.12) : Theme.cardBg
+    }
+
+    private var rowBorder: Color {
+        isSelected ? Theme.accent.opacity(0.35) : Theme.cardBorder
+    }
+}
 
 struct ErrorBanner: View {
     let message: String

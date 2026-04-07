@@ -1,6 +1,19 @@
 #if os(iOS)
 import SwiftUI
 
+enum TmuxSidebarPresentation {
+    case overlay
+    case persistent
+
+    var showsDismissButton: Bool {
+        self == .overlay
+    }
+
+    var dismissesAfterSelection: Bool {
+        self == .overlay
+    }
+}
+
 /// Slide-over sidebar showing server info and tmux sessions/windows.
 ///
 /// Layout matches the design mockup:
@@ -11,9 +24,10 @@ import SwiftUI
 struct TmuxSidebarView: View {
     @Environment(ShellCoordinator.self) private var coordinator
 
-    let onDismiss: () -> Void
+    let presentation: TmuxSidebarPresentation
+    let onDismiss: (() -> Void)?
     let onDisconnect: () -> Void
-    var onSwitchHost: (() -> Void)?
+    let onSwitchHost: () -> Void
 
     @State private var renameTarget: TmuxSession?
     @State private var renameText = ""
@@ -22,12 +36,10 @@ struct TmuxSidebarView: View {
         VStack(spacing: 0) {
             ServerCardView(
                 server: coordinator.activeServer,
-                onSwitchHost: { onSwitchHost?() },
-                onDisconnect: {
-                    onDismiss()
-                    onDisconnect()
-                },
-                onDismiss: onDismiss
+                showsDismissButton: presentation.showsDismissButton,
+                onSwitchHost: onSwitchHost,
+                onDisconnect: onDisconnect,
+                onDismiss: { onDismiss?() }
             )
 
             divider
@@ -47,18 +59,16 @@ struct TmuxSidebarView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(red: 0.07, green: 0.07, blue: 0.10))
-        .alert("Rename Session", isPresented: showRenameAlert) {
-            TextField("Session name", text: $renameText)
-            Button("Cancel", role: .cancel) { }
-            Button("Rename") {
+        .alert(String(localized: "Rename Session"), isPresented: showRenameAlert) {
+            TextField(String(localized: "Session name"), text: $renameText)
+            Button(String(localized: "Cancel"), role: .cancel) { }
+            Button(String(localized: "Rename")) {
                 if let session = renameTarget, !renameText.isEmpty {
                     coordinator.renameTmuxSession(session.name, to: renameText)
                 }
             }
         }
     }
-
-    // MARK: - Subviews
 
     private var divider: some View {
         Rectangle()
@@ -79,7 +89,7 @@ struct TmuxSidebarView: View {
                         isActive: isActive,
                         onSwitch: {
                             coordinator.switchTmuxSession(session.name)
-                            onDismiss()
+                            dismissIfNeeded()
                         },
                         onRename: {
                             renameTarget = session
@@ -101,7 +111,7 @@ struct TmuxSidebarView: View {
                                     session: session.name,
                                     windowIndex: window.index
                                 )
-                                onDismiss()
+                                dismissIfNeeded()
                             },
                             onNewAfter: {
                                 coordinator.newTmuxWindowAfter(
@@ -131,11 +141,11 @@ struct TmuxSidebarView: View {
                 .font(.system(size: 28))
                 .foregroundStyle(Color.white.opacity(0.1))
 
-            Text("No tmux sessions")
+            Text(String(localized: "No tmux sessions"))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.25))
 
-            Text("Start tmux to manage\nwindows from here.")
+            Text(String(localized: "Start tmux to manage\nwindows from here."))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.white.opacity(0.15))
                 .multilineTextAlignment(.center)
@@ -146,7 +156,7 @@ struct TmuxSidebarView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "plus")
                         .font(.system(size: 11))
-                    Text("New Session")
+                    Text(String(localized: "New Session"))
                         .font(.system(size: 13, weight: .semibold))
                 }
                 .foregroundStyle(Theme.accent)
@@ -165,13 +175,16 @@ struct TmuxSidebarView: View {
         .padding(.horizontal, 24)
     }
 
-    // MARK: - Rename Alert Binding
-
     private var showRenameAlert: Binding<Bool> {
         Binding(
             get: { renameTarget != nil },
             set: { if !$0 { renameTarget = nil } }
         )
+    }
+
+    private func dismissIfNeeded() {
+        guard presentation.dismissesAfterSelection else { return }
+        onDismiss?()
     }
 }
 #endif

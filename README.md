@@ -15,6 +15,7 @@ Instead of managing loose terminal tabs, Mori treats your git repositories as fi
 - **Project-first navigation** — switch between repos and branches, not anonymous tabs
 - **Local + remote projects** — add local folders or SSH-hosted repositories from one Add flow
 - **Persistent sessions** — close the app, reopen later, everything is still running in tmux
+- **Remote companion on iPhone and iPad** — MoriRemote gives you adaptive SSH/tmux access away from your Mac
 - **Native macOS experience** — sidebar, command palette, notifications, keyboard shortcuts
 - **GPU-rendered terminal** — libghostty (Ghostty's rendering engine) with Metal acceleration
 - **Worktree-aware** — multiple branches of the same repo run side-by-side with independent sessions

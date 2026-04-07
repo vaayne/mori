@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- **MoriRemote**: add adaptive iPad layouts with split-view server browsing while disconnected and a persistent two-pane workspace while connected
+
 ### ♻️ Changes
 
 - Remove legacy workflow-status and sidebar-mode code paths after the unified sidebar redesign, including the `mori status` CLI command and manual sidebar status controls
