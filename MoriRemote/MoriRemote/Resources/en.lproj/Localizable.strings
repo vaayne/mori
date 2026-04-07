@@ -12,6 +12,7 @@
 "Connected" = "Connected";
 "Connecting..." = "Connecting...";
 "Connecting…" = "Connecting…";
+"Connecting to Server" = "Connecting to Server";
 "Connection" = "Connection";
 "CONNECTION" = "CONNECTION";
 "Connection Failed" = "Connection Failed";
@@ -30,6 +31,7 @@
 "main" = "main";
 "Mori Remote" = "Mori Remote";
 "MoriRemote is opening the SSH connection. You can keep browsing servers while this attempt finishes." = "MoriRemote is opening the SSH connection. You can keep browsing servers while this attempt finishes.";
+"Checking credentials and opening the SSH session. You can keep browsing servers while this attempt finishes." = "Checking credentials and opening the SSH session. You can keep browsing servers while this attempt finishes.";
 "New Window After" = "New Window After";
 "My Server" = "My Server";
 "New Session" = "New Session";
@@ -40,6 +42,7 @@
 "Opening shell…" = "Opening shell…";
 "password" = "password";
 "Password" = "Password";
+"Preparing Terminal" = "Preparing Terminal";
 "Port" = "Port";
 "Port must be a valid positive number." = "Port must be a valid positive number.";
 "Ready to connect" = "Ready to connect";
@@ -54,13 +57,16 @@
 "Send" = "Send";
 "Servers" = "Servers";
 "Session" = "Session";
+"SSH Connected" = "SSH Connected";
 "Session Name" = "Session Name";
 "Session name" = "Session name";
 "Session name cannot be empty." = "Session name cannot be empty.";
 "SSH connection is not available." = "SSH connection is not available.";
 "SSH couldn’t connect with the current settings." = "SSH couldn’t connect with the current settings.";
 "Start tmux to manage\nwindows from here." = "Start tmux to manage\nwindows from here.";
+"Status" = "Status";
 "Switch Host" = "Switch Host";
+"Opening the interactive shell and checking tmux windows." = "Opening the interactive shell and checking tmux windows.";
 "Terminal renderer is not ready yet." = "Terminal renderer is not ready yet.";
 "Window" = "Window";
 "TMUX SESSION" = "TMUX SESSION";

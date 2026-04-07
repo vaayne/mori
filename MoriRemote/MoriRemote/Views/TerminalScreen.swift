@@ -103,21 +103,10 @@ struct TerminalScreen: View {
             .ignoresSafeArea(.container, edges: .bottom)
 
             if coordinator.state != .shell {
-                VStack(spacing: 12) {
-                    ProgressView()
-                        .tint(Theme.accent)
-                        .scaleEffect(1.05)
-
-                    Text(String(localized: "Opening shell…"))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Theme.textSecondary)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 18)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                TerminalPreparingOverlay(
+                    serverName: serverName,
+                    subtitle: coordinator.activeServer?.subtitle ?? "",
+                    sessionName: coordinator.activeServer?.defaultSession ?? ""
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
@@ -160,6 +149,111 @@ struct TerminalScreen: View {
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+        )
+    }
+}
+
+private struct TerminalPreparingOverlay: View {
+    let serverName: String
+    let subtitle: String
+    let sessionName: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 14) {
+                RoundedRectangle(cornerRadius: Theme.cardRadius)
+                    .fill(Theme.accentSoft)
+                    .frame(width: 42, height: 42)
+                    .overlay {
+                        ProgressView()
+                            .tint(Theme.accent)
+                    }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    TerminalStateBadge(title: String(localized: "SSH Connected"))
+
+                    Text(String(localized: "Preparing Terminal"))
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+
+                    Text(serverName)
+                        .font(Theme.rowTitleFont)
+                        .foregroundStyle(Theme.textSecondary)
+
+                    if !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(Theme.monoDetailFont)
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                }
+            }
+
+            VStack(spacing: 0) {
+                terminalMetadataRow(label: String(localized: "Session"), value: sessionName, monospace: true)
+                Rectangle()
+                    .fill(Theme.divider)
+                    .frame(height: 1)
+                terminalMetadataRow(label: String(localized: "Status"), value: String(localized: "Opening shell…"))
+            }
+            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.cardRadius)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            )
+
+            Text(String(localized: "Opening the interactive shell and checking tmux windows."))
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(20)
+        .frame(maxWidth: 360, alignment: .leading)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
+        .padding(.horizontal, 24)
+    }
+
+    private func terminalMetadataRow(label: String, value: String, monospace: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.textSecondary)
+
+            Spacer(minLength: 8)
+
+            Text(value)
+                .font(monospace ? Theme.monoDetailFont : .system(size: 13))
+                .foregroundStyle(Theme.textPrimary)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+}
+
+private struct TerminalStateBadge: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(Theme.accent)
+                .frame(width: 6, height: 6)
+
+            Text(title)
+                .font(Theme.shortcutFont.weight(.semibold))
+                .foregroundStyle(Theme.accent)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 6))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(Theme.accentBorder, lineWidth: 1)
         )
     }
 }

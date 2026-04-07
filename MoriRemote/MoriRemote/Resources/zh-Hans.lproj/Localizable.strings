@@ -12,6 +12,7 @@
 "Connected" = "已连接";
 "Connecting..." = "连接中...";
 "Connecting…" = "正在连接…";
+"Connecting to Server" = "正在连接服务器";
 "Connection" = "连接";
 "CONNECTION" = "连接信息";
 "Connection Failed" = "连接失败";
@@ -30,6 +31,7 @@
 "main" = "main";
 "Mori Remote" = "Mori 远程";
 "MoriRemote is opening the SSH connection. You can keep browsing servers while this attempt finishes." = "MoriRemote 正在建立 SSH 连接。等待本次尝试完成期间，你仍然可以继续浏览其他服务器。";
+"Checking credentials and opening the SSH session. You can keep browsing servers while this attempt finishes." = "正在检查凭据并建立 SSH 会话。等待本次尝试完成期间，你仍然可以继续浏览其他服务器。";
 "New Window After" = "在后方新建窗口";
 "My Server" = "我的服务器";
 "New Session" = "新建会话";
@@ -40,6 +42,7 @@
 "Opening shell…" = "正在打开 shell…";
 "password" = "密码";
 "Password" = "密码";
+"Preparing Terminal" = "正在准备终端";
 "Port" = "端口";
 "Port must be a valid positive number." = "端口必须是有效的正整数。";
 "Ready to connect" = "可以连接";
@@ -54,13 +57,16 @@
 "Send" = "发送";
 "Servers" = "服务器";
 "Session" = "会话";
+"SSH Connected" = "SSH 已连接";
 "Session Name" = "会话名称";
 "Session name" = "会话名称";
 "Session name cannot be empty." = "会话名称不能为空。";
 "SSH connection is not available." = "SSH 连接不可用。";
 "SSH couldn’t connect with the current settings." = "SSH 无法使用当前设置建立连接。";
 "Start tmux to manage\nwindows from here." = "启动 tmux 后，即可在这里管理\n窗口。";
+"Status" = "状态";
 "Switch Host" = "切换主机";
+"Opening the interactive shell and checking tmux windows." = "正在打开交互式 shell，并检查 tmux 窗口。";
 "Terminal renderer is not ready yet." = "终端渲染器尚未就绪。";
 "Window" = "窗口";
 "TMUX SESSION" = "TMUX 会话";

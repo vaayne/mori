@@ -449,13 +449,25 @@ private struct ServerBrowserConnectingDetail: View {
                 Text(String(localized: "Connection"))
                     .moriSectionHeaderStyle()
 
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        ProgressView()
-                            .tint(Theme.accent)
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(alignment: .top, spacing: 14) {
+                        RoundedRectangle(cornerRadius: Theme.cardRadius)
+                            .fill(Theme.accentSoft)
+                            .frame(width: 42, height: 42)
+                            .overlay {
+                                ProgressView()
+                                    .tint(Theme.accent)
+                            }
 
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(String(localized: "Connecting…"))
+                        VStack(alignment: .leading, spacing: 6) {
+                            WorkflowStateBadge(
+                                title: String(localized: "Connecting…"),
+                                color: Theme.accent,
+                                background: Theme.accentSoft,
+                                border: Theme.accentBorder
+                            )
+
+                            Text(String(localized: "Connecting to Server"))
                                 .font(.system(size: 22, weight: .semibold))
                                 .foregroundStyle(Theme.textPrimary)
 
@@ -465,11 +477,9 @@ private struct ServerBrowserConnectingDetail: View {
                         }
                     }
 
-                    Text(server.subtitle)
-                        .font(Theme.monoDetailFont)
-                        .foregroundStyle(Theme.textSecondary)
+                    WorkflowMetadataBlock(server: server)
 
-                    Text(String(localized: "MoriRemote is opening the SSH connection. You can keep browsing servers while this attempt finishes."))
+                    Text(String(localized: "Checking credentials and opening the SSH session. You can keep browsing servers while this attempt finishes."))
                         .font(.system(size: 14))
                         .foregroundStyle(Theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -489,14 +499,36 @@ private struct ServerBrowserFailureDetail: View {
     var body: some View {
         ServerBrowserDetailLayout {
             VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(String(localized: "Connection Failed"))
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(Theme.textPrimary)
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(alignment: .top, spacing: 14) {
+                        RoundedRectangle(cornerRadius: Theme.cardRadius)
+                            .fill(Theme.warning.opacity(0.12))
+                            .frame(width: 42, height: 42)
+                            .overlay {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(Theme.warning)
+                            }
 
-                    Text(server.subtitle)
-                        .font(Theme.monoDetailFont)
-                        .foregroundStyle(Theme.textSecondary)
+                        VStack(alignment: .leading, spacing: 6) {
+                            WorkflowStateBadge(
+                                title: String(localized: "Connection Failed"),
+                                color: Theme.warning,
+                                background: Theme.warning.opacity(0.12),
+                                border: Theme.warning.opacity(0.24)
+                            )
+
+                            Text(server.displayName)
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundStyle(Theme.textPrimary)
+
+                            Text(server.subtitle)
+                                .font(Theme.monoDetailFont)
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                    }
+
+                    WorkflowMetadataBlock(server: server)
                 }
                 .cardStyle(padding: 20)
 
@@ -511,10 +543,10 @@ private struct ServerBrowserFailureDetail: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(16)
-                .background(Color(red: 0.18, green: 0.14, blue: 0.08), in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+                .background(Theme.mutedSurface, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
                 .overlay(
                     RoundedRectangle(cornerRadius: Theme.cardRadius)
-                        .strokeBorder(Theme.warning.opacity(0.24), lineWidth: 1)
+                        .strokeBorder(Theme.cardBorder, lineWidth: 1)
                 )
 
                 HStack(spacing: 12) {
@@ -530,6 +562,68 @@ private struct ServerBrowserFailureDetail: View {
                 }
             }
         }
+    }
+}
+
+private struct WorkflowMetadataBlock: View {
+    let server: Server
+
+    var body: some View {
+        VStack(spacing: 0) {
+            metadataRow(label: String(localized: "Host"), value: server.host)
+            metadataDivider
+            metadataRow(label: String(localized: "Username"), value: server.username, monospace: true)
+            metadataDivider
+            metadataRow(label: String(localized: "Session"), value: server.defaultSession, monospace: true)
+        }
+        .background(Theme.mutedSurface, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.cardRadius)
+                .strokeBorder(Theme.cardBorder, lineWidth: 1)
+        )
+    }
+
+    private var metadataDivider: some View {
+        Rectangle()
+            .fill(Theme.divider)
+            .frame(height: 1)
+    }
+
+    private func metadataRow(label: String, value: String, monospace: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.textSecondary)
+
+            Spacer(minLength: 10)
+
+            Text(value)
+                .font(monospace ? Theme.monoDetailFont : .system(size: 13))
+                .foregroundStyle(Theme.textPrimary)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+}
+
+private struct WorkflowStateBadge: View {
+    let title: String
+    let color: Color
+    let background: Color
+    let border: Color
+
+    var body: some View {
+        Text(title)
+            .font(Theme.shortcutFont.weight(.semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(background, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(border, lineWidth: 1)
+            )
     }
 }
 
