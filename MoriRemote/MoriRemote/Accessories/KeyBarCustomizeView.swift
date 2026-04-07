@@ -2,24 +2,34 @@
 import SwiftUI
 
 /// Bottom sheet for customizing the keyboard accessory key bar.
-/// Users toggle keys on/off. Changes apply live to the key bar.
 struct KeyBarCustomizeView: View {
-    /// Direct reference to the UIKit key bar — mutations apply immediately.
     let keyBar: KeyBarView
     @Environment(\.dismiss) private var dismiss
 
-    /// Local copy of layout for SwiftUI reactivity.
     @State private var layout: [KeyAction] = []
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Active Keys") {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(String(localized: "Customize Keys"))
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(Theme.textPrimary)
+
+                        Text(String(localized: "Pick the keys you want in the terminal accessory bar. Reorder active keys to keep your most-used actions close."))
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                    .listRowBackground(Color.clear)
+                }
+
+                Section(String(localized: "Active Keys")) {
                     let activeKeys = layout.filter { $0 != .divider }
                     if activeKeys.isEmpty {
-                        Text("No keys added")
-                            .foregroundStyle(.secondary)
-                            .font(.subheadline)
+                        Text(String(localized: "No keys added"))
+                            .foregroundStyle(Theme.textSecondary)
+                            .font(.system(size: 13))
                     } else {
                         ForEach(activeKeys, id: \.self) { action in
                             activeKeyRow(action)
@@ -38,7 +48,7 @@ struct KeyBarCustomizeView: View {
                 }
 
                 ForEach(KeyAction.Category.allCases, id: \.self) { category in
-                    Section(category.rawValue) {
+                    Section(category.localizedTitle) {
                         let actions = KeyAction.actions(for: category)
                         ForEach(actions, id: \.self) { action in
                             keyToggleRow(action)
@@ -46,20 +56,23 @@ struct KeyBarCustomizeView: View {
                     }
                 }
             }
-            .navigationTitle("Customize Keys")
+            .scrollContentBackground(.hidden)
+            .background(Theme.bg)
+            .navigationTitle(String(localized: "Customize Keys"))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     EditButton()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Reset") {
+                    Button(String(localized: "Reset")) {
                         applyLayout(KeyAction.defaultLayout)
                     }
                     .foregroundStyle(Theme.destructive)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button(String(localized: "Done")) { dismiss() }
                         .fontWeight(.semibold)
                 }
             }
@@ -76,25 +89,19 @@ struct KeyBarCustomizeView: View {
         KeyBarLayout.save(newLayout)
     }
 
-    // MARK: - Active Key Row
-
     private func activeKeyRow(_ action: KeyAction) -> some View {
-        HStack {
-            Text(action.label)
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .foregroundStyle(keyColor(action))
-                .frame(width: 48, height: 28)
-                .background(keyBackground(action), in: RoundedRectangle(cornerRadius: 5))
+        HStack(spacing: 12) {
+            keyPreview(action, width: 52, height: 28)
 
-            Text(actionDescription(action))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            Text(action.localizedDescription)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textSecondary)
 
             Spacer()
         }
+        .padding(.vertical, 2)
+        .listRowBackground(Theme.mutedSurface)
     }
-
-    // MARK: - Toggle Row
 
     private func keyToggleRow(_ action: KeyAction) -> some View {
         let isInBar = layout.contains(action)
@@ -107,65 +114,93 @@ struct KeyBarCustomizeView: View {
             }
             applyLayout(newLayout)
         } label: {
-            HStack {
-                Text(action.label)
-                    .font(.system(size: 14, weight: .medium, design: .monospaced))
-                    .foregroundStyle(keyColor(action))
-                    .frame(width: 60, height: 30)
-                    .background(keyBackground(action), in: RoundedRectangle(cornerRadius: 6))
+            HStack(spacing: 12) {
+                keyPreview(action, width: 62, height: 30)
 
-                Text(actionDescription(action))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                Text(action.localizedDescription)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textSecondary)
 
                 Spacer()
 
                 Image(systemName: isInBar ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isInBar ? Theme.accent : .secondary)
+                    .foregroundStyle(isInBar ? Theme.accent : Theme.textTertiary)
             }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .listRowBackground(Theme.mutedSurface)
     }
 
-    // MARK: - Helpers
+    private func keyPreview(_ action: KeyAction, width: CGFloat, height: CGFloat) -> some View {
+        Text(action.label)
+            .font(.system(size: action.isSpecial ? 10 : 11, weight: .semibold, design: .monospaced))
+            .foregroundStyle(keyColor(action))
+            .frame(width: width, height: height)
+            .background(keyBackground(action), in: RoundedRectangle(cornerRadius: 7))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7)
+                    .strokeBorder(keyBorder(action), lineWidth: 1)
+            )
+    }
 
     private func keyColor(_ action: KeyAction) -> Color {
-        if action.isTmux { return Color(Theme.accent) }
-        if action.isSpecial { return .white.opacity(0.55) }
-        return .white
+        if action.isTmux { return Theme.accent }
+        if action.isSpecial { return Theme.textSecondary }
+        return Theme.textPrimary
     }
 
     private func keyBackground(_ action: KeyAction) -> Color {
-        if action.isTmux { return Color(Theme.accent).opacity(0.1) }
-        if action.isSpecial { return Color(red: 0.118, green: 0.118, blue: 0.149) }
-        return Color(red: 0.165, green: 0.165, blue: 0.196)
+        if action.isTmux { return Theme.accentSoft }
+        if action.isSpecial { return Theme.elevatedBg }
+        return Theme.mutedSurface
     }
 
-    private func actionDescription(_ action: KeyAction) -> String {
-        switch action {
-        case .esc:        return "Escape key"
-        case .ctrl:       return "Control modifier (sticky)"
-        case .alt:        return "Alt/Meta modifier"
-        case .tab:        return "Tab key"
-        case .tmuxPrefix:    return "Tmux prefix (Ctrl+B)"
-        case .tmuxNewTab:    return "New tab (⌘T)"
-        case .tmuxClosePane: return "Close pane (⌘W)"
-        case .tmuxNextTab:   return "Next tab (⌘⇧])"
-        case .tmuxPrevTab:   return "Previous tab (⌘⇧[)"
-        case .tmuxSplitH:    return "Split right (⌘D)"
-        case .tmuxSplitV:    return "Split down (⌘⇧D)"
-        case .tmuxNextPane:  return "Next pane (⌘])"
-        case .tmuxPrevPane:  return "Previous pane (⌘[)"
-        case .tmuxZoom:      return "Toggle zoom (⌘⇧↩)"
-        case .tmuxDetach:    return "Detach session"
-        case .left:       return "Arrow left (auto-repeat)"
-        case .down:       return "Arrow down (auto-repeat)"
-        case .up:         return "Arrow up (auto-repeat)"
-        case .right:      return "Arrow right (auto-repeat)"
-        case .home:       return "Home key"
-        case .end:        return "End key"
-        case .pageUp:     return "Page up"
-        case .pageDown:   return "Page down"
-        default:          return "Send '\(action.label)'"
+    private func keyBorder(_ action: KeyAction) -> Color {
+        if action.isTmux { return Theme.accentBorder }
+        return Theme.cardBorder
+    }
+}
+
+private extension KeyAction.Category {
+    var localizedTitle: LocalizedStringKey {
+        switch self {
+        case .modifiers: return "Modifiers"
+        case .symbols: return "Symbols"
+        case .navigation: return "Navigation"
+        case .functionKeys: return "Function Keys"
+        case .tmux: return "Tmux Shortcuts"
+        }
+    }
+}
+
+private extension KeyAction {
+    var localizedDescription: String {
+        switch self {
+        case .esc:        return String(localized: "Escape key")
+        case .ctrl:       return String(localized: "Control modifier (sticky)")
+        case .alt:        return String(localized: "Alt/Meta modifier")
+        case .tab:        return String(localized: "Tab key")
+        case .tmuxPrefix:    return String(localized: "Tmux prefix (Ctrl+B)")
+        case .tmuxNewTab:    return String(localized: "New tab (⌘T)")
+        case .tmuxClosePane: return String(localized: "Close pane (⌘W)")
+        case .tmuxNextTab:   return String(localized: "Next tab (⌘⇧])")
+        case .tmuxPrevTab:   return String(localized: "Previous tab (⌘⇧[)")
+        case .tmuxSplitH:    return String(localized: "Split right (⌘D)")
+        case .tmuxSplitV:    return String(localized: "Split down (⌘⇧D)")
+        case .tmuxNextPane:  return String(localized: "Next pane (⌘])")
+        case .tmuxPrevPane:  return String(localized: "Previous pane (⌘[)")
+        case .tmuxZoom:      return String(localized: "Toggle zoom (⌘⇧↩)")
+        case .tmuxDetach:    return String(localized: "Detach session")
+        case .left:       return String(localized: "Arrow left (auto-repeat)")
+        case .down:       return String(localized: "Arrow down (auto-repeat)")
+        case .up:         return String(localized: "Arrow up (auto-repeat)")
+        case .right:      return String(localized: "Arrow right (auto-repeat)")
+        case .home:       return String(localized: "Home key")
+        case .end:        return String(localized: "End key")
+        case .pageUp:     return String(localized: "Page up")
+        case .pageDown:   return String(localized: "Page down")
+        default:          return String(localized: "Send key") + " ‘\(label)’"
         }
     }
 }

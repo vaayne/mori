@@ -3,8 +3,7 @@ import SwiftTerm
 import UIKit
 
 /// Single-row input accessory view for the terminal keyboard.
-///
-/// Contains the `KeyBarView` — customizable quick keys including the tmux menu button.
+/// Contains the compact Mori-style quick key bar.
 @MainActor
 final class TerminalAccessoryBar: UIInputView, UIInputViewAudioFeedback {
 
@@ -20,12 +19,10 @@ final class TerminalAccessoryBar: UIInputView, UIInputViewAudioFeedback {
     /// Called when the user taps the gear button to customize the key bar.
     var onCustomizeTapped: (() -> Void)?
 
-    // UIInputViewAudioFeedback
     var enableInputClicksWhenVisible: Bool { true }
 
-    private let barBg = UIColor(red: 0.102, green: 0.102, blue: 0.125, alpha: 1) // #1a1a20
-
-    // MARK: - Init
+    private let barBg = UIColor(red: 0.08, green: 0.09, blue: 0.11, alpha: 1)
+    private let topBorder = UIView()
 
     init() {
         super.init(frame: CGRect(x: 0, y: 0, width: 0, height: 45), inputViewStyle: .keyboard)
@@ -38,8 +35,7 @@ final class TerminalAccessoryBar: UIInputView, UIInputViewAudioFeedback {
     required init?(coder: NSCoder) { fatalError() }
 
     private func setup() {
-        let topBorder = UIView()
-        topBorder.backgroundColor = UIColor.white.withAlphaComponent(0.06)
+        topBorder.backgroundColor = UIColor.white.withAlphaComponent(0.08)
         topBorder.translatesAutoresizingMaskIntoConstraints = false
 
         keyBar.translatesAutoresizingMaskIntoConstraints = false
@@ -68,10 +64,8 @@ final class TerminalAccessoryBar: UIInputView, UIInputViewAudioFeedback {
         ])
     }
 
-    // MARK: - Tmux State
-
     func updateTmux(session: TmuxSession?, windows: [TmuxWindow]) {
-        // Kept for ShellCoordinator compatibility — no-op now that the pill is removed.
+        // Kept for ShellCoordinator compatibility.
     }
 
     override var intrinsicContentSize: CGSize {
@@ -82,26 +76,20 @@ final class TerminalAccessoryBar: UIInputView, UIInputViewAudioFeedback {
 // MARK: - Tmux Command
 
 enum TmuxCommand: Sendable {
-    // Window/tab management
     case selectWindow(Int)
     case newWindow
     case nextWindow
     case prevWindow
-
-    // Pane management
     case splitRight
     case splitDown
     case nextPane
     case prevPane
     case toggleZoom
     case closePane
-
-    // Session
     case showSessionPicker
     case switchSession(String)
     case detach
 
-    /// The real tmux CLI command to execute via SSH exec channel.
     func shellCommand(session: String? = nil) -> String {
         switch self {
         case .selectWindow(let idx): return "tmux select-window -t :\(idx)"

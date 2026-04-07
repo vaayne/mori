@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **MoriRemote**: add adaptive iPad layouts with split-view server browsing while disconnected and a persistent two-pane workspace while connected
 - **MoriRemote**: polish iPhone and iPad UI to follow the shared Mac-first `DESIGN.md` language with denser server rows, flatter tmux sidebars, compact terminal chrome, and normalized dark semantic styling
+- **MoriRemote**: restyle the terminal accessory bar and key customization sheet with compact Mori tokens, semantic accent usage, and localized tmux actions
 
 ### ♻️ Changes
 
