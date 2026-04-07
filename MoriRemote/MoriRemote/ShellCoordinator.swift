@@ -102,8 +102,9 @@ final class ShellCoordinator {
     }
 
     func disconnect() async {
-        invalidateConnectionGeneration()
+        let generation = beginConnectionGeneration()
         await resetConnection()
+        guard isCurrentConnection(generation) else { return }
         state = .disconnected
     }
 
@@ -622,10 +623,6 @@ final class ShellCoordinator {
     private func beginConnectionGeneration() -> UInt64 {
         connectionGeneration &+= 1
         return connectionGeneration
-    }
-
-    private func invalidateConnectionGeneration() {
-        connectionGeneration &+= 1
     }
 
     private func isCurrentConnection(_ generation: UInt64) -> Bool {

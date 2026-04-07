@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MoriRemote**: move compact terminal navigation into the accessory row by adding a back control beside tmux, keeping the terminal viewport free of extra chrome
 - **MoriRemote**: harden terminal session lifecycle handling so disconnects, host switches, stale shell callbacks, and accessory-bar reuse no longer race into broken shell/tmux state
 - **MoriRemote**: defer accessory-bar navigation and tmux/customization presentation until after the keyboard responder cycle, preventing crashes when tapping Back or tmux actions
+- **MoriRemote**: preserve reconnect reliability after Back/disconnect by preventing stale disconnect tasks from overwriting a newer SSH connection attempt
 
 ### ♻️ Changes
 
