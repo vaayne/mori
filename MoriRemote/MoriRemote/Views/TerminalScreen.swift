@@ -76,28 +76,31 @@ struct TerminalScreen: View {
     }
 
     private var regularWorkspace: some View {
-        ZStack(alignment: .topLeading) {
-            HStack(spacing: 0) {
-                if showRegularSidebar {
-                    sidebarContent(
-                        presentation: .persistent,
-                        onDismiss: { showRegularSidebar = false }
-                    )
-                    .frame(width: 304)
-                    .background(Theme.sidebarBg)
+        HStack(spacing: 0) {
+            if showRegularSidebar {
+                sidebarContent(
+                    presentation: .persistent,
+                    onDismiss: { showRegularSidebar = false }
+                )
+                .frame(width: 304)
+                .background(Theme.sidebarBg)
 
-                    Rectangle()
-                        .fill(Theme.divider)
-                        .frame(width: 1)
-                }
-
-                terminalContent(showsCompactChrome: false)
+                Rectangle()
+                    .fill(Theme.divider)
+                    .frame(width: 1)
             }
 
+            terminalContent(showsCompactChrome: false)
+        }
+        .safeAreaInset(edge: .top, alignment: .leading) {
             if coordinator.state == .shell && !showRegularSidebar {
-                regularSidebarRevealButton
-                    .padding(.top, 12)
-                    .padding(.leading, 12)
+                HStack {
+                    regularSidebarRevealButton
+                    Spacer(minLength: 0)
+                }
+                .padding(.top, 6)
+                .padding(.leading, 12)
+                .padding(.trailing, 12)
             }
         }
         .background(Theme.terminalBg.ignoresSafeArea())
@@ -130,7 +133,7 @@ struct TerminalScreen: View {
     }
 
     private func terminalContent(showsCompactChrome: Bool) -> some View {
-        ZStack(alignment: .topLeading) {
+        ZStack {
             Theme.terminalBg.ignoresSafeArea()
 
             TerminalView(
@@ -148,11 +151,16 @@ struct TerminalScreen: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
-
+        }
+        .safeAreaInset(edge: .top, alignment: .leading) {
             if showsCompactChrome && coordinator.state == .shell {
-                compactTopBar
-                    .padding(.top, 8)
-                    .padding(.leading, 12)
+                HStack {
+                    compactTopBar
+                    Spacer(minLength: 0)
+                }
+                .padding(.top, 4)
+                .padding(.leading, 12)
+                .padding(.trailing, 12)
             }
         }
     }

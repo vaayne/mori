@@ -32,7 +32,7 @@ struct TmuxSidebarView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     ServerCardView(
                         server: coordinator.activeServer,
-                        showsDismissButton: presentation.showsDismissButton,
+                        showsDismissButton: onDismiss != nil,
                         onSwitchHost: onSwitchHost,
                         onDisconnect: onDisconnect,
                         onDismiss: { onDismiss?() }

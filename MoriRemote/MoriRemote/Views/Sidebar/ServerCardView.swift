@@ -46,16 +46,20 @@ struct ServerCardView: View {
             Spacer(minLength: 8)
 
             if showsDismissButton {
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 28, height: 28)
-                        .background(Theme.mutedSurface, in: RoundedRectangle(cornerRadius: 7))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 7)
-                                .strokeBorder(Theme.cardBorder, lineWidth: 1)
-                        )
+                HStack(spacing: 8) {
+                    connectionBadge
+
+                    Button(action: onDismiss) {
+                        Image(systemName: "sidebar.left")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.textSecondary)
+                            .frame(width: 28, height: 28)
+                            .background(Theme.mutedSurface, in: RoundedRectangle(cornerRadius: 7))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 7)
+                                    .strokeBorder(Theme.cardBorder, lineWidth: 1)
+                            )
+                    }
                 }
             } else {
                 connectionBadge
