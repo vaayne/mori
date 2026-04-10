@@ -684,7 +684,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             initialAgentHooks: AgentHookModel(
                 claudeEnabled: AgentHookConfigurator.isClaudeHookInstalled(),
                 codexEnabled: AgentHookConfigurator.isCodexHookInstalled(),
-                piEnabled: AgentHookConfigurator.isPiExtensionInstalled()
+                piEnabled: AgentHookConfigurator.isPiExtensionInstalled(),
+                droidEnabled: AgentHookConfigurator.isDroidHookInstalled()
             ),
             initialProxy: ProxySettingsApplicator.load(),
             onChanged: { [weak self] newModel in
@@ -1568,6 +1569,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             AgentHookConfigurator.installPiExtension()
         } else {
             AgentHookConfigurator.uninstallPiExtension()
+        }
+        if model.droidEnabled {
+            AgentHookConfigurator.installDroidHook()
+        } else {
+            AgentHookConfigurator.uninstallDroidHook()
         }
     }
 

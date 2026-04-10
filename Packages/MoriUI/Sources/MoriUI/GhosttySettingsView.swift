@@ -120,11 +120,13 @@ public struct AgentHookModel: Equatable {
     public var claudeEnabled: Bool
     public var codexEnabled: Bool
     public var piEnabled: Bool
+    public var droidEnabled: Bool
 
-    public init(claudeEnabled: Bool = false, codexEnabled: Bool = false, piEnabled: Bool = false) {
+    public init(claudeEnabled: Bool = false, codexEnabled: Bool = false, piEnabled: Bool = false, droidEnabled: Bool = false) {
         self.claudeEnabled = claudeEnabled
         self.codexEnabled = codexEnabled
         self.piEnabled = piEnabled
+        self.droidEnabled = droidEnabled
     }
 }
 
@@ -1381,6 +1383,13 @@ private struct AgentHookSettingsContent: View {
             icon: "sparkle",
             description: .localized("Registers an extension in Pi's settings.json for agent start, end, and tool execution events."),
             isEnabled: $model.piEnabled
+        )
+
+        agentCard(
+            name: .localized("Droid"),
+            icon: "cpu",
+            description: .localized("Adds hooks to ~/.factory/settings.json for prompt submit, tool use, stop, and notification events."),
+            isEnabled: $model.droidEnabled
         )
     }
 

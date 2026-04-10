@@ -37,6 +37,8 @@
 "Default" = "默认";
 "Directional Pane Nav" = "方向键面板导航";
 "Distribute extra padding evenly around the terminal content to center it within the window." = "在终端内容周围均匀分配额外边距，使其在窗口中居中。";
+"Droid" = "Droid";
+"Adds hooks to ~/.factory/settings.json for prompt submit, tool use, stop, and notification events." = "向 ~/.factory/settings.json 添加钩子，用于提示提交、工具使用、停止和通知事件。";
 "Equalize Panes" = "均分面板";
 "Error" = "错误";
 "Filter fonts…" = "筛选字体…";
