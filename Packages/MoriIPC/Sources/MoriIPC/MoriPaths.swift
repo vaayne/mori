@@ -75,32 +75,64 @@ public enum MoriPaths {
     // MARK: - Private Helpers
     
     /// Detects if running as a bundled macOS app vs a development build.
-    /// 
-    /// Bundled app characteristics:
-    /// - Bundle path ends with `.app`
-    /// - Not located in `.build` or `DerivedData` directories
     ///
-    /// Dev build characteristics:
+    /// For the main app executable, `Bundle.main.bundlePath` returns the `.app` bundle root
+    /// (e.g. `/Applications/Mori.app`). But for secondary executables inside the bundle
+    /// (e.g. the `mori` CLI at `Contents/MacOS/bin/mori`), `Bundle.main.bundlePath`
+    /// returns the directory containing that executable — which does NOT end with `.app`.
+    ///
+    /// We therefore check the executable's path, walking up to find a `.app` ancestor,
+    /// which correctly identifies both the main app and any CLI tools shipped inside it.
+    ///
+    /// Dev build characteristics (returned as `false`):
     /// - Running via `swift run` (in `.build` directory)
     /// - Running from `.build-cli` directory
     /// - Running from Xcode `DerivedData`
     private static var isBundledApp: Bool {
+        // Try Bundle.main first — works for the main app executable
         let bundlePath = Bundle.main.bundlePath
-        
-        // Must end with .app to be considered a bundled app
-        guard bundlePath.hasSuffix(".app") else {
-            return false
+        if bundlePath.hasSuffix(".app") && !isInBuildDirectory(bundlePath) {
+            return true
         }
-        
-        // Must NOT be in build directories (use path-segment matching to avoid
-        // false positives on user paths like /Users/DerivedDataUser/)
-        let buildIndicators = ["/.build/", "/.build-cli/", "/DerivedData/"]
-        for indicator in buildIndicators {
-            if bundlePath.contains(indicator) {
-                return false
+
+        // Walk up from the executable path to find a .app ancestor.
+        // This catches the CLI binary at Contents/MacOS/bin/mori where
+        // Bundle.main.bundlePath does NOT point to the .app bundle.
+        let execPath: String
+        if let mainExec = Bundle.main.executablePath {
+            execPath = mainExec
+        } else {
+            execPath = CommandLine.arguments[0]
+        }
+        let resolvedExec = URL(fileURLWithPath: execPath).resolvingSymlinksInPath().path
+
+        return isInAppBundle(resolvedExec)
+    }
+
+    /// Walk up the directory tree looking for a `.app` ancestor directory.
+    static func isInAppBundle(_ path: String) -> Bool {
+        var dir = path
+        while true {
+            let parent = (dir as NSString).deletingLastPathComponent
+            if parent == dir { break } // reached filesystem root
+            dir = parent
+            if dir.hasSuffix(".app") && !isInBuildDirectory(dir) {
+                return true
             }
         }
-        
-        return true
+        return false
+    }
+
+    /// Checks whether a path is inside a known build-output directory,
+    /// using path-segment matching to avoid false positives on user paths
+    /// like `/Users/DerivedDataUser/`.
+    static func isInBuildDirectory(_ path: String) -> Bool {
+        let buildIndicators = ["/.build/", "/.build-cli/", "/DerivedData/"]
+        for indicator in buildIndicators {
+            if path.contains(indicator) {
+                return true
+            }
+        }
+        return false
     }
 }
