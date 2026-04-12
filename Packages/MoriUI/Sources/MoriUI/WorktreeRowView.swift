@@ -53,9 +53,7 @@ public struct WorktreeRowView: View {
 
                 Spacer(minLength: 0)
 
-                if let primaryBadge {
-                    primaryBadge
-                }
+                primaryBadge
 
                 if isHovered {
                     overflowMenu
@@ -132,17 +130,18 @@ public struct WorktreeRowView: View {
         }
     }
 
-    private var primaryBadge: some View? {
-        guard let style = primaryBadgeStyle else { return nil }
-
-        return Text(style.title)
-            .font(MoriTokens.Font.caption)
-            .foregroundStyle(style.color)
-            .padding(.horizontal, MoriTokens.Spacing.sm)
-            .padding(.vertical, MoriTokens.Spacing.xxs)
-            .background(style.color.opacity(MoriTokens.Opacity.subtle))
-            .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
-            .accessibilityLabel(style.accessibilityLabel)
+    @ViewBuilder
+    private var primaryBadge: some View {
+        if let style = primaryBadgeStyle {
+            Text(style.title)
+                .font(MoriTokens.Font.caption)
+                .foregroundStyle(style.color)
+                .padding(.horizontal, MoriTokens.Spacing.sm)
+                .padding(.vertical, MoriTokens.Spacing.xxs)
+                .background(style.color.opacity(MoriTokens.Opacity.subtle))
+                .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
+                .accessibilityLabel(style.accessibilityLabel)
+        }
     }
 
     // MARK: - Overflow Menu

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ♻️ Changes
+
+- Remove legacy workflow-status and sidebar-mode code paths after the unified sidebar redesign, including the `mori status` CLI command and manual sidebar status controls
+
 ## [0.3.4] - 2026-04-12
 
 ### ✨ Features
