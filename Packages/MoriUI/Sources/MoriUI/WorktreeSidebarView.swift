@@ -157,19 +157,7 @@ public struct WorktreeSidebarView: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     summaryStrip
                     activeWorktreeSection
-
-                        sectionHeader(title: String.localized("Projects")) {
-                        if let onAddProject {
-                            Button(action: onAddProject) {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(MoriTokens.Color.muted)
-                            }
-                            .buttonStyle(.plain)
-                            .help(String.localized("Add Project"))
-                        }
-                    }
-                    .padding(.top, MoriTokens.Spacing.lg)
+                    projectsSectionHeader
 
                     ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
                         if index > 0 {
@@ -236,60 +224,7 @@ public struct WorktreeSidebarView: View {
             if hoveredProjectId == project.id {
                 HStack(spacing: MoriTokens.Spacing.sm) {
                     Menu {
-                        if !project.isCollapsed, onShowCreatePanel != nil {
-                            Button {
-                                onSelectProject?(project.id)
-                                onShowCreatePanel?()
-                            } label: {
-                                Label("New Workspace…", systemImage: "plus")
-                            }
-                        }
-
-                        let editors = EditorLauncher.installed
-                        if !editors.isEmpty {
-                            Divider()
-                            ForEach(editors) { editor in
-                                Button {
-                                    editor.open(path: project.repoRootPath)
-                                } label: {
-                                    Label("Open in \(editor.name)", systemImage: editor.icon)
-                                }
-                            }
-                        }
-
-                        Divider()
-
-                        Button {
-                            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.repoRootPath)
-                        } label: {
-                            Label("Reveal in Finder", systemImage: "folder")
-                        }
-
-                        Divider()
-
-                        Button {
-                            renameText = project.name
-                            renamingProjectId = project.id
-                        } label: {
-                            Label("Rename Project…", systemImage: "pencil")
-                        }
-
-                        if case .ssh = (project.location ?? .local), let onEditRemoteProject {
-                            Button {
-                                onEditRemoteProject(project.id)
-                            } label: {
-                                Label("Update Remote Credentials…", systemImage: "key")
-                            }
-                        }
-
-                        if let onRemoveProject {
-                            Divider()
-                            Button(role: .destructive) {
-                                onRemoveProject(project.id)
-                            } label: {
-                                Label("Remove Project…", systemImage: "trash")
-                            }
-                        }
+                        projectActions(project)
                     } label: {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 11, weight: .medium))
@@ -318,60 +253,7 @@ public struct WorktreeSidebarView: View {
             }
         }
         .contextMenu {
-            if onShowCreatePanel != nil {
-                Button {
-                    onSelectProject?(project.id)
-                    onShowCreatePanel?()
-                } label: {
-                    Label("New Workspace…", systemImage: "plus")
-                }
-            }
-
-            let editors = EditorLauncher.installed
-            if !editors.isEmpty {
-                Divider()
-                ForEach(editors) { editor in
-                    Button {
-                        editor.open(path: project.repoRootPath)
-                    } label: {
-                        Label("Open in \(editor.name)", systemImage: editor.icon)
-                    }
-                }
-            }
-
-            Divider()
-
-            Button {
-                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.repoRootPath)
-            } label: {
-                Label("Reveal in Finder", systemImage: "folder")
-            }
-
-            Divider()
-
-            Button {
-                renameText = project.name
-                renamingProjectId = project.id
-            } label: {
-                Label("Rename Project…", systemImage: "pencil")
-            }
-
-            if case .ssh = (project.location ?? .local), let onEditRemoteProject {
-                Button {
-                    onEditRemoteProject(project.id)
-                } label: {
-                    Label("Update Remote Credentials…", systemImage: "key")
-                }
-            }
-
-            if let onRemoveProject {
-                Divider()
-                Button(role: .destructive) {
-                    onRemoveProject(project.id)
-                } label: {
-                    Label("Remove Project…", systemImage: "trash")
-                }
-            }
+            projectActions(project)
         }
 
         if !project.isCollapsed {
@@ -502,13 +384,7 @@ public struct WorktreeSidebarView: View {
 
     private func visibleDetailWindows(for worktree: Worktree) -> [RuntimeWindow] {
         let all = allWindows(for: worktree)
-        let relevant = all.filter { window in
-            window.tmuxWindowId == selectedWindowId
-                || window.detectedAgent != nil
-                || window.agentState != .none
-                || window.badge != nil
-                || window.hasUnreadOutput
-        }
+        let relevant = all.filter(isRelevantDetailWindow)
 
         if !relevant.isEmpty {
             return relevant
@@ -524,6 +400,88 @@ public struct WorktreeSidebarView: View {
         case .completed: return 2
         case .none: return 3
         }
+    }
+
+    @ViewBuilder
+    private var projectsSectionHeader: some View {
+        sectionHeader(title: String.localized("Projects")) {
+            if let onAddProject {
+                Button(action: onAddProject) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(MoriTokens.Color.muted)
+                }
+                .buttonStyle(.plain)
+                .help(String.localized("Add Project"))
+            }
+        }
+        .padding(.top, MoriTokens.Spacing.lg)
+    }
+
+    @ViewBuilder
+    private func projectActions(_ project: Project) -> some View {
+        if !project.isCollapsed, onShowCreatePanel != nil {
+            Button {
+                onSelectProject?(project.id)
+                onShowCreatePanel?()
+            } label: {
+                Label("New Workspace…", systemImage: "plus")
+            }
+        }
+
+        let editors = EditorLauncher.installed
+        if !editors.isEmpty {
+            Divider()
+            ForEach(editors) { editor in
+                Button {
+                    editor.open(path: project.repoRootPath)
+                } label: {
+                    Label("Open in \(editor.name)", systemImage: editor.icon)
+                }
+            }
+        }
+
+        Divider()
+
+        Button {
+            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.repoRootPath)
+        } label: {
+            Label("Reveal in Finder", systemImage: "folder")
+        }
+
+        Divider()
+
+        Button {
+            renameText = project.name
+            renamingProjectId = project.id
+        } label: {
+            Label("Rename Project…", systemImage: "pencil")
+        }
+
+        if case .ssh = (project.location ?? .local), let onEditRemoteProject {
+            Button {
+                onEditRemoteProject(project.id)
+            } label: {
+                Label("Update Remote Credentials…", systemImage: "key")
+            }
+        }
+
+        if let onRemoveProject {
+            Divider()
+            Button(role: .destructive) {
+                onRemoveProject(project.id)
+            } label: {
+                Label("Remove Project…", systemImage: "trash")
+            }
+        }
+    }
+
+    private func isRelevantDetailWindow(_ window: RuntimeWindow) -> Bool {
+        window.tmuxWindowId == selectedWindowId
+            || window.detectedAgent != nil
+            || window.agentState != .none
+            || window.badge != nil
+            || window.hasUnreadOutput
     }
 
     @ViewBuilder

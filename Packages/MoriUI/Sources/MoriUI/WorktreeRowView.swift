@@ -4,6 +4,12 @@ import MoriCore
 /// A compact worktree row with a single primary status badge.
 /// Secondary metadata stays on the subtitle line to keep scanning easy.
 public struct WorktreeRowView: View {
+    private struct PrimaryBadgeStyle {
+        let title: String
+        let color: Color
+        let accessibilityLabel: String
+    }
+
     let worktree: Worktree
     let agentName: String?
     let isSelected: Bool
@@ -125,14 +131,16 @@ public struct WorktreeRowView: View {
     }
 
     private var primaryBadge: some View {
-        Text(primaryBadgeTitle)
+        let style = primaryBadgeStyle
+
+        return Text(style.title)
             .font(MoriTokens.Font.caption)
-            .foregroundStyle(primaryBadgeColor)
+            .foregroundStyle(style.color)
             .padding(.horizontal, MoriTokens.Spacing.sm)
             .padding(.vertical, MoriTokens.Spacing.xxs)
-            .background(primaryBadgeColor.opacity(MoriTokens.Opacity.subtle))
+            .background(style.color.opacity(MoriTokens.Opacity.subtle))
             .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
-            .accessibilityLabel(primaryBadgeAccessibilityLabel)
+            .accessibilityLabel(style.accessibilityLabel)
     }
 
     // MARK: - Overflow Menu
@@ -233,46 +241,50 @@ public struct WorktreeRowView: View {
         return parts.joined(separator: " ")
     }
 
-    private var primaryBadgeTitle: String {
+    private var primaryBadgeStyle: PrimaryBadgeStyle {
         switch worktree.agentState {
         case .waitingForInput:
-            return String.localized("Waiting")
+            return PrimaryBadgeStyle(
+                title: String.localized("Waiting"),
+                color: MoriTokens.Color.attention,
+                accessibilityLabel: String.localized("Waiting")
+            )
         case .error:
-            return String.localized("Error")
+            return PrimaryBadgeStyle(
+                title: String.localized("Error"),
+                color: MoriTokens.Color.error,
+                accessibilityLabel: String.localized("Error")
+            )
         case .running:
-            return String.localized("Running")
+            return PrimaryBadgeStyle(
+                title: String.localized("Running"),
+                color: MoriTokens.Color.success,
+                accessibilityLabel: String.localized("Running")
+            )
         case .completed:
-            return String.localized("Completed")
+            return PrimaryBadgeStyle(
+                title: String.localized("Completed"),
+                color: MoriTokens.Color.success,
+                accessibilityLabel: String.localized("Completed")
+            )
         case .none:
-            return String.localized(String.LocalizationValue(stringLiteral: worktree.workflowStatus.displayName))
+            let title = String.localized(String.LocalizationValue(stringLiteral: worktree.workflowStatus.displayName))
+            return PrimaryBadgeStyle(
+                title: title,
+                color: workflowStatusColor,
+                accessibilityLabel: title
+            )
         }
     }
 
-    private var primaryBadgeColor: Color {
-        switch worktree.agentState {
-        case .waitingForInput:
-            return MoriTokens.Color.attention
-        case .error:
-            return MoriTokens.Color.error
-        case .running, .completed:
+    private var workflowStatusColor: Color {
+        switch worktree.workflowStatus {
+        case .needsReview:
+            return MoriTokens.Color.info
+        case .inProgress:
             return MoriTokens.Color.success
-        case .none:
-            switch worktree.workflowStatus {
-            case .needsReview:
-                return MoriTokens.Color.info
-            case .inProgress:
-                return MoriTokens.Color.success
-            case .todo, .done, .cancelled:
-                return MoriTokens.Color.muted
-            }
+        case .todo, .done, .cancelled:
+            return MoriTokens.Color.muted
         }
-    }
-
-    private var primaryBadgeAccessibilityLabel: String {
-        if worktree.agentState != .none {
-            return primaryBadgeTitle
-        }
-
-        return String.localized(String.LocalizationValue(stringLiteral: worktree.workflowStatus.displayName))
     }
 }
