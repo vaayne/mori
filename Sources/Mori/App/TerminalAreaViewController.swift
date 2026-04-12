@@ -62,7 +62,7 @@ final class TerminalAreaViewController: NSViewController {
     override func loadView() {
         let container = NSView()
         container.wantsLayer = true
-        container.layer?.backgroundColor = themeInfo.background.cgColor
+        container.layer?.backgroundColor = themeInfo.effectiveBackground.cgColor
         self.view = container
         showEmptyState()
     }

@@ -3,6 +3,60 @@ import MoriCore
 
 /// Settings model representing user-facing ghostty config options.
 /// Read from and written to ~/.config/ghostty/config.
+public enum GhosttyBackgroundBlur: Equatable {
+    case disabled
+    case standard
+    case radius(Int)
+    case macosGlassRegular
+    case macosGlassClear
+
+    public init(configValue: String) {
+        let value = configValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch value {
+        case "", "false", "0":
+            self = .disabled
+        case "true":
+            self = .standard
+        case "macos-glass-regular":
+            self = .macosGlassRegular
+        case "macos-glass-clear":
+            self = .macosGlassClear
+        default:
+            if let radius = Int(value), radius > 0 {
+                self = .radius(radius)
+            } else {
+                self = .disabled
+            }
+        }
+    }
+
+    public var configValue: String {
+        switch self {
+        case .disabled:
+            "false"
+        case .standard:
+            "true"
+        case .radius(let value):
+            "\(max(1, value))"
+        case .macosGlassRegular:
+            "macos-glass-regular"
+        case .macosGlassClear:
+            "macos-glass-clear"
+        }
+    }
+
+    public var radiusValue: Int {
+        switch self {
+        case .radius(let value):
+            max(1, value)
+        case .standard:
+            20
+        default:
+            20
+        }
+    }
+}
+
 public struct GhosttySettingsModel: Equatable {
     public var fontFamily: String
     public var fontSize: Int
@@ -10,6 +64,7 @@ public struct GhosttySettingsModel: Equatable {
     public var cursorStyle: String
     public var cursorBlink: Bool
     public var backgroundOpacity: Double
+    public var backgroundBlur: GhosttyBackgroundBlur
     public var macosOptionAsAlt: String
     public var mouseHideWhileTyping: Bool
     public var mouseScrollMultiplier: Int
@@ -24,6 +79,7 @@ public struct GhosttySettingsModel: Equatable {
         cursorStyle: String = "block",
         cursorBlink: Bool = true,
         backgroundOpacity: Double = 1.0,
+        backgroundBlur: GhosttyBackgroundBlur = .disabled,
         macosOptionAsAlt: String = "false",
         mouseHideWhileTyping: Bool = false,
         mouseScrollMultiplier: Int = 1,
@@ -37,6 +93,7 @@ public struct GhosttySettingsModel: Equatable {
         self.cursorStyle = cursorStyle
         self.cursorBlink = cursorBlink
         self.backgroundOpacity = backgroundOpacity
+        self.backgroundBlur = backgroundBlur
         self.macosOptionAsAlt = macosOptionAsAlt
         self.mouseHideWhileTyping = mouseHideWhileTyping
         self.mouseScrollMultiplier = mouseScrollMultiplier
@@ -535,11 +592,60 @@ private struct GeneralSettingsContent: View {
 // MARK: - Theme Settings
 
 private struct ThemeSettingsContent: View {
+    private enum BackgroundBlurPreset: String, CaseIterable, Identifiable {
+        case disabled
+        case standard
+        case custom
+        case macosGlassRegular
+        case macosGlassClear
+
+        var id: String { rawValue }
+    }
+
     @Binding var model: GhosttySettingsModel
     let availableThemes: [String]
     let onChanged: () -> Void
 
     @State private var themeSearch = ""
+
+    private var blurPreset: Binding<BackgroundBlurPreset> {
+        Binding(
+            get: {
+                switch model.backgroundBlur {
+                case .disabled: .disabled
+                case .standard: .standard
+                case .radius: .custom
+                case .macosGlassRegular: .macosGlassRegular
+                case .macosGlassClear: .macosGlassClear
+                }
+            },
+            set: { preset in
+                switch preset {
+                case .disabled:
+                    model.backgroundBlur = .disabled
+                case .standard:
+                    model.backgroundBlur = .standard
+                case .custom:
+                    model.backgroundBlur = .radius(model.backgroundBlur.radiusValue)
+                case .macosGlassRegular:
+                    model.backgroundBlur = .macosGlassRegular
+                case .macosGlassClear:
+                    model.backgroundBlur = .macosGlassClear
+                }
+                onChanged()
+            }
+        )
+    }
+
+    private var blurRadius: Binding<Double> {
+        Binding(
+            get: { Double(model.backgroundBlur.radiusValue) },
+            set: { newValue in
+                model.backgroundBlur = .radius(Int(newValue.rounded()))
+                onChanged()
+            }
+        )
+    }
 
     var body: some View {
         // Preview
@@ -615,6 +721,38 @@ private struct ThemeSettingsContent: View {
                     Slider(value: $model.backgroundOpacity, in: 0.1...1.0, step: 0.05)
                         .frame(width: 140)
                         .onChange(of: model.backgroundOpacity) { _, _ in onChanged() }
+                }
+            }
+
+            CardDivider()
+
+            SettingRow(
+                title: .localized("Background blur"),
+                description: .localized("Inherit Ghostty window blur and glass styling for translucent terminal backgrounds.")
+            ) {
+                VStack(alignment: .trailing, spacing: 8) {
+                    Picker("", selection: blurPreset) {
+                        Text(String.localized("Off")).tag(BackgroundBlurPreset.disabled)
+                        Text(String.localized("Standard Blur")).tag(BackgroundBlurPreset.standard)
+                        Text(String.localized("Custom Blur Radius")).tag(BackgroundBlurPreset.custom)
+                        if #available(macOS 26.0, *) {
+                            Text(String.localized("Glass Regular")).tag(BackgroundBlurPreset.macosGlassRegular)
+                            Text(String.localized("Glass Clear")).tag(BackgroundBlurPreset.macosGlassClear)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 180)
+
+                    if case .radius = model.backgroundBlur {
+                        HStack(spacing: 8) {
+                            Text("\(model.backgroundBlur.radiusValue)")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 28)
+                            Slider(value: blurRadius, in: 1...60, step: 1)
+                                .frame(width: 140)
+                        }
+                    }
                 }
             }
         }

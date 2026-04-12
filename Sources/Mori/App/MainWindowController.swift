@@ -30,7 +30,7 @@ final class MainWindowController: NSWindowController {
         window.title = "Mori"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        window.backgroundColor = themeInfo.background
+        window.backgroundColor = themeInfo.effectiveBackground
         window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
         window.center()
 

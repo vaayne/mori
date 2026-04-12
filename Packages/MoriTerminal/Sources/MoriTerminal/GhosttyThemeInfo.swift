@@ -5,18 +5,72 @@ import GhosttyKit
 /// Resolved theme colors extracted from ghostty's config.
 /// Queried once at startup via `ghostty_config_get` before the config is consumed.
 public struct GhosttyThemeInfo: Sendable {
+    public enum BackgroundBlur: Sendable, Equatable {
+        case disabled
+        case radius(Int)
+        case macosGlassRegular
+        case macosGlassClear
+
+        var isEnabled: Bool {
+            switch self {
+            case .disabled: false
+            default: true
+            }
+        }
+
+        var isGlassStyle: Bool {
+            switch self {
+            case .macosGlassRegular, .macosGlassClear: true
+            default: false
+            }
+        }
+
+        static func from(cValue: Int16) -> BackgroundBlur {
+            switch cValue {
+            case 0:
+                .disabled
+            case -1:
+                if #available(macOS 26.0, *) {
+                    .macosGlassRegular
+                } else {
+                    .disabled
+                }
+            case -2:
+                if #available(macOS 26.0, *) {
+                    .macosGlassClear
+                } else {
+                    .disabled
+                }
+            default:
+                .radius(Int(cValue))
+            }
+        }
+    }
+
     public let background: NSColor
     public let foreground: NSColor
     /// ANSI palette (16 standard colors, indices 0-15).
     public let palette: [NSColor]
     public let isDark: Bool
+    public let backgroundOpacity: Double
+    public let backgroundBlur: BackgroundBlur
+
+    public var effectiveBackground: NSColor {
+        background.withAlphaComponent(backgroundOpacity)
+    }
+
+    public var usesTransparentWindowBackground: Bool {
+        backgroundOpacity < 1 || backgroundBlur.isGlassStyle
+    }
 
     /// Default fallback when config cannot be queried.
     public static let fallback = GhosttyThemeInfo(
         background: .black,
         foreground: .white,
         palette: (0..<16).map { _ in .gray },
-        isDark: true
+        isDark: true,
+        backgroundOpacity: 1,
+        backgroundBlur: .disabled
     )
 
     /// Query theme colors from a finalized ghostty config.
@@ -24,6 +78,8 @@ public struct GhosttyThemeInfo: Sendable {
     static func from(config: ghostty_config_t) -> GhosttyThemeInfo {
         let bg = queryColor(config, key: "background") ?? NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
         let fg = queryColor(config, key: "foreground") ?? NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
+        let backgroundOpacity = queryDouble(config, key: "background-opacity") ?? 1
+        let backgroundBlur = queryBackgroundBlur(config, key: "background-blur") ?? .disabled
 
         // Query palette — ghostty_config_palette_s contains a 256-element C array
         // which Swift imports as a massive tuple. Use withUnsafePointer to access by index.
@@ -61,7 +117,9 @@ public struct GhosttyThemeInfo: Sendable {
             background: bg,
             foreground: fg,
             palette: palette,
-            isDark: luminance < 0.5
+            isDark: luminance < 0.5,
+            backgroundOpacity: max(0.001, min(backgroundOpacity, 1)),
+            backgroundBlur: backgroundBlur
         )
     }
 
@@ -85,6 +143,22 @@ public struct GhosttyThemeInfo: Sendable {
             blue: CGFloat(color.b) / 255.0,
             alpha: 1.0
         )
+    }
+
+    private static func queryDouble(_ config: ghostty_config_t, key: String) -> Double? {
+        var value: Double = 0
+        let success = withUnsafeMutablePointer(to: &value) { ptr in
+            ghostty_config_get(config, ptr, key, UInt(key.count))
+        }
+        return success ? value : nil
+    }
+
+    private static func queryBackgroundBlur(_ config: ghostty_config_t, key: String) -> BackgroundBlur? {
+        var value: Int16 = 0
+        let success = withUnsafeMutablePointer(to: &value) { ptr in
+            ghostty_config_get(config, ptr, key, UInt(key.count))
+        }
+        return success ? BackgroundBlur.from(cValue: value) : nil
     }
 }
 #endif

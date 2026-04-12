@@ -109,6 +109,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Build the window with ghostty theme
         let windowController = MainWindowController(themeInfo: themeInfo)
         self.mainWindowController = windowController
+        if let adapter = terminalArea.terminalHost as? GhosttyAdapter,
+           let window = windowController.window {
+            adapter.syncWindowAppearance(window)
+        }
 
         // Build split view children
         let sidebarController = SidebarHostingController(
@@ -741,14 +745,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         let hostingController = NSHostingController(rootView: settingsView)
         hostingController.view.wantsLayer = true
-        hostingController.view.layer?.backgroundColor = themeInfo.background.cgColor
+        hostingController.view.layer?.backgroundColor = themeInfo.effectiveBackground.cgColor
         let window = NSWindow(contentViewController: hostingController)
         window.title = .localized("Settings")
         window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.backgroundColor = themeInfo.background
-        window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        if let adapter = terminalAreaController?.terminalHost as? GhosttyAdapter {
+            adapter.syncWindowAppearance(window)
+        } else {
+            window.backgroundColor = themeInfo.background
+            window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        }
         window.center()
         window.setFrameAutosaveName("MoriSettings")
 
@@ -765,6 +773,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             cursorStyle: cf.get("cursor-style") ?? "block",
             cursorBlink: (cf.get("cursor-style-blink") ?? "true") != "false",
             backgroundOpacity: Double(cf.get("background-opacity") ?? "1.0") ?? 1.0,
+            backgroundBlur: GhosttyBackgroundBlur(configValue: cf.get("background-blur") ?? "false"),
             macosOptionAsAlt: cf.get("macos-option-as-alt") ?? "false",
             mouseHideWhileTyping: cf.get("mouse-hide-while-typing") == "true",
             mouseScrollMultiplier: Int(cf.get("mouse-scroll-multiplier") ?? "") ?? 1,
@@ -793,6 +802,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         cf.set("cursor-style", value: model.cursorStyle)
         cf.set("cursor-style-blink", value: model.cursorBlink ? "true" : "false")
         cf.set("background-opacity", value: String(format: "%.2f", model.backgroundOpacity))
+        cf.set("background-blur", value: model.backgroundBlur.configValue)
         cf.set("macos-option-as-alt", value: model.macosOptionAsAlt)
         cf.set("mouse-hide-while-typing", value: model.mouseHideWhileTyping ? "true" : "false")
         cf.set("mouse-scroll-multiplier", value: "\(model.mouseScrollMultiplier)")
@@ -806,17 +816,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         adapter.reloadConfig()
 
         let themeInfo = adapter.themeInfo
-        mainWindowController?.window?.backgroundColor = themeInfo.background
-        mainWindowController?.window?.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        if let window = mainWindowController?.window {
+            adapter.syncWindowAppearance(window)
+        }
         sidebarController?.updateAppearance(themeInfo: themeInfo)
-        terminalAreaController?.view.layer?.backgroundColor = themeInfo.background.cgColor
+        terminalAreaController?.view.layer?.backgroundColor = themeInfo.effectiveBackground.cgColor
 
         // Update settings window appearance
         if let settingsWindow = settingsWindowController?.window {
-            settingsWindow.backgroundColor = themeInfo.background
-            settingsWindow.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+            adapter.syncWindowAppearance(settingsWindow)
             settingsWindow.contentViewController?.view.wantsLayer = true
-            settingsWindow.contentViewController?.view.layer?.backgroundColor = themeInfo.background.cgColor
+            settingsWindow.contentViewController?.view.layer?.backgroundColor = themeInfo.effectiveBackground.cgColor
         }
 
         // Update agent dashboard appearance
