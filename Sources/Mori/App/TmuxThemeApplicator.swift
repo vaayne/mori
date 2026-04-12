@@ -20,14 +20,14 @@ enum TmuxThemeApplicator {
     }
 
     private actor Cache {
-        private var lastAppliedPayload: ThemePayload?
+        private var lastAppliedPayloads: [ObjectIdentifier: ThemePayload] = [:]
 
-        func shouldApply(_ payload: ThemePayload) -> Bool {
-            payload != lastAppliedPayload
+        func shouldApply(_ payload: ThemePayload, backendID: ObjectIdentifier) -> Bool {
+            payload != lastAppliedPayloads[backendID]
         }
 
-        func markApplied(_ payload: ThemePayload) {
-            lastAppliedPayload = payload
+        func markApplied(_ payload: ThemePayload, backendID: ObjectIdentifier) {
+            lastAppliedPayloads[backendID] = payload
         }
     }
 
@@ -35,7 +35,8 @@ enum TmuxThemeApplicator {
 
     static func apply(themeInfo: GhosttyThemeInfo, tmuxBackend: TmuxBackend) async {
         let payload = makePayload(themeInfo: themeInfo)
-        guard await cache.shouldApply(payload) else { return }
+        let backendID = ObjectIdentifier(tmuxBackend)
+        guard await cache.shouldApply(payload, backendID: backendID) else { return }
 
         let styles = makeStyles(payload: payload)
         await applyGlobalCompatibilityOptions(tmuxBackend: tmuxBackend)
@@ -47,7 +48,7 @@ enum TmuxThemeApplicator {
 
         do {
             try await tmuxBackend.refreshClients()
-            await cache.markApplied(payload)
+            await cache.markApplied(payload, backendID: backendID)
         } catch {
             print("[TmuxThemeApplicator] Failed to refresh clients: \(error)")
         }

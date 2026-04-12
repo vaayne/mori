@@ -15,6 +15,11 @@
 "Automatically hide the mouse cursor when typing in the terminal." = "在终端中输入时自动隐藏鼠标光标。";
 "Available Monospace Fonts" = "可用等宽字体";
 "Background opacity" = "背景透明度";
+"Background blur" = "背景模糊";
+"Inherit Ghostty window blur and glass styling for translucent terminal backgrounds." = "为半透明终端背景继承 Ghostty 的窗口模糊与玻璃效果样式。";
+"Background blur is only visible when background opacity is below 1.0." = "仅当背景不透明度低于 1.0 时，背景模糊才会可见。";
+"Apply opacity to colored cells" = "将不透明度应用到彩色单元格";
+"Let tmux and terminal apps keep translucent backgrounds when they draw colored cells instead of using the default terminal background." = "当 tmux 或终端应用绘制彩色单元格而不是使用默认终端背景时，也让这些背景保持半透明。";
 "Balance window padding" = "平衡窗口边距";
 "Bar" = "竖线";
 "Block" = "方块";
