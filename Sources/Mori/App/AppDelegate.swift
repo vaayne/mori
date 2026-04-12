@@ -36,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var keyBindingStore: KeyBindingStore!
     private var configurableMenuItems: [String: NSMenuItem] = [:]
     private var keyMonitorActionMap: [String: () -> Void] = [:]
+    private let tmuxThemeDebounceNanoseconds: UInt64 = 250_000_000
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -823,12 +824,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         refreshGhosttyThemeBackgrounds(themeInfo: themeInfo)
 
-        // Update settings window appearance
-        if let settingsWindow = settingsWindowController?.window {
-            adapter.syncThemedWindowAppearance(settingsWindow)
-            settingsWindow.contentViewController?.view.wantsLayer = true
-            settingsWindow.contentViewController?.view.layer?.backgroundColor = themeInfo.background.cgColor
-        }
+        refreshSettingsWindowAppearance(adapter: adapter, themeInfo: themeInfo)
 
         // Update agent dashboard appearance
         agentDashboardPanel?.updateAppearance(themeInfo: themeInfo)
@@ -841,7 +837,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     private func scheduleTmuxThemeApply(immediate: Bool, tmuxBackend: TmuxBackend) {
         tmuxThemeApplyTask?.cancel()
-        let delayNanoseconds: UInt64 = immediate ? 0 : 250_000_000
+        let delayNanoseconds = immediate ? 0 : tmuxThemeDebounceNanoseconds
         tmuxThemeApplyTask = Task { [weak self] in
             if delayNanoseconds > 0 {
                 try? await Task.sleep(nanoseconds: delayNanoseconds)
@@ -858,6 +854,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             themeInfo: themeInfo,
             isKeyWindow: mainWindowController?.window?.isKeyWindow ?? true
         )
+    }
+
+    private func refreshSettingsWindowAppearance(adapter: GhosttyAdapter, themeInfo: GhosttyThemeInfo) {
+        guard let settingsWindow = settingsWindowController?.window else { return }
+        adapter.syncThemedWindowAppearance(settingsWindow)
+        settingsWindow.contentViewController?.view.wantsLayer = true
+        settingsWindow.contentViewController?.view.layer?.backgroundColor = themeInfo.background.cgColor
     }
 
     // MARK: - Proxy

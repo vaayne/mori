@@ -173,19 +173,10 @@ final class TerminalAreaViewController: NSViewController {
 
     private func updateGlassEffectIfNeeded(themeInfo: GhosttyThemeInfo, isKeyWindow: Bool) {
 #if compiler(>=6.2)
-        guard #available(macOS 26.0, *), themeInfo.backgroundBlur.isGlassStyle else {
+        guard #available(macOS 26.0, *), let style = glassStyle(for: themeInfo) else {
             glassBackgroundView?.removeFromSuperview()
             glassBackgroundView = nil
             return
-        }
-
-        let style: NSGlassEffectView.Style = switch themeInfo.backgroundBlur {
-        case .macosGlassRegular:
-            .regular
-        case .macosGlassClear:
-            .clear
-        default:
-            .regular
         }
 
         let glassBackgroundView = makeGlassBackgroundView()
@@ -197,6 +188,20 @@ final class TerminalAreaViewController: NSViewController {
         )
 #endif
     }
+
+#if compiler(>=6.2)
+    @available(macOS 26.0, *)
+    private func glassStyle(for themeInfo: GhosttyThemeInfo) -> NSGlassEffectView.Style? {
+        switch themeInfo.backgroundBlur {
+        case .macosGlassRegular:
+            .regular
+        case .macosGlassClear:
+            .clear
+        default:
+            nil
+        }
+    }
+#endif
 
     // MARK: - Public API
 
