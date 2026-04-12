@@ -7,9 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-04-12
+
 ### ✨ Features
 
-- Start Ghostty translucency inheritance: Mori now reads and persists `background-blur` and `background-opacity-cells`, applies Ghostty window opacity/blur to the main workspace window, exposes translucency controls in Settings, improves tmux translucency by avoiding forced opaque backgrounds when cell opacity is disabled, adds macOS 26 glass background polish for terminal content, and avoids redundant tmux theme reapplication with debounced updates
+- Ghostty translucency inheritance: Mori now reads and persists `background-blur` and `background-opacity-cells`, applies Ghostty window opacity/blur to the main workspace window, exposes translucency controls in Settings, improves tmux translucency by avoiding forced opaque backgrounds when cell opacity is disabled, adds macOS 26 glass background polish for terminal content, and avoids redundant tmux theme reapplication with debounced updates ([#55](https://github.com/vaayne/mori/pull/55))
+- Add Droid agent status hook support for richer agent lifecycle tracking in Mori ([#53](https://github.com/vaayne/mori/pull/53))
+- Introduce the unified sidebar redesign with task/workspace parity, collapsed non-active task groups by default, shared footer cleanup, and improved visual hierarchy ([#56](https://github.com/vaayne/mori/pull/56))
+
+### 🐛 Bug Fixes
+
+- Resolve the CLI/app IPC socket path mismatch when `mori` runs from inside the packaged `.app` bundle ([#52](https://github.com/vaayne/mori/pull/52))
+- Fall back to the CI GhosttyKit artifact when the local Zig linker fails during dependency setup
+- Fix MoriRemote keyboard input being obscured by the software keyboard and add a dismiss button
+- Default iOS TestFlight build numbers to a UTC timestamp in CI to avoid duplicate build-number failures
+
+**Full Changelog**: [v0.3.3...v0.3.4](https://github.com/vaayne/mori/compare/v0.3.3...v0.3.4)
 
 ## [0.3.3] - 2026-04-05
 
