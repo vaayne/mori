@@ -2,8 +2,7 @@ import SwiftUI
 import MoriCore
 
 /// Container view for the unified sidebar.
-/// The old sidebar mode parameters are still accepted for compatibility,
-/// but the UI now renders a single combined navigation surface.
+/// Renders a single combined navigation surface for projects, worktrees, and windows.
 public struct SidebarContainerView: View {
 
     // Shared data
@@ -33,8 +32,6 @@ public struct SidebarContainerView: View {
     private let onUpdateProject: ((Project) -> Void)?
 
     public init(
-        sidebarMode: SidebarMode,
-        onToggleSidebarMode: @escaping (SidebarMode) -> Void,
         projects: [Project] = [],
         selectedProjectId: UUID? = nil,
         worktrees: [Worktree],

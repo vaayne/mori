@@ -26,7 +26,6 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         onAddProject: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
         onOpenCommandPalette: (() -> Void)? = nil,
-        onToggleSidebarMode: ((SidebarMode) -> Void)? = nil,
         onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)? = nil,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil,
@@ -47,7 +46,6 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
             onAddProject: onAddProject,
             onOpenSettings: onOpenSettings,
             onOpenCommandPalette: onOpenCommandPalette,
-            onToggleSidebarMode: onToggleSidebarMode,
             onSetWorkflowStatus: onSetWorkflowStatus,
             onRequestPaneOutput: onRequestPaneOutput,
             onSendKeys: onSendKeys,
@@ -91,7 +89,6 @@ struct SidebarContentView: View {
     let onAddProject: (() -> Void)?
     let onOpenSettings: (() -> Void)?
     let onOpenCommandPalette: (() -> Void)?
-    let onToggleSidebarMode: ((SidebarMode) -> Void)?
     let onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)?
     let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     let onSendKeys: ((String, String) -> Void)?
@@ -99,10 +96,6 @@ struct SidebarContentView: View {
 
     var body: some View {
         SidebarContainerView(
-            sidebarMode: appState.uiState.sidebarMode,
-            onToggleSidebarMode: { mode in
-                onToggleSidebarMode?(mode)
-            },
             projects: appState.projects,
             selectedProjectId: appState.uiState.selectedProjectId,
             worktrees: appState.worktrees,

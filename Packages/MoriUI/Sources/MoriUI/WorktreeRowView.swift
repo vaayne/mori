@@ -227,6 +227,9 @@ public struct WorktreeRowView: View {
         if worktree.behindCount > 0 {
             parts.append("↓\(worktree.behindCount)")
         }
+        if worktree.stagedCount > 0 {
+            parts.append("+\(worktree.stagedCount)")
+        }
         if worktree.modifiedCount > 0 {
             parts.append("~\(worktree.modifiedCount)")
         }
