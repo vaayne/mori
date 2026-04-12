@@ -182,64 +182,12 @@ public struct AgentSidebarView: View {
     // MARK: - Footer
 
     private var sidebarFooter: some View {
-        VStack(spacing: 0) {
-            Divider()
-
-            HStack(spacing: MoriTokens.Spacing.xl) {
-                if let onAddProject {
-                    Button(action: onAddProject) {
-                        Image(systemName: "plus.rectangle.on.folder")
-                            .font(.system(size: 13))
-                            .foregroundStyle(MoriTokens.Color.muted)
-                    }
-                    .buttonStyle(.plain)
-                    .help(String.localized("Add Repository"))
-                    .accessibilityLabel(String.localized("Add Repository"))
-                }
-
-                Spacer()
-
-                if let onOpenCommandPalette {
-                    Button(action: onOpenCommandPalette) {
-                        Image(systemName: "text.magnifyingglass")
-                            .font(.system(size: 13))
-                            .foregroundStyle(MoriTokens.Color.muted)
-                    }
-                    .buttonStyle(.plain)
-                    .help(String.localized("Command Palette (⇧⌘P)"))
-                    .accessibilityLabel(String.localized("Command Palette"))
-                    .overlay(alignment: .top) {
-                        if shortcutHintsVisible {
-                            ShortcutHintPill("⇧⌘P")
-                                .offset(y: -22)
-                                .transition(.opacity)
-                        }
-                    }
-                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
-                }
-
-                if let onOpenSettings {
-                    Button(action: onOpenSettings) {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 13))
-                            .foregroundStyle(MoriTokens.Color.muted)
-                    }
-                    .buttonStyle(.plain)
-                    .help(String.localized("Settings (⌘,)"))
-                    .accessibilityLabel(String.localized("Settings"))
-                    .overlay(alignment: .top) {
-                        if shortcutHintsVisible {
-                            ShortcutHintPill("⌘,")
-                                .offset(y: -22)
-                                .transition(.opacity)
-                        }
-                    }
-                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
-                }
-            }
-            .padding(.horizontal, MoriTokens.Spacing.xl)
-            .padding(.vertical, MoriTokens.Spacing.lg)
-        }
+        SidebarFooterView(
+            shortcutHintsVisible: shortcutHintsVisible,
+            onAddProject: onAddProject,
+            onOpenCommandPalette: onOpenCommandPalette,
+            onOpenSettings: onOpenSettings
+        )
     }
 }
 

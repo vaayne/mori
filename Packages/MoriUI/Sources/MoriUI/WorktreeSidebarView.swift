@@ -501,36 +501,13 @@ public struct WorktreeSidebarView: View {
     // MARK: - Footer
 
     private var sidebarFooter: some View {
-        VStack(spacing: 0) {
-            Divider()
-                .padding(.horizontal, MoriTokens.Spacing.xl)
-
-            if let onOpenSettings {
-                Button(action: onOpenSettings) {
-                    HStack(spacing: MoriTokens.Spacing.md) {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 12))
-                            .foregroundStyle(MoriTokens.Color.muted)
-
-                        Text(String.localized("Settings"))
-                            .font(MoriTokens.Font.windowTitle)
-                            .foregroundStyle(MoriTokens.Color.muted)
-
-                        Spacer()
-
-                        Text("⌘,")
-                            .font(MoriTokens.Font.monoShortcut)
-                            .foregroundStyle(MoriTokens.Color.inactive)
-                    }
-                    .padding(.horizontal, MoriTokens.Spacing.xl)
-                    .padding(.vertical, MoriTokens.Spacing.lg)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Settings (⌘,)")
-                .accessibilityLabel("Settings")
-            }
-        }
+        SidebarFooterView(
+            shortcutHintsVisible: shortcutHintsVisible,
+            onAddProject: onAddProject,
+            onOpenCommandPalette: onOpenCommandPalette,
+            onOpenSettings: onOpenSettings,
+            horizontalDividerPadding: MoriTokens.Spacing.xl
+        )
     }
 }
 
