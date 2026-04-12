@@ -37,6 +37,8 @@
 "Default" = "Default";
 "Directional Pane Nav" = "Directional Pane Nav";
 "Distribute extra padding evenly around the terminal content to center it within the window." = "Distribute extra padding evenly around the terminal content to center it within the window.";
+"Droid" = "Droid";
+"Adds hooks to ~/.factory/settings.json for prompt submit, tool use, stop, and notification events." = "Adds hooks to ~/.factory/settings.json for prompt submit, tool use, stop, and notification events.";
 "Equalize Panes" = "Equalize Panes";
 "Error" = "Error";
 "Filter fonts…" = "Filter fonts…";

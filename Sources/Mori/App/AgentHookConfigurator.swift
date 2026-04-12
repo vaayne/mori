@@ -12,10 +12,14 @@ enum AgentHookConfigurator {
         "claude": "Claude Code",
         "codex": "Codex",
         "pi": "Pi",
+        "droid": "Droid",
     ]
 
     /// Claude Code hook event names (used for both install and uninstall).
     private static let claudeEvents = ["UserPromptSubmit", "PreToolUse", "Stop", "Notification"]
+
+    /// Droid hook event names (same lifecycle events as Claude Code).
+    private static let droidEvents = ["UserPromptSubmit", "PreToolUse", "Stop", "Notification"]
 
     private static let home = FileManager.default.homeDirectoryForCurrentUser
 
@@ -37,6 +41,15 @@ enum AgentHookConfigurator {
 
     private static var codexHookPath: String {
         hooksDir.appendingPathComponent("mori-codex-hook.sh").path
+    }
+
+    private static var droidHookPath: String {
+        hooksDir.appendingPathComponent("mori-droid-hook.sh").path
+    }
+
+    /// Factory (Droid) settings: ~/.factory/settings.json
+    private static var factorySettingsURL: URL {
+        home.appendingPathComponent(".factory/settings.json")
     }
 
     /// Pi config directory: $PI_CODING_AGENT_DIR or ~/.pi/agent
@@ -69,6 +82,14 @@ enum AgentHookConfigurator {
         return content.contains(codexHookPath)
     }
 
+    /// Check if Droid hooks are installed in ~/.factory/settings.json.
+    static func isDroidHookInstalled() -> Bool {
+        guard let data = try? Data(contentsOf: factorySettingsURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let hooks = json["hooks"] as? [String: Any] else { return false }
+        return hookEntryExists(in: hooks, event: "Stop", command: "\(droidHookPath) Stop")
+    }
+
     /// Check if Pi extension is installed and registered in ~/.pi/agent/settings.json.
     static func isPiExtensionInstalled() -> Bool {
         guard FileManager.default.fileExists(atPath: piExtensionURL.path) else { return false }
@@ -99,6 +120,15 @@ enum AgentHookConfigurator {
         guard let source = loadBundledResource("mori-codex-hook", ext: "sh"),
               let path = installScript(name: "mori-codex-hook", source: source) else { return }
         configureCodexSettings(hookPath: path)
+    }
+
+    /// Install Droid hook and register in ~/.factory/settings.json.
+    static func installDroidHook() {
+        ensureHooksDir()
+        installCommonScript()
+        guard let source = loadBundledResource("mori-droid-hook", ext: "sh"),
+              let path = installScript(name: "mori-droid-hook", source: source) else { return }
+        configureDroidSettings(hookPath: path)
     }
 
     /// Install Pi extension to mori config dir and register in Pi's settings.json.
@@ -164,6 +194,35 @@ enum AgentHookConfigurator {
             try? cleaned.write(to: configURL, atomically: true, encoding: .utf8)
         }
         try? FileManager.default.removeItem(atPath: codexHookPath)
+    }
+
+    /// Remove Droid hooks from ~/.factory/settings.json and delete hook script.
+    static func uninstallDroidHook() {
+        if let data = try? Data(contentsOf: factorySettingsURL),
+           var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           var hooks = json["hooks"] as? [String: Any] {
+            var changed = false
+            for event in droidEvents {
+                let command = "\(droidHookPath) \(event)"
+                if removeHookEntry(from: &hooks, event: event, command: command) {
+                    changed = true
+                }
+            }
+            if changed {
+                for (key, value) in hooks {
+                    if let arr = value as? [[String: Any]], arr.isEmpty {
+                        hooks.removeValue(forKey: key)
+                    }
+                }
+                if hooks.isEmpty {
+                    json.removeValue(forKey: "hooks")
+                } else {
+                    json["hooks"] = hooks
+                }
+                writeJSON(json, to: factorySettingsURL)
+            }
+        }
+        try? FileManager.default.removeItem(atPath: droidHookPath)
     }
 
     /// Remove Pi extension file and unregister from settings.json.
@@ -290,6 +349,40 @@ enum AgentHookConfigurator {
         }
         let config = lines.joined(separator: "\n")
         try? config.write(to: configURL, atomically: true, encoding: .utf8)
+    }
+
+    // MARK: - Droid
+
+    private static func configureDroidSettings(hookPath: String) {
+        var settings: [String: Any] = [:]
+        if let data = try? Data(contentsOf: factorySettingsURL),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            settings = json
+        }
+
+        var hooks = settings["hooks"] as? [String: Any] ?? [:]
+        var changed = false
+
+        for event in droidEvents {
+            let command = "\(hookPath) \(event)"
+            if !hookEntryExists(in: hooks, event: event, command: command) {
+                let entry: [String: Any] = [
+                    "hooks": [["type": "command", "command": command]]
+                ]
+                var eventHooks = hooks[event] as? [[String: Any]] ?? []
+                eventHooks.append(entry)
+                hooks[event] = eventHooks
+                changed = true
+            }
+        }
+
+        guard changed else { return }
+
+        try? FileManager.default.createDirectory(
+            at: factorySettingsURL.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        settings["hooks"] = hooks
+        writeJSON(settings, to: factorySettingsURL)
     }
 
     // MARK: - Pi
