@@ -86,6 +86,13 @@ public struct WorktreeSidebarView: View {
         var id: UUID { worktree.id }
     }
 
+    private struct ActiveWorktreeStyle {
+        let icon: String
+        let color: Color
+        let title: String
+        let background: AnyShapeStyle
+    }
+
     /// Count of agent windows needing attention across all worktrees.
     private var attentionCount: Int {
         windows.filter { $0.agentState == .waitingForInput || $0.agentState == .error }.count
@@ -95,17 +102,21 @@ public struct WorktreeSidebarView: View {
         windows.filter { $0.agentState == .running }.count
     }
 
+    private var projectNamesById: [UUID: String] {
+        Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0.name) })
+    }
+
     private var activeWorktreeItems: [ActiveWorktreeItem] {
         worktrees
             .filter { $0.status != .unavailable && $0.agentState != .none }
             .compactMap { worktree in
-                guard let project = projects.first(where: { $0.id == worktree.projectId }) else { return nil }
+                guard let projectName = projectNamesById[worktree.projectId] else { return nil }
                 let agentName = windows.first(where: {
                     $0.worktreeId == worktree.id && ($0.detectedAgent != nil || $0.agentState != .none)
                 })?.detectedAgent
                 return ActiveWorktreeItem(
                     worktree: worktree,
-                    projectName: project.name,
+                    projectName: projectName,
                     agentName: agentName
                 )
             }
@@ -129,10 +140,7 @@ public struct WorktreeSidebarView: View {
             let projectWorktrees = worktrees
                 .filter { $0.projectId == project.id && $0.status != .unavailable }
             for worktree in projectWorktrees {
-                let worktreeWindows = windows
-                    .filter { $0.worktreeId == worktree.id }
-                    .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
-                for window in worktreeWindows {
+                for window in allWindows(for: worktree) {
                     if globalIndex <= 9 {
                         result[window.tmuxWindowId] = globalIndex
                     }
@@ -150,15 +158,7 @@ public struct WorktreeSidebarView: View {
                     summaryStrip
                     activeWorktreeSection
 
-                    // "PROJECTS" section header
-                    HStack {
-                        Text(String.localized("Projects"))
-                            .font(.system(size: 11, weight: .bold))
-                            .tracking(1.2)
-                            .foregroundStyle(MoriTokens.Color.muted)
-
-                        Spacer()
-
+                        sectionHeader(title: String.localized("Projects")) {
                         if let onAddProject {
                             Button(action: onAddProject) {
                                 Image(systemName: "plus")
@@ -169,9 +169,7 @@ public struct WorktreeSidebarView: View {
                             .help(String.localized("Add Project"))
                         }
                     }
-                    .padding(.horizontal, MoriTokens.Spacing.xl)
                     .padding(.top, MoriTokens.Spacing.lg)
-                    .padding(.bottom, MoriTokens.Spacing.sm)
 
                     ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
                         if index > 0 {
@@ -237,19 +235,6 @@ public struct WorktreeSidebarView: View {
 
             if hoveredProjectId == project.id {
                 HStack(spacing: MoriTokens.Spacing.sm) {
-                    if !project.isCollapsed, onShowCreatePanel != nil {
-                        Button {
-                            onSelectProject?(project.id)
-                            onShowCreatePanel?()
-                        } label: {
-                            Image(systemName: "plus")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(MoriTokens.Color.muted)
-                        }
-                        .buttonStyle(.plain)
-                        .help("New Workspace")
-                    }
-
                     Menu {
                         if !project.isCollapsed, onShowCreatePanel != nil {
                             Button {
@@ -412,9 +397,8 @@ public struct WorktreeSidebarView: View {
     @ViewBuilder
     private func worktreeRow(_ worktree: Worktree) -> some View {
         let isSelected = worktree.id == selectedWorktreeId
-        let worktreeWindows = windows
-            .filter { $0.worktreeId == worktree.id }
-            .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
+        let worktreeWindows = allWindows(for: worktree)
+        let detailWindows = visibleDetailWindows(for: worktree)
         let agentName = worktreeWindows.first(where: {
             $0.detectedAgent != nil || $0.agentState != .none
         })?.detectedAgent
@@ -464,9 +448,9 @@ public struct WorktreeSidebarView: View {
                 }
             }
 
-            // Show window details only for the selected worktree to keep the unified sidebar compact.
-            if isSelected, !worktreeWindows.isEmpty {
-                TreeConnectorGroup(data: worktreeWindows) { window in
+            // Show only the most relevant window details for the selected worktree.
+            if isSelected, !detailWindows.isEmpty {
+                TreeConnectorGroup(data: detailWindows) { window in
                     let globalIdx = globalWindowIndices[window.tmuxWindowId]
                     Group {
                         if window.detectedAgent != nil || window.agentState != .none {
@@ -510,6 +494,29 @@ public struct WorktreeSidebarView: View {
 
     // MARK: - Helpers
 
+    private func allWindows(for worktree: Worktree) -> [RuntimeWindow] {
+        windows
+            .filter { $0.worktreeId == worktree.id }
+            .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
+    }
+
+    private func visibleDetailWindows(for worktree: Worktree) -> [RuntimeWindow] {
+        let all = allWindows(for: worktree)
+        let relevant = all.filter { window in
+            window.tmuxWindowId == selectedWindowId
+                || window.detectedAgent != nil
+                || window.agentState != .none
+                || window.badge != nil
+                || window.hasUnreadOutput
+        }
+
+        if !relevant.isEmpty {
+            return relevant
+        }
+
+        return Array(all.prefix(1))
+    }
+
     private func activeWorktreePriority(_ state: AgentState) -> Int {
         switch state {
         case .waitingForInput, .error: return 0
@@ -546,19 +553,11 @@ public struct WorktreeSidebarView: View {
     private var activeWorktreeSection: some View {
         if !activeWorktreeItems.isEmpty {
             VStack(alignment: .leading, spacing: MoriTokens.Spacing.sm) {
-                HStack {
-                    Text(String.localized("Now"))
-                        .font(.system(size: 11, weight: .bold))
-                        .tracking(1.2)
-                        .foregroundStyle(MoriTokens.Color.muted)
-
-                    Spacer()
-
+                sectionHeader(title: String.localized("Now")) {
                     Text("\(activeWorktreeItems.count)")
                         .font(MoriTokens.Font.caption)
                         .foregroundStyle(MoriTokens.Color.inactive)
                 }
-                .padding(.horizontal, MoriTokens.Spacing.xl)
 
                 VStack(spacing: MoriTokens.Spacing.sm) {
                     ForEach(activeWorktreeItems) { item in
@@ -569,6 +568,24 @@ public struct WorktreeSidebarView: View {
                 .padding(.bottom, MoriTokens.Spacing.sm)
             }
         }
+    }
+
+    private func sectionHeader<Accessory: View>(
+        title: String,
+        @ViewBuilder accessory: () -> Accessory
+    ) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.2)
+                .foregroundStyle(MoriTokens.Color.muted)
+
+            Spacer()
+
+            accessory()
+        }
+        .padding(.horizontal, MoriTokens.Spacing.xl)
+        .padding(.bottom, MoriTokens.Spacing.sm)
     }
 
     private func summaryChip(icon: String, text: String, tint: Color, isProminent: Bool) -> some View {
@@ -588,14 +605,16 @@ public struct WorktreeSidebarView: View {
     }
 
     private func activeWorktreeCard(_ item: ActiveWorktreeItem) -> some View {
-        Button {
+        let style = activeWorktreeStyle(item.worktree.agentState)
+
+        return Button {
             onSelectProject?(item.worktree.projectId)
             onSelectWorktree(item.worktree.id)
         } label: {
             HStack(alignment: .center, spacing: MoriTokens.Spacing.lg) {
-                Image(systemName: activeWorktreeIcon(item.worktree.agentState))
+                Image(systemName: style.icon)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(activeWorktreeColor(item.worktree.agentState))
+                    .foregroundStyle(style.color)
                     .frame(width: 16)
 
                 VStack(alignment: .leading, spacing: MoriTokens.Spacing.xxs) {
@@ -603,7 +622,9 @@ public struct WorktreeSidebarView: View {
                         Text(item.worktree.name)
                             .font(MoriTokens.Font.rowTitle)
                             .lineLimit(1)
-                        activeWorktreeBadge(item.worktree.agentState)
+                        Text(style.title)
+                            .font(MoriTokens.Font.caption)
+                            .foregroundStyle(style.color)
                     }
 
                     Text(activeWorktreeSubtitle(for: item))
@@ -619,48 +640,47 @@ public struct WorktreeSidebarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(activeWorktreeBackground(item.worktree.agentState))
+        .background(style.background)
         .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
     }
 
-    private func activeWorktreeIcon(_ state: AgentState) -> String {
+    private func activeWorktreeStyle(_ state: AgentState) -> ActiveWorktreeStyle {
         switch state {
         case .waitingForInput:
-            return "exclamationmark.bubble.fill"
+            return ActiveWorktreeStyle(
+                icon: "exclamationmark.bubble.fill",
+                color: MoriTokens.Color.attention,
+                title: String.localized("Waiting"),
+                background: AnyShapeStyle(MoriTokens.Color.attention.opacity(MoriTokens.Opacity.subtle))
+            )
         case .error:
-            return "xmark.circle.fill"
+            return ActiveWorktreeStyle(
+                icon: "xmark.circle.fill",
+                color: MoriTokens.Color.error,
+                title: String.localized("Error"),
+                background: AnyShapeStyle(MoriTokens.Color.error.opacity(MoriTokens.Opacity.subtle))
+            )
         case .running:
-            return "bolt.fill"
+            return ActiveWorktreeStyle(
+                icon: "bolt.fill",
+                color: MoriTokens.Color.success,
+                title: String.localized("Running"),
+                background: AnyShapeStyle(MoriTokens.Color.success.opacity(MoriTokens.Opacity.subtle))
+            )
         case .completed:
-            return "checkmark.circle.fill"
+            return ActiveWorktreeStyle(
+                icon: "checkmark.circle.fill",
+                color: MoriTokens.Color.success,
+                title: String.localized("Completed"),
+                background: AnyShapeStyle(MoriTokens.Color.success.opacity(MoriTokens.Opacity.subtle))
+            )
         case .none:
-            return "circle.fill"
-        }
-    }
-
-    private func activeWorktreeColor(_ state: AgentState) -> Color {
-        switch state {
-        case .waitingForInput:
-            return MoriTokens.Color.attention
-        case .error:
-            return MoriTokens.Color.error
-        case .running, .completed:
-            return MoriTokens.Color.success
-        case .none:
-            return MoriTokens.Color.muted
-        }
-    }
-
-    private func activeWorktreeBackground(_ state: AgentState) -> some ShapeStyle {
-        switch state {
-        case .waitingForInput:
-            return AnyShapeStyle(MoriTokens.Color.attention.opacity(MoriTokens.Opacity.subtle))
-        case .error:
-            return AnyShapeStyle(MoriTokens.Color.error.opacity(MoriTokens.Opacity.subtle))
-        case .running, .completed:
-            return AnyShapeStyle(MoriTokens.Color.success.opacity(MoriTokens.Opacity.subtle))
-        case .none:
-            return AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+            return ActiveWorktreeStyle(
+                icon: "circle.fill",
+                color: MoriTokens.Color.muted,
+                title: String.localized("Idle"),
+                background: AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+            )
         }
     }
 
@@ -669,26 +689,6 @@ public struct WorktreeSidebarView: View {
         return "\(item.projectName) · \(agentText)"
     }
 
-    private func activeWorktreeBadge(_ state: AgentState) -> some View {
-        Text(activeWorktreeTitle(state))
-            .font(MoriTokens.Font.caption)
-            .foregroundStyle(activeWorktreeColor(state))
-    }
-
-    private func activeWorktreeTitle(_ state: AgentState) -> String {
-        switch state {
-        case .waitingForInput:
-            return String.localized("Waiting")
-        case .error:
-            return String.localized("Error")
-        case .running:
-            return String.localized("Running")
-        case .completed:
-            return String.localized("Completed")
-        case .none:
-            return String.localized("Idle")
-        }
-    }
 
     // MARK: - Footer
 
