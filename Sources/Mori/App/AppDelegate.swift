@@ -1171,8 +1171,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         guard let scriptObj = NSAppleScript(source: appleScript) else {
             return .failure("Failed to create AppleScript.")
         }
-        let descriptor = scriptObj.executeAndReturnError(&error)
-        if descriptor != nil { return .success }
+        _ = scriptObj.executeAndReturnError(&error)
+        if error == nil { return .success }
         // Error code -128 = user clicked Cancel
         if let errorNumber = error?[NSAppleScript.errorNumber] as? Int, errorNumber == -128 {
             return .cancelled
