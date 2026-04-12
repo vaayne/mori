@@ -1,11 +1,11 @@
 import SwiftUI
 
 struct SidebarFooterView: View {
-    let shortcutHintsVisible: Bool
-    let onAddProject: (() -> Void)?
-    let onOpenCommandPalette: (() -> Void)?
-    let onOpenSettings: (() -> Void)?
-    let horizontalDividerPadding: CGFloat?
+    private let shortcutHintsVisible: Bool
+    private let onAddProject: (() -> Void)?
+    private let onOpenCommandPalette: (() -> Void)?
+    private let onOpenSettings: (() -> Void)?
+    private let horizontalDividerPadding: CGFloat?
 
     init(
         shortcutHintsVisible: Bool,
@@ -23,69 +23,77 @@ struct SidebarFooterView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Group {
-                if let horizontalDividerPadding {
-                    Divider()
-                        .padding(.horizontal, horizontalDividerPadding)
-                } else {
-                    Divider()
-                }
-            }
+            footerDivider
 
             HStack(spacing: MoriTokens.Spacing.xl) {
                 if let onAddProject {
-                    Button(action: onAddProject) {
-                        Image(systemName: "plus.rectangle.on.folder")
-                            .font(.system(size: 13))
-                            .foregroundStyle(MoriTokens.Color.muted)
-                    }
-                    .buttonStyle(.plain)
-                    .help(String.localized("Add Repository"))
-                    .accessibilityLabel(String.localized("Add Repository"))
+                    footerButton(
+                        systemImage: "plus.rectangle.on.folder",
+                        helpText: String.localized("Add Repository"),
+                        accessibilityLabel: String.localized("Add Repository"),
+                        action: onAddProject
+                    )
                 }
 
                 Spacer()
 
                 if let onOpenCommandPalette {
-                    Button(action: onOpenCommandPalette) {
-                        Image(systemName: "text.magnifyingglass")
-                            .font(.system(size: 13))
-                            .foregroundStyle(MoriTokens.Color.muted)
-                    }
-                    .buttonStyle(.plain)
-                    .help(String.localized("Command Palette (⇧⌘P)"))
-                    .accessibilityLabel(String.localized("Command Palette"))
-                    .overlay(alignment: .top) {
-                        if shortcutHintsVisible {
-                            ShortcutHintPill("⇧⌘P")
-                                .offset(y: -22)
-                                .transition(.opacity)
-                        }
-                    }
-                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
+                    footerButton(
+                        systemImage: "text.magnifyingglass",
+                        helpText: String.localized("Command Palette (⇧⌘P)"),
+                        accessibilityLabel: String.localized("Command Palette"),
+                        shortcutHint: "⇧⌘P",
+                        action: onOpenCommandPalette
+                    )
                 }
 
                 if let onOpenSettings {
-                    Button(action: onOpenSettings) {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 13))
-                            .foregroundStyle(MoriTokens.Color.muted)
-                    }
-                    .buttonStyle(.plain)
-                    .help(String.localized("Settings (⌘,)"))
-                    .accessibilityLabel(String.localized("Settings"))
-                    .overlay(alignment: .top) {
-                        if shortcutHintsVisible {
-                            ShortcutHintPill("⌘,")
-                                .offset(y: -22)
-                                .transition(.opacity)
-                        }
-                    }
-                    .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
+                    footerButton(
+                        systemImage: "gearshape",
+                        helpText: String.localized("Settings (⌘,)"),
+                        accessibilityLabel: String.localized("Settings"),
+                        shortcutHint: "⌘,",
+                        action: onOpenSettings
+                    )
                 }
             }
             .padding(.horizontal, MoriTokens.Spacing.xl)
             .padding(.vertical, MoriTokens.Spacing.lg)
         }
+    }
+
+    @ViewBuilder
+    private var footerDivider: some View {
+        if let horizontalDividerPadding {
+            Divider()
+                .padding(.horizontal, horizontalDividerPadding)
+        } else {
+            Divider()
+        }
+    }
+
+    private func footerButton(
+        systemImage: String,
+        helpText: String,
+        accessibilityLabel: String,
+        shortcutHint: String? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13))
+                .foregroundStyle(MoriTokens.Color.muted)
+        }
+        .buttonStyle(.plain)
+        .help(helpText)
+        .accessibilityLabel(accessibilityLabel)
+        .overlay(alignment: .top) {
+            if let shortcutHint, shortcutHintsVisible {
+                ShortcutHintPill(shortcutHint)
+                    .offset(y: -22)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
     }
 }
