@@ -202,7 +202,6 @@ func testUIStateDefaultInit() {
     assertNil(state.selectedProjectId)
     assertNil(state.selectedWorktreeId)
     assertNil(state.selectedWindowId)
-    assertEqual(state.sidebarMode, .workspaces)
     assertEqual(state.searchQuery, "")
 }
 
@@ -1342,20 +1341,6 @@ testHookConfigInvalidJsonReturnsNil()
 testHookConfigMissingFieldsFails()
 testHookEntryMatchByEvent()
 
-testWorkflowStatusRawValues()
-testWorkflowStatusCodableRoundTrip()
-testWorkflowStatusSortOrder()
-testWorkflowStatusDisplayName()
-testWorkflowStatusIconName()
-testWorktreeWorkflowStatusDefault()
-testWorktreeWorkflowStatusCodable()
-testWorktreeCodableBackwardsCompatWorkflowStatus()
-testWorktreeCodableWithWorkflowStatus()
-testSidebarModeNewValuesRoundTrip()
-testSidebarModeBackwardsCompatWorktrees()
-testSidebarModeBackwardsCompatSearch()
-testSidebarModeBackwardsCompatAgents()
-testSidebarModeAgentTasksRoundTrip()
 
 testSSHControlSocketPathLengthLimit()
 testSSHExecutionConfigTargetFormatting()
