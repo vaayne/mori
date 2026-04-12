@@ -163,9 +163,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             onOpenCommandPalette: { [weak self] in
                 self?.commandPaletteController?.toggle()
             },
-            onSetWorkflowStatus: { [weak manager] worktreeId, status in
-                manager?.setWorkflowStatus(worktreeId: worktreeId, status: status)
-            },
             onRequestPaneOutput: { [weak self, weak manager] paneId, completion in
                 guard let self, let manager else {
                     completion(nil)
@@ -1174,8 +1171,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         guard let scriptObj = NSAppleScript(source: appleScript) else {
             return .failure("Failed to create AppleScript.")
         }
-        let descriptor = scriptObj.executeAndReturnError(&error)
-        if descriptor != nil { return .success }
+        _ = scriptObj.executeAndReturnError(&error)
+        if error == nil { return .success }
         // Error code -128 = user clicked Cancel
         if let errorNumber = error?[NSAppleScript.errorNumber] as? Int, errorNumber == -128 {
             return .cancelled
@@ -1501,14 +1498,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                     Task { @MainActor in
                         await manager.launchToolInCurrentSession(command: tool.command, windowName: tool.name.lowercased())
                     }
-                }
-            }
-            // Handle "action.status-<rawValue>" patterns
-            else if actionId.hasPrefix("action.status-") {
-                let rawValue = String(actionId.dropFirst("action.status-".count))
-                if let status = WorkflowStatus(rawValue: rawValue),
-                   let worktreeId = appState?.uiState.selectedWorktreeId {
-                    manager.setWorkflowStatus(worktreeId: worktreeId, status: status)
                 }
             }
         }

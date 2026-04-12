@@ -137,26 +137,6 @@ mori open ~/workspace/mori
 mori open .
 ```
 
-### `mori status`
-
-Set the workflow status for a worktree. Status is displayed as a badge in the
-sidebar.
-
-```bash
-mori status <project> <worktree> <status>
-```
-
-| Argument | Description |
-|----------|-------------|
-| `project` | Project name |
-| `worktree` | Worktree name |
-| `status` | One of: `todo`, `inProgress`, `needsReview`, `done`, `cancelled` |
-
-```bash
-mori status mori feature/cli-docs inProgress
-mori status mori feature/cli-docs done
-```
-
 ### `mori pane list`
 
 List all panes across projects and worktrees. Optionally filter by project
@@ -296,12 +276,3 @@ The receiving pane sees the message along with metadata identifying the sender's
 project, worktree, window, and pane ID — all populated automatically from the
 sender's `MORI_*` environment variables.
 
-### Setting workflow status
-
-Agents can update the worktree's workflow status to signal progress:
-
-```bash
-mori status mori feature/auth inProgress   # working on it
-mori status mori feature/auth needsReview  # ready for review
-mori status mori feature/auth done         # finished
-```

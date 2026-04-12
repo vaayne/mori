@@ -26,7 +26,6 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         onAddProject: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
         onOpenCommandPalette: (() -> Void)? = nil,
-        onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)? = nil,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil,
         onUpdateProject: ((Project) -> Void)? = nil
@@ -46,7 +45,6 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
             onAddProject: onAddProject,
             onOpenSettings: onOpenSettings,
             onOpenCommandPalette: onOpenCommandPalette,
-            onSetWorkflowStatus: onSetWorkflowStatus,
             onRequestPaneOutput: onRequestPaneOutput,
             onSendKeys: onSendKeys,
             onUpdateProject: onUpdateProject
@@ -89,7 +87,6 @@ struct SidebarContentView: View {
     let onAddProject: (() -> Void)?
     let onOpenSettings: (() -> Void)?
     let onOpenCommandPalette: (() -> Void)?
-    let onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)?
     let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     let onSendKeys: ((String, String) -> Void)?
     let onUpdateProject: ((Project) -> Void)?
@@ -114,7 +111,6 @@ struct SidebarContentView: View {
             onAddProject: onAddProject,
             onOpenSettings: onOpenSettings,
             onOpenCommandPalette: onOpenCommandPalette,
-            onSetWorkflowStatus: onSetWorkflowStatus,
             onRequestPaneOutput: onRequestPaneOutput,
             onSendKeys: onSendKeys,
             onUpdateProject: onUpdateProject

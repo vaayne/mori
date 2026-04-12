@@ -50,12 +50,6 @@
 "Opens an existing project or creates a new one from the directory. Use '.' for the current directory." = "打开已有项目或从目录创建新项目。使用 '.' 表示当前目录。";
 "Path to project directory" = "项目目录路径";
 
-/* Status */
-"Set workflow status for a worktree" = "设置工作树的工作流状态";
-"Workflow: todo → inProgress → needsReview → done / cancelled" = "工作流：todo → inProgress → needsReview → done / cancelled";
-"Status is displayed as a badge in the Mori sidebar." = "状态会显示为 Mori 侧边栏中的徽章。";
-"Workflow status (todo, inProgress, needsReview, done, cancelled)" = "工作流状态（todo、inProgress、needsReview、done、cancelled）";
-
 /* Pane commands */
 "Pane commands for agent communication" = "面板命令（用于 Agent 通信）";
 "Enables agents to discover, observe, and interact with other panes." = "使 Agent 能够发现、观察和交互其他面板。";

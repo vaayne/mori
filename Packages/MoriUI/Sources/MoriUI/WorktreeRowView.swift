@@ -130,17 +130,18 @@ public struct WorktreeRowView: View {
         }
     }
 
+    @ViewBuilder
     private var primaryBadge: some View {
-        let style = primaryBadgeStyle
-
-        return Text(style.title)
-            .font(MoriTokens.Font.caption)
-            .foregroundStyle(style.color)
-            .padding(.horizontal, MoriTokens.Spacing.sm)
-            .padding(.vertical, MoriTokens.Spacing.xxs)
-            .background(style.color.opacity(MoriTokens.Opacity.subtle))
-            .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
-            .accessibilityLabel(style.accessibilityLabel)
+        if let style = primaryBadgeStyle {
+            Text(style.title)
+                .font(MoriTokens.Font.caption)
+                .foregroundStyle(style.color)
+                .padding(.horizontal, MoriTokens.Spacing.sm)
+                .padding(.vertical, MoriTokens.Spacing.xxs)
+                .background(style.color.opacity(MoriTokens.Opacity.subtle))
+                .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
+                .accessibilityLabel(style.accessibilityLabel)
+        }
     }
 
     // MARK: - Overflow Menu
@@ -244,7 +245,7 @@ public struct WorktreeRowView: View {
         return parts.joined(separator: " ")
     }
 
-    private var primaryBadgeStyle: PrimaryBadgeStyle {
+    private var primaryBadgeStyle: PrimaryBadgeStyle? {
         switch worktree.agentState {
         case .waitingForInput:
             return PrimaryBadgeStyle(
@@ -271,23 +272,7 @@ public struct WorktreeRowView: View {
                 accessibilityLabel: String.localized("Completed")
             )
         case .none:
-            let title = String.localized(String.LocalizationValue(stringLiteral: worktree.workflowStatus.displayName))
-            return PrimaryBadgeStyle(
-                title: title,
-                color: workflowStatusColor,
-                accessibilityLabel: title
-            )
-        }
-    }
-
-    private var workflowStatusColor: Color {
-        switch worktree.workflowStatus {
-        case .needsReview:
-            return MoriTokens.Color.info
-        case .inProgress:
-            return MoriTokens.Color.success
-        case .todo, .done, .cancelled:
-            return MoriTokens.Color.muted
+            return nil
         }
     }
 }

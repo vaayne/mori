@@ -187,7 +187,6 @@ func testUIStateDefault() throws {
     assertNil(state.selectedProjectId)
     assertNil(state.selectedWorktreeId)
     assertNil(state.selectedWindowId)
-    assertEqual(state.sidebarMode, .workspaces)
     assertEqual(state.searchQuery, "")
 }
 
@@ -201,7 +200,6 @@ func testUIStateSaveAndFetch() throws {
         selectedProjectId: projectId,
         selectedWorktreeId: worktreeId,
         selectedWindowId: "@3",
-        sidebarMode: .tasks,
         searchQuery: "hello"
     )
 
@@ -211,7 +209,6 @@ func testUIStateSaveAndFetch() throws {
     assertEqual(fetched.selectedProjectId, projectId)
     assertEqual(fetched.selectedWorktreeId, worktreeId)
     assertEqual(fetched.selectedWindowId, "@3")
-    assertEqual(fetched.sidebarMode, .tasks)
     assertEqual(fetched.searchQuery, "hello")
 }
 
@@ -219,15 +216,14 @@ func testUIStateOverwrite() throws {
     let store = JSONStore()
     let repo = UIStateRepository(store: store)
 
-    let state1 = UIState(selectedProjectId: UUID(), sidebarMode: .workspaces, searchQuery: "first")
+    let state1 = UIState(selectedProjectId: UUID(), searchQuery: "first")
     try repo.save(state1)
 
-    let state2 = UIState(selectedProjectId: UUID(), sidebarMode: .tasks, searchQuery: "second")
+    let state2 = UIState(selectedProjectId: UUID(), searchQuery: "second")
     try repo.save(state2)
 
     let fetched = try repo.fetch()
     assertEqual(fetched.selectedProjectId, state2.selectedProjectId)
-    assertEqual(fetched.sidebarMode, .tasks)
     assertEqual(fetched.searchQuery, "second")
 }
 
