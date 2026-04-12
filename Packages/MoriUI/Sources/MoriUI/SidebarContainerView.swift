@@ -1,12 +1,9 @@
 import SwiftUI
 import MoriCore
 
-/// Container view with a segmented control toggle (Tasks | Workspaces) at top,
-/// plus an agent-mode toggle button. When agent mode is active, `AgentSidebarView`
-/// replaces the content regardless of which base mode is selected.
+/// Container view for the unified sidebar.
+/// Renders a single combined navigation surface for projects, worktrees, and windows.
 public struct SidebarContainerView: View {
-    private let sidebarMode: SidebarMode
-    private let onToggleSidebarMode: (SidebarMode) -> Void
 
     // Shared data
     private let projects: [Project]
@@ -35,8 +32,6 @@ public struct SidebarContainerView: View {
     private let onUpdateProject: ((Project) -> Void)?
 
     public init(
-        sidebarMode: SidebarMode,
-        onToggleSidebarMode: @escaping (SidebarMode) -> Void,
         projects: [Project] = [],
         selectedProjectId: UUID? = nil,
         worktrees: [Worktree],
@@ -60,8 +55,6 @@ public struct SidebarContainerView: View {
         onSendKeys: ((String, String) -> Void)? = nil,
         onUpdateProject: ((Project) -> Void)? = nil
     ) {
-        self.sidebarMode = sidebarMode
-        self.onToggleSidebarMode = onToggleSidebarMode
         self.projects = projects
         self.selectedProjectId = selectedProjectId
         self.worktrees = worktrees
@@ -90,72 +83,31 @@ public struct SidebarContainerView: View {
     @StateObject private var shortcutHintMonitor = ShortcutHintModifierMonitor()
 
     public var body: some View {
-        VStack(spacing: 0) {
-            headerRow
-
-            // Content
-            switch sidebarMode {
-            case .agentTasks:
-                AgentSidebarView(
-                    projects: projects,
-                    worktrees: worktrees,
-                    windows: windows,
-                    selectedWindowId: selectedWindowId,
-                    shortcutHintsVisible: shortcutHintMonitor.areHintsVisible,
-                    onSelectWindow: onSelectWindow,
-                    onRequestPaneOutput: onRequestPaneOutput,
-                    onSendKeys: onSendKeys,
-                    onAddProject: onAddProject,
-                    onOpenSettings: onOpenSettings,
-                    onOpenCommandPalette: onOpenCommandPalette
-                )
-            case .tasks:
-                TaskSidebarView(
-                    projects: projects,
-                    worktrees: worktrees,
-                    windows: windows,
-                    selectedWorktreeId: selectedWorktreeId,
-                    selectedWindowId: selectedWindowId,
-                    onSelectWorktree: onSelectWorktree,
-                    onSelectWindow: onSelectWindow,
-                    onCloseWindow: onCloseWindow,
-                    onRemoveWorktree: onRemoveWorktree,
-                    onSetWorkflowStatus: onSetWorkflowStatus,
-                    onAddProject: onAddProject,
-                    onOpenSettings: onOpenSettings,
-                    onOpenCommandPalette: onOpenCommandPalette,
-                    shortcutHintsVisible: shortcutHintMonitor.areHintsVisible,
-                    onRequestPaneOutput: onRequestPaneOutput,
-                    onSendKeys: onSendKeys
-                )
-            case .workspaces:
-                WorktreeSidebarView(
-                    projects: projects,
-                    selectedProjectId: selectedProjectId,
-                    worktrees: worktrees,
-                    windows: windows,
-                    selectedWorktreeId: selectedWorktreeId,
-                    selectedWindowId: selectedWindowId,
-                    shortcutHintsVisible: shortcutHintMonitor.areHintsVisible,
-                    onSelectProject: onSelectProject,
-                    onSelectWorktree: onSelectWorktree,
-                    onSelectWindow: onSelectWindow,
-                    onShowCreatePanel: onShowCreatePanel,
-                    onRemoveWorktree: onRemoveWorktree,
-                    onRemoveProject: onRemoveProject,
-                    onEditRemoteProject: onEditRemoteProject,
-                    onCloseWindow: onCloseWindow,
-                    onToggleCollapse: onToggleCollapse,
-                    onAddProject: onAddProject,
-                    onOpenSettings: onOpenSettings,
-                    onOpenCommandPalette: onOpenCommandPalette,
-                    onSetWorkflowStatus: onSetWorkflowStatus,
-                    onRequestPaneOutput: onRequestPaneOutput,
-                    onSendKeys: onSendKeys,
-                    onUpdateProject: onUpdateProject
-                )
-            }
-        }
+        WorktreeSidebarView(
+            projects: projects,
+            selectedProjectId: selectedProjectId,
+            worktrees: worktrees,
+            windows: windows,
+            selectedWorktreeId: selectedWorktreeId,
+            selectedWindowId: selectedWindowId,
+            shortcutHintsVisible: shortcutHintMonitor.areHintsVisible,
+            onSelectProject: onSelectProject,
+            onSelectWorktree: onSelectWorktree,
+            onSelectWindow: onSelectWindow,
+            onShowCreatePanel: onShowCreatePanel,
+            onRemoveWorktree: onRemoveWorktree,
+            onRemoveProject: onRemoveProject,
+            onEditRemoteProject: onEditRemoteProject,
+            onCloseWindow: onCloseWindow,
+            onToggleCollapse: onToggleCollapse,
+            onAddProject: onAddProject,
+            onOpenSettings: onOpenSettings,
+            onOpenCommandPalette: onOpenCommandPalette,
+            onSetWorkflowStatus: onSetWorkflowStatus,
+            onRequestPaneOutput: onRequestPaneOutput,
+            onSendKeys: onSendKeys,
+            onUpdateProject: onUpdateProject
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             shortcutHintMonitor.start()
@@ -163,23 +115,5 @@ public struct SidebarContainerView: View {
         .onDisappear {
             shortcutHintMonitor.stop()
         }
-    }
-
-    // MARK: - Header
-
-    /// Three-segment picker: Workspaces | Tasks | Agents.
-    private var headerRow: some View {
-        Picker("", selection: Binding(
-            get: { sidebarMode },
-            set: { onToggleSidebarMode($0) }
-        )) {
-            Text(String.localized("Workspaces")).tag(SidebarMode.workspaces)
-            Text(String.localized("Tasks")).tag(SidebarMode.tasks)
-            Text(String.localized("Agents")).tag(SidebarMode.agentTasks)
-        }
-        .pickerStyle(.segmented)
-        .padding(.horizontal, MoriTokens.Spacing.xl)
-        .padding(.top, MoriTokens.Spacing.lg)
-        .padding(.bottom, MoriTokens.Spacing.sm)
     }
 }

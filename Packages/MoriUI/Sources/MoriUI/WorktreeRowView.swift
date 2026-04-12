@@ -1,9 +1,15 @@
 import SwiftUI
 import MoriCore
 
-/// A two-line row representing a single worktree: bold name + subtitle with status.
-/// Shows a hover-reveal `...` menu for management actions.
+/// A compact worktree row with a single primary status badge.
+/// Secondary metadata stays on the subtitle line to keep scanning easy.
 public struct WorktreeRowView: View {
+    private struct PrimaryBadgeStyle {
+        let title: String
+        let color: Color
+        let accessibilityLabel: String
+    }
+
     let worktree: Worktree
     let agentName: String?
     let isSelected: Bool
@@ -29,36 +35,25 @@ public struct WorktreeRowView: View {
     public var body: some View {
         Button(action: onSelect) {
             HStack(alignment: .center, spacing: MoriTokens.Spacing.lg) {
-                // Icon box
-                ZStack {
-                    RoundedRectangle(cornerRadius: MoriTokens.Icon.worktreeBoxRadius)
-                        .fill(isSelected
-                            ? MoriTokens.Color.active.opacity(MoriTokens.Opacity.light)
-                            : MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
-                        .frame(width: MoriTokens.Icon.worktreeBox, height: MoriTokens.Icon.worktreeBox)
-                    Image(systemName: worktreeIcon)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(isSelected ? MoriTokens.Color.active : MoriTokens.Color.muted)
-                }
+                iconView
 
                 VStack(alignment: .leading, spacing: MoriTokens.Spacing.xxs) {
-                    Text(worktree.name)
-                        .font(MoriTokens.Font.rowTitle)
-                        .lineLimit(1)
-
                     HStack(spacing: MoriTokens.Spacing.sm) {
-                        statusLine
-                        gitStatusBadges
+                        Text(worktree.name)
+                            .font(MoriTokens.Font.rowTitle)
+                            .lineLimit(1)
+
+                        if isSelected {
+                            selectedAgentLabel
+                        }
                     }
+
+                    subtitleLine
                 }
 
                 Spacer(minLength: 0)
 
-                // Right column: diff stats + agent badge
-                VStack(alignment: .trailing, spacing: MoriTokens.Spacing.xs) {
-                    diffStatsView
-                    alertBadgeView
-                }
+                primaryBadge
 
                 if isHovered {
                     overflowMenu
@@ -77,6 +72,75 @@ public struct WorktreeRowView: View {
                 isHovered = hovering
             }
         }
+    }
+
+    private var iconView: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: MoriTokens.Icon.worktreeBoxRadius)
+                .fill(isSelected
+                    ? MoriTokens.Color.active.opacity(MoriTokens.Opacity.light)
+                    : MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+                .frame(width: MoriTokens.Icon.worktreeBox, height: MoriTokens.Icon.worktreeBox)
+            Image(systemName: worktreeIcon)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(isSelected ? MoriTokens.Color.active : MoriTokens.Color.muted)
+        }
+    }
+
+    private var selectedAgentLabel: some View {
+        Group {
+            if let agentName, worktree.agentState != .none {
+                Text(agentName)
+                    .font(MoriTokens.Font.caption)
+                    .foregroundStyle(MoriTokens.Color.muted)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private var subtitleLine: some View {
+        HStack(spacing: MoriTokens.Spacing.sm) {
+            if let branchText = branchText {
+                Text(branchText)
+                    .font(MoriTokens.Font.monoBranch)
+                    .foregroundStyle(MoriTokens.Color.muted)
+                    .lineLimit(1)
+            }
+
+            if worktree.status == .active {
+                Circle()
+                    .fill(MoriTokens.Color.success)
+                    .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
+                    .accessibilityLabel(String.localized("Active"))
+            }
+
+            if let timeText = relativeTimeText {
+                Text(timeText)
+                    .font(MoriTokens.Font.caption)
+                    .foregroundStyle(MoriTokens.Color.inactive)
+                    .lineLimit(1)
+            }
+
+            if let gitSummaryText {
+                Text(gitSummaryText)
+                    .font(MoriTokens.Font.monoSmall)
+                    .foregroundStyle(MoriTokens.Color.muted)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private var primaryBadge: some View {
+        let style = primaryBadgeStyle
+
+        return Text(style.title)
+            .font(MoriTokens.Font.caption)
+            .foregroundStyle(style.color)
+            .padding(.horizontal, MoriTokens.Spacing.sm)
+            .padding(.vertical, MoriTokens.Spacing.xxs)
+            .background(style.color.opacity(MoriTokens.Opacity.subtle))
+            .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
+            .accessibilityLabel(style.accessibilityLabel)
     }
 
     // MARK: - Overflow Menu
@@ -117,44 +181,20 @@ public struct WorktreeRowView: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .frame(width: 16)
-        .help("More Actions")
+        .help(String.localized("More Actions"))
     }
 
     private var rowBackground: some ShapeStyle {
         if isSelected {
             return AnyShapeStyle(MoriTokens.Color.active.opacity(MoriTokens.Opacity.light))
-        } else if isHovered {
+        }
+        if isHovered {
             return AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
-        } else {
-            return AnyShapeStyle(Color.clear)
         }
+        return AnyShapeStyle(Color.clear)
     }
 
-    // MARK: - Diff Stats
-
-    /// Shows +N -N in green/red when there are staged or modified files.
-    @ViewBuilder
-    private var diffStatsView: some View {
-        let staged = worktree.stagedCount
-        let modified = worktree.modifiedCount
-        if staged > 0 || modified > 0 {
-            HStack(spacing: MoriTokens.Spacing.xs) {
-                if staged > 0 {
-                    Text("+\(staged)")
-                        .font(MoriTokens.Font.monoSmall)
-                        .foregroundStyle(MoriTokens.Color.success)
-                }
-                if modified > 0 {
-                    Text("-\(modified)")
-                        .font(MoriTokens.Font.monoSmall)
-                        .foregroundStyle(MoriTokens.Color.error)
-                }
-            }
-            .accessibilityLabel(String.localized("\(staged) staged, \(modified) modified"))
-        }
-    }
-
-    // MARK: - Icon
+    // MARK: - Derived Content
 
     private var worktreeIcon: String {
         if worktree.branch == nil {
@@ -163,121 +203,91 @@ public struct WorktreeRowView: View {
         return worktree.isMainWorktree ? "star.fill" : "arrow.triangle.branch"
     }
 
-    // MARK: - Status Line
-
-    private var statusLine: some View {
-        HStack(spacing: MoriTokens.Spacing.sm) {
-            // Show branch only when it differs from the worktree name
-            if let branch = worktree.branch, branch != worktree.name {
-                Text(branch)
-                    .font(MoriTokens.Font.monoBranch)
-                    .foregroundStyle(MoriTokens.Color.muted)
-                    .lineLimit(1)
-            }
-
-            if worktree.status == .active {
-                Circle()
-                    .fill(MoriTokens.Color.success)
-                    .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
-                    .accessibilityLabel("Active")
-            }
-
-            if let timeText = relativeTimeText {
-                Text(timeText)
-                    .font(MoriTokens.Font.caption)
-                    .foregroundStyle(MoriTokens.Color.inactive)
-                    .lineLimit(1)
-            }
-        }
+    private var branchText: String? {
+        guard let branch = worktree.branch, branch != worktree.name else { return nil }
+        return branch
     }
 
     private var relativeTimeText: String? {
         guard let date = worktree.lastActiveAt else { return nil }
         let seconds = Int(-date.timeIntervalSinceNow)
-        if seconds < 60 { return "just now" }
-        if seconds < 3600 { return "\(seconds / 60)m ago" }
-        if seconds < 86400 { return "\(seconds / 3600)h ago" }
-        if seconds < 604_800 { return "\(seconds / 86400)d ago" }
+        if seconds < 60 { return String.localized("just now") }
+        if seconds < 3600 { return String.localized("\(seconds / 60)m ago") }
+        if seconds < 86400 { return String.localized("\(seconds / 3600)h ago") }
+        if seconds < 604_800 { return String.localized("\(seconds / 86400)d ago") }
         return nil
     }
 
-    // MARK: - Git Status Badges
+    private var gitSummaryText: String? {
+        var parts: [String] = []
 
-    @ViewBuilder
-    private var gitStatusBadges: some View {
-        let indicators = gitStatusIndicators
-        if !indicators.isEmpty {
-            HStack(spacing: MoriTokens.Spacing.sm) {
-                ForEach(indicators, id: \.label) { indicator in
-                    Text(indicator.text)
-                        .font(MoriTokens.Font.monoSmall)
-                        .foregroundStyle(indicator.color)
-                        .accessibilityLabel(indicator.label)
-                }
-            }
-            .padding(.horizontal, MoriTokens.Spacing.sm)
-            .padding(.vertical, MoriTokens.Spacing.xxs)
-            .background(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
-            .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
-        }
-    }
-
-    private var gitStatusIndicators: [(text: String, color: Color, label: String)] {
-        var result: [(text: String, color: Color, label: String)] = []
-        if !worktree.hasUpstream && worktree.branch != nil {
-            result.append(("⊘", MoriTokens.Color.info, "No upstream"))
-        }
         if worktree.aheadCount > 0 {
-            result.append(("↑\(worktree.aheadCount)", MoriTokens.Color.success, "\(worktree.aheadCount) ahead"))
+            parts.append("↑\(worktree.aheadCount)")
         }
         if worktree.behindCount > 0 {
-            result.append(("↓\(worktree.behindCount)", MoriTokens.Color.error, "\(worktree.behindCount) behind"))
+            parts.append("↓\(worktree.behindCount)")
         }
         if worktree.stagedCount > 0 {
-            result.append(("+\(worktree.stagedCount)", MoriTokens.Color.success, "\(worktree.stagedCount) staged"))
+            parts.append("+\(worktree.stagedCount)")
         }
         if worktree.modifiedCount > 0 {
-            result.append(("~\(worktree.modifiedCount)", MoriTokens.Color.warning, "\(worktree.modifiedCount) modified"))
+            parts.append("~\(worktree.modifiedCount)")
         }
         if worktree.untrackedCount > 0 {
-            result.append(("?\(worktree.untrackedCount)", MoriTokens.Color.inactive, "\(worktree.untrackedCount) untracked"))
+            parts.append("?\(worktree.untrackedCount)")
         }
-        return result
+        if !worktree.hasUpstream && worktree.branch != nil {
+            parts.append("⊘")
+        }
+
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: " ")
     }
 
-    // MARK: - Alert Badge
-
-    private var effectiveAgentLabel: (icon: String, color: Color, help: String, name: String?)? {
+    private var primaryBadgeStyle: PrimaryBadgeStyle {
         switch worktree.agentState {
-        case .error:
-            return ("xmark.circle.fill", MoriTokens.Color.error, "Agent error", agentName)
         case .waitingForInput:
-            return ("exclamationmark.bubble.fill", MoriTokens.Color.attention, "Agent waiting for input", agentName)
+            return PrimaryBadgeStyle(
+                title: String.localized("Waiting"),
+                color: MoriTokens.Color.attention,
+                accessibilityLabel: String.localized("Waiting")
+            )
+        case .error:
+            return PrimaryBadgeStyle(
+                title: String.localized("Error"),
+                color: MoriTokens.Color.error,
+                accessibilityLabel: String.localized("Error")
+            )
         case .running:
-            return ("bolt.fill", MoriTokens.Color.success, "Agent running", agentName)
+            return PrimaryBadgeStyle(
+                title: String.localized("Running"),
+                color: MoriTokens.Color.success,
+                accessibilityLabel: String.localized("Running")
+            )
         case .completed:
-            return ("checkmark.circle.fill", MoriTokens.Color.success, "Agent completed", agentName)
+            return PrimaryBadgeStyle(
+                title: String.localized("Completed"),
+                color: MoriTokens.Color.success,
+                accessibilityLabel: String.localized("Completed")
+            )
         case .none:
-            return nil
+            let title = String.localized(String.LocalizationValue(stringLiteral: worktree.workflowStatus.displayName))
+            return PrimaryBadgeStyle(
+                title: title,
+                color: workflowStatusColor,
+                accessibilityLabel: title
+            )
         }
     }
 
-    @ViewBuilder
-    private var alertBadgeView: some View {
-        if let label = effectiveAgentLabel {
-            HStack(spacing: MoriTokens.Spacing.xxs) {
-                Image(systemName: label.icon)
-                    .font(.system(size: MoriTokens.Icon.badge))
-                    .foregroundStyle(label.color)
-                if let name = label.name {
-                    Text(name)
-                        .font(MoriTokens.Font.monoSmall)
-                        .foregroundStyle(label.color)
-                        .lineLimit(1)
-                }
-            }
-            .help(label.help)
-            .accessibilityLabel(label.help)
+    private var workflowStatusColor: Color {
+        switch worktree.workflowStatus {
+        case .needsReview:
+            return MoriTokens.Color.info
+        case .inProgress:
+            return MoriTokens.Color.success
+        case .todo, .done, .cancelled:
+            return MoriTokens.Color.muted
         }
     }
 }

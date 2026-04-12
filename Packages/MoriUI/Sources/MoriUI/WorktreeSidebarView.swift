@@ -78,9 +78,57 @@ public struct WorktreeSidebarView: View {
         self.shortcutHintsVisible = shortcutHintsVisible
     }
 
+    private struct ActiveWorktreeItem: Identifiable {
+        let worktree: Worktree
+        let projectName: String
+        let agentName: String?
+
+        var id: UUID { worktree.id }
+    }
+
+    private struct ActiveWorktreeStyle {
+        let icon: String
+        let color: Color
+        let title: String
+        let background: AnyShapeStyle
+    }
+
     /// Count of agent windows needing attention across all worktrees.
     private var attentionCount: Int {
         windows.filter { $0.agentState == .waitingForInput || $0.agentState == .error }.count
+    }
+
+    private var runningCount: Int {
+        windows.filter { $0.agentState == .running }.count
+    }
+
+    private var projectNamesById: [UUID: String] {
+        Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0.name) })
+    }
+
+    private var activeWorktreeItems: [ActiveWorktreeItem] {
+        worktrees
+            .filter { $0.status != .unavailable && $0.agentState != .none }
+            .compactMap { worktree in
+                guard let projectName = projectNamesById[worktree.projectId] else { return nil }
+                let agentName = windows.first(where: {
+                    $0.worktreeId == worktree.id && ($0.detectedAgent != nil || $0.agentState != .none)
+                })?.detectedAgent
+                return ActiveWorktreeItem(
+                    worktree: worktree,
+                    projectName: projectName,
+                    agentName: agentName
+                )
+            }
+            .sorted { lhs, rhs in
+                let leftPriority = activeWorktreePriority(lhs.worktree.agentState)
+                let rightPriority = activeWorktreePriority(rhs.worktree.agentState)
+                if leftPriority != rightPriority {
+                    return leftPriority < rightPriority
+                }
+
+                return (lhs.worktree.lastActiveAt ?? .distantPast) > (rhs.worktree.lastActiveAt ?? .distantPast)
+            }
     }
 
     /// Global 1-based index for each window across all projects and worktrees.
@@ -92,10 +140,7 @@ public struct WorktreeSidebarView: View {
             let projectWorktrees = worktrees
                 .filter { $0.projectId == project.id && $0.status != .unavailable }
             for worktree in projectWorktrees {
-                let worktreeWindows = windows
-                    .filter { $0.worktreeId == worktree.id }
-                    .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
-                for window in worktreeWindows {
+                for window in allWindows(for: worktree) {
                     if globalIndex <= 9 {
                         result[window.tmuxWindowId] = globalIndex
                     }
@@ -110,30 +155,9 @@ public struct WorktreeSidebarView: View {
         VStack(spacing: 0) {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    attentionBanner
-
-                    // "PROJECTS" section header
-                    HStack {
-                        Text(String.localized("PROJECTS"))
-                            .font(.system(size: 11, weight: .bold))
-                            .tracking(1.2)
-                            .foregroundStyle(MoriTokens.Color.muted)
-
-                        Spacer()
-
-                        if let onAddProject {
-                            Button(action: onAddProject) {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(MoriTokens.Color.muted)
-                            }
-                            .buttonStyle(.plain)
-                            .help("Add Project")
-                        }
-                    }
-                    .padding(.horizontal, MoriTokens.Spacing.xl)
-                    .padding(.top, MoriTokens.Spacing.lg)
-                    .padding(.bottom, MoriTokens.Spacing.sm)
+                    summaryStrip
+                    activeWorktreeSection
+                    projectsSectionHeader
 
                     ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
                         if index > 0 {
@@ -199,74 +223,8 @@ public struct WorktreeSidebarView: View {
 
             if hoveredProjectId == project.id {
                 HStack(spacing: MoriTokens.Spacing.sm) {
-                    if !project.isCollapsed, onShowCreatePanel != nil {
-                        Button {
-                            onSelectProject?(project.id)
-                            onShowCreatePanel?()
-                        } label: {
-                            Image(systemName: "plus")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(MoriTokens.Color.muted)
-                        }
-                        .buttonStyle(.plain)
-                        .help("New Workspace")
-                    }
-
                     Menu {
-                        if !project.isCollapsed, onShowCreatePanel != nil {
-                            Button {
-                                onSelectProject?(project.id)
-                                onShowCreatePanel?()
-                            } label: {
-                                Label("New Workspace…", systemImage: "plus")
-                            }
-                        }
-
-                        let editors = EditorLauncher.installed
-                        if !editors.isEmpty {
-                            Divider()
-                            ForEach(editors) { editor in
-                                Button {
-                                    editor.open(path: project.repoRootPath)
-                                } label: {
-                                    Label("Open in \(editor.name)", systemImage: editor.icon)
-                                }
-                            }
-                        }
-
-                        Divider()
-
-                        Button {
-                            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.repoRootPath)
-                        } label: {
-                            Label("Reveal in Finder", systemImage: "folder")
-                        }
-
-                        Divider()
-
-                        Button {
-                            renameText = project.name
-                            renamingProjectId = project.id
-                        } label: {
-                            Label("Rename Project…", systemImage: "pencil")
-                        }
-
-                        if case .ssh = (project.location ?? .local), let onEditRemoteProject {
-                            Button {
-                                onEditRemoteProject(project.id)
-                            } label: {
-                                Label("Update Remote Credentials…", systemImage: "key")
-                            }
-                        }
-
-                        if let onRemoveProject {
-                            Divider()
-                            Button(role: .destructive) {
-                                onRemoveProject(project.id)
-                            } label: {
-                                Label("Remove Project…", systemImage: "trash")
-                            }
-                        }
+                        projectActions(project)
                     } label: {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 11, weight: .medium))
@@ -295,60 +253,7 @@ public struct WorktreeSidebarView: View {
             }
         }
         .contextMenu {
-            if onShowCreatePanel != nil {
-                Button {
-                    onSelectProject?(project.id)
-                    onShowCreatePanel?()
-                } label: {
-                    Label("New Workspace…", systemImage: "plus")
-                }
-            }
-
-            let editors = EditorLauncher.installed
-            if !editors.isEmpty {
-                Divider()
-                ForEach(editors) { editor in
-                    Button {
-                        editor.open(path: project.repoRootPath)
-                    } label: {
-                        Label("Open in \(editor.name)", systemImage: editor.icon)
-                    }
-                }
-            }
-
-            Divider()
-
-            Button {
-                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.repoRootPath)
-            } label: {
-                Label("Reveal in Finder", systemImage: "folder")
-            }
-
-            Divider()
-
-            Button {
-                renameText = project.name
-                renamingProjectId = project.id
-            } label: {
-                Label("Rename Project…", systemImage: "pencil")
-            }
-
-            if case .ssh = (project.location ?? .local), let onEditRemoteProject {
-                Button {
-                    onEditRemoteProject(project.id)
-                } label: {
-                    Label("Update Remote Credentials…", systemImage: "key")
-                }
-            }
-
-            if let onRemoveProject {
-                Divider()
-                Button(role: .destructive) {
-                    onRemoveProject(project.id)
-                } label: {
-                    Label("Remove Project…", systemImage: "trash")
-                }
-            }
+            projectActions(project)
         }
 
         if !project.isCollapsed {
@@ -374,9 +279,8 @@ public struct WorktreeSidebarView: View {
     @ViewBuilder
     private func worktreeRow(_ worktree: Worktree) -> some View {
         let isSelected = worktree.id == selectedWorktreeId
-        let worktreeWindows = windows
-            .filter { $0.worktreeId == worktree.id }
-            .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
+        let worktreeWindows = allWindows(for: worktree)
+        let detailWindows = visibleDetailWindows(for: worktree)
         let agentName = worktreeWindows.first(where: {
             $0.detectedAgent != nil || $0.agentState != .none
         })?.detectedAgent
@@ -426,9 +330,9 @@ public struct WorktreeSidebarView: View {
                 }
             }
 
-            // Show windows (tabs) under every worktree that has them — tree connector
-            if !worktreeWindows.isEmpty {
-                TreeConnectorGroup(data: worktreeWindows) { window in
+            // Show only the most relevant window details for the selected worktree.
+            if isSelected, !detailWindows.isEmpty {
+                TreeConnectorGroup(data: detailWindows) { window in
                     let globalIdx = globalWindowIndices[window.tmuxWindowId]
                     Group {
                         if window.detectedAgent != nil || window.agentState != .none {
@@ -472,31 +376,277 @@ public struct WorktreeSidebarView: View {
 
     // MARK: - Helpers
 
-    // MARK: - Attention Banner
+    private func allWindows(for worktree: Worktree) -> [RuntimeWindow] {
+        windows
+            .filter { $0.worktreeId == worktree.id }
+            .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
+    }
+
+    private func visibleDetailWindows(for worktree: Worktree) -> [RuntimeWindow] {
+        let all = allWindows(for: worktree)
+        let relevant = all.filter(isRelevantDetailWindow)
+
+        if !relevant.isEmpty {
+            return relevant
+        }
+
+        return Array(all.prefix(1))
+    }
+
+    private func activeWorktreePriority(_ state: AgentState) -> Int {
+        switch state {
+        case .waitingForInput, .error: return 0
+        case .running: return 1
+        case .completed: return 2
+        case .none: return 3
+        }
+    }
 
     @ViewBuilder
-    private var attentionBanner: some View {
-        let count = attentionCount
-        if count > 0 {
-            HStack(spacing: MoriTokens.Spacing.md) {
-                Image(systemName: "exclamationmark.bubble.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(MoriTokens.Color.attention)
-                Text(count == 1
-                    ? String.localized("1 agent needs attention")
-                    : String.localized("\(count) agents need attention"))
-                    .font(MoriTokens.Font.caption)
-                    .foregroundStyle(MoriTokens.Color.attention)
-                Spacer()
+    private var projectsSectionHeader: some View {
+        sectionHeader(title: String.localized("Projects")) {
+            if let onAddProject {
+                Button(action: onAddProject) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(MoriTokens.Color.muted)
+                }
+                .buttonStyle(.plain)
+                .help(String.localized("Add Project"))
             }
-            .padding(.horizontal, MoriTokens.Spacing.xl)
-            .padding(.vertical, MoriTokens.Spacing.md)
-            .background(MoriTokens.Color.attention.opacity(MoriTokens.Opacity.subtle))
-            .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
+        }
+        .padding(.top, MoriTokens.Spacing.lg)
+    }
+
+    @ViewBuilder
+    private func projectActions(_ project: Project) -> some View {
+        if !project.isCollapsed, onShowCreatePanel != nil {
+            Button {
+                onSelectProject?(project.id)
+                onShowCreatePanel?()
+            } label: {
+                Label("New Workspace…", systemImage: "plus")
+            }
+        }
+
+        let editors = EditorLauncher.installed
+        if !editors.isEmpty {
+            Divider()
+            ForEach(editors) { editor in
+                Button {
+                    editor.open(path: project.repoRootPath)
+                } label: {
+                    Label("Open in \(editor.name)", systemImage: editor.icon)
+                }
+            }
+        }
+
+        Divider()
+
+        Button {
+            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.repoRootPath)
+        } label: {
+            Label("Reveal in Finder", systemImage: "folder")
+        }
+
+        Divider()
+
+        Button {
+            renameText = project.name
+            renamingProjectId = project.id
+        } label: {
+            Label("Rename Project…", systemImage: "pencil")
+        }
+
+        if case .ssh = (project.location ?? .local), let onEditRemoteProject {
+            Button {
+                onEditRemoteProject(project.id)
+            } label: {
+                Label("Update Remote Credentials…", systemImage: "key")
+            }
+        }
+
+        if let onRemoveProject {
+            Divider()
+            Button(role: .destructive) {
+                onRemoveProject(project.id)
+            } label: {
+                Label("Remove Project…", systemImage: "trash")
+            }
+        }
+    }
+
+    private func isRelevantDetailWindow(_ window: RuntimeWindow) -> Bool {
+        window.tmuxWindowId == selectedWindowId
+            || window.detectedAgent != nil
+            || window.agentState != .none
+            || window.badge != nil
+            || window.hasUnreadOutput
+    }
+
+    @ViewBuilder
+    private var summaryStrip: some View {
+        if attentionCount > 0 || runningCount > 0 {
+            HStack(spacing: MoriTokens.Spacing.sm) {
+                summaryChip(
+                    icon: "exclamationmark.bubble.fill",
+                    text: "\(attentionCount) \(String.localized("Attention"))",
+                    tint: MoriTokens.Color.attention,
+                    isProminent: attentionCount > 0
+                )
+
+                summaryChip(
+                    icon: "bolt.fill",
+                    text: "\(runningCount) \(String.localized("Running"))",
+                    tint: MoriTokens.Color.success,
+                    isProminent: runningCount > 0
+                )
+            }
             .padding(.horizontal, MoriTokens.Spacing.sm)
             .padding(.bottom, MoriTokens.Spacing.sm)
         }
     }
+
+    @ViewBuilder
+    private var activeWorktreeSection: some View {
+        if !activeWorktreeItems.isEmpty {
+            VStack(alignment: .leading, spacing: MoriTokens.Spacing.sm) {
+                sectionHeader(title: String.localized("Now")) {
+                    Text("\(activeWorktreeItems.count)")
+                        .font(MoriTokens.Font.caption)
+                        .foregroundStyle(MoriTokens.Color.inactive)
+                }
+
+                VStack(spacing: MoriTokens.Spacing.sm) {
+                    ForEach(activeWorktreeItems) { item in
+                        activeWorktreeCard(item)
+                    }
+                }
+                .padding(.horizontal, MoriTokens.Spacing.sm)
+                .padding(.bottom, MoriTokens.Spacing.sm)
+            }
+        }
+    }
+
+    private func sectionHeader<Accessory: View>(
+        title: String,
+        @ViewBuilder accessory: () -> Accessory
+    ) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.2)
+                .foregroundStyle(MoriTokens.Color.muted)
+
+            Spacer()
+
+            accessory()
+        }
+        .padding(.horizontal, MoriTokens.Spacing.xl)
+        .padding(.bottom, MoriTokens.Spacing.sm)
+    }
+
+    private func summaryChip(icon: String, text: String, tint: Color, isProminent: Bool) -> some View {
+        HStack(spacing: MoriTokens.Spacing.sm) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(tint)
+            Text(text)
+                .font(MoriTokens.Font.caption)
+                .foregroundStyle(isProminent ? Color.primary : MoriTokens.Color.muted)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, MoriTokens.Spacing.lg)
+        .padding(.vertical, MoriTokens.Spacing.md)
+        .background(tint.opacity(MoriTokens.Opacity.subtle))
+        .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
+    }
+
+    private func activeWorktreeCard(_ item: ActiveWorktreeItem) -> some View {
+        let style = activeWorktreeStyle(item.worktree.agentState)
+
+        return Button {
+            onSelectProject?(item.worktree.projectId)
+            onSelectWorktree(item.worktree.id)
+        } label: {
+            HStack(alignment: .center, spacing: MoriTokens.Spacing.lg) {
+                Image(systemName: style.icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(style.color)
+                    .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: MoriTokens.Spacing.xxs) {
+                    HStack(spacing: MoriTokens.Spacing.sm) {
+                        Text(item.worktree.name)
+                            .font(MoriTokens.Font.rowTitle)
+                            .lineLimit(1)
+                        Text(style.title)
+                            .font(MoriTokens.Font.caption)
+                            .foregroundStyle(style.color)
+                    }
+
+                    Text(activeWorktreeSubtitle(for: item))
+                        .font(MoriTokens.Font.caption)
+                        .foregroundStyle(MoriTokens.Color.muted)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, MoriTokens.Spacing.lg)
+            .padding(.vertical, MoriTokens.Spacing.md)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(style.background)
+        .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
+    }
+
+    private func activeWorktreeStyle(_ state: AgentState) -> ActiveWorktreeStyle {
+        switch state {
+        case .waitingForInput:
+            return ActiveWorktreeStyle(
+                icon: "exclamationmark.bubble.fill",
+                color: MoriTokens.Color.attention,
+                title: String.localized("Waiting"),
+                background: AnyShapeStyle(MoriTokens.Color.attention.opacity(MoriTokens.Opacity.subtle))
+            )
+        case .error:
+            return ActiveWorktreeStyle(
+                icon: "xmark.circle.fill",
+                color: MoriTokens.Color.error,
+                title: String.localized("Error"),
+                background: AnyShapeStyle(MoriTokens.Color.error.opacity(MoriTokens.Opacity.subtle))
+            )
+        case .running:
+            return ActiveWorktreeStyle(
+                icon: "bolt.fill",
+                color: MoriTokens.Color.success,
+                title: String.localized("Running"),
+                background: AnyShapeStyle(MoriTokens.Color.success.opacity(MoriTokens.Opacity.subtle))
+            )
+        case .completed:
+            return ActiveWorktreeStyle(
+                icon: "checkmark.circle.fill",
+                color: MoriTokens.Color.success,
+                title: String.localized("Completed"),
+                background: AnyShapeStyle(MoriTokens.Color.success.opacity(MoriTokens.Opacity.subtle))
+            )
+        case .none:
+            return ActiveWorktreeStyle(
+                icon: "circle.fill",
+                color: MoriTokens.Color.muted,
+                title: String.localized("Idle"),
+                background: AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+            )
+        }
+    }
+
+    private func activeWorktreeSubtitle(for item: ActiveWorktreeItem) -> String {
+        let agentText = item.agentName ?? String.localized("Agent")
+        return "\(item.projectName) · \(agentText)"
+    }
+
 
     // MARK: - Footer
 
