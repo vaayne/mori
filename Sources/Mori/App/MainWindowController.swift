@@ -3,6 +3,7 @@ import SwiftUI
 import MoriTerminal
 
 final class MainWindowController: NSWindowController {
+    var onWindowAppearanceInvalidated: (() -> Void)?
 
     // MARK: - Toolbar
 
@@ -30,12 +31,13 @@ final class MainWindowController: NSWindowController {
         window.title = "Mori"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        window.backgroundColor = themeInfo.background
+        window.backgroundColor = themeInfo.effectiveBackground
         window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
         window.center()
 
         super.init(window: window)
 
+        window.delegate = self
         configureToolbar()
     }
 
@@ -111,6 +113,24 @@ final class MainWindowController: NSWindowController {
 }
 
 // MARK: - NSToolbarDelegate
+
+extension MainWindowController: NSWindowDelegate {
+    func windowDidEnterFullScreen(_ notification: Notification) {
+        onWindowAppearanceInvalidated?()
+    }
+
+    func windowDidExitFullScreen(_ notification: Notification) {
+        onWindowAppearanceInvalidated?()
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        onWindowAppearanceInvalidated?()
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        onWindowAppearanceInvalidated?()
+    }
+}
 
 extension MainWindowController: NSToolbarDelegate {
 

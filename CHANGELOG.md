@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- Start Ghostty translucency inheritance: Mori now reads and persists `background-blur` and `background-opacity-cells`, applies Ghostty window opacity/blur to the main workspace window, exposes translucency controls in Settings, improves tmux translucency by avoiding forced opaque backgrounds when cell opacity is disabled, adds macOS 26 glass background polish for terminal content, and avoids redundant tmux theme reapplication with debounced updates
+
 ## [0.3.3] - 2026-04-05
 
 ### ✨ Features

@@ -3,12 +3,78 @@ import MoriCore
 import MoriTerminal
 import MoriTmux
 
+#if compiler(>=6.2)
+@available(macOS 26.0, *)
+private final class WorkspaceGlassBackgroundView: NSView {
+    private let glassEffectView = NSGlassEffectView()
+    private let tintOverlay = NSView()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        translatesAutoresizingMaskIntoConstraints = false
+
+        glassEffectView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(glassEffectView)
+        NSLayoutConstraint.activate([
+            glassEffectView.topAnchor.constraint(equalTo: topAnchor),
+            glassEffectView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            glassEffectView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            glassEffectView.trailingAnchor.constraint(equalTo: trailingAnchor),
+        ])
+
+        tintOverlay.translatesAutoresizingMaskIntoConstraints = false
+        tintOverlay.wantsLayer = true
+        tintOverlay.alphaValue = 0
+        addSubview(tintOverlay, positioned: .above, relativeTo: glassEffectView)
+        NSLayoutConstraint.activate([
+            tintOverlay.topAnchor.constraint(equalTo: topAnchor),
+            tintOverlay.leadingAnchor.constraint(equalTo: leadingAnchor),
+            tintOverlay.bottomAnchor.constraint(equalTo: bottomAnchor),
+            tintOverlay.trailingAnchor.constraint(equalTo: trailingAnchor),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(
+        style: NSGlassEffectView.Style,
+        backgroundColor: NSColor,
+        backgroundOpacity: Double,
+        isKeyWindow: Bool
+    ) {
+        glassEffectView.style = style
+        glassEffectView.tintColor = backgroundColor.withAlphaComponent(backgroundOpacity)
+        updateKeyStatus(isKeyWindow, backgroundColor: backgroundColor)
+    }
+
+    func updateKeyStatus(_ isKeyWindow: Bool, backgroundColor: NSColor) {
+        let tint = tintProperties(for: backgroundColor)
+        tintOverlay.layer?.backgroundColor = tint.color.cgColor
+        tintOverlay.alphaValue = isKeyWindow ? 0 : tint.opacity
+    }
+
+    private func tintProperties(for color: NSColor) -> (color: NSColor, opacity: CGFloat) {
+        let srgb = color.usingColorSpace(.sRGB) ?? color
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+        srgb.getRed(&r, green: &g, blue: &b, alpha: nil)
+        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        let isLight = luminance >= 0.5
+        let overlayOpacity: CGFloat = isLight ? 0.35 : 0.85
+        return (srgb, overlayOpacity)
+    }
+}
+#endif
+
 /// View controller that hosts terminal surfaces, one per tmux session.
 /// Uses a TerminalSurfaceCache to manage an LRU pool of surfaces (max 3).
 /// When a worktree is selected, it shows the corresponding terminal surface
 /// running `tmux new-session -A -s <session-name>` to attach-or-create.
 @MainActor
 final class TerminalAreaViewController: NSViewController {
+    private var glassBackgroundView: NSView?
 
     // MARK: - Dependencies
 
@@ -62,8 +128,8 @@ final class TerminalAreaViewController: NSViewController {
     override func loadView() {
         let container = NSView()
         container.wantsLayer = true
-        container.layer?.backgroundColor = themeInfo.background.cgColor
         self.view = container
+        updateAppearance(themeInfo: themeInfo, isKeyWindow: true)
         showEmptyState()
     }
 
@@ -74,6 +140,68 @@ final class TerminalAreaViewController: NSViewController {
             terminalHost.surfaceDidResize(surface, to: view.bounds.size)
         }
     }
+
+    func updateAppearance(themeInfo: GhosttyThemeInfo, isKeyWindow: Bool) {
+        view.layer?.backgroundColor = backgroundColor(for: themeInfo).cgColor
+        updateGlassEffectIfNeeded(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
+    }
+
+    private func backgroundColor(for themeInfo: GhosttyThemeInfo) -> NSColor {
+        themeInfo.backgroundBlur.isGlassStyle ? .clear : themeInfo.effectiveBackground
+    }
+
+#if compiler(>=6.2)
+    @available(macOS 26.0, *)
+    private func makeGlassBackgroundView() -> WorkspaceGlassBackgroundView {
+        if let glassBackgroundView = glassBackgroundView as? WorkspaceGlassBackgroundView {
+            return glassBackgroundView
+        }
+
+        let glassBackgroundView = WorkspaceGlassBackgroundView()
+        glassBackgroundView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(glassBackgroundView, positioned: .below, relativeTo: nil)
+        NSLayoutConstraint.activate([
+            glassBackgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+            glassBackgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            glassBackgroundView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            glassBackgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+        self.glassBackgroundView = glassBackgroundView
+        return glassBackgroundView
+    }
+#endif
+
+    private func updateGlassEffectIfNeeded(themeInfo: GhosttyThemeInfo, isKeyWindow: Bool) {
+#if compiler(>=6.2)
+        guard #available(macOS 26.0, *), let style = glassStyle(for: themeInfo) else {
+            glassBackgroundView?.removeFromSuperview()
+            glassBackgroundView = nil
+            return
+        }
+
+        let glassBackgroundView = makeGlassBackgroundView()
+        glassBackgroundView.configure(
+            style: style,
+            backgroundColor: themeInfo.background,
+            backgroundOpacity: themeInfo.backgroundOpacity,
+            isKeyWindow: isKeyWindow
+        )
+#endif
+    }
+
+#if compiler(>=6.2)
+    @available(macOS 26.0, *)
+    private func glassStyle(for themeInfo: GhosttyThemeInfo) -> NSGlassEffectView.Style? {
+        switch themeInfo.backgroundBlur {
+        case .macosGlassRegular:
+            .regular
+        case .macosGlassClear:
+            .clear
+        default:
+            nil
+        }
+    }
+#endif
 
     // MARK: - Public API
 

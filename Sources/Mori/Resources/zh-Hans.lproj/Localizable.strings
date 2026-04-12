@@ -63,6 +63,7 @@
 "Open Lazygit" = "打开 Lazygit";
 "Open Project" = "打开项目";
 "Open Project..." = "打开项目...";
+"Off" = "关闭";
 "Open Yazi" = "打开 Yazi";
 "Paste" = "粘贴";
 "Path:" = "路径:";
@@ -77,6 +78,10 @@
 "Redo" = "重做";
 "Refresh" = "刷新";
 "Reload Settings" = "重新加载设置";
+"Standard Blur" = "标准模糊";
+"Custom Blur Radius" = "自定义模糊半径";
+"Glass Regular" = "常规玻璃";
+"Glass Clear" = "通透玻璃";
 "Remove" = "移除";
 "Remove from Mori" = "从 Mori 移除";
 "Remove from Mori and Delete Files" = "从 Mori 移除并删除文件";

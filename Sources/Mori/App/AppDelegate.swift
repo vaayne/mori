@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var settingsWindowController: NSWindowController?
     private var configFile: GhosttyConfigFile?
     private var proxyApplyTask: Task<Void, Never>?
+    private var tmuxThemeApplyTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
     private var remoteConnectWizardController: RemoteConnectWizardController?
     private var updateController: UpdateController?
@@ -35,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var keyBindingStore: KeyBindingStore!
     private var configurableMenuItems: [String: NSMenuItem] = [:]
     private var keyMonitorActionMap: [String: () -> Void] = [:]
+    private let tmuxThemeDebounceNanoseconds: UInt64 = 250_000_000
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -231,9 +233,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         windowController.onShowCreateWorktreePanel = { [weak self] in
             self?.showCreateWorktreePanel()
         }
+        windowController.onWindowAppearanceInvalidated = { [weak self, weak terminalArea, weak windowController] in
+            guard let self,
+                  let adapter = terminalArea?.terminalHost as? GhosttyAdapter,
+                  let window = windowController?.window else { return }
+            adapter.syncWorkspaceWindowAppearance(window)
+            self.refreshGhosttyThemeBackgrounds(themeInfo: adapter.themeInfo)
+        }
 
         windowController.contentViewController = splitVC
         windowController.showWindow(nil)
+        if let adapter = terminalArea.terminalHost as? GhosttyAdapter,
+           let window = windowController.window {
+            adapter.syncWorkspaceWindowAppearance(window)
+        }
         // Restore saved frame after all layout is complete
         windowController.restoreSavedFrame()
         NSApp.activate(ignoringOtherApps: true)
@@ -266,11 +279,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             await ProxySettingsApplicator.apply(model, tmuxBackend: tmuxBackend)
 
             // Apply theme (including status bar off) to the newly created session
-            if let terminalArea = self?.terminalAreaController {
-                await TmuxThemeApplicator.apply(
-                    themeInfo: terminalArea.themeInfo,
-                    tmuxBackend: tmuxBackend
-                )
+            if let self {
+                self.scheduleTmuxThemeApply(immediate: true, tmuxBackend: tmuxBackend)
             }
         }
 
@@ -321,12 +331,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             manager.startPolling()
 
             // Apply ghostty theme colors to tmux (pane borders, status bar)
-            if let terminalArea = self.terminalAreaController {
-                await TmuxThemeApplicator.apply(
-                    themeInfo: terminalArea.themeInfo,
-                    tmuxBackend: manager.tmuxBackend
-                )
-            }
+            self.scheduleTmuxThemeApply(immediate: true, tmuxBackend: manager.tmuxBackend)
 
             // Apply proxy environment variables to tmux
             self.applyProxyToTmux()
@@ -747,8 +752,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.backgroundColor = themeInfo.background
-        window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        if let adapter = terminalAreaController?.terminalHost as? GhosttyAdapter {
+            adapter.syncThemedWindowAppearance(window)
+        } else {
+            window.backgroundColor = themeInfo.background
+            window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        }
         window.center()
         window.setFrameAutosaveName("MoriSettings")
 
@@ -765,6 +774,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             cursorStyle: cf.get("cursor-style") ?? "block",
             cursorBlink: (cf.get("cursor-style-blink") ?? "true") != "false",
             backgroundOpacity: Double(cf.get("background-opacity") ?? "1.0") ?? 1.0,
+            backgroundOpacityCells: cf.get("background-opacity-cells") == "true",
+            backgroundBlur: GhosttyBackgroundBlur(configValue: cf.get("background-blur") ?? "false"),
             macosOptionAsAlt: cf.get("macos-option-as-alt") ?? "false",
             mouseHideWhileTyping: cf.get("mouse-hide-while-typing") == "true",
             mouseScrollMultiplier: Int(cf.get("mouse-scroll-multiplier") ?? "") ?? 1,
@@ -793,6 +804,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         cf.set("cursor-style", value: model.cursorStyle)
         cf.set("cursor-style-blink", value: model.cursorBlink ? "true" : "false")
         cf.set("background-opacity", value: String(format: "%.2f", model.backgroundOpacity))
+        cf.set("background-opacity-cells", value: model.backgroundOpacityCells ? "true" : "false")
+        cf.set("background-blur", value: model.backgroundBlur.configValue)
         cf.set("macos-option-as-alt", value: model.macosOptionAsAlt)
         cf.set("mouse-hide-while-typing", value: model.mouseHideWhileTyping ? "true" : "false")
         cf.set("mouse-scroll-multiplier", value: "\(model.mouseScrollMultiplier)")
@@ -806,28 +819,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         adapter.reloadConfig()
 
         let themeInfo = adapter.themeInfo
-        mainWindowController?.window?.backgroundColor = themeInfo.background
-        mainWindowController?.window?.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
-        sidebarController?.updateAppearance(themeInfo: themeInfo)
-        terminalAreaController?.view.layer?.backgroundColor = themeInfo.background.cgColor
-
-        // Update settings window appearance
-        if let settingsWindow = settingsWindowController?.window {
-            settingsWindow.backgroundColor = themeInfo.background
-            settingsWindow.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
-            settingsWindow.contentViewController?.view.wantsLayer = true
-            settingsWindow.contentViewController?.view.layer?.backgroundColor = themeInfo.background.cgColor
+        if let window = mainWindowController?.window {
+            adapter.syncWorkspaceWindowAppearance(window)
         }
+        refreshGhosttyThemeBackgrounds(themeInfo: themeInfo)
+
+        refreshSettingsWindowAppearance(adapter: adapter, themeInfo: themeInfo)
 
         // Update agent dashboard appearance
         agentDashboardPanel?.updateAppearance(themeInfo: themeInfo)
 
         // Sync to tmux
         if let tmuxBackend = workspaceManager?.tmuxBackend {
-            Task {
-                await TmuxThemeApplicator.apply(themeInfo: themeInfo, tmuxBackend: tmuxBackend)
-            }
+            scheduleTmuxThemeApply(immediate: false, tmuxBackend: tmuxBackend)
         }
+    }
+
+    private func scheduleTmuxThemeApply(immediate: Bool, tmuxBackend: TmuxBackend) {
+        tmuxThemeApplyTask?.cancel()
+        let delayNanoseconds = immediate ? 0 : tmuxThemeDebounceNanoseconds
+        tmuxThemeApplyTask = Task { [weak self] in
+            if delayNanoseconds > 0 {
+                try? await Task.sleep(nanoseconds: delayNanoseconds)
+            }
+            guard !Task.isCancelled,
+                  let themeInfo = self?.terminalAreaController?.themeInfo else { return }
+            await TmuxThemeApplicator.apply(themeInfo: themeInfo, tmuxBackend: tmuxBackend)
+        }
+    }
+
+    private func refreshGhosttyThemeBackgrounds(themeInfo: GhosttyThemeInfo) {
+        sidebarController?.updateAppearance(themeInfo: themeInfo)
+        terminalAreaController?.updateAppearance(
+            themeInfo: themeInfo,
+            isKeyWindow: mainWindowController?.window?.isKeyWindow ?? true
+        )
+    }
+
+    private func refreshSettingsWindowAppearance(adapter: GhosttyAdapter, themeInfo: GhosttyThemeInfo) {
+        guard let settingsWindow = settingsWindowController?.window else { return }
+        adapter.syncThemedWindowAppearance(settingsWindow)
+        settingsWindow.contentViewController?.view.wantsLayer = true
+        settingsWindow.contentViewController?.view.layer?.backgroundColor = themeInfo.background.cgColor
     }
 
     // MARK: - Proxy
