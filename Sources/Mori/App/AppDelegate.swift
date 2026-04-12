@@ -848,7 +848,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     private func refreshGhosttyThemeBackgrounds(themeInfo: GhosttyThemeInfo) {
         sidebarController?.updateAppearance(themeInfo: themeInfo)
-        terminalAreaController?.view.layer?.backgroundColor = themeInfo.effectiveBackground.cgColor
+        terminalAreaController?.updateAppearance(
+            themeInfo: themeInfo,
+            isKeyWindow: mainWindowController?.window?.isKeyWindow ?? true
+        )
     }
 
     // MARK: - Proxy

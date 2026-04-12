@@ -122,6 +122,14 @@ extension MainWindowController: NSWindowDelegate {
     func windowDidExitFullScreen(_ notification: Notification) {
         onWindowAppearanceInvalidated?()
     }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        onWindowAppearanceInvalidated?()
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        onWindowAppearanceInvalidated?()
+    }
 }
 
 extension MainWindowController: NSToolbarDelegate {

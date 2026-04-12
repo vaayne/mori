@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Features
 
-- Start Ghostty translucency inheritance: Mori now reads and persists `background-blur`, applies Ghostty window opacity/blur to the main workspace window and settings window, and exposes blur controls in Settings
+- Start Ghostty translucency inheritance: Mori now reads and persists `background-blur`, applies Ghostty window opacity/blur to the main workspace window, exposes blur controls in Settings, and adds macOS 26 glass background polish for terminal content
 
 ## [0.3.3] - 2026-04-05
 

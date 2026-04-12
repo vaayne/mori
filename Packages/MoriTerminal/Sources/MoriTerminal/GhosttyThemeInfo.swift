@@ -11,14 +11,14 @@ public struct GhosttyThemeInfo: Sendable {
         case macosGlassRegular
         case macosGlassClear
 
-        var isEnabled: Bool {
+        public var isEnabled: Bool {
             switch self {
             case .disabled: false
             default: true
             }
         }
 
-        var isGlassStyle: Bool {
+        public var isGlassStyle: Bool {
             switch self {
             case .macosGlassRegular, .macosGlassClear: true
             default: false
