@@ -22,7 +22,7 @@ public struct TaskSidebarView: View {
     private let shortcutHintsVisible: Bool
 
     @State private var showCancelled = false
-    @State private var collapsedGroups: Set<WorkflowStatus> = [.done]
+    @State private var collapsedGroups: Set<WorkflowStatus> = [.needsReview, .todo, .done, .cancelled]
 
     /// Status group display order (cancelled excluded — controlled by toggle).
     private static let visibleStatuses: [WorkflowStatus] = [.inProgress, .needsReview, .todo, .done]
