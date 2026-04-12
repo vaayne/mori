@@ -1128,15 +1128,6 @@ final class WorkspaceManager {
         }
     }
 
-    // MARK: - Workflow Status
-
-    /// Update the workflow status for a worktree and persist the change.
-    func setWorkflowStatus(worktreeId: UUID, status: WorkflowStatus) {
-        guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }) else { return }
-        appState.worktrees[index].workflowStatus = status
-        try? worktreeRepo.save(appState.worktrees[index])
-    }
-
     // MARK: - Tmux Integration
 
     /// Check the actual git branch for a worktree and update if it changed.

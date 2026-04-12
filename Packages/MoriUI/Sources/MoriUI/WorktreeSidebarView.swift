@@ -22,7 +22,6 @@ public struct WorktreeSidebarView: View {
     private let onAddProject: (() -> Void)?
     private let onOpenSettings: (() -> Void)?
     private let onOpenCommandPalette: (() -> Void)?
-    private let onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)?
     private let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     private let onSendKeys: ((String, String) -> Void)?
     private let onUpdateProject: ((Project) -> Void)?
@@ -48,7 +47,6 @@ public struct WorktreeSidebarView: View {
         onAddProject: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
         onOpenCommandPalette: (() -> Void)? = nil,
-        onSetWorkflowStatus: ((UUID, WorkflowStatus) -> Void)? = nil,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil,
         onUpdateProject: ((Project) -> Void)? = nil
@@ -71,7 +69,6 @@ public struct WorktreeSidebarView: View {
         self.onAddProject = onAddProject
         self.onOpenSettings = onOpenSettings
         self.onOpenCommandPalette = onOpenCommandPalette
-        self.onSetWorkflowStatus = onSetWorkflowStatus
         self.onRequestPaneOutput = onRequestPaneOutput
         self.onSendKeys = onSendKeys
         self.onUpdateProject = onUpdateProject
@@ -294,14 +291,6 @@ public struct WorktreeSidebarView: View {
                 onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } }
             )
             .contextMenu {
-                if let onSetWorkflowStatus {
-                    WorkflowStatusMenu(
-                        currentStatus: worktree.workflowStatus,
-                        onSetStatus: { status in onSetWorkflowStatus(worktree.id, status) }
-                    )
-                    Divider()
-                }
-
                 let editors = EditorLauncher.installed
                 if !editors.isEmpty {
                     ForEach(editors) { editor in

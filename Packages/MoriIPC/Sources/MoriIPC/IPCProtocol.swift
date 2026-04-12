@@ -10,7 +10,6 @@ public enum IPCCommand: Codable, Sendable, Equatable {
     case send(project: String, worktree: String, window: String, keys: String)
     case newWindow(project: String, worktree: String, name: String?)
     case open(path: String)
-    case setWorkflowStatus(project: String, worktree: String, status: String)
     case paneList(project: String? = nil, worktree: String? = nil)
     case paneRead(project: String, worktree: String, window: String, lines: Int)
     case paneMessage(project: String, worktree: String, window: String, text: String,

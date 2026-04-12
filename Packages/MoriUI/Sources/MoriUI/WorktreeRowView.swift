@@ -53,7 +53,9 @@ public struct WorktreeRowView: View {
 
                 Spacer(minLength: 0)
 
-                primaryBadge
+                if let primaryBadge {
+                    primaryBadge
+                }
 
                 if isHovered {
                     overflowMenu
@@ -130,8 +132,8 @@ public struct WorktreeRowView: View {
         }
     }
 
-    private var primaryBadge: some View {
-        let style = primaryBadgeStyle
+    private var primaryBadge: some View? {
+        guard let style = primaryBadgeStyle else { return nil }
 
         return Text(style.title)
             .font(MoriTokens.Font.caption)
@@ -244,7 +246,7 @@ public struct WorktreeRowView: View {
         return parts.joined(separator: " ")
     }
 
-    private var primaryBadgeStyle: PrimaryBadgeStyle {
+    private var primaryBadgeStyle: PrimaryBadgeStyle? {
         switch worktree.agentState {
         case .waitingForInput:
             return PrimaryBadgeStyle(
@@ -271,23 +273,7 @@ public struct WorktreeRowView: View {
                 accessibilityLabel: String.localized("Completed")
             )
         case .none:
-            let title = String.localized(String.LocalizationValue(stringLiteral: worktree.workflowStatus.displayName))
-            return PrimaryBadgeStyle(
-                title: title,
-                color: workflowStatusColor,
-                accessibilityLabel: title
-            )
-        }
-    }
-
-    private var workflowStatusColor: Color {
-        switch worktree.workflowStatus {
-        case .needsReview:
-            return MoriTokens.Color.info
-        case .inProgress:
-            return MoriTokens.Color.success
-        case .todo, .done, .cancelled:
-            return MoriTokens.Color.muted
+            return nil
         }
     }
 }

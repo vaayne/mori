@@ -25,7 +25,6 @@ struct MoriCLI: ParsableCommand {
             Send.self,
             NewWindow.self,
             Open.self,
-            StatusCmd.self,
             PaneCmd.self,
         ]
     )
@@ -437,39 +436,6 @@ struct Open: ParsableCommand {
     func run() throws {
         let data = try sendIPCRequest(.open(path: path))
         printResult(data, json: output.json, formatter: OutputFormat.formatProjectOpen)
-    }
-}
-
-// MARK: - mori status
-
-struct StatusCmd: ParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "status",
-        abstract: .localized("Set workflow status for a worktree"),
-        discussion: """
-        \(String.localized("Workflow: todo → inProgress → needsReview → done / cancelled"))
-        \(String.localized("Status is displayed as a badge in the Mori sidebar."))
-
-        \(String.localized("Examples:"))
-          mori status myproject feature/auth inProgress
-          mori status myproject feature/auth done
-        """
-    )
-
-    @Argument(help: ArgumentHelp(.localized("Project name")))
-    var project: String
-
-    @Argument(help: ArgumentHelp(.localized("Worktree name")))
-    var worktree: String
-
-    @Argument(help: ArgumentHelp(.localized("Workflow status (todo, inProgress, needsReview, done, cancelled)")))
-    var status: String
-
-    @OptionGroup var output: OutputOptions
-
-    func run() throws {
-        let data = try sendIPCRequest(.setWorkflowStatus(project: project, worktree: worktree, status: status))
-        printSuccess(data, json: output.json, label: String(format: .localized("Set %@/%@ status to '%@'"), project, worktree, status))
     }
 }
 

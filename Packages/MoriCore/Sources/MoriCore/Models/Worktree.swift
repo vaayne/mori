@@ -22,7 +22,6 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
     public var unreadCount: Int
     public var agentState: AgentState
     public var status: WorktreeStatus
-    public var workflowStatus: WorkflowStatus
     /// Where this worktree's git/tmux operations execute.
     /// nil is treated as `.local` for backward compatibility.
     /// Invariant: default behavior inherits the project endpoint; writes are
@@ -51,7 +50,6 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
         unreadCount: Int = 0,
         agentState: AgentState = .none,
         status: WorktreeStatus = .active,
-        workflowStatus: WorkflowStatus = .todo,
         location: WorkspaceLocation? = nil
     ) {
         self.id = id
@@ -75,7 +73,6 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
         self.unreadCount = unreadCount
         self.agentState = agentState
         self.status = status
-        self.workflowStatus = workflowStatus
         self.location = location
     }
 
@@ -104,7 +101,6 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
         unreadCount = try container.decode(Int.self, forKey: .unreadCount)
         agentState = try container.decode(AgentState.self, forKey: .agentState)
         status = try container.decode(WorktreeStatus.self, forKey: .status)
-        workflowStatus = try container.decodeIfPresent(WorkflowStatus.self, forKey: .workflowStatus) ?? .todo
         location = try container.decodeIfPresent(WorkspaceLocation.self, forKey: .location)
     }
 }

@@ -52,33 +52,6 @@ func testCommandOpenRoundTrip() {
     assertEqual(decoded, cmd, "open round-trip")
 }
 
-func testCommandSetWorkflowStatusRoundTrip() {
-    let cmd = IPCCommand.setWorkflowStatus(project: "mori", worktree: "feature-branch", status: "inProgress")
-    let data = try! JSONEncoder().encode(cmd)
-    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
-    assertEqual(decoded, cmd, "setWorkflowStatus round-trip")
-}
-
-func testCommandSetWorkflowStatusAllStatuses() {
-    let statuses = ["todo", "inProgress", "needsReview", "done", "cancelled"]
-    for status in statuses {
-        let cmd = IPCCommand.setWorkflowStatus(project: "proj", worktree: "wt", status: status)
-        let data = try! JSONEncoder().encode(cmd)
-        let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
-        assertEqual(decoded, cmd, "setWorkflowStatus round-trip for \(status)")
-    }
-}
-
-func testCommandSetWorkflowStatusFraming() {
-    let cmd = IPCCommand.setWorkflowStatus(project: "mori", worktree: "main", status: "done")
-    let request = IPCRequest(command: cmd, requestId: "status-1")
-    let data = try! IPCFraming.encode(request)
-    assertEqual(data.last, 0x0A, "setWorkflowStatus framed request ends with newline")
-    let decoded = try! IPCFraming.decodeRequest(from: data)
-    assertEqual(decoded.command, cmd, "setWorkflowStatus framed request decodable")
-    assertEqual(decoded.requestId, "status-1", "setWorkflowStatus framed request id")
-}
-
 // MARK: - Pane Command Round-trip Tests
 
 func testCommandPaneListRoundTrip() {
@@ -367,9 +340,6 @@ testCommandSendRoundTrip()
 testCommandNewWindowRoundTrip()
 testCommandNewWindowNilNameRoundTrip()
 testCommandOpenRoundTrip()
-testCommandSetWorkflowStatusRoundTrip()
-testCommandSetWorkflowStatusAllStatuses()
-testCommandSetWorkflowStatusFraming()
 
 // Pane command round-trips
 testCommandPaneListRoundTrip()
