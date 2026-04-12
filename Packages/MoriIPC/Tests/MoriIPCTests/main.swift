@@ -1,5 +1,5 @@
 import Foundation
-import MoriIPC
+@testable import MoriIPC
 
 // MARK: - IPCCommand Round-trip Tests
 
@@ -292,6 +292,69 @@ func testSplitMessagesNoNewline() {
     assertEqual(String(data: remainder, encoding: .utf8), "partial", "all is remainder")
 }
 
+// MARK: - MoriPaths Tests
+
+func testMoriPathsSocketPathEnvOverride() {
+    setenv("MORI_SOCKET_PATH", "/tmp/custom.sock", 1)
+    defer { unsetenv("MORI_SOCKET_PATH") }
+    assertEqual(MoriPaths.socketPath, "/tmp/custom.sock", "MORI_SOCKET_PATH overrides socket path")
+}
+
+func testMoriPathsAppSupportDirEnvOverride() {
+    setenv("MORI_APP_SUPPORT_DIR", "/tmp/mori-test", 1)
+    defer { unsetenv("MORI_APP_SUPPORT_DIR") }
+    assertEqual(MoriPaths.appSupportDirectory.path, "/tmp/mori-test", "MORI_APP_SUPPORT_DIR overrides app support dir")
+}
+
+func testMoriPathsDefaultSocketPathEndsWithSock() {
+    let path = MoriPaths.socketPath
+    assertTrue(path.hasSuffix("mori.sock"), "default socket path ends with mori.sock, got: \(path)")
+}
+
+func testMoriPathsIsInAppBundlePrimaryExecutable() {
+    // Simulates: /Applications/Mori.app/Contents/MacOS/Mori
+    let path = "/Applications/Mori.app/Contents/MacOS/Mori"
+    assertTrue(MoriPaths.isInAppBundle(path), "primary executable inside .app bundle should be detected")
+}
+
+func testMoriPathsIsInAppBundleSecondaryExecutable() {
+    // Simulates: /Applications/Mori.app/Contents/MacOS/bin/mori
+    // This is the bug scenario — the CLI binary inside the .app bundle
+    let path = "/Applications/Mori.app/Contents/MacOS/bin/mori"
+    assertTrue(MoriPaths.isInAppBundle(path), "CLI binary inside .app bundle should be detected")
+}
+
+func testMoriPathsIsInAppBundleStandaloneBinary() {
+    // No .app ancestor — dev build or standalone CLI
+    let path = "/Users/dev/.build-cli/release/mori"
+    assertFalse(MoriPaths.isInAppBundle(path), "standalone dev build should NOT be detected as bundled")
+}
+
+func testMoriPathsIsInAppBundleSymlinkResolved() {
+    // After symlink resolution, path inside .app should be detected
+    let path = "/Applications/Mori.app/Contents/MacOS/bin/mori"
+    assertTrue(MoriPaths.isInAppBundle(path), "resolved symlink inside .app should be detected")
+}
+
+func testMoriPathsIsInAppBundleBuildDirectory() {
+    // Even if path contains .app but is inside a build directory
+    let path = "/Users/dev/mori/.build-cli/release/Mori.app/Contents/MacOS/Mori"
+    assertFalse(MoriPaths.isInAppBundle(path), ".build-cli path should NOT be detected as bundled")
+}
+
+func testMoriPathsIsInAppBundleDerivedData() {
+    let path = "/Users/dev/DerivedData/Mori-abc/Mori.app/Contents/MacOS/Mori"
+    assertFalse(MoriPaths.isInAppBundle(path), "DerivedData path should NOT be detected as bundled")
+}
+
+func testMoriPathsIsInBuildDirectory() {
+    assertTrue(MoriPaths.isInBuildDirectory("/Users/dev/mori/.build/release/Mori"), "detects .build")
+    assertTrue(MoriPaths.isInBuildDirectory("/Users/dev/mori/.build-cli/release/mori"), "detects .build-cli")
+    assertTrue(MoriPaths.isInBuildDirectory("/Users/dev/Library/Developer/Xcode/DerivedData/Mori-xyz"), "detects DerivedData")
+    assertFalse(MoriPaths.isInBuildDirectory("/Users/DerivedDataUser/mori"), "no false positive on user path with DerivedData")
+    assertFalse(MoriPaths.isInBuildDirectory("/Applications/Mori.app"), "no false positive on .app bundle")
+}
+
 // MARK: - Run All Tests
 
 print("Running MoriIPC tests...")
@@ -341,6 +404,18 @@ testSplitMessagesMultiple()
 testSplitMessagesIncomplete()
 testSplitMessagesEmpty()
 testSplitMessagesNoNewline()
+
+// MoriPaths
+testMoriPathsSocketPathEnvOverride()
+testMoriPathsAppSupportDirEnvOverride()
+testMoriPathsDefaultSocketPathEndsWithSock()
+testMoriPathsIsInAppBundlePrimaryExecutable()
+testMoriPathsIsInAppBundleSecondaryExecutable()
+testMoriPathsIsInAppBundleStandaloneBinary()
+testMoriPathsIsInAppBundleSymlinkResolved()
+testMoriPathsIsInAppBundleBuildDirectory()
+testMoriPathsIsInAppBundleDerivedData()
+testMoriPathsIsInBuildDirectory()
 
 printResults()
 
