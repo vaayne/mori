@@ -7,21 +7,50 @@ import MoriTmux
 /// Reads resolved colors from GhosttyThemeInfo (extracted from ghostty's config)
 /// and sets both global defaults (for new sessions) and per-session overrides.
 enum TmuxThemeApplicator {
+    private struct ThemePayload: Equatable {
+        let foreground: String
+        let background: String
+        let backgroundOpacity: Double
+        let backgroundOpacityCells: Bool
+        let palette: [String]
+    }
+
+    private actor Cache {
+        private var lastAppliedPayload: ThemePayload?
+
+        func shouldApply(_ payload: ThemePayload) -> Bool {
+            payload != lastAppliedPayload
+        }
+
+        func markApplied(_ payload: ThemePayload) {
+            lastAppliedPayload = payload
+        }
+    }
+
+    private static let cache = Cache()
 
     static func apply(themeInfo: GhosttyThemeInfo, tmuxBackend: TmuxBackend) async {
-        let fg = GhosttyThemeInfo.hexString(themeInfo.foreground)
-        let bg = GhosttyThemeInfo.hexString(themeInfo.background)
+        let payload = ThemePayload(
+            foreground: GhosttyThemeInfo.hexString(themeInfo.foreground),
+            background: GhosttyThemeInfo.hexString(themeInfo.background),
+            backgroundOpacity: themeInfo.backgroundOpacity,
+            backgroundOpacityCells: themeInfo.backgroundOpacityCells,
+            palette: themeInfo.palette.map(GhosttyThemeInfo.hexString)
+        )
+        guard await cache.shouldApply(payload) else { return }
+        let fg = payload.foreground
+        let bg = payload.background
 
         let defaultBackedWindowStyle = themeInfo.backgroundOpacity < 1 && !themeInfo.backgroundOpacityCells
         let windowStyle = defaultBackedWindowStyle ? "fg=\(fg),bg=default" : "fg=\(fg),bg=\(bg)"
-        let borderFg = themeInfo.palette.count > 8
-            ? GhosttyThemeInfo.hexString(themeInfo.palette[8])  // bright black
+        let borderFg = payload.palette.count > 8
+            ? payload.palette[8]  // bright black
             : fg
-        let activeBorderFg = themeInfo.palette.count > 4
-            ? GhosttyThemeInfo.hexString(themeInfo.palette[4])  // blue
+        let activeBorderFg = payload.palette.count > 4
+            ? payload.palette[4]  // blue
             : fg
-        let statusBg = themeInfo.palette.count > 0
-            ? GhosttyThemeInfo.hexString(themeInfo.palette[0])  // palette black
+        let statusBg = payload.palette.count > 0
+            ? payload.palette[0]  // palette black
             : bg
 
         // Session-level options (set-option -g)
@@ -109,6 +138,7 @@ enum TmuxThemeApplicator {
         // Force all attached clients to redraw
         do {
             try await tmuxBackend.refreshClients()
+            await cache.markApplied(payload)
         } catch {
             print("[TmuxThemeApplicator] Failed to refresh clients: \(error)")
         }

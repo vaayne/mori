@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var settingsWindowController: NSWindowController?
     private var configFile: GhosttyConfigFile?
     private var proxyApplyTask: Task<Void, Never>?
+    private var tmuxThemeApplyTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
     private var remoteConnectWizardController: RemoteConnectWizardController?
     private var updateController: UpdateController?
@@ -277,11 +278,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             await ProxySettingsApplicator.apply(model, tmuxBackend: tmuxBackend)
 
             // Apply theme (including status bar off) to the newly created session
-            if let terminalArea = self?.terminalAreaController {
-                await TmuxThemeApplicator.apply(
-                    themeInfo: terminalArea.themeInfo,
-                    tmuxBackend: tmuxBackend
-                )
+            if let self {
+                self.scheduleTmuxThemeApply(immediate: true, tmuxBackend: tmuxBackend)
             }
         }
 
@@ -332,12 +330,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             manager.startPolling()
 
             // Apply ghostty theme colors to tmux (pane borders, status bar)
-            if let terminalArea = self.terminalAreaController {
-                await TmuxThemeApplicator.apply(
-                    themeInfo: terminalArea.themeInfo,
-                    tmuxBackend: manager.tmuxBackend
-                )
-            }
+            self.scheduleTmuxThemeApply(immediate: true, tmuxBackend: manager.tmuxBackend)
 
             // Apply proxy environment variables to tmux
             self.applyProxyToTmux()
@@ -842,9 +835,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         // Sync to tmux
         if let tmuxBackend = workspaceManager?.tmuxBackend {
-            Task {
-                await TmuxThemeApplicator.apply(themeInfo: themeInfo, tmuxBackend: tmuxBackend)
+            scheduleTmuxThemeApply(immediate: false, tmuxBackend: tmuxBackend)
+        }
+    }
+
+    private func scheduleTmuxThemeApply(immediate: Bool, tmuxBackend: TmuxBackend) {
+        tmuxThemeApplyTask?.cancel()
+        let delayNanoseconds: UInt64 = immediate ? 0 : 250_000_000
+        tmuxThemeApplyTask = Task { [weak self] in
+            if delayNanoseconds > 0 {
+                try? await Task.sleep(nanoseconds: delayNanoseconds)
             }
+            guard !Task.isCancelled,
+                  let themeInfo = self?.terminalAreaController?.themeInfo else { return }
+            await TmuxThemeApplicator.apply(themeInfo: themeInfo, tmuxBackend: tmuxBackend)
         }
     }
 
