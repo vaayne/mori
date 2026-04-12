@@ -14,6 +14,69 @@ FRAMEWORK_DIR="$PROJECT_ROOT/Frameworks"
 XCFRAMEWORK="$FRAMEWORK_DIR/GhosttyKit.xcframework"
 RESOURCES_DIR="$FRAMEWORK_DIR/ghostty-resources"
 
+repo_slug() {
+    local remote_url
+    remote_url="$(git -C "$PROJECT_ROOT" remote get-url origin 2>/dev/null || true)"
+    case "$remote_url" in
+        https://github.com/*)
+            remote_url="${remote_url#https://github.com/}"
+            remote_url="${remote_url%.git}"
+            ;;
+        git@github.com:*)
+            remote_url="${remote_url#git@github.com:}"
+            remote_url="${remote_url%.git}"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+    printf '%s\n' "$remote_url"
+}
+
+find_matching_ci_run() {
+    command -v gh >/dev/null 2>&1 || return 1
+
+    local repo ghostty_sha runs_json run_id run_sha run_ghostty_sha
+    repo="$(repo_slug)" || return 1
+    ghostty_sha="$(git -C "$GHOSTTY_DIR" rev-parse HEAD)"
+    runs_json="$(gh run list --repo "$repo" --workflow CI --branch main --status success --limit 20 --json databaseId,headSha 2>/dev/null)" || return 1
+
+    while IFS=$'\t' read -r run_id run_sha; do
+        [[ -n "$run_id" && -n "$run_sha" ]] || continue
+        run_ghostty_sha="$(gh api "repos/$repo/contents/vendor/ghostty?ref=$run_sha" --jq '.sha' 2>/dev/null || true)"
+        if [[ "$run_ghostty_sha" == "$ghostty_sha" ]]; then
+            printf '%s\n' "$run_id"
+            return 0
+        fi
+    done < <(printf '%s' "$runs_json" | jq -r '.[] | [.databaseId, .headSha] | @tsv')
+
+    return 1
+}
+
+restore_ci_artifact() {
+    command -v gh >/dev/null 2>&1 || return 1
+
+    local repo run_id tmp_dir
+    repo="$(repo_slug)" || return 1
+    run_id="$(find_matching_ci_run)" || return 1
+    tmp_dir="$(mktemp -d)"
+    trap 'rm -rf "$tmp_dir"' RETURN
+
+    echo "Downloading GhosttyKit artifact from CI run $run_id..."
+    gh run download "$run_id" --repo "$repo" -n GhosttyKit -D "$tmp_dir" >/dev/null
+
+    [[ -f "$tmp_dir/GhosttyKit.xcframework/Info.plist" ]] || return 1
+    [[ -d "$tmp_dir/ghostty-resources" ]] || return 1
+
+    mkdir -p "$FRAMEWORK_DIR"
+    rm -rf "$XCFRAMEWORK" "$RESOURCES_DIR"
+    cp -R "$tmp_dir/GhosttyKit.xcframework" "$XCFRAMEWORK"
+    cp -R "$tmp_dir/ghostty-resources" "$RESOURCES_DIR"
+    strip_archive_debug_symbols "$XCFRAMEWORK"
+
+    echo "Restored GhosttyKit.xcframework from CI artifact into $FRAMEWORK_DIR"
+}
+
 has_valid_xcframework() {
     [[ -f "$XCFRAMEWORK/Info.plist" ]] || return 1
     local static_lib
@@ -236,13 +299,25 @@ fi
 rm -rf "$GHOSTTY_DIR/.zig-cache"
 
 # Build XCFramework
+BUILD_LOG="$(mktemp)"
 echo "Building GhosttyKit XCFramework target=$XCFW_TARGET (this may take a few minutes)..."
-zig build \
+if ! zig build \
     -Demit-xcframework=true \
     -Demit-macos-app=false \
     -Dxcframework-target="$XCFW_TARGET" \
     -Dapp-runtime=none \
-    -Doptimize=ReleaseFast
+    -Doptimize=ReleaseFast \
+    2> >(tee "$BUILD_LOG" >&2); then
+    if grep -q "undefined symbol: __availability_version_check" "$BUILD_LOG"; then
+        echo "Detected Zig 0.15.x linker incompatibility with the local macOS toolchain."
+        if restore_ci_artifact; then
+            exit 0
+        fi
+        echo "CI artifact fallback was unavailable; keeping the original Zig build failure." >&2
+    fi
+    exit 1
+fi
+rm -f "$BUILD_LOG"
 
 # Find the built XCFramework
 BUILD_OUTPUT="$GHOSTTY_DIR/zig-out/GhosttyKit.xcframework"
