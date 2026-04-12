@@ -6,6 +6,8 @@
 "Add Repository" = "添加仓库";
 "Adds a notify entry to ~/.codex/config.toml for agent turn completion events." = "向 ~/.codex/config.toml 添加通知条目，用于代理回合完成事件。";
 "Adds hooks to ~/.claude/settings.json for prompt submit, tool use, stop, and notification events." = "向 ~/.claude/settings.json 添加钩子，用于提示提交、工具使用、停止和通知事件。";
+"Agent" = "代理";
+"Attention" = "待处理";
 "Agent Hooks" = "代理钩子";
 "Agent completed" = "代理已完成";
 "Agent error" = "代理错误";
@@ -53,6 +55,7 @@
 "Fonts" = "字体";
 "Format: key_combo=action (e.g. super+shift+p=toggle_command_palette)" = "格式：key_combo=action（例如 super+shift+p=toggle_command_palette）";
 "General" = "通用";
+"Idle" = "空闲";
 "Ghostty Defaults" = "Ghostty 默认";
 "Go to Tab N" = "跳转到第 N 个标签页";
 "Hide while typing" = "输入时隐藏";
@@ -80,6 +83,7 @@
 "Open Project" = "打开项目";
 "Open Yazi" = "打开 Yazi";
 "Open in %@" = "在 %@ 中打开";
+"Projects" = "项目";
 "Option as Alt" = "Option 作为 Alt";
 "Pi" = "Pi";
 "Previous Pane" = "上一个面板";
@@ -93,6 +97,7 @@
 "Reveal in Finder" = "在访达中显示";
 "Right" = "右";
 "Running" = "运行中";
+"Completed" = "已完成";
 "Scroll multiplier" = "滚动倍率";
 "Search themes…" = "搜索主题…";
 "Select a color scheme for the terminal." = "选择终端的配色方案。";
@@ -114,6 +119,7 @@
 "Underline" = "下划线";
 "Unread output" = "未读输出";
 "User Overrides" = "用户自定义";
+"Waiting" = "等待中";
 "Waiting for input" = "等待输入";
 "Whether the cursor blinks when idle." = "空闲时光标是否闪烁。";
 "Window" = "窗口";
@@ -142,6 +148,7 @@
 /* Task Mode Sidebar */
 "Tasks" = "任务";
 "Workspaces" = "工作区";
+"Now" = "当前";
 "Set Status" = "设置状态";
 "To Do" = "待办";
 "In Progress" = "进行中";

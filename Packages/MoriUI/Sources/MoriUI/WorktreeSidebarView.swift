@@ -78,9 +78,46 @@ public struct WorktreeSidebarView: View {
         self.shortcutHintsVisible = shortcutHintsVisible
     }
 
+    private struct ActiveWorktreeItem: Identifiable {
+        let worktree: Worktree
+        let projectName: String
+        let agentName: String?
+
+        var id: UUID { worktree.id }
+    }
+
     /// Count of agent windows needing attention across all worktrees.
     private var attentionCount: Int {
         windows.filter { $0.agentState == .waitingForInput || $0.agentState == .error }.count
+    }
+
+    private var runningCount: Int {
+        windows.filter { $0.agentState == .running }.count
+    }
+
+    private var activeWorktreeItems: [ActiveWorktreeItem] {
+        worktrees
+            .filter { $0.status != .unavailable && $0.agentState != .none }
+            .compactMap { worktree in
+                guard let project = projects.first(where: { $0.id == worktree.projectId }) else { return nil }
+                let agentName = windows.first(where: {
+                    $0.worktreeId == worktree.id && ($0.detectedAgent != nil || $0.agentState != .none)
+                })?.detectedAgent
+                return ActiveWorktreeItem(
+                    worktree: worktree,
+                    projectName: project.name,
+                    agentName: agentName
+                )
+            }
+            .sorted { lhs, rhs in
+                let leftPriority = activeWorktreePriority(lhs.worktree.agentState)
+                let rightPriority = activeWorktreePriority(rhs.worktree.agentState)
+                if leftPriority != rightPriority {
+                    return leftPriority < rightPriority
+                }
+
+                return (lhs.worktree.lastActiveAt ?? .distantPast) > (rhs.worktree.lastActiveAt ?? .distantPast)
+            }
     }
 
     /// Global 1-based index for each window across all projects and worktrees.
@@ -110,11 +147,12 @@ public struct WorktreeSidebarView: View {
         VStack(spacing: 0) {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    attentionBanner
+                    summaryStrip
+                    activeWorktreeSection
 
                     // "PROJECTS" section header
                     HStack {
-                        Text(String.localized("PROJECTS"))
+                        Text(String.localized("Projects"))
                             .font(.system(size: 11, weight: .bold))
                             .tracking(1.2)
                             .foregroundStyle(MoriTokens.Color.muted)
@@ -128,7 +166,7 @@ public struct WorktreeSidebarView: View {
                                     .foregroundStyle(MoriTokens.Color.muted)
                             }
                             .buttonStyle(.plain)
-                            .help("Add Project")
+                            .help(String.localized("Add Project"))
                         }
                     }
                     .padding(.horizontal, MoriTokens.Spacing.xl)
@@ -426,8 +464,8 @@ public struct WorktreeSidebarView: View {
                 }
             }
 
-            // Show windows (tabs) under every worktree that has them — tree connector
-            if !worktreeWindows.isEmpty {
+            // Show window details only for the selected worktree to keep the unified sidebar compact.
+            if isSelected, !worktreeWindows.isEmpty {
                 TreeConnectorGroup(data: worktreeWindows) { window in
                     let globalIdx = globalWindowIndices[window.tmuxWindowId]
                     Group {
@@ -472,29 +510,183 @@ public struct WorktreeSidebarView: View {
 
     // MARK: - Helpers
 
-    // MARK: - Attention Banner
+    private func activeWorktreePriority(_ state: AgentState) -> Int {
+        switch state {
+        case .waitingForInput, .error: return 0
+        case .running: return 1
+        case .completed: return 2
+        case .none: return 3
+        }
+    }
 
     @ViewBuilder
-    private var attentionBanner: some View {
-        let count = attentionCount
-        if count > 0 {
-            HStack(spacing: MoriTokens.Spacing.md) {
-                Image(systemName: "exclamationmark.bubble.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(MoriTokens.Color.attention)
-                Text(count == 1
-                    ? String.localized("1 agent needs attention")
-                    : String.localized("\(count) agents need attention"))
-                    .font(MoriTokens.Font.caption)
-                    .foregroundStyle(MoriTokens.Color.attention)
-                Spacer()
+    private var summaryStrip: some View {
+        if attentionCount > 0 || runningCount > 0 {
+            HStack(spacing: MoriTokens.Spacing.sm) {
+                summaryChip(
+                    icon: "exclamationmark.bubble.fill",
+                    text: "\(attentionCount) \(String.localized("Attention"))",
+                    tint: MoriTokens.Color.attention,
+                    isProminent: attentionCount > 0
+                )
+
+                summaryChip(
+                    icon: "bolt.fill",
+                    text: "\(runningCount) \(String.localized("Running"))",
+                    tint: MoriTokens.Color.success,
+                    isProminent: runningCount > 0
+                )
             }
-            .padding(.horizontal, MoriTokens.Spacing.xl)
-            .padding(.vertical, MoriTokens.Spacing.md)
-            .background(MoriTokens.Color.attention.opacity(MoriTokens.Opacity.subtle))
-            .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
             .padding(.horizontal, MoriTokens.Spacing.sm)
             .padding(.bottom, MoriTokens.Spacing.sm)
+        }
+    }
+
+    @ViewBuilder
+    private var activeWorktreeSection: some View {
+        if !activeWorktreeItems.isEmpty {
+            VStack(alignment: .leading, spacing: MoriTokens.Spacing.sm) {
+                HStack {
+                    Text(String.localized("Now"))
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(1.2)
+                        .foregroundStyle(MoriTokens.Color.muted)
+
+                    Spacer()
+
+                    Text("\(activeWorktreeItems.count)")
+                        .font(MoriTokens.Font.caption)
+                        .foregroundStyle(MoriTokens.Color.inactive)
+                }
+                .padding(.horizontal, MoriTokens.Spacing.xl)
+
+                VStack(spacing: MoriTokens.Spacing.sm) {
+                    ForEach(activeWorktreeItems) { item in
+                        activeWorktreeCard(item)
+                    }
+                }
+                .padding(.horizontal, MoriTokens.Spacing.sm)
+                .padding(.bottom, MoriTokens.Spacing.sm)
+            }
+        }
+    }
+
+    private func summaryChip(icon: String, text: String, tint: Color, isProminent: Bool) -> some View {
+        HStack(spacing: MoriTokens.Spacing.sm) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(tint)
+            Text(text)
+                .font(MoriTokens.Font.caption)
+                .foregroundStyle(isProminent ? Color.primary : MoriTokens.Color.muted)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, MoriTokens.Spacing.lg)
+        .padding(.vertical, MoriTokens.Spacing.md)
+        .background(tint.opacity(MoriTokens.Opacity.subtle))
+        .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
+    }
+
+    private func activeWorktreeCard(_ item: ActiveWorktreeItem) -> some View {
+        Button {
+            onSelectProject?(item.worktree.projectId)
+            onSelectWorktree(item.worktree.id)
+        } label: {
+            HStack(alignment: .center, spacing: MoriTokens.Spacing.lg) {
+                Image(systemName: activeWorktreeIcon(item.worktree.agentState))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(activeWorktreeColor(item.worktree.agentState))
+                    .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: MoriTokens.Spacing.xxs) {
+                    HStack(spacing: MoriTokens.Spacing.sm) {
+                        Text(item.worktree.name)
+                            .font(MoriTokens.Font.rowTitle)
+                            .lineLimit(1)
+                        activeWorktreeBadge(item.worktree.agentState)
+                    }
+
+                    Text(activeWorktreeSubtitle(for: item))
+                        .font(MoriTokens.Font.caption)
+                        .foregroundStyle(MoriTokens.Color.muted)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, MoriTokens.Spacing.lg)
+            .padding(.vertical, MoriTokens.Spacing.md)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(activeWorktreeBackground(item.worktree.agentState))
+        .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
+    }
+
+    private func activeWorktreeIcon(_ state: AgentState) -> String {
+        switch state {
+        case .waitingForInput:
+            return "exclamationmark.bubble.fill"
+        case .error:
+            return "xmark.circle.fill"
+        case .running:
+            return "bolt.fill"
+        case .completed:
+            return "checkmark.circle.fill"
+        case .none:
+            return "circle.fill"
+        }
+    }
+
+    private func activeWorktreeColor(_ state: AgentState) -> Color {
+        switch state {
+        case .waitingForInput:
+            return MoriTokens.Color.attention
+        case .error:
+            return MoriTokens.Color.error
+        case .running, .completed:
+            return MoriTokens.Color.success
+        case .none:
+            return MoriTokens.Color.muted
+        }
+    }
+
+    private func activeWorktreeBackground(_ state: AgentState) -> some ShapeStyle {
+        switch state {
+        case .waitingForInput:
+            return AnyShapeStyle(MoriTokens.Color.attention.opacity(MoriTokens.Opacity.subtle))
+        case .error:
+            return AnyShapeStyle(MoriTokens.Color.error.opacity(MoriTokens.Opacity.subtle))
+        case .running, .completed:
+            return AnyShapeStyle(MoriTokens.Color.success.opacity(MoriTokens.Opacity.subtle))
+        case .none:
+            return AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+        }
+    }
+
+    private func activeWorktreeSubtitle(for item: ActiveWorktreeItem) -> String {
+        let agentText = item.agentName ?? String.localized("Agent")
+        return "\(item.projectName) · \(agentText)"
+    }
+
+    private func activeWorktreeBadge(_ state: AgentState) -> some View {
+        Text(activeWorktreeTitle(state))
+            .font(MoriTokens.Font.caption)
+            .foregroundStyle(activeWorktreeColor(state))
+    }
+
+    private func activeWorktreeTitle(_ state: AgentState) -> String {
+        switch state {
+        case .waitingForInput:
+            return String.localized("Waiting")
+        case .error:
+            return String.localized("Error")
+        case .running:
+            return String.localized("Running")
+        case .completed:
+            return String.localized("Completed")
+        case .none:
+            return String.localized("Idle")
         }
     }
 

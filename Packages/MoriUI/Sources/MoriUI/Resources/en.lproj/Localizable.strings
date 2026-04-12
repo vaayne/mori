@@ -6,6 +6,8 @@
 "Add Repository" = "Add Repository";
 "Adds a notify entry to ~/.codex/config.toml for agent turn completion events." = "Adds a notify entry to ~/.codex/config.toml for agent turn completion events.";
 "Adds hooks to ~/.claude/settings.json for prompt submit, tool use, stop, and notification events." = "Adds hooks to ~/.claude/settings.json for prompt submit, tool use, stop, and notification events.";
+"Agent" = "Agent";
+"Attention" = "Attention";
 "Agent Hooks" = "Agent Hooks";
 "Agent completed" = "Agent completed";
 "Agent error" = "Agent error";
@@ -53,6 +55,7 @@
 "Fonts" = "Fonts";
 "Format: key_combo=action (e.g. super+shift+p=toggle_command_palette)" = "Format: key_combo=action (e.g. super+shift+p=toggle_command_palette)";
 "General" = "General";
+"Idle" = "Idle";
 "Ghostty Defaults" = "Ghostty Defaults";
 "Go to Tab N" = "Go to Tab N";
 "Hide while typing" = "Hide while typing";
@@ -80,6 +83,7 @@
 "Open Project" = "Open Project";
 "Open Yazi" = "Open Yazi";
 "Open in %@" = "Open in %@";
+"Projects" = "Projects";
 "Option as Alt" = "Option as Alt";
 "Pi" = "Pi";
 "Previous Pane" = "Previous Pane";
@@ -93,6 +97,7 @@
 "Reveal in Finder" = "Reveal in Finder";
 "Right" = "Right";
 "Running" = "Running";
+"Completed" = "Completed";
 "Scroll multiplier" = "Scroll multiplier";
 "Search themes…" = "Search themes…";
 "Select a color scheme for the terminal." = "Select a color scheme for the terminal.";
@@ -114,6 +119,7 @@
 "Underline" = "Underline";
 "Unread output" = "Unread output";
 "User Overrides" = "User Overrides";
+"Waiting" = "Waiting";
 "Waiting for input" = "Waiting for input";
 "Whether the cursor blinks when idle." = "Whether the cursor blinks when idle.";
 "Window" = "Window";
@@ -142,6 +148,7 @@
 /* Task Mode Sidebar */
 "Tasks" = "Tasks";
 "Workspaces" = "Workspaces";
+"Now" = "Now";
 "Set Status" = "Set Status";
 "To Do" = "To Do";
 "In Progress" = "In Progress";
