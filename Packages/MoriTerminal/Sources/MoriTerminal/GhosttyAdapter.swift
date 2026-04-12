@@ -35,17 +35,28 @@ public final class GhosttyAdapter: TerminalHost {
         GhosttyApp.shared.reloadConfig()
     }
 
-    /// Apply Ghostty-derived window translucency and blur to an NSWindow.
-    public func syncWindowAppearance(_ window: NSWindow) {
+    /// Apply Ghostty-derived window translucency and blur to the main workspace window.
+    public func syncWorkspaceWindowAppearance(_ window: NSWindow) {
+        applyWindowAppearance(window, allowsTransparency: true)
+    }
+
+    /// Apply Ghostty theme colors to a non-terminal window while keeping it opaque.
+    public func syncThemedWindowAppearance(_ window: NSWindow) {
+        applyWindowAppearance(window, allowsTransparency: false)
+    }
+
+    private func applyWindowAppearance(_ window: NSWindow, allowsTransparency: Bool) {
         let themeInfo = self.themeInfo
         window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
 
-        let useTransparentBackground = !window.styleMask.contains(.fullScreen) && themeInfo.usesTransparentWindowBackground
+        let useTransparentBackground = allowsTransparency && !window.styleMask.contains(.fullScreen) && themeInfo.usesTransparentWindowBackground
         if useTransparentBackground {
             window.isOpaque = false
             window.backgroundColor = .white.withAlphaComponent(0.001)
 
-            if !themeInfo.backgroundBlur.isGlassStyle, let app = GhosttyApp.shared.app {
+            if window.isVisible,
+               !themeInfo.backgroundBlur.isGlassStyle,
+               let app = GhosttyApp.shared.app {
                 ghostty_set_window_background_blur(app, Unmanaged.passUnretained(window).toOpaque())
             }
         } else {

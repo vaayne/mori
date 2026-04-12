@@ -80,6 +80,7 @@
 "Reload Settings" = "Reload Settings";
 "Background blur" = "Background blur";
 "Inherit Ghostty window blur and glass styling for translucent terminal backgrounds." = "Inherit Ghostty window blur and glass styling for translucent terminal backgrounds.";
+"Background blur is only visible when background opacity is below 1.0." = "Background blur is only visible when background opacity is below 1.0.";
 "Standard Blur" = "Standard Blur";
 "Custom Blur Radius" = "Custom Blur Radius";
 "Glass Regular" = "Glass Regular";

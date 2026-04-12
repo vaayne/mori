@@ -753,6 +753,14 @@ private struct ThemeSettingsContent: View {
                                 .frame(width: 140)
                         }
                     }
+
+                    if model.backgroundOpacity >= 1, model.backgroundBlur != .disabled {
+                        Text(String.localized("Background blur is only visible when background opacity is below 1.0."))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 180, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }

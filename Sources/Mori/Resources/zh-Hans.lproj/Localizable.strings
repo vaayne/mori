@@ -80,6 +80,7 @@
 "Reload Settings" = "重新加载设置";
 "Background blur" = "背景模糊";
 "Inherit Ghostty window blur and glass styling for translucent terminal backgrounds." = "为半透明终端背景继承 Ghostty 的窗口模糊与玻璃效果样式。";
+"Background blur is only visible when background opacity is below 1.0." = "仅当背景不透明度低于 1.0 时，背景模糊才会可见。";
 "Standard Blur" = "标准模糊";
 "Custom Blur Radius" = "自定义模糊半径";
 "Glass Regular" = "常规玻璃";

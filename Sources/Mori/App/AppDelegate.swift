@@ -109,10 +109,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Build the window with ghostty theme
         let windowController = MainWindowController(themeInfo: themeInfo)
         self.mainWindowController = windowController
-        if let adapter = terminalArea.terminalHost as? GhosttyAdapter,
-           let window = windowController.window {
-            adapter.syncWindowAppearance(window)
-        }
 
         // Build split view children
         let sidebarController = SidebarHostingController(
@@ -235,9 +231,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         windowController.onShowCreateWorktreePanel = { [weak self] in
             self?.showCreateWorktreePanel()
         }
+        windowController.onWindowAppearanceInvalidated = { [weak self, weak terminalArea, weak windowController] in
+            guard let self,
+                  let adapter = terminalArea?.terminalHost as? GhosttyAdapter,
+                  let window = windowController?.window else { return }
+            adapter.syncWorkspaceWindowAppearance(window)
+            self.refreshGhosttyThemeBackgrounds(themeInfo: adapter.themeInfo)
+        }
 
         windowController.contentViewController = splitVC
         windowController.showWindow(nil)
+        if let adapter = terminalArea.terminalHost as? GhosttyAdapter,
+           let window = windowController.window {
+            adapter.syncWorkspaceWindowAppearance(window)
+        }
         // Restore saved frame after all layout is complete
         windowController.restoreSavedFrame()
         NSApp.activate(ignoringOtherApps: true)
@@ -745,14 +752,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         let hostingController = NSHostingController(rootView: settingsView)
         hostingController.view.wantsLayer = true
-        hostingController.view.layer?.backgroundColor = themeInfo.effectiveBackground.cgColor
+        hostingController.view.layer?.backgroundColor = themeInfo.background.cgColor
         let window = NSWindow(contentViewController: hostingController)
         window.title = .localized("Settings")
         window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         if let adapter = terminalAreaController?.terminalHost as? GhosttyAdapter {
-            adapter.syncWindowAppearance(window)
+            adapter.syncThemedWindowAppearance(window)
         } else {
             window.backgroundColor = themeInfo.background
             window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
@@ -817,16 +824,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         let themeInfo = adapter.themeInfo
         if let window = mainWindowController?.window {
-            adapter.syncWindowAppearance(window)
+            adapter.syncWorkspaceWindowAppearance(window)
         }
-        sidebarController?.updateAppearance(themeInfo: themeInfo)
-        terminalAreaController?.view.layer?.backgroundColor = themeInfo.effectiveBackground.cgColor
+        refreshGhosttyThemeBackgrounds(themeInfo: themeInfo)
 
         // Update settings window appearance
         if let settingsWindow = settingsWindowController?.window {
-            adapter.syncWindowAppearance(settingsWindow)
+            adapter.syncThemedWindowAppearance(settingsWindow)
             settingsWindow.contentViewController?.view.wantsLayer = true
-            settingsWindow.contentViewController?.view.layer?.backgroundColor = themeInfo.effectiveBackground.cgColor
+            settingsWindow.contentViewController?.view.layer?.backgroundColor = themeInfo.background.cgColor
         }
 
         // Update agent dashboard appearance
@@ -838,6 +844,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 await TmuxThemeApplicator.apply(themeInfo: themeInfo, tmuxBackend: tmuxBackend)
             }
         }
+    }
+
+    private func refreshGhosttyThemeBackgrounds(themeInfo: GhosttyThemeInfo) {
+        sidebarController?.updateAppearance(themeInfo: themeInfo)
+        terminalAreaController?.view.layer?.backgroundColor = themeInfo.effectiveBackground.cgColor
     }
 
     // MARK: - Proxy
