@@ -12,7 +12,8 @@ enum TmuxThemeApplicator {
         let fg = GhosttyThemeInfo.hexString(themeInfo.foreground)
         let bg = GhosttyThemeInfo.hexString(themeInfo.background)
 
-        let windowStyle = "fg=\(fg),bg=\(bg)"
+        let defaultBackedWindowStyle = themeInfo.backgroundOpacity < 1 && !themeInfo.backgroundOpacityCells
+        let windowStyle = defaultBackedWindowStyle ? "fg=\(fg),bg=default" : "fg=\(fg),bg=\(bg)"
         let borderFg = themeInfo.palette.count > 8
             ? GhosttyThemeInfo.hexString(themeInfo.palette[8])  // bright black
             : fg
@@ -24,11 +25,12 @@ enum TmuxThemeApplicator {
             : bg
 
         // Session-level options (set-option -g)
+        let statusStyle = defaultBackedWindowStyle ? "fg=\(fg),bg=default" : "fg=\(fg),bg=\(statusBg)"
         let sessionOptions: [(String, String)] = [
             ("mouse", "on"),
             ("status", "off"),
-            ("status-style", "fg=\(fg),bg=\(statusBg)"),
-            ("message-style", "fg=\(fg),bg=\(statusBg)"),
+            ("status-style", statusStyle),
+            ("message-style", statusStyle),
             ("allow-passthrough", "on"),
         ]
 

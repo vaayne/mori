@@ -81,6 +81,8 @@
 "Background blur" = "背景模糊";
 "Inherit Ghostty window blur and glass styling for translucent terminal backgrounds." = "为半透明终端背景继承 Ghostty 的窗口模糊与玻璃效果样式。";
 "Background blur is only visible when background opacity is below 1.0." = "仅当背景不透明度低于 1.0 时，背景模糊才会可见。";
+"Apply opacity to colored cells" = "将不透明度应用到彩色单元格";
+"Let tmux and terminal apps keep translucent backgrounds when they draw colored cells instead of using the default terminal background." = "当 tmux 或终端应用绘制彩色单元格而不是使用默认终端背景时，也让这些背景保持半透明。";
 "Standard Blur" = "标准模糊";
 "Custom Blur Radius" = "自定义模糊半径";
 "Glass Regular" = "常规玻璃";

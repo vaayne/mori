@@ -780,6 +780,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             cursorStyle: cf.get("cursor-style") ?? "block",
             cursorBlink: (cf.get("cursor-style-blink") ?? "true") != "false",
             backgroundOpacity: Double(cf.get("background-opacity") ?? "1.0") ?? 1.0,
+            backgroundOpacityCells: cf.get("background-opacity-cells") == "true",
             backgroundBlur: GhosttyBackgroundBlur(configValue: cf.get("background-blur") ?? "false"),
             macosOptionAsAlt: cf.get("macos-option-as-alt") ?? "false",
             mouseHideWhileTyping: cf.get("mouse-hide-while-typing") == "true",
@@ -809,6 +810,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         cf.set("cursor-style", value: model.cursorStyle)
         cf.set("cursor-style-blink", value: model.cursorBlink ? "true" : "false")
         cf.set("background-opacity", value: String(format: "%.2f", model.backgroundOpacity))
+        cf.set("background-opacity-cells", value: model.backgroundOpacityCells ? "true" : "false")
         cf.set("background-blur", value: model.backgroundBlur.configValue)
         cf.set("macos-option-as-alt", value: model.macosOptionAsAlt)
         cf.set("mouse-hide-while-typing", value: model.mouseHideWhileTyping ? "true" : "false")

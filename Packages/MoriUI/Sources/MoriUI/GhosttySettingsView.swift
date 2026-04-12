@@ -64,6 +64,7 @@ public struct GhosttySettingsModel: Equatable {
     public var cursorStyle: String
     public var cursorBlink: Bool
     public var backgroundOpacity: Double
+    public var backgroundOpacityCells: Bool
     public var backgroundBlur: GhosttyBackgroundBlur
     public var macosOptionAsAlt: String
     public var mouseHideWhileTyping: Bool
@@ -79,6 +80,7 @@ public struct GhosttySettingsModel: Equatable {
         cursorStyle: String = "block",
         cursorBlink: Bool = true,
         backgroundOpacity: Double = 1.0,
+        backgroundOpacityCells: Bool = false,
         backgroundBlur: GhosttyBackgroundBlur = .disabled,
         macosOptionAsAlt: String = "false",
         mouseHideWhileTyping: Bool = false,
@@ -93,6 +95,7 @@ public struct GhosttySettingsModel: Equatable {
         self.cursorStyle = cursorStyle
         self.cursorBlink = cursorBlink
         self.backgroundOpacity = backgroundOpacity
+        self.backgroundOpacityCells = backgroundOpacityCells
         self.backgroundBlur = backgroundBlur
         self.macosOptionAsAlt = macosOptionAsAlt
         self.mouseHideWhileTyping = mouseHideWhileTyping
@@ -722,6 +725,17 @@ private struct ThemeSettingsContent: View {
                         .frame(width: 140)
                         .onChange(of: model.backgroundOpacity) { _, _ in onChanged() }
                 }
+            }
+
+            CardDivider()
+
+            SettingRow(
+                title: .localized("Apply opacity to colored cells"),
+                description: .localized("Let tmux and terminal apps keep translucent backgrounds when they draw colored cells instead of using the default terminal background.")
+            ) {
+                Toggle("", isOn: $model.backgroundOpacityCells)
+                    .labelsHidden()
+                    .onChange(of: model.backgroundOpacityCells) { _, _ in onChanged() }
             }
 
             CardDivider()

@@ -53,6 +53,7 @@ public struct GhosttyThemeInfo: Sendable {
     public let palette: [NSColor]
     public let isDark: Bool
     public let backgroundOpacity: Double
+    public let backgroundOpacityCells: Bool
     public let backgroundBlur: BackgroundBlur
 
     public var effectiveBackground: NSColor {
@@ -70,6 +71,7 @@ public struct GhosttyThemeInfo: Sendable {
         palette: (0..<16).map { _ in .gray },
         isDark: true,
         backgroundOpacity: 1,
+        backgroundOpacityCells: false,
         backgroundBlur: .disabled
     )
 
@@ -79,6 +81,7 @@ public struct GhosttyThemeInfo: Sendable {
         let bg = queryColor(config, key: "background") ?? NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
         let fg = queryColor(config, key: "foreground") ?? NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
         let backgroundOpacity = queryDouble(config, key: "background-opacity") ?? 1
+        let backgroundOpacityCells = queryBool(config, key: "background-opacity-cells") ?? false
         let backgroundBlur = queryBackgroundBlur(config, key: "background-blur") ?? .disabled
 
         // Query palette — ghostty_config_palette_s contains a 256-element C array
@@ -119,6 +122,7 @@ public struct GhosttyThemeInfo: Sendable {
             palette: palette,
             isDark: luminance < 0.5,
             backgroundOpacity: max(0.001, min(backgroundOpacity, 1)),
+            backgroundOpacityCells: backgroundOpacityCells,
             backgroundBlur: backgroundBlur
         )
     }
@@ -147,6 +151,14 @@ public struct GhosttyThemeInfo: Sendable {
 
     private static func queryDouble(_ config: ghostty_config_t, key: String) -> Double? {
         var value: Double = 0
+        let success = withUnsafeMutablePointer(to: &value) { ptr in
+            ghostty_config_get(config, ptr, key, UInt(key.count))
+        }
+        return success ? value : nil
+    }
+
+    private static func queryBool(_ config: ghostty_config_t, key: String) -> Bool? {
+        var value = false
         let success = withUnsafeMutablePointer(to: &value) { ptr in
             ghostty_config_get(config, ptr, key, UInt(key.count))
         }
