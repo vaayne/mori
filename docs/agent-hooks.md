@@ -18,7 +18,6 @@ During Mori's 5-second polling cycle, it reads these options directly from tmux 
 2. Toggle **Claude Code** on
 3. Mori updates `~/.claude/settings.json` with hooks for:
    - `UserPromptSubmit` (prompt entered)
-   - `PreToolUse` (tool invoked)
    - `Stop` (agent stopped)
    - `Notification` (completion notification)
 
@@ -62,7 +61,7 @@ Shared bash functions sourced by agent-specific scripts. Sets `@mori-agent-state
 
 ### mori-agent-hook.sh (Claude Code)
 Responds to Claude Code hook events:
-- `UserPromptSubmit`, `PreToolUse` → state: `"working"`
+- `UserPromptSubmit` → state: `"working"`
 - `Stop`, `Notification` → state: `"waiting"`
 
 Drains stdin (Claude Code pipes JSON hook data) and bails silently if not in tmux.

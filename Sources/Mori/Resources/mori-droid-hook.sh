@@ -18,7 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/mori-hook-common.sh"
 
 case "$HOOK_TYPE" in
-    UserPromptSubmit|PreToolUse)
+    UserPromptSubmit)
         set_state "working"
         ;;
     Stop|Notification)
