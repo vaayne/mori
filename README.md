@@ -8,104 +8,46 @@
 
 A native macOS workspace terminal organized around **Projects** and **Worktrees**, powered by **tmux** and **libghostty**.
 
-Instead of managing loose terminal tabs, Mori treats your git repositories as first-class projects. Each worktree (branch checkout) gets its own persistent tmux session with multiple windows and panes — all presented through a native sidebar and GPU-accelerated terminal.
+Mori treats git repositories as first-class projects. Each worktree gets its own persistent tmux session, presented through a native sidebar and GPU-accelerated terminal.
 
-## Why Mori
+## Features
 
 - **Project-first navigation** — switch between repos and branches, not anonymous tabs
-- **Local + remote projects** — add local folders or SSH-hosted repositories from one Add flow
-- **Persistent sessions** — close the app, reopen later, everything is still running in tmux
-- **Remote companion on iPhone and iPad** — MoriRemote gives you adaptive SSH/tmux access away from your Mac
-- **Native macOS experience** — sidebar, command palette, notifications, keyboard shortcuts
-- **GPU-rendered terminal** — libghostty (Ghostty's rendering engine) with Metal acceleration
-- **Worktree-aware** — multiple branches of the same repo run side-by-side with independent sessions
-
-## How It Works
-
-```
-Project (git repo)
-  └─ Worktree (branch checkout)
-       └─ tmux Session
-            ├─ Window (tab)   →  Pane
-            ├─ Window         →  Pane | Pane
-            └─ Window         →  Pane
-```
-
-Each worktree maps to one tmux session. Windows and panes are standard tmux constructs. Mori provides the UI layer on top — organizing, navigating, and displaying status.
-
-## Architecture
-
-```
-App (AppKit shell + SwiftUI sidebar views)
-  ├─ MoriCore         — Models + observable app state
-  ├─ MoriUI           — SwiftUI sidebar views
-  ├─ MoriTmux         — tmux CLI integration (actor)
-  ├─ MoriGit          — Git worktree/status discovery (actor)
-  ├─ MoriTerminal     — libghostty terminal surface
-  ├─ MoriPersistence  — SQLite via GRDB
-  └─ MoriIPC          — Unix socket IPC + `ws` CLI
-```
-
-## Requirements
-
-- macOS 14 (Sonoma) or later
-- tmux
-- [mise](https://mise.jdx.dev/) (task runner)
-- Zig 0.15.2 + Xcode (for building libghostty)
+- **Persistent sessions** — close the app, reopen later, tmux keeps everything running
+- **Worktree-aware** — multiple branches of the same repo run side-by-side
+- **Local + SSH projects** — add local folders or remote repos from one flow
+- **MoriRemote** — iPhone/iPad companion app for SSH/tmux access away from your Mac
+- **GPU-rendered terminal** — libghostty (Ghostty's engine) with Metal acceleration
 
 ## Install
-
-### Homebrew
 
 ```bash
 brew tap vaayne/tap
 brew install --cask mori
 ```
 
-### MoriRemote (iOS/iPadOS)
+Or download from [GitHub Releases](https://github.com/vaayne/mori/releases). MoriRemote for iOS is on [TestFlight](https://testflight.apple.com/join/k2GFJPC2).
 
-Join the [TestFlight beta](https://testflight.apple.com/join/k2GFJPC2) to install MoriRemote on iPhone or iPad.
+## Build
 
-### GitHub Releases
-
-Download the latest release from [GitHub Releases](https://github.com/vaayne/mori/releases).
-
-- `.dmg`: Open the disk image and move `Mori.app` into `/Applications`
-- `.zip`: Extract the archive and move `Mori.app` into `/Applications`
-
-The Homebrew tap installs `Mori.app`. Release bundles also embed the `mori` CLI for Homebrew-based installs, and the cask declares `tmux` as a dependency.
-
-## Build & Run
+Requires macOS 14+, tmux, [mise](https://mise.jdx.dev/), Zig 0.15.2, and Xcode.
 
 ```bash
-mise run build           # Debug build
-mise run build:release   # Release build
-mise run dev             # Build + run
-mise run test            # Run all tests
-mise run clean           # Clean build artifacts
-```
-
-`mise run build` and `mise run build:release` automatically bootstrap the libghostty XCFramework on first run. You can also build it manually:
-
-```bash
-mise run build:ghostty   # Requires Zig 0.15.2 + Xcode (downloads Metal Toolchain if missing)
+mise run build    # Debug build (bootstraps libghostty automatically)
+mise run dev      # Build + run
+mise run test     # Run all tests
 ```
 
 ## CLI
-
-The `mori` command lets you interact with Mori from the terminal:
 
 ```bash
 mori project list
 mori open /path/to/repo
 mori worktree create <project> <branch>
 mori focus <project> <worktree>
-mori send <project> <worktree> <window> "command"
 mori new-window <project> <worktree> <name>
-mori pane list
-mori pane read <project> <worktree> <window> [--lines N]
-mori pane message <project> <worktree> <window> "text"
-mori pane id
+mori send <project> <worktree> <window> "keys"
+mori pane list|read|message|id
 ```
 
 ## Terminal Configuration
@@ -114,21 +56,17 @@ Mori uses Ghostty's configuration system. Customize your terminal in `~/.config/
 
 ## Keyboard Shortcuts
 
-See [docs/worktrees.md](docs/worktrees.md) for worktree management and [docs/keymaps.md](docs/keymaps.md) for the full shortcut list. Highlights:
+See [docs/keymaps.md](docs/keymaps.md) for the full list. Key highlights:
 
-| Shortcut                                                     | Action                |
-| ------------------------------------------------------------ | --------------------- |
-| <kbd>⌘</kbd>+<kbd>T</kbd>                                    | New tab (tmux window) |
-| <kbd>⌘</kbd>+<kbd>W</kbd>                                    | Close pane            |
-| <kbd>⌘</kbd>+<kbd>D</kbd> / <kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>D</kbd> | Split right / down    |
-| <kbd>⌘</kbd>+<kbd>1</kbd>–<kbd>⌘</kbd>+<kbd>9</kbd>          | Go to tab N           |
-| <kbd>⌃</kbd>+<kbd>Tab</kbd> / <kbd>⌃</kbd>+<kbd>⇧</kbd>+<kbd>Tab</kbd> | Cycle worktrees       |
-| <kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>N</kbd>                       | New worktree          |
-| <kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>P</kbd>                       | Command palette       |
-| <kbd>⌘</kbd>+<kbd>B</kbd>                                    | Toggle sidebar        |
-| <kbd>⌘</kbd>+<kbd>G</kbd>                                    | Lazygit               |
-| <kbd>⌘</kbd>+<kbd>E</kbd>                                    | Yazi                  |
-
+| Shortcut | Action |
+|---|---|
+| <kbd>⌘</kbd>+<kbd>T</kbd> | New tab |
+| <kbd>⌘</kbd>+<kbd>D</kbd> / <kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>D</kbd> | Split right / down |
+| <kbd>⌃</kbd>+<kbd>Tab</kbd> | Cycle worktrees |
+| <kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>N</kbd> | New worktree |
+| <kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>P</kbd> | Command palette |
+| <kbd>⌘</kbd>+<kbd>G</kbd> | Lazygit |
+| <kbd>⌘</kbd>+<kbd>E</kbd> | Yazi |
 
 ## License
 
