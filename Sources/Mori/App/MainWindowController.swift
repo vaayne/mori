@@ -266,14 +266,15 @@ extension MainWindowController: NSToolbarDelegate {
         willBeInsertedIntoToolbar flag: Bool
     ) -> NSToolbarItem? {
         let item = NSToolbarItem(itemIdentifier: itemIdentifier)
-        let compactSplitSymbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
+        let symbolConfig = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
 
         switch itemIdentifier {
         case ToolbarID.toggleSidebar:
             item.label = .localized("Toggle Sidebar")
             item.paletteLabel = .localized("Toggle Sidebar")
             item.toolTip = .localized("Show or hide the sidebar (⌘B)")
-            item.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: .localized("Toggle Sidebar"))
+            item.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: .localized("Toggle Sidebar"))?
+                .withSymbolConfiguration(symbolConfig)
             item.target = self
             item.action = #selector(toggleSidebarClicked)
             return item
@@ -281,7 +282,8 @@ extension MainWindowController: NSToolbarDelegate {
             item.label = .localized("Files")
             item.paletteLabel = .localized("Files")
             item.toolTip = .localized("Open Files Companion Pane (⌘E)")
-            item.image = NSImage(systemSymbolName: "folder", accessibilityDescription: .localized("Files"))
+            item.image = NSImage(systemSymbolName: "folder", accessibilityDescription: .localized("Files"))?
+                .withSymbolConfiguration(symbolConfig)
             item.target = self
             item.action = #selector(toggleFilesClicked)
             return item
@@ -289,7 +291,8 @@ extension MainWindowController: NSToolbarDelegate {
             item.label = .localized("Git")
             item.paletteLabel = .localized("Git")
             item.toolTip = .localized("Open Git Companion Pane (⌘G)")
-            item.image = NSImage(systemSymbolName: "point.topleft.down.curvedto.point.bottomright.up", accessibilityDescription: .localized("Git"))
+            item.image = NSImage(systemSymbolName: "point.topleft.down.curvedto.point.bottomright.up", accessibilityDescription: .localized("Git"))?
+                .withSymbolConfiguration(symbolConfig)
             item.target = self
             item.action = #selector(toggleGitClicked)
             return item
@@ -297,10 +300,8 @@ extension MainWindowController: NSToolbarDelegate {
             item.label = .localized("Split Right")
             item.paletteLabel = .localized("Split Right")
             item.toolTip = .localized("Split the current pane to the right (⌘D)")
-            item.image = NSImage(
-                systemSymbolName: "rectangle.split.2x1",
-                accessibilityDescription: .localized("Split Right")
-            )?.withSymbolConfiguration(compactSplitSymbolConfiguration)
+            item.image = NSImage(systemSymbolName: "rectangle.split.2x1", accessibilityDescription: .localized("Split Right"))?
+                .withSymbolConfiguration(symbolConfig)
             item.target = self
             item.action = #selector(splitRightClicked)
             return item
@@ -308,10 +309,8 @@ extension MainWindowController: NSToolbarDelegate {
             item.label = .localized("Split Down")
             item.paletteLabel = .localized("Split Down")
             item.toolTip = .localized("Split the current pane downward (⇧⌘D)")
-            item.image = NSImage(
-                systemSymbolName: "rectangle.split.1x2",
-                accessibilityDescription: .localized("Split Down")
-            )?.withSymbolConfiguration(compactSplitSymbolConfiguration)
+            item.image = NSImage(systemSymbolName: "rectangle.split.1x2", accessibilityDescription: .localized("Split Down"))?
+                .withSymbolConfiguration(symbolConfig)
             item.target = self
             item.action = #selector(splitDownClicked)
             return item
