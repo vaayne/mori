@@ -200,6 +200,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     case keyboard = "Keyboard"
     case mouse = "Mouse"
     case window = "Window"
+    case tools = "Tools"
     case network = "Network"
     case agents = "Agent Hooks"
 
@@ -218,6 +219,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .keyboard: return "keyboard"
         case .mouse: return "computermouse"
         case .window: return "macwindow"
+        case .tools: return "hammer"
         case .network: return "network"
         case .agents: return "cpu"
         }
@@ -237,6 +239,8 @@ public struct GhosttySettingsView: View {
     @Binding var proxySettings: ProxySettingsModel
     var onProxyApply: ((ProxySettingsModel) -> Void)?
     var onSystemProxyDetect: (() -> ProxySettingsModel)?
+    @Binding var toolSettings: ToolSettings
+    var onToolSettingsChanged: ((ToolSettings) -> Void)?
 
     // Key bindings
     var keyBindings: [KeyBinding]
@@ -259,6 +263,8 @@ public struct GhosttySettingsView: View {
         proxySettings: Binding<ProxySettingsModel> = .constant(ProxySettingsModel()),
         onProxyApply: ((ProxySettingsModel) -> Void)? = nil,
         onSystemProxyDetect: (() -> ProxySettingsModel)? = nil,
+        toolSettings: Binding<ToolSettings> = .constant(ToolSettings()),
+        onToolSettingsChanged: ((ToolSettings) -> Void)? = nil,
         keyBindings: [KeyBinding] = [],
         keyBindingDefaults: [KeyBinding] = [],
         onKeyBindingValidate: ((KeyBinding) -> ConflictResult)? = nil,
@@ -276,6 +282,8 @@ public struct GhosttySettingsView: View {
         self._proxySettings = proxySettings
         self.onProxyApply = onProxyApply
         self.onSystemProxyDetect = onSystemProxyDetect
+        self._toolSettings = toolSettings
+        self.onToolSettingsChanged = onToolSettingsChanged
         self.keyBindings = keyBindings
         self.keyBindingDefaults = keyBindingDefaults
         self.onKeyBindingValidate = onKeyBindingValidate
@@ -387,6 +395,10 @@ public struct GhosttySettingsView: View {
                     )
                     case .mouse: MouseSettingsContent(model: $model, onChanged: onChanged)
                     case .window: WindowSettingsContent(model: $model, onChanged: onChanged)
+                    case .tools: ToolSettingsContent(
+                        model: $toolSettings,
+                        onApply: { onToolSettingsChanged?(toolSettings) }
+                    )
                     case .network: NetworkSettingsContent(
                         model: $proxySettings,
                         onApply: { onProxyApply?(proxySettings) },
@@ -1346,6 +1358,103 @@ private struct WindowSettingsContent: View {
                     .onChange(of: model.windowPaddingBalance) { _, _ in onChanged() }
             }
         }
+    }
+}
+
+// MARK: - Tool Settings
+
+private struct ToolSettingsContent: View {
+    private static let tools: [(command: String, description: String)] = [
+        ("tmux", .localized("Required for local Mori workspaces. Supports custom installs such as ~/homebrew/bin/tmux.")),
+        ("lazygit", .localized("Optional Git companion tool path.")),
+        ("yazi", .localized("Optional file manager companion tool path.")),
+    ]
+
+    @Binding var model: ToolSettings
+    let onApply: () -> Void
+
+    @State private var hasUnappliedChanges = false
+
+    var body: some View {
+        Text(String.localized("Configure explicit paths for tmux, Lazygit, and Yazi. Leave a field empty to let Mori auto-detect from common install locations and your shell PATH."))
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+        SettingsCard {
+            ForEach(Array(Self.tools.enumerated()), id: \.element.command) { index, tool in
+                toolRow(command: tool.command, description: tool.description)
+
+                if index < Self.tools.count - 1 {
+                    CardDivider()
+                }
+            }
+        }
+
+        SettingsCard {
+            HStack {
+                Button(String.localized("Apply")) {
+                    onApply()
+                    hasUnappliedChanges = false
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!hasUnappliedChanges)
+
+                if hasUnappliedChanges {
+                    Text(String.localized("Unsaved changes"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange)
+                }
+
+                Spacer()
+
+                Text(String.localized("Tool path changes apply immediately to new launches. Existing tmux clients or shells may still use earlier paths."))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func toolRow(command: String, description: String) -> some View {
+        let value = toolBinding(for: command)
+        let resolvedPath = model.displayPath(for: command)
+        let hasOverride = !(model.trimmedRawPath(for: command) ?? "").isEmpty
+
+        return SettingRow(title: command, description: description) {
+            VStack(alignment: .trailing, spacing: 4) {
+                TextField(String.localized("Resolved automatically"), text: value)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 280)
+                    .font(.system(size: 12, design: .monospaced))
+                    .onChange(of: value.wrappedValue) { _, _ in
+                        hasUnappliedChanges = true
+                    }
+
+                if !resolvedPath.isEmpty {
+                    Text(
+                        hasOverride
+                            ? String(format: .localized("Using override: %@"), resolvedPath)
+                            : String(format: .localized("Auto-detected: %@"), resolvedPath)
+                    )
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 280, alignment: .trailing)
+                    .multilineTextAlignment(.trailing)
+                    .textSelection(.enabled)
+                }
+            }
+        }
+    }
+
+    private func toolBinding(for command: String) -> Binding<String> {
+        Binding(
+            get: {
+                model.rawPath(for: command) ?? ""
+            },
+            set: { newValue in
+                model.setRawPath(newValue, for: command)
+            }
+        )
     }
 }
 

@@ -1239,6 +1239,91 @@ func testAgentMessageCodable() {
     assertEqual(decoded, msg, "AgentMessage codable round-trip")
 }
 
+// MARK: - Tool Resolution Tests
+
+func testToolSettingsConfiguredPathExpandsTilde() {
+    let settings = ToolSettings(tmuxPath: "~/homebrew/bin/tmux")
+    let expected = NSString(string: "~/homebrew/bin/tmux").expandingTildeInPath
+    assertEqual(settings.configuredPath(for: "tmux"), expected)
+    assertNil(settings.configuredPath(for: "unknown"))
+}
+
+func testBinaryResolverPrefersConfiguredPath() {
+    let resolved = BinaryResolver.resolve(
+        command: "tmux",
+        configuredPath: "~/custom/tmux",
+        environment: ["PATH": "/usr/bin:/bin"],
+        additionalSearchDirectories: [],
+        isExecutable: { $0 == NSString(string: "~/custom/tmux").expandingTildeInPath }
+    )
+    assertEqual(resolved, NSString(string: "~/custom/tmux").expandingTildeInPath)
+}
+
+func testBinaryResolverPrefersPATHBeforeFallbackDirectories() {
+    let resolved = BinaryResolver.resolve(
+        command: "tmux",
+        environment: ["PATH": "/custom/bin:/usr/bin:/bin"],
+        additionalSearchDirectories: ["~/homebrew/bin"],
+        isExecutable: {
+            $0 == "/custom/bin/tmux" ||
+            $0 == NSString(string: "~/homebrew/bin/tmux").expandingTildeInPath
+        }
+    )
+    assertEqual(resolved, "/custom/bin/tmux")
+}
+
+func testBinaryResolverFallsBackToPATH() {
+    let resolved = BinaryResolver.resolve(
+        command: "lazygit",
+        environment: ["PATH": "/tmp/bin:/usr/bin"],
+        additionalSearchDirectories: [],
+        isExecutable: { $0 == "/tmp/bin/lazygit" }
+    )
+    assertEqual(resolved, "/tmp/bin/lazygit")
+}
+
+func testBinaryResolverResolveToolUsesToolSettings() {
+    let settings = ToolSettings(lazygitPath: "~/tools/lazygit")
+    let expected = NSString(string: "~/tools/lazygit").expandingTildeInPath
+    let resolved = BinaryResolver.resolveTool(
+        command: "lazygit",
+        settings: settings,
+        environment: ["PATH": "/usr/bin:/bin"],
+        additionalSearchDirectories: [],
+        isExecutable: { $0 == expected }
+    )
+    assertEqual(resolved, expected)
+}
+
+func testBinaryResolverPathDirectoriesParsing() {
+    let directories = BinaryResolver.pathDirectories(from: "~/bin:/usr/local/bin::/usr/bin")
+    assertEqual(directories[0], NSString(string: "~/bin").expandingTildeInPath)
+    assertEqual(directories[1], "/usr/local/bin")
+    assertEqual(directories[2], "/usr/bin")
+    assertEqual(directories.count, 3)
+}
+
+func testBinaryResolverSynthesizedPATHPreservesPATHPrecedence() {
+    let pathValue = BinaryResolver.synthesizedPATH(
+        environment: ["PATH": "/custom/bin:/usr/bin"],
+        additionalSearchDirectories: ["~/homebrew/bin", "/usr/bin", "/opt/homebrew/bin"]
+    )
+    let expected = [
+        "/custom/bin",
+        "/usr/bin",
+        NSString(string: "~/homebrew/bin").expandingTildeInPath,
+        "/opt/homebrew/bin",
+    ].joined(separator: ":")
+    assertEqual(pathValue, expected)
+}
+
+func testBinaryResolverDefaultSearchDirectoriesIncludeExplicitFallbacks() {
+    let directories = Set(BinaryResolver.defaultSearchDirectories)
+    assertTrue(directories.contains(NSString(string: "~/homebrew/bin").expandingTildeInPath))
+    assertTrue(directories.contains("/opt/homebrew/bin"))
+    assertTrue(directories.contains("/usr/local/bin"))
+}
+
 // MARK: - Main
 
 print("=== MoriCore Model Tests ===")
@@ -1348,6 +1433,7 @@ testSSHRemovingBatchMode()
 testSSHShellEscape()
 testSSHAskPassEnvironmentIsMinimal()
 testSSHCreateAskPassScriptHasSecurePermissions()
+testSSHRemoteLoginShellCommand()
 
 // AgentMessage
 testAgentMessageEnvelope()
@@ -1355,6 +1441,16 @@ testAgentMessageParse()
 testAgentMessageParseSlashInWorktree()
 testAgentMessageParseInvalid()
 testAgentMessageCodable()
+
+// Tool resolution
+testToolSettingsConfiguredPathExpandsTilde()
+testBinaryResolverPrefersConfiguredPath()
+testBinaryResolverPrefersPATHBeforeFallbackDirectories()
+testBinaryResolverFallsBackToPATH()
+testBinaryResolverResolveToolUsesToolSettings()
+testBinaryResolverPathDirectoriesParsing()
+testBinaryResolverSynthesizedPATHPreservesPATHPrecedence()
+testBinaryResolverDefaultSearchDirectoriesIncludeExplicitFallbacks()
 
 // KeyBinding
 runKeyBindingTests()

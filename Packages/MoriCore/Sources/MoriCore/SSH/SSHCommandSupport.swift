@@ -107,6 +107,18 @@ public enum SSHCommandSupport {
         return "'\(escaped)'"
     }
 
+    public static func remoteLoginShellCommand(
+        _ command: String,
+        environment: [String: String] = [:]
+    ) -> String {
+        let exports = environment
+            .sorted { $0.key < $1.key }
+            .map { "export \($0.key)=\(shellEscape($0.value));" }
+            .joined(separator: " ")
+        let prefix = exports.isEmpty ? "" : "\(exports) "
+        return "\(prefix)exec ${SHELL:-/bin/sh} -l -c \(shellEscape(command))"
+    }
+
     public static func createAskPassScript(password: String) throws -> SSHAskPassScript {
         let temporaryDirectory = NSTemporaryDirectory()
         let templatePath = (temporaryDirectory as NSString).appendingPathComponent("mori-askpass-XXXXXX")

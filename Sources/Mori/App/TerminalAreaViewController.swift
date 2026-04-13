@@ -218,12 +218,19 @@ final class TerminalAreaViewController: NSViewController {
         switch location {
         case .local:
             let escapedCwd = shellEscape(workingDirectory)
-            let command = "export STARSHIP_LOG=error; export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH\"; \(escapedTmux) new-session -A -s \(escaped) -c \(escapedCwd)"
+            let command = "\(localEnvironmentExports())\(escapedTmux) new-session -A -s \(escaped) -c \(escapedCwd)"
             attachSurface(identity: sessionKey, command: command, workingDirectory: workingDirectory)
         case .ssh(let ssh):
             let termProgram = ProcessInfo.processInfo.environment["TERM_PROGRAM"] ?? "ghostty"
             let remoteCwd = shellEscape(workingDirectory)
-            let remoteTmux = "export STARSHIP_LOG=error; export TERM_PROGRAM=\(shellEscape(termProgram)); export COLORTERM=truecolor; export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/snap/bin:$PATH\"; tmux new-session -A -s \(escaped) -c \(remoteCwd)"
+            let remoteTmux = SSHCommandSupport.remoteLoginShellCommand(
+                "tmux new-session -A -s \(escaped) -c \(remoteCwd)",
+                environment: [
+                    "STARSHIP_LOG": "error",
+                    "TERM_PROGRAM": termProgram,
+                    "COLORTERM": "truecolor",
+                ]
+            )
             attachSurface(identity: sessionKey, command: wrappedSSHCommand(ssh: ssh, remoteCommand: remoteTmux), workingDirectory: NSHomeDirectory())
         }
     }
@@ -238,14 +245,22 @@ final class TerminalAreaViewController: NSViewController {
         location: WorkspaceLocation = .local,
         focus: Bool = true
     ) {
-        let localCommand = "export STARSHIP_LOG=error; export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH\"; cd \(shellEscape(workingDirectory)); exec \(command)"
+        let resolvedLocalCommand = BinaryResolver.resolveTool(command: command) ?? command
+        let localCommand = "\(localEnvironmentExports())cd \(shellEscape(workingDirectory)); exec \(shellEscape(resolvedLocalCommand))"
 
         switch location {
         case .local:
             attachSurface(identity: identity, command: localCommand, workingDirectory: workingDirectory, focus: focus)
         case .ssh(let ssh):
             let termProgram = ProcessInfo.processInfo.environment["TERM_PROGRAM"] ?? "ghostty"
-            let remoteCommand = "export STARSHIP_LOG=error; export TERM_PROGRAM=\(shellEscape(termProgram)); export COLORTERM=truecolor; export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/snap/bin:$PATH\"; cd \(shellEscape(workingDirectory)); exec \(command)"
+            let remoteCommand = SSHCommandSupport.remoteLoginShellCommand(
+                "cd \(shellEscape(workingDirectory)); exec \(command)",
+                environment: [
+                    "STARSHIP_LOG": "error",
+                    "TERM_PROGRAM": termProgram,
+                    "COLORTERM": "truecolor",
+                ]
+            )
             attachSurface(identity: identity, command: wrappedSSHCommand(ssh: ssh, remoteCommand: remoteCommand), workingDirectory: NSHomeDirectory(), focus: focus)
         }
     }
@@ -390,6 +405,12 @@ final class TerminalAreaViewController: NSViewController {
         "'" + str.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
+    private func localEnvironmentExports() -> String {
+        let synthesizedPath = BinaryResolver.synthesizedPATH()
+        let pathExport = synthesizedPath.isEmpty ? "" : "export PATH=\(shellEscape(synthesizedPath)); "
+        return "\(pathExport)export STARSHIP_LOG=error; "
+    }
+
     private func sshOptionsForInteractiveTerminal(_ ssh: SSHWorkspaceLocation) -> [String] {
         let options = SSHCommandSupport.connectivityOptions() + SSHControlOptions.sshOptions(for: ssh)
         var filtered = SSHCommandSupport.removingBatchMode(from: options)
@@ -458,6 +479,7 @@ final class TerminalAreaViewController: NSViewController {
         sshCommand += " \(shellEscape(ssh.target)) \(shellEscape(remoteCommand))"
         return sshCommand
     }
+
 
     /// Defensive cleanup in case a dead surface view was not tracked as current.
     private func removeResidualTerminalSubviews() {
