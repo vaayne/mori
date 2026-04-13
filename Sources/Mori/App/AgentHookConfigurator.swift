@@ -16,10 +16,10 @@ enum AgentHookConfigurator {
     ]
 
     /// Claude Code hook event names (used for both install and uninstall).
-    private static let claudeEvents = ["UserPromptSubmit", "PreToolUse", "Stop", "Notification"]
+    private static let claudeEvents = ["UserPromptSubmit", "Stop", "Notification"]
 
     /// Droid hook event names (same lifecycle events as Claude Code).
-    private static let droidEvents = ["UserPromptSubmit", "PreToolUse", "Stop", "Notification"]
+    private static let droidEvents = ["UserPromptSubmit", "Stop", "Notification"]
 
     private static let home = FileManager.default.homeDirectoryForCurrentUser
 
