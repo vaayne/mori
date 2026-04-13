@@ -18,14 +18,11 @@ public struct ToolSettings: Codable, Equatable, Sendable {
     private static let defaultsKey = "toolSettings"
 
     public static func load(from defaults: UserDefaults = .standard) -> ToolSettings {
-        let model: ToolSettings
-        if let data = defaults.data(forKey: defaultsKey),
-           let decoded = try? JSONDecoder().decode(ToolSettings.self, from: data) {
-            model = decoded
-        } else {
-            model = ToolSettings()
+        guard let data = defaults.data(forKey: defaultsKey),
+              let model = try? JSONDecoder().decode(ToolSettings.self, from: data) else {
+            return ToolSettings()
         }
-        return model.withResolvedDefaults()
+        return model
     }
 
     public static func save(_ model: ToolSettings, to defaults: UserDefaults = .standard) {
@@ -38,26 +35,19 @@ public struct ToolSettings: Codable, Equatable, Sendable {
         return trimmed.isEmpty ? nil : NSString(string: trimmed).expandingTildeInPath
     }
 
-    private func rawPath(for command: String) -> String? {
+    public func displayPath(for command: String) -> String {
+        if let configuredPath = configuredPath(for: command) {
+            return configuredPath
+        }
+        return BinaryResolver.resolve(command: command) ?? ""
+    }
+
+    public func rawPath(for command: String) -> String? {
         switch command {
         case "tmux": tmuxPath
         case "lazygit": lazygitPath
         case "yazi": yaziPath
         default: nil
         }
-    }
-
-    private func withResolvedDefaults() -> ToolSettings {
-        ToolSettings(
-            tmuxPath: resolvedDefault(for: "tmux", current: tmuxPath),
-            lazygitPath: resolvedDefault(for: "lazygit", current: lazygitPath),
-            yaziPath: resolvedDefault(for: "yazi", current: yaziPath)
-        )
-    }
-
-    private func resolvedDefault(for command: String, current: String) -> String {
-        let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty else { return current }
-        return BinaryResolver.resolve(command: command) ?? ""
     }
 }

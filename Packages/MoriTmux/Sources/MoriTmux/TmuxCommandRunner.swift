@@ -181,7 +181,7 @@ public actor TmuxCommandRunner {
     public func run(_ arguments: [String]) async throws -> String {
         if let sshConfig {
             let tmuxCommand = (["tmux"] + arguments).map(SSHCommandSupport.shellEscape).joined(separator: " ")
-            let remoteCommand = "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/snap/bin:\\$PATH\"; \(tmuxCommand)"
+            let remoteCommand = SSHCommandSupport.remoteLoginShellCommand(tmuxCommand)
 
             var sshArguments: [String] = SSHCommandSupport.connectivityOptions()
             sshArguments += sshConfig.sshOptions

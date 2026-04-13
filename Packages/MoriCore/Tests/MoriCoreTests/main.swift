@@ -1409,6 +1409,7 @@ testSSHRemovingBatchMode()
 testSSHShellEscape()
 testSSHAskPassEnvironmentIsMinimal()
 testSSHCreateAskPassScriptHasSecurePermissions()
+testSSHRemoteLoginShellCommand()
 
 // AgentMessage
 testAgentMessageEnvelope()

@@ -223,9 +223,13 @@ final class TerminalAreaViewController: NSViewController {
         case .ssh(let ssh):
             let termProgram = ProcessInfo.processInfo.environment["TERM_PROGRAM"] ?? "ghostty"
             let remoteCwd = shellEscape(workingDirectory)
-            let remoteTmux = remoteLoginShellCommand(
+            let remoteTmux = SSHCommandSupport.remoteLoginShellCommand(
                 "tmux new-session -A -s \(escaped) -c \(remoteCwd)",
-                termProgram: termProgram
+                environment: [
+                    "STARSHIP_LOG": "error",
+                    "TERM_PROGRAM": termProgram,
+                    "COLORTERM": "truecolor",
+                ]
             )
             attachSurface(identity: sessionKey, command: wrappedSSHCommand(ssh: ssh, remoteCommand: remoteTmux), workingDirectory: NSHomeDirectory())
         }
@@ -249,9 +253,13 @@ final class TerminalAreaViewController: NSViewController {
             attachSurface(identity: identity, command: localCommand, workingDirectory: workingDirectory, focus: focus)
         case .ssh(let ssh):
             let termProgram = ProcessInfo.processInfo.environment["TERM_PROGRAM"] ?? "ghostty"
-            let remoteCommand = remoteLoginShellCommand(
+            let remoteCommand = SSHCommandSupport.remoteLoginShellCommand(
                 "cd \(shellEscape(workingDirectory)); exec \(command)",
-                termProgram: termProgram
+                environment: [
+                    "STARSHIP_LOG": "error",
+                    "TERM_PROGRAM": termProgram,
+                    "COLORTERM": "truecolor",
+                ]
             )
             attachSurface(identity: identity, command: wrappedSSHCommand(ssh: ssh, remoteCommand: remoteCommand), workingDirectory: NSHomeDirectory(), focus: focus)
         }
@@ -466,10 +474,6 @@ final class TerminalAreaViewController: NSViewController {
         return sshCommand
     }
 
-    private func remoteLoginShellCommand(_ command: String, termProgram: String) -> String {
-        let shell = "${SHELL:-/bin/sh}"
-        return "export STARSHIP_LOG=error; export TERM_PROGRAM=\(shellEscape(termProgram)); export COLORTERM=truecolor; exec \(shell) -l -c \(shellEscape(command))"
-    }
 
     /// Defensive cleanup in case a dead surface view was not tracked as current.
     private func removeResidualTerminalSubviews() {

@@ -1379,8 +1379,7 @@ private struct ToolSettingsContent: View {
             toolRow(
                 title: "tmux",
                 description: .localized("Required for local Mori workspaces. Supports custom installs such as ~/homebrew/bin/tmux."),
-                value: $model.tmuxPath,
-                placeholder: .localized("Resolved automatically")
+                command: "tmux"
             )
 
             CardDivider()
@@ -1388,8 +1387,7 @@ private struct ToolSettingsContent: View {
             toolRow(
                 title: "lazygit",
                 description: .localized("Optional Git companion tool path."),
-                value: $model.lazygitPath,
-                placeholder: .localized("Resolved automatically")
+                command: "lazygit"
             )
 
             CardDivider()
@@ -1397,8 +1395,7 @@ private struct ToolSettingsContent: View {
             toolRow(
                 title: "yazi",
                 description: .localized("Optional file manager companion tool path."),
-                value: $model.yaziPath,
-                placeholder: .localized("Resolved automatically")
+                command: "yazi"
             )
         }
 
@@ -1429,11 +1426,11 @@ private struct ToolSettingsContent: View {
     private func toolRow(
         title: String,
         description: String,
-        value: Binding<String>,
-        placeholder: String
+        command: String
     ) -> some View {
-        SettingRow(title: title, description: description) {
-            TextField(placeholder, text: value)
+        let value = toolBinding(for: command)
+        return SettingRow(title: title, description: description) {
+            TextField(String.localized("Resolved automatically"), text: value)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 280)
                 .font(.system(size: 12, design: .monospaced))
@@ -1441,6 +1438,30 @@ private struct ToolSettingsContent: View {
                     hasUnappliedChanges = true
                 }
         }
+    }
+
+    private func toolBinding(for command: String) -> Binding<String> {
+        Binding(
+            get: {
+                let rawValue = model.rawPath(for: command)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if rawValue.isEmpty {
+                    return model.displayPath(for: command)
+                }
+                return rawValue
+            },
+            set: { newValue in
+                switch command {
+                case "tmux":
+                    model.tmuxPath = newValue
+                case "lazygit":
+                    model.lazygitPath = newValue
+                case "yazi":
+                    model.yaziPath = newValue
+                default:
+                    return
+                }
+            }
+        )
     }
 }
 

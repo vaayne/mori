@@ -69,3 +69,16 @@ func testSSHCreateAskPassScriptHasSecurePermissions() {
     let mode = (attrs?[.posixPermissions] as? NSNumber)?.intValue ?? -1
     assertEqual(mode & 0o777, 0o700, "Askpass script should be executable only by current user")
 }
+
+func testSSHRemoteLoginShellCommand() {
+    let command = SSHCommandSupport.remoteLoginShellCommand(
+        "tmux -V",
+        environment: [
+            "TERM_PROGRAM": "ghostty",
+            "STARSHIP_LOG": "error",
+        ]
+    )
+    assertTrue(command.contains("exec ${SHELL:-/bin/sh} -l -c 'tmux -V'"))
+    assertTrue(command.contains("export STARSHIP_LOG='error';"))
+    assertTrue(command.contains("export TERM_PROGRAM='ghostty';"))
+}
