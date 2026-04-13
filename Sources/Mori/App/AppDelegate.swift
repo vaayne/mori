@@ -750,7 +750,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             onToolSettingsChanged: { [weak self] newModel in
                 ToolSettings.save(newModel)
-                self?.terminalAreaController?.tmuxBinaryPath = TmuxCommandRunner.preferredBinaryPath() ?? "tmux"
+                Task { @MainActor [weak self] in
+                    guard let self,
+                          let manager = self.workspaceManager,
+                          let tmuxPath = try? await manager.tmuxBackend.resolvedBinaryPath() else { return }
+                    self.terminalAreaController?.tmuxBinaryPath = tmuxPath
+                }
             },
             keyBindings: store.bindings,
             keyBindingDefaults: KeyBindingDefaults.all,

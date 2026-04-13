@@ -1906,7 +1906,11 @@ final class WorkspaceManager {
         guard let worktree = appState.selectedWorktree,
               let sessionName = worktree.tmuxSessionName else { return }
         let tmux = tmuxBackend(for: worktree)
-        let launchCommand = location(for: worktree) == .local ? (resolvedLocalCommand ?? command) : command
+        let launchCommand = toolLaunchCommand(
+            command: command,
+            resolvedLocalCommand: resolvedLocalCommand,
+            location: location(for: worktree)
+        )
         do {
             let newWindow = try await tmux.createWindow(
                 sessionId: sessionName,
@@ -2002,10 +2006,15 @@ final class WorkspaceManager {
 
         // Resolve cwd from the active pane, falling back to worktree path
         let cwd = activePaneCwd() ?? worktree.path
-        let resolvedLocalCommand = location(for: worktree) == .local
+        let workspaceLocation = location(for: worktree)
+        let resolvedLocalCommand = workspaceLocation == .local
             ? BinaryResolver.resolveTool(command: command)
             : nil
-        let launchCommand = resolvedLocalCommand ?? command
+        let launchCommand = toolLaunchCommand(
+            command: command,
+            resolvedLocalCommand: resolvedLocalCommand,
+            location: workspaceLocation
+        )
 
         do {
             let sessionReady = await ensureTmuxSession(for: worktree, showErrors: true)
@@ -2028,6 +2037,19 @@ final class WorkspaceManager {
         guard let windowId = appState.uiState.selectedWindowId else { return nil }
         let panes = appState.panes(forWindow: windowId)
         return panes.first(where: { $0.isActive })?.cwd ?? panes.first?.cwd
+    }
+
+    private func toolLaunchCommand(
+        command: String,
+        resolvedLocalCommand: String?,
+        location: WorkspaceLocation
+    ) -> String {
+        switch location {
+        case .local:
+            return SSHCommandSupport.shellEscape(resolvedLocalCommand ?? command)
+        case .ssh:
+            return command
+        }
     }
 
     // MARK: - Pane Navigation & Management
