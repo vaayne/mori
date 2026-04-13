@@ -237,6 +237,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         windowController.onToggleSidebar = { [weak splitVC] in
             splitVC?.toggleSidebar()
         }
+        windowController.onToggleFiles = { [weak self] in
+            self?.toggleCompanionTool(.yazi)
+        }
+        windowController.onToggleGit = { [weak self] in
+            self?.toggleCompanionTool(.lazygit)
+        }
 
         windowController.onShowCreateWorktreePanel = { [weak self] in
             self?.showCreateWorktreePanel()
