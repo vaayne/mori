@@ -200,6 +200,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     case keyboard = "Keyboard"
     case mouse = "Mouse"
     case window = "Window"
+    case tools = "Tools"
     case network = "Network"
     case agents = "Agent Hooks"
 
@@ -218,6 +219,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .keyboard: return "keyboard"
         case .mouse: return "computermouse"
         case .window: return "macwindow"
+        case .tools: return "hammer"
         case .network: return "network"
         case .agents: return "cpu"
         }
@@ -237,6 +239,8 @@ public struct GhosttySettingsView: View {
     @Binding var proxySettings: ProxySettingsModel
     var onProxyApply: ((ProxySettingsModel) -> Void)?
     var onSystemProxyDetect: (() -> ProxySettingsModel)?
+    @Binding var toolSettings: ToolSettings
+    var onToolSettingsChanged: ((ToolSettings) -> Void)?
 
     // Key bindings
     var keyBindings: [KeyBinding]
@@ -259,6 +263,8 @@ public struct GhosttySettingsView: View {
         proxySettings: Binding<ProxySettingsModel> = .constant(ProxySettingsModel()),
         onProxyApply: ((ProxySettingsModel) -> Void)? = nil,
         onSystemProxyDetect: (() -> ProxySettingsModel)? = nil,
+        toolSettings: Binding<ToolSettings> = .constant(ToolSettings()),
+        onToolSettingsChanged: ((ToolSettings) -> Void)? = nil,
         keyBindings: [KeyBinding] = [],
         keyBindingDefaults: [KeyBinding] = [],
         onKeyBindingValidate: ((KeyBinding) -> ConflictResult)? = nil,
@@ -276,6 +282,8 @@ public struct GhosttySettingsView: View {
         self._proxySettings = proxySettings
         self.onProxyApply = onProxyApply
         self.onSystemProxyDetect = onSystemProxyDetect
+        self._toolSettings = toolSettings
+        self.onToolSettingsChanged = onToolSettingsChanged
         self.keyBindings = keyBindings
         self.keyBindingDefaults = keyBindingDefaults
         self.onKeyBindingValidate = onKeyBindingValidate
@@ -387,6 +395,10 @@ public struct GhosttySettingsView: View {
                     )
                     case .mouse: MouseSettingsContent(model: $model, onChanged: onChanged)
                     case .window: WindowSettingsContent(model: $model, onChanged: onChanged)
+                    case .tools: ToolSettingsContent(
+                        model: $toolSettings,
+                        onApply: { onToolSettingsChanged?(toolSettings) }
+                    )
                     case .network: NetworkSettingsContent(
                         model: $proxySettings,
                         onApply: { onProxyApply?(proxySettings) },
@@ -1345,6 +1357,89 @@ private struct WindowSettingsContent: View {
                     .labelsHidden()
                     .onChange(of: model.windowPaddingBalance) { _, _ in onChanged() }
             }
+        }
+    }
+}
+
+// MARK: - Tool Settings
+
+private struct ToolSettingsContent: View {
+    @Binding var model: ToolSettings
+    let onApply: () -> Void
+
+    @State private var hasUnappliedChanges = false
+
+    var body: some View {
+        Text(String.localized("Configure explicit paths for tmux, Lazygit, and Yazi. Leave a field empty to let Mori auto-detect from common install locations and your shell PATH."))
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+        SettingsCard {
+            toolRow(
+                title: "tmux",
+                description: .localized("Required for local Mori workspaces. Supports custom installs such as ~/homebrew/bin/tmux."),
+                value: $model.tmuxPath,
+                placeholder: "/opt/homebrew/bin/tmux"
+            )
+
+            CardDivider()
+
+            toolRow(
+                title: "lazygit",
+                description: .localized("Optional Git companion tool path."),
+                value: $model.lazygitPath,
+                placeholder: "/opt/homebrew/bin/lazygit"
+            )
+
+            CardDivider()
+
+            toolRow(
+                title: "yazi",
+                description: .localized("Optional file manager companion tool path."),
+                value: $model.yaziPath,
+                placeholder: "/opt/homebrew/bin/yazi"
+            )
+        }
+
+        SettingsCard {
+            HStack {
+                Button(String.localized("Apply")) {
+                    onApply()
+                    hasUnappliedChanges = false
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!hasUnappliedChanges)
+
+                if hasUnappliedChanges {
+                    Text(String.localized("Unsaved changes"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange)
+                }
+
+                Spacer()
+
+                Text(String.localized("Tool path changes apply immediately to new launches. Existing tmux clients or shells may still use earlier paths."))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func toolRow(
+        title: String,
+        description: String,
+        value: Binding<String>,
+        placeholder: String
+    ) -> some View {
+        SettingRow(title: title, description: description) {
+            TextField(placeholder, text: value)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 280)
+                .font(.system(size: 12, design: .monospaced))
+                .onChange(of: value.wrappedValue) { _, _ in
+                    hasUnappliedChanges = true
+                }
         }
     }
 }

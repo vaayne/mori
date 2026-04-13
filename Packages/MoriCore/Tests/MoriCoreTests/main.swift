@@ -1239,6 +1239,46 @@ func testAgentMessageCodable() {
     assertEqual(decoded, msg, "AgentMessage codable round-trip")
 }
 
+// MARK: - Tool Resolution Tests
+
+func testToolSettingsConfiguredPathExpandsTilde() {
+    let settings = ToolSettings(tmuxPath: "~/homebrew/bin/tmux")
+    let expected = NSString(string: "~/homebrew/bin/tmux").expandingTildeInPath
+    assertEqual(settings.configuredPath(for: "tmux"), expected)
+    assertNil(settings.configuredPath(for: "unknown"))
+}
+
+func testBinaryResolverPrefersConfiguredPath() {
+    let resolved = BinaryResolver.resolve(
+        command: "tmux",
+        configuredPath: "~/custom/tmux",
+        environment: ["PATH": "/usr/bin:/bin"],
+        additionalSearchDirectories: [],
+        isExecutable: { $0 == NSString(string: "~/custom/tmux").expandingTildeInPath }
+    )
+    assertEqual(resolved, NSString(string: "~/custom/tmux").expandingTildeInPath)
+}
+
+func testBinaryResolverChecksFallbackDirectoriesBeforePATH() {
+    let resolved = BinaryResolver.resolve(
+        command: "tmux",
+        environment: ["PATH": "/usr/bin:/bin"],
+        additionalSearchDirectories: ["~/homebrew/bin"],
+        isExecutable: { $0 == NSString(string: "~/homebrew/bin/tmux").expandingTildeInPath }
+    )
+    assertEqual(resolved, NSString(string: "~/homebrew/bin/tmux").expandingTildeInPath)
+}
+
+func testBinaryResolverFallsBackToPATH() {
+    let resolved = BinaryResolver.resolve(
+        command: "lazygit",
+        environment: ["PATH": "/tmp/bin:/usr/bin"],
+        additionalSearchDirectories: [],
+        isExecutable: { $0 == "/tmp/bin/lazygit" }
+    )
+    assertEqual(resolved, "/tmp/bin/lazygit")
+}
+
 // MARK: - Main
 
 print("=== MoriCore Model Tests ===")
@@ -1355,6 +1395,12 @@ testAgentMessageParse()
 testAgentMessageParseSlashInWorktree()
 testAgentMessageParseInvalid()
 testAgentMessageCodable()
+
+// Tool resolution
+testToolSettingsConfiguredPathExpandsTilde()
+testBinaryResolverPrefersConfiguredPath()
+testBinaryResolverChecksFallbackDirectoriesBeforePATH()
+testBinaryResolverFallsBackToPATH()
 
 // KeyBinding
 runKeyBindingTests()

@@ -238,7 +238,11 @@ final class TerminalAreaViewController: NSViewController {
         location: WorkspaceLocation = .local,
         focus: Bool = true
     ) {
-        let localCommand = "export STARSHIP_LOG=error; export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH\"; cd \(shellEscape(workingDirectory)); exec \(command)"
+        let resolvedLocalCommand = BinaryResolver.resolve(
+            command: command,
+            configuredPath: ToolSettings.load().configuredPath(for: command)
+        ) ?? command
+        let localCommand = "export STARSHIP_LOG=error; export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH\"; cd \(shellEscape(workingDirectory)); exec \(shellEscape(resolvedLocalCommand))"
 
         switch location {
         case .local:

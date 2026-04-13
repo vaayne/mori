@@ -1,6 +1,8 @@
 import Foundation
+import MoriCore
 
-/// Detects availability of external CLI tools (lazygit, yazi, etc.) via PATH lookup.
+/// Detects availability of external CLI tools (lazygit, yazi, etc.) via configured
+/// paths, common package-manager prefixes, and PATH lookup.
 struct ToolDetector: Sendable {
 
     /// A CLI tool that Mori can launch in a tmux pane.
@@ -10,6 +12,7 @@ struct ToolDetector: Sendable {
         let command: String
         let description: String
         let isAvailable: Bool
+        let resolvedCommand: String?
     }
 
     /// Well-known tools that Mori can detect and offer to launch.
@@ -20,31 +23,21 @@ struct ToolDetector: Sendable {
 
     /// Detect all known tools and return their availability status.
     static func detectAll() -> [Tool] {
-        knownTools.map { tool in
-            let available = isInPath(tool.command)
+        let settings = ToolSettings.load()
+        return knownTools.map { tool in
+            let resolvedCommand = BinaryResolver.resolve(
+                command: tool.command,
+                configuredPath: settings.configuredPath(for: tool.command)
+            )
+            let available = resolvedCommand != nil
             return Tool(
                 id: tool.id,
                 name: tool.name,
                 command: tool.command,
                 description: available ? tool.description : "Not installed — \(tool.installHint)",
-                isAvailable: available
+                isAvailable: available,
+                resolvedCommand: resolvedCommand
             )
-        }
-    }
-
-    /// Check if a command exists in PATH.
-    private static func isInPath(_ command: String) -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        process.arguments = [command]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-            process.waitUntilExit()
-            return process.terminationStatus == 0
-        } catch {
-            return false
         }
     }
 }

@@ -715,6 +715,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 droidEnabled: AgentHookConfigurator.isDroidHookInstalled()
             ),
             initialProxy: ProxySettingsApplicator.load(),
+            initialTools: ToolSettings.load(),
             onChanged: { [weak self] newModel in
                 guard let self else { return }
                 self.writeSettingsModel(newModel, to: cf)
@@ -746,6 +747,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             onSystemProxyDetect: {
                 ProxySettingsApplicator.readSystemProxy()
+            },
+            onToolSettingsChanged: { [weak self] newModel in
+                ToolSettings.save(newModel)
+                self?.terminalAreaController?.tmuxBinaryPath = TmuxCommandRunner.preferredBinaryPath() ?? "tmux"
             },
             keyBindings: store.bindings,
             keyBindingDefaults: KeyBindingDefaults.all,
@@ -1572,7 +1577,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 let toolId = String(actionId.dropFirst("action.tool-".count))
                 if let tool = ToolDetector.detectAll().first(where: { $0.id == toolId }) {
                     Task { @MainActor in
-                        await manager.launchToolInCurrentSession(command: tool.command, windowName: tool.name.lowercased())
+                        await manager.launchToolInCurrentSession(
+                            command: tool.command,
+                            resolvedLocalCommand: tool.resolvedCommand,
+                            windowName: tool.name.lowercased()
+                        )
                     }
                 }
             }
@@ -1727,6 +1736,7 @@ private struct SettingsWindowContent: View {
     @State var model: GhosttySettingsModel
     @State var agentHooks: AgentHookModel
     @State var proxySettings: ProxySettingsModel
+    @State var toolSettings: ToolSettings
     let availableThemes: [String]
     let ghosttyDefaults: [String]
     var onChanged: (GhosttySettingsModel) -> Void
@@ -1734,6 +1744,7 @@ private struct SettingsWindowContent: View {
     var onAgentHookChanged: (AgentHookModel) -> Void
     var onProxyApply: (ProxySettingsModel) -> Void
     var onSystemProxyDetect: (() -> ProxySettingsModel)?
+    var onToolSettingsChanged: (ToolSettings) -> Void
 
     // Key bindings
     @State var keyBindings: [KeyBinding]
@@ -1750,11 +1761,13 @@ private struct SettingsWindowContent: View {
         ghosttyDefaults: [String] = [],
         initialAgentHooks: AgentHookModel = AgentHookModel(),
         initialProxy: ProxySettingsModel = ProxySettingsModel(),
+        initialTools: ToolSettings = ToolSettings(),
         onChanged: @escaping (GhosttySettingsModel) -> Void,
         onOpenConfigFile: @escaping () -> Void,
         onAgentHookChanged: @escaping (AgentHookModel) -> Void = { _ in },
         onProxyApply: @escaping (ProxySettingsModel) -> Void = { _ in },
         onSystemProxyDetect: (() -> ProxySettingsModel)? = nil,
+        onToolSettingsChanged: @escaping (ToolSettings) -> Void = { _ in },
         keyBindings: [KeyBinding] = [],
         keyBindingDefaults: [KeyBinding] = [],
         onKeyBindingValidate: ((KeyBinding) -> ConflictResult)? = nil,
@@ -1766,6 +1779,7 @@ private struct SettingsWindowContent: View {
         self._model = State(initialValue: initial)
         self._agentHooks = State(initialValue: initialAgentHooks)
         self._proxySettings = State(initialValue: initialProxy)
+        self._toolSettings = State(initialValue: initialTools)
         self.availableThemes = availableThemes
         self.ghosttyDefaults = ghosttyDefaults
         self.onChanged = onChanged
@@ -1773,6 +1787,7 @@ private struct SettingsWindowContent: View {
         self.onAgentHookChanged = onAgentHookChanged
         self.onProxyApply = onProxyApply
         self.onSystemProxyDetect = onSystemProxyDetect
+        self.onToolSettingsChanged = onToolSettingsChanged
         self._keyBindings = State(initialValue: keyBindings)
         self.keyBindingDefaults = keyBindingDefaults
         self.onKeyBindingValidate = onKeyBindingValidate
@@ -1794,6 +1809,8 @@ private struct SettingsWindowContent: View {
             proxySettings: $proxySettings,
             onProxyApply: onProxyApply,
             onSystemProxyDetect: onSystemProxyDetect,
+            toolSettings: $toolSettings,
+            onToolSettingsChanged: onToolSettingsChanged,
             keyBindings: keyBindings,
             keyBindingDefaults: keyBindingDefaults,
             onKeyBindingValidate: onKeyBindingValidate,

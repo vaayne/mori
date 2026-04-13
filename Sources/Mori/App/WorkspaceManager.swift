@@ -1898,10 +1898,15 @@ final class WorkspaceManager {
     }
 
     /// Launch a CLI tool in the currently selected worktree's tmux session.
-    func launchToolInCurrentSession(command: String, windowName: String) async {
+    func launchToolInCurrentSession(
+        command: String,
+        resolvedLocalCommand: String? = nil,
+        windowName: String
+    ) async {
         guard let worktree = appState.selectedWorktree,
               let sessionName = worktree.tmuxSessionName else { return }
         let tmux = tmuxBackend(for: worktree)
+        let launchCommand = location(for: worktree) == .local ? (resolvedLocalCommand ?? command) : command
         do {
             let newWindow = try await tmux.createWindow(
                 sessionId: sessionName,
@@ -1911,7 +1916,7 @@ final class WorkspaceManager {
             try await tmux.sendKeys(
                 sessionId: sessionName,
                 paneId: newWindow.windowId,
-                keys: command
+                keys: launchCommand
             )
             await refreshRuntimeState()
         } catch {
@@ -1997,12 +2002,19 @@ final class WorkspaceManager {
 
         // Resolve cwd from the active pane, falling back to worktree path
         let cwd = activePaneCwd() ?? worktree.path
+        let resolvedLocalCommand = location(for: worktree) == .local
+            ? BinaryResolver.resolve(
+                command: command,
+                configuredPath: ToolSettings.load().configuredPath(for: command)
+            )
+            : nil
+        let launchCommand = resolvedLocalCommand ?? command
 
         do {
             let sessionReady = await ensureTmuxSession(for: worktree, showErrors: true)
             guard sessionReady else { return }
             let window = try await tmux.createWindow(sessionId: sessionName, name: command, cwd: cwd)
-            try await tmux.sendKeys(sessionId: sessionName, paneId: window.windowId, keys: command)
+            try await tmux.sendKeys(sessionId: sessionName, paneId: window.windowId, keys: launchCommand)
             await refreshRuntimeState()
             onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
         } catch {

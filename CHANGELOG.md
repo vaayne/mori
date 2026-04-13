@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove legacy workflow-status and sidebar-mode code paths after the unified sidebar redesign, including the `mori status` CLI command and manual sidebar status controls
 - Start replacing Yazi/Lazygit's separate tmux-window flow with a shared in-window companion tool pane that reuses one right-side split for Files and Git
 
+### 🐛 Bug Fixes
+
+- Add shared tool-path resolution for tmux, Lazygit, and Yazi, including custom install prefixes like `~/homebrew/bin`, explicit Settings overrides, and local launch paths that reuse the resolved executable instead of assuming the app's inherited PATH
+
 ## [0.3.4] - 2026-04-12
 
 ### ✨ Features
