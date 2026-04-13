@@ -66,14 +66,14 @@ final class RootSplitViewController: NSViewController {
         embed(contentController, in: contentContainer)
         embed(companionController, in: companionContainer)
 
-        let savedSidebarWidth = UserDefaults.standard.double(forKey: Self.sidebarWidthKey)
-        if savedSidebarWidth > 0 {
-            sidebarWidth = savedSidebarWidth.clamped(to: Self.sidebarMinWidth, Self.sidebarMaxWidth)
+        let savedSidebar = CGFloat(UserDefaults.standard.double(forKey: Self.sidebarWidthKey))
+        if savedSidebar > 0 {
+            sidebarWidth = savedSidebar.clamped(to: Self.sidebarMinWidth, Self.sidebarMaxWidth)
         }
 
-        let savedCompanionWidth = UserDefaults.standard.double(forKey: Self.companionWidthKey)
-        if savedCompanionWidth > 0 {
-            companionWidth = savedCompanionWidth.clamped(to: Self.companionMinWidth, Self.companionMaxWidth)
+        let savedCompanion = CGFloat(UserDefaults.standard.double(forKey: Self.companionWidthKey))
+        if savedCompanion > 0 {
+            companionWidth = savedCompanion.clamped(to: Self.companionMinWidth, Self.companionMaxWidth)
             toolPaneState.width = companionWidth
         }
     }
@@ -83,28 +83,24 @@ final class RootSplitViewController: NSViewController {
         updateLayout()
     }
 
+    private func resolvedCompanionWidth(given availableWidth: CGFloat) -> CGFloat {
+        guard toolPaneState.isVisible else { return 0 }
+
+        let maxAllowed = max(Self.companionMinWidth, availableWidth - Self.minimumContentWidth)
+        let clampedWidth = companionWidth.clamped(to: Self.companionMinWidth, Self.companionMaxWidth)
+        return min(clampedWidth, maxAllowed)
+    }
+
     private func updateLayout() {
         let bounds = view.bounds
         let sidebarWidth = collapsed ? 0 : self.sidebarWidth
         let sidebarDividerWidth: CGFloat = collapsed ? 0 : 1
         let availableWidth = bounds.width - sidebarWidth - sidebarDividerWidth
         let companionVisible = toolPaneState.isVisible
-        let companionFocused = toolPaneState.presentation == .focused && companionVisible
-        let companionDividerWidth: CGFloat = companionVisible && !companionFocused ? 1 : 0
+        let companionDividerWidth: CGFloat = companionVisible ? 1 : 0
 
-        let resolvedCompanionWidth: CGFloat
-        if companionFocused {
-            resolvedCompanionWidth = availableWidth
-        } else if companionVisible {
-            let maxAllowed = max(Self.companionMinWidth, availableWidth - Self.minimumContentWidth)
-            resolvedCompanionWidth = min(companionWidth.clamped(to: Self.companionMinWidth, Self.companionMaxWidth), maxAllowed)
-        } else {
-            resolvedCompanionWidth = 0
-        }
-
-        let contentWidth = companionFocused
-            ? 0
-            : max(0, availableWidth - companionDividerWidth - resolvedCompanionWidth)
+        let resolvedCompanionWidth = resolvedCompanionWidth(given: availableWidth)
+        let contentWidth = max(0, availableWidth - companionDividerWidth - resolvedCompanionWidth)
 
         sidebarContainer.frame = NSRect(x: 0, y: 0, width: sidebarWidth, height: bounds.height)
         sidebarDividerView.frame = NSRect(x: sidebarWidth, y: 0, width: sidebarDividerWidth, height: bounds.height)
@@ -124,9 +120,9 @@ final class RootSplitViewController: NSViewController {
 
         sidebarContainer.isHidden = collapsed
         sidebarDividerView.isHidden = collapsed
-        contentContainer.isHidden = companionFocused
+        contentContainer.isHidden = false
         companionContainer.isHidden = !companionVisible
-        companionDividerView.isHidden = !companionVisible || companionFocused
+        companionDividerView.isHidden = !companionVisible
 
         view.discardCursorRects()
         if !collapsed {
@@ -140,7 +136,7 @@ final class RootSplitViewController: NSViewController {
             view.addCursorRect(sidebarRect, cursor: .resizeLeftRight)
         }
 
-        if companionVisible && !companionFocused {
+        if companionVisible {
             let companionCenter = sidebarWidth + sidebarDividerWidth + contentWidth + companionDividerWidth / 2
             let companionRect = NSRect(
                 x: companionCenter - Self.dividerHitWidth / 2,
@@ -158,7 +154,7 @@ final class RootSplitViewController: NSViewController {
             return .sidebar
         }
 
-        guard toolPaneState.isVisible, toolPaneState.presentation == .docked else { return nil }
+        guard toolPaneState.isVisible else { return nil }
         let companionDividerX = companionContainer.frame.minX
         if abs(x - companionDividerX) <= Self.dividerHitWidth / 2 {
             return .companion
@@ -267,11 +263,5 @@ final class RootSplitViewController: NSViewController {
 private extension CGFloat {
     func clamped(to minVal: CGFloat, _ maxVal: CGFloat) -> CGFloat {
         Swift.min(Swift.max(self, minVal), maxVal)
-    }
-}
-
-private extension Double {
-    func clamped(to minVal: CGFloat, _ maxVal: CGFloat) -> CGFloat {
-        CGFloat(self).clamped(to: minVal, maxVal)
     }
 }

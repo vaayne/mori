@@ -7,12 +7,7 @@ enum CompanionTool: String, CaseIterable {
     case yazi
     case lazygit
 
-    var command: String {
-        switch self {
-        case .yazi: "yazi"
-        case .lazygit: "lazygit"
-        }
-    }
+    var command: String { rawValue }
 
     var title: String {
         switch self {
@@ -25,7 +20,6 @@ enum CompanionTool: String, CaseIterable {
 enum CompanionToolPanePresentation {
     case closed
     case docked
-    case focused
 }
 
 struct CompanionToolPaneState {
@@ -126,8 +120,9 @@ final class CompanionToolPaneController: NSViewController {
     func show(tool: CompanionTool, context: CompanionToolLaunchContext, focus: Bool = true) {
         activeTool = tool
         titleLabel.stringValue = tool.title
+        let identity = "tool|\(tool.rawValue)|\(context.location.endpointKey)|\(context.workspaceID)"
         terminalController.attachToCommand(
-            identity: toolIdentity(tool: tool, context: context),
+            identity: identity,
             command: tool.command,
             workingDirectory: context.workingDirectory,
             location: context.location,
@@ -136,10 +131,6 @@ final class CompanionToolPaneController: NSViewController {
         if focus {
             terminalController.focusCurrentSurface()
         }
-    }
-
-    func focusTool() {
-        terminalController.focusCurrentSurface()
     }
 
     func isFocused(in window: NSWindow?) -> Bool {
@@ -154,10 +145,6 @@ final class CompanionToolPaneController: NSViewController {
         dividerView.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.45).cgColor
         titleLabel.textColor = .secondaryLabelColor
         terminalController.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
-    }
-
-    private func toolIdentity(tool: CompanionTool, context: CompanionToolLaunchContext) -> String {
-        "tool|\(tool.rawValue)|\(context.location.endpointKey)|\(context.workspaceID)"
     }
 
     private func headerBackgroundColor(for themeInfo: GhosttyThemeInfo) -> NSColor {

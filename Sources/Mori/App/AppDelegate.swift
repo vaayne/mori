@@ -1273,25 +1273,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return
         }
 
-        if companionToolState.activeTool == tool, companionToolState.isVisible {
-            if companionToolController?.isFocused(in: mainWindowController?.window) == true {
-                companionToolState.activeTool = nil
-                companionToolState.presentation = .closed
-                rootSplitVC?.updateCompanionPane(state: companionToolState)
-                terminalAreaController?.focusCurrentSurface()
-            } else {
-                companionToolController?.show(tool: tool, context: context)
-                rootSplitVC?.updateCompanionPane(state: companionToolState)
-            }
+        let sameToolVisible = companionToolState.activeTool == tool && companionToolState.isVisible
+        let toolIsFocused = companionToolController?.isFocused(in: mainWindowController?.window) == true
+
+        if sameToolVisible && toolIsFocused {
+            closeCompanionTool()
+            terminalAreaController?.focusCurrentSurface()
             return
         }
 
-        companionToolState.activeTool = tool
-        if companionToolState.presentation == .closed {
-            companionToolState.presentation = .docked
-        }
+        showCompanionTool(tool, context: context)
+    }
 
-        companionToolController?.show(tool: tool, context: context)
+    private func closeCompanionTool() {
+        companionToolState.activeTool = nil
+        companionToolState.presentation = .closed
+        rootSplitVC?.updateCompanionPane(state: companionToolState)
+    }
+
+    private func showCompanionTool(_ tool: CompanionTool, context: CompanionToolLaunchContext, focus: Bool = true) {
+        companionToolState.activeTool = tool
+        companionToolState.presentation = .docked
+        companionToolController?.show(tool: tool, context: context, focus: focus)
         rootSplitVC?.updateCompanionPane(state: companionToolState)
     }
 
@@ -1303,14 +1306,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
 
         guard let context = manager.companionToolLaunchContext() else {
-            companionToolState.activeTool = nil
-            companionToolState.presentation = .closed
-            rootSplitVC?.updateCompanionPane(state: companionToolState)
+            closeCompanionTool()
             return
         }
 
-        companionToolController?.show(tool: tool, context: context, focus: false)
-        rootSplitVC?.updateCompanionPane(state: companionToolState)
+        showCompanionTool(tool, context: context, focus: false)
     }
 
     @objc private func openLazygitMenuAction() {
