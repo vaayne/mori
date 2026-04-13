@@ -1452,8 +1452,114 @@ testBinaryResolverPathDirectoriesParsing()
 testBinaryResolverSynthesizedPATHPreservesPATHPrecedence()
 testBinaryResolverDefaultSearchDirectoriesIncludeExplicitFallbacks()
 
+// MARK: - MoriRemote Transfer Payload
+
+func testMoriRemoteTransferPayloadRoundTrip() {
+    let original = MoriRemoteTransferPayload(
+        name: "My Project",
+        host: "example.com",
+        port: 2222,
+        username: "deploy",
+        password: "secret",
+        defaultSession: "mori/main"
+    )
+    let s = try! original.encodeToQRString()
+    assertTrue(s.hasPrefix(MoriRemoteTransferPayload.qrPrefix))
+    let decoded = try! MoriRemoteTransferPayload.decode(qrString: s)
+    assertEqual(decoded, original)
+}
+
+func testMoriRemoteTransferPayloadRoundTripWithoutOptionalFields() {
+    let original = MoriRemoteTransferPayload(
+        name: nil,
+        host: "host.test",
+        port: 22,
+        username: "u",
+        password: nil,
+        defaultSession: nil
+    )
+    let s = try! original.encodeToQRString()
+    let decoded = try! MoriRemoteTransferPayload.decode(qrString: s)
+    assertEqual(decoded, original)
+}
+
+func testMoriRemoteTransferDecodeInvalidPrefix() {
+    do {
+        _ = try MoriRemoteTransferPayload.decode(qrString: "wrong:1:abc")
+        assertTrue(false, "expected throw")
+    } catch MoriRemoteTransferError.invalidPrefix {
+        assertTrue(true)
+    } catch {
+        assertTrue(false, "wrong error")
+    }
+}
+
+func testMoriRemoteTransferDecodeInvalidBase64() {
+    do {
+        _ = try MoriRemoteTransferPayload.decode(qrString: MoriRemoteTransferPayload.qrPrefix + "!!!")
+        assertTrue(false, "expected throw")
+    } catch MoriRemoteTransferError.invalidBase64 {
+        assertTrue(true)
+    } catch {
+        assertTrue(false, "wrong error")
+    }
+}
+
+func testMoriRemoteTransferDecodeInvalidVersion() {
+    let bad = #"{"v":2,"host":"h","port":22,"username":"u"}"#
+    let b64 = Data(bad.utf8).base64EncodedString()
+        .replacingOccurrences(of: "+", with: "-")
+        .replacingOccurrences(of: "/", with: "_")
+        .replacingOccurrences(of: "=", with: "")
+    do {
+        _ = try MoriRemoteTransferPayload.decode(qrString: MoriRemoteTransferPayload.qrPrefix + b64)
+        assertTrue(false, "expected throw")
+    } catch MoriRemoteTransferError.unsupportedVersion(2) {
+        assertTrue(true)
+    } catch {
+        assertTrue(false, "wrong error \(error)")
+    }
+}
+
+func testMoriRemoteTransferDecodeInvalidHost() {
+    let bad = #"{"v":1,"host":"   ","port":22,"username":"u"}"#
+    let b64 = Data(bad.utf8).base64EncodedString()
+        .replacingOccurrences(of: "+", with: "-")
+        .replacingOccurrences(of: "/", with: "_")
+        .replacingOccurrences(of: "=", with: "")
+    do {
+        _ = try MoriRemoteTransferPayload.decode(qrString: MoriRemoteTransferPayload.qrPrefix + b64)
+        assertTrue(false, "expected throw")
+    } catch MoriRemoteTransferError.invalidHost {
+        assertTrue(true)
+    } catch {
+        assertTrue(false, "wrong error")
+    }
+}
+
+func testMoriRemoteTransferEncodeRejectsInvalidPort() {
+    let bad = MoriRemoteTransferPayload(host: "h", port: 0, username: "u")
+    do {
+        _ = try bad.encodeToQRString()
+        assertTrue(false, "expected throw")
+    } catch MoriRemoteTransferError.invalidPort {
+        assertTrue(true)
+    } catch {
+        assertTrue(false, "wrong error")
+    }
+}
+
 // KeyBinding
 runKeyBindingTests()
+
+// MoriRemote QR transfer
+testMoriRemoteTransferPayloadRoundTrip()
+testMoriRemoteTransferPayloadRoundTripWithoutOptionalFields()
+testMoriRemoteTransferDecodeInvalidPrefix()
+testMoriRemoteTransferDecodeInvalidBase64()
+testMoriRemoteTransferDecodeInvalidVersion()
+testMoriRemoteTransferDecodeInvalidHost()
+testMoriRemoteTransferEncodeRejectsInvalidPort()
 
 printResults()
 

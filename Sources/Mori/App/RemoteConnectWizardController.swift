@@ -36,6 +36,10 @@ final class RemoteConnectWizardController: NSWindowController {
     private var remotePath: String = ""
     private var password: String?
 
+    /// Set when the user chooses “Use This Mac”; cleared after host step if the host field is edited away.
+    private var suggestLocalHomeForPath = false
+    private var thisMacFilledHost: String?
+
     private let titleLabel = NSTextField(labelWithString: "")
     private let stepLabel = NSTextField(labelWithString: "")
     private let subtitleLabel = NSTextField(labelWithString: "")
@@ -49,12 +53,15 @@ final class RemoteConnectWizardController: NSWindowController {
     private let backButton = NSButton(title: "Back", target: nil, action: nil)
     private let continueButton = NSButton(title: "Continue", target: nil, action: nil)
     private let cancelButton = NSButton(title: "Cancel", target: nil, action: nil)
+    private let useThisMacButton = NSButton(title: "", target: nil, action: nil)
+    private let useThisMacHelpButton = NSButton(title: "", target: nil, action: nil)
+    private let useThisMacRow = NSStackView()
 
     private let stack = NSStackView()
 
     init() {
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 220),
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 260),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: true
@@ -65,6 +72,8 @@ final class RemoteConnectWizardController: NSWindowController {
         panel.isMovableByWindowBackground = true
         panel.level = .floating
         panel.hasShadow = true
+
+        panel.contentMinSize = NSSize(width: 440, height: 160)
 
         super.init(window: panel)
         setupUI()
@@ -105,9 +114,13 @@ final class RemoteConnectWizardController: NSWindowController {
         subtitleLabel.font = .systemFont(ofSize: 12)
         subtitleLabel.textColor = .secondaryLabelColor
         subtitleLabel.lineBreakMode = .byTruncatingTail
+        subtitleLabel.setContentHuggingPriority(.required, for: .vertical)
+        subtitleLabel.setContentCompressionResistancePriority(.required, for: .vertical)
         helperLabel.font = .systemFont(ofSize: 11)
         helperLabel.textColor = .tertiaryLabelColor
         helperLabel.lineBreakMode = .byTruncatingTail
+        helperLabel.setContentHuggingPriority(.required, for: .vertical)
+        helperLabel.setContentCompressionResistancePriority(.required, for: .vertical)
 
         inputField.placeholderString = ""
         inputField.font = .systemFont(ofSize: 16)
@@ -117,6 +130,8 @@ final class RemoteConnectWizardController: NSWindowController {
         secureInputField.bezelStyle = .roundedBezel
 
         authControl.selectedSegment = 0
+        authControl.setContentHuggingPriority(.required, for: .vertical)
+        authControl.setContentCompressionResistancePriority(.required, for: .vertical)
 
         progressIndicator.style = .spinning
         progressIndicator.controlSize = .regular
@@ -134,6 +149,33 @@ final class RemoteConnectWizardController: NSWindowController {
         cancelButton.target = self
         cancelButton.action = #selector(cancelTapped)
 
+        useThisMacButton.title = String.localized("Use This Mac")
+        useThisMacButton.toolTip = String.localized("Fill your macOS account name and this computer’s LAN IP (for SSH from MoriRemote or another device).")
+        useThisMacButton.target = self
+        useThisMacButton.action = #selector(useThisMacTapped)
+        useThisMacButton.bezelStyle = .rounded
+        useThisMacButton.isHidden = true
+
+        if let helpIcon = NSImage(systemSymbolName: "questionmark.circle", accessibilityDescription: String.localized("SSH tmux check help")) {
+            helpIcon.isTemplate = true
+            useThisMacHelpButton.image = helpIcon
+        }
+        useThisMacHelpButton.isBordered = false
+        useThisMacHelpButton.toolTip = String.localized("Copy the same ssh + tmux -V probe Mori uses (details in the sheet).")
+        useThisMacHelpButton.target = self
+        useThisMacHelpButton.action = #selector(useThisMacHelpTapped)
+        useThisMacHelpButton.isHidden = true
+
+        useThisMacRow.orientation = .horizontal
+        useThisMacRow.alignment = .centerY
+        useThisMacRow.spacing = 8
+        useThisMacRow.distribution = .fill
+        useThisMacRow.addArrangedSubview(useThisMacButton)
+        useThisMacRow.addArrangedSubview(useThisMacHelpButton)
+        useThisMacButton.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        useThisMacHelpButton.setContentHuggingPriority(.required, for: .horizontal)
+        useThisMacRow.translatesAutoresizingMaskIntoConstraints = false
+
         let buttonRow = NSStackView(views: [cancelButton, NSView(), backButton, continueButton])
         buttonRow.orientation = .horizontal
         buttonRow.alignment = .centerY
@@ -147,9 +189,10 @@ final class RemoteConnectWizardController: NSWindowController {
         stack.orientation = .vertical
         stack.spacing = 10
         stack.alignment = .leading
+        stack.setContentHuggingPriority(.defaultHigh, for: .vertical)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        [headerRow, subtitleLabel, helperLabel, inputField, secureInputField, authControl, progressIndicator, errorLabel, buttonRow].forEach {
+        [headerRow, subtitleLabel, helperLabel, useThisMacRow, inputField, secureInputField, authControl, progressIndicator, errorLabel, buttonRow].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             stack.addArrangedSubview($0)
         }
@@ -157,6 +200,7 @@ final class RemoteConnectWizardController: NSWindowController {
         secureInputField.isHidden = true
         authControl.isHidden = true
         progressIndicator.isHidden = true
+        useThisMacRow.isHidden = true
 
         contentView.addSubview(stack)
 
@@ -164,10 +208,11 @@ final class RemoteConnectWizardController: NSWindowController {
             stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 18),
             stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 18),
             stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
-            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -14),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -14),
             inputField.widthAnchor.constraint(equalTo: stack.widthAnchor),
             secureInputField.widthAnchor.constraint(equalTo: stack.widthAnchor),
             authControl.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            useThisMacRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
 
         inputField.delegate = self
@@ -181,6 +226,9 @@ final class RemoteConnectWizardController: NSWindowController {
         inputField.isHidden = true
         secureInputField.isHidden = true
         authControl.isHidden = true
+        useThisMacButton.isHidden = true
+        useThisMacHelpButton.isHidden = true
+        useThisMacRow.isHidden = true
         progressIndicator.stopAnimation(nil)
         progressIndicator.isHidden = true
 
@@ -193,6 +241,9 @@ final class RemoteConnectWizardController: NSWindowController {
             inputField.placeholderString = "e.g. dev@server or server:2222"
             inputField.stringValue = composeHostFieldValue()
             inputField.isHidden = false
+            useThisMacRow.isHidden = false
+            useThisMacButton.isHidden = false
+            useThisMacHelpButton.isHidden = false
             backButton.isHidden = true
             continueButton.isEnabled = true
             continueButton.title = "Continue"
@@ -228,6 +279,10 @@ final class RemoteConnectWizardController: NSWindowController {
             subtitleLabel.stringValue = "Enter absolute repository path on remote host"
             helperLabel.stringValue = "Git repository is optional. Mori can manage plain remote directories too."
             inputField.placeholderString = "/home/dev/project"
+            if remotePath.isEmpty, suggestLocalHomeForPath {
+                remotePath = NSHomeDirectory()
+                suggestLocalHomeForPath = false
+            }
             inputField.stringValue = remotePath
             inputField.isHidden = false
             backButton.isHidden = false
@@ -246,6 +301,23 @@ final class RemoteConnectWizardController: NSWindowController {
             continueButton.isEnabled = false
             continueButton.title = "Connecting..."
         }
+
+        adjustPanelHeightToFitStack()
+    }
+
+    /// Keeps the sheet compact per step (fixed tall height + fill distribution left a large gap on Authentication).
+    private func adjustPanelHeightToFitStack() {
+        guard let window = window, let contentView = window.contentView else { return }
+        contentView.needsLayout = true
+        contentView.layoutSubtreeIfNeeded()
+        let verticalMargins: CGFloat = 18 + 14
+        let fit = stack.fittingSize
+        let contentHeight = ceil(fit.height + verticalMargins)
+        let clamped = min(420, max(168, contentHeight))
+        var size = window.contentLayoutRect.size
+        guard abs(size.height - clamped) > 0.5 else { return }
+        size.height = clamped
+        window.setContentSize(size)
     }
 
     private func composeHostFieldValue() -> String {
@@ -322,11 +394,73 @@ final class RemoteConnectWizardController: NSWindowController {
         dismissWizard()
     }
 
+    @objc private func useThisMacTapped() {
+        guard let ip = LocalNetworkAddress.preferredIPv4() else {
+            showError(String.localized("Could not find a local network IP address. Check Wi‑Fi or Ethernet."))
+            return
+        }
+        clearError()
+        thisMacFilledHost = ip
+        suggestLocalHomeForPath = true
+        inputField.stringValue = "\(NSUserName())@\(ip)"
+    }
+
+    @objc private func useThisMacHelpTapped() {
+        guard let panel = window else { return }
+        let alert = NSAlert()
+        alert.messageText = String.localized("SSH tmux check")
+        alert.informativeText = String.localized(
+            "Turn on Remote Login on this Mac first (System Settings → General → Sharing → Remote Login) so MoriRemote or other devices can connect over SSH.\n\nCopies one ssh command (same as Mori) so your login shell runs tmux -V on the host. If the host field is empty, the command uses your macOS account name and this Mac’s detected LAN IPv4. Otherwise it uses what you typed (or click “Use This Mac” to fill user@IP)."
+        )
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: String.localized("OK"))
+        alert.addButton(withTitle: String.localized("Copy SSH tmux check"))
+        alert.beginSheetModal(for: panel) { [weak self] response in
+            guard let self, response == NSApplication.ModalResponse.alertSecondButtonReturn else { return }
+            guard let command = self.sshTmuxProbeCommandFromHostField() else {
+                self.showError(String.localized("Could not find a local network IP address. Check Wi‑Fi or Ethernet."))
+                return
+            }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(command, forType: .string)
+        }
+    }
+
+    /// One-line probe matching Mori’s remote login-shell wrapper (`SSHCommandSupport.remoteLoginShellCommand`).
+    /// When the host field is empty, requires a detected LAN IPv4 (same as “Use This Mac”).
+    private func sshTmuxProbeCommandFromHostField() -> String? {
+        let raw = inputField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw.isEmpty {
+            guard let ip = LocalNetworkAddress.preferredIPv4() else { return nil }
+            let hostPart = "\(NSUserName())@\(ip)"
+            return "ssh \(hostPart) 'exec ${SHELL:-/bin/sh} -l -c \"tmux -V\"'"
+        }
+        if let parsed = try? parseHostInput(raw) {
+            var cmd = "ssh "
+            if let port = parsed.port {
+                cmd += "-p \(port) "
+            }
+            var target = ""
+            if let user = parsed.user, !user.isEmpty {
+                target += "\(user)@"
+            }
+            target += parsed.host
+            cmd += "\(target) 'exec ${SHELL:-/bin/sh} -l -c \"tmux -V\"'"
+            return cmd
+        }
+        // Fallback: parse failed, show error instead of interpolating unsanitized input into a shell command
+        return nil
+    }
+
     @objc private func continueTapped() {
         switch step {
         case .host:
             do {
                 let parsed = try parseHostInput(inputField.stringValue)
+                if parsed.host != thisMacFilledHost {
+                    suggestLocalHomeForPath = false
+                }
+                thisMacFilledHost = nil
                 parsedHost = parsed.host
                 parsedUser = parsed.user
                 parsedPort = parsed.port

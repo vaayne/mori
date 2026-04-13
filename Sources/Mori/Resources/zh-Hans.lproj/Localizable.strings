@@ -211,3 +211,22 @@
 "Waiting" = "等待中";
 "Error" = "错误";
 "Switch project..." = "切换项目...";
+
+/* MoriRemote QR export */
+"MoriRemote QR Code" = "MoriRemote 二维码";
+"Scan this code with MoriRemote on your iPhone or iPad to add this server." = "使用 iPhone 或 iPad 上的 MoriRemote 扫描此码即可添加该服务器。";
+"Include password in QR code" = "在二维码中包含密码";
+"Anyone who can see the QR code can read the password. Use only in private." = "任何能看到二维码的人都能读取密码。请仅在私密环境中使用。";
+"Warning: the password is embedded in the QR code as plain text. Do not share screenshots or display this in public." = "警告：密码以明文嵌入二维码。请勿截图或在公共场合展示。";
+"MoriRemote supports password authentication. If this host uses SSH keys only, you must add the server manually on the device." = "MoriRemote 目前仅支持密码登录。若该主机仅允许 SSH 密钥，请在设备上手动添加服务器。";
+"Copy QR Text" = "复制二维码文本";
+"This project is not an SSH remote project." = "该项目不是 SSH 远程项目。";
+"MoriRemote configuration QR code" = "MoriRemote 配置二维码";
+"Use This Mac" = "使用本机";
+"Fill your macOS account name and this computer’s LAN IP (for SSH from MoriRemote or another device)." = "填入当前 macOS 用户名和本机在局域网中的 IP（便于 MoriRemote 或其他设备通过 SSH 连接）。";
+"Could not find a local network IP address. Check Wi‑Fi or Ethernet." = "未找到可用的局域网 IP，请检查 Wi‑Fi 或以太网是否已连接。";
+"SSH tmux check help" = "SSH tmux 检测说明";
+"Copy the same ssh + tmux -V probe Mori uses (details in the sheet)." = "复制与 Mori 相同的 ssh + tmux -V 检测命令（详情见窗口）。";
+"SSH tmux check" = "SSH tmux 检测";
+"Turn on Remote Login on this Mac first (System Settings → General → Sharing → Remote Login) so MoriRemote or other devices can connect over SSH.\n\nCopies one ssh command (same as Mori) so your login shell runs tmux -V on the host. If the host field is empty, the command uses your macOS account name and this Mac’s detected LAN IPv4. Otherwise it uses what you typed (or click “Use This Mac” to fill user@IP)." = "请先在 Mac 上打开「远程登录」（系统设置 → 通用 → 共享 → 远程登录），以便 MoriRemote 或其他设备通过 SSH 连接本机。\n\n复制一条与 Mori 相同的 ssh 命令，让远端登录 shell 执行 tmux -V。若主机一栏为空，则使用当前 macOS 用户名与本机检测到的局域网 IPv4；否则使用你填写的内容（也可先点「使用本机」填入 user@IP）。";
+"Copy SSH tmux check" = "复制 SSH tmux 检测命令";

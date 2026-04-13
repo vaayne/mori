@@ -148,6 +148,7 @@ enum Theme {
                 .foregroundStyle(Theme.textPrimary)
             }
     }
+
 }
 
 extension View {

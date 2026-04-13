@@ -211,3 +211,22 @@
 "Waiting" = "Waiting";
 "Error" = "Error";
 "Switch project..." = "Switch project...";
+
+/* MoriRemote QR export */
+"MoriRemote QR Code" = "MoriRemote QR Code";
+"Scan this code with MoriRemote on your iPhone or iPad to add this server." = "Scan this code with MoriRemote on your iPhone or iPad to add this server.";
+"Include password in QR code" = "Include password in QR code";
+"Anyone who can see the QR code can read the password. Use only in private." = "Anyone who can see the QR code can read the password. Use only in private.";
+"Warning: the password is embedded in the QR code as plain text. Do not share screenshots or display this in public." = "Warning: the password is embedded in the QR code as plain text. Do not share screenshots or display this in public.";
+"MoriRemote supports password authentication. If this host uses SSH keys only, you must add the server manually on the device." = "MoriRemote supports password authentication. If this host uses SSH keys only, you must add the server manually on the device.";
+"Copy QR Text" = "Copy QR Text";
+"This project is not an SSH remote project." = "This project is not an SSH remote project.";
+"MoriRemote configuration QR code" = "MoriRemote configuration QR code";
+"Use This Mac" = "Use This Mac";
+"Fill your macOS account name and this computer’s LAN IP (for SSH from MoriRemote or another device)." = "Fill your macOS account name and this computer’s LAN IP (for SSH from MoriRemote or another device).";
+"Could not find a local network IP address. Check Wi‑Fi or Ethernet." = "Could not find a local network IP address. Check Wi‑Fi or Ethernet.";
+"SSH tmux check help" = "SSH tmux check help";
+"Copy the same ssh + tmux -V probe Mori uses (details in the sheet)." = "Copy the same ssh + tmux -V probe Mori uses (details in the sheet).";
+"SSH tmux check" = "SSH tmux check";
+"Turn on Remote Login on this Mac first (System Settings → General → Sharing → Remote Login) so MoriRemote or other devices can connect over SSH.\n\nCopies one ssh command (same as Mori) so your login shell runs tmux -V on the host. If the host field is empty, the command uses your macOS account name and this Mac’s detected LAN IPv4. Otherwise it uses what you typed (or click “Use This Mac” to fill user@IP)." = "Turn on Remote Login on this Mac first (System Settings → General → Sharing → Remote Login) so MoriRemote or other devices can connect over SSH.\n\nCopies one ssh command (same as Mori) so your login shell runs tmux -V on the host. If the host field is empty, the command uses your macOS account name and this Mac’s detected LAN IPv4. Otherwise it uses what you typed (or click “Use This Mac” to fill user@IP).";
+"Copy SSH tmux check" = "Copy SSH tmux check";

@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var remoteConnectWizardController: RemoteConnectWizardController?
     private var updateController: UpdateController?
     private var agentDashboardPanel: AgentDashboardPanel?
+    private var moriRemoteQRPanel: MoriRemoteQRPanelController?
     private var keyBindingStore: KeyBindingStore!
     private var configurableMenuItems: [String: NSMenuItem] = [:]
     private var keyMonitorActionMap: [String: () -> Void] = [:]
@@ -152,6 +153,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             onEditRemoteProject: { [weak self] projectId in
                 self?.showEditRemoteCredentialsPanel(projectId: projectId)
+            },
+            onExportMoriRemoteQR: { [weak self] projectId in
+                self?.showMoriRemoteQRPanel(projectId: projectId)
             },
             onCloseWindow: { [weak manager] windowId in
                 guard let manager else { return }
@@ -578,6 +582,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
+    private func showMoriRemoteQRPanel(projectId: UUID) {
+        guard let state = appState,
+              let themeInfo = terminalAreaController?.themeInfo else { return }
+        let controller = MoriRemoteQRPanelController()
+        moriRemoteQRPanel = controller
+        controller.present(appState: state, projectId: projectId, themeInfo: themeInfo)
+    }
+
     private func promptForRemotePassword(projectId: UUID, hostDisplay: String) {
         guard let window = mainWindowController?.window else { return }
 
@@ -860,6 +872,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         // Update agent dashboard appearance
         agentDashboardPanel?.updateAppearance(themeInfo: themeInfo)
+        moriRemoteQRPanel?.updateAppearance(themeInfo: themeInfo)
 
         // Sync to tmux
         if let tmuxBackend = workspaceManager?.tmuxBackend {

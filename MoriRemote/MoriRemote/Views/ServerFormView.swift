@@ -25,10 +25,14 @@ struct ServerFormView: View {
     @State private var username: String
     @State private var password: String
     @State private var defaultSession: String
+    /// Password from Mori QR — applied after a short delay and by recreating `SecureField` so iOS actually displays it.
+    private let qrImportedPassword: String?
+    @State private var secureFieldIdentity = UUID()
 
     init(mode: Mode, onSave: @escaping (Server) -> Void) {
         self.mode = mode
         self.onSave = onSave
+        self.qrImportedPassword = nil
 
         switch mode {
         case .add:
@@ -46,6 +50,22 @@ struct ServerFormView: View {
             _password = State(initialValue: server.password)
             _defaultSession = State(initialValue: server.defaultSession)
         }
+        _secureFieldIdentity = State(initialValue: UUID())
+    }
+
+    /// Prefill fields for a new server (e.g. QR import). On save, a new `Server` with a fresh id is created.
+    init(importDraft: Server, onSave: @escaping (Server) -> Void) {
+        self.mode = .add
+        self.onSave = onSave
+        let trimmedPassword = importDraft.password.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.qrImportedPassword = trimmedPassword.isEmpty ? nil : trimmedPassword
+        _name = State(initialValue: importDraft.name)
+        _host = State(initialValue: importDraft.host)
+        _port = State(initialValue: String(importDraft.port))
+        _username = State(initialValue: importDraft.username)
+        _password = State(initialValue: "")
+        _defaultSession = State(initialValue: importDraft.defaultSession)
+        _secureFieldIdentity = State(initialValue: UUID())
     }
 
     private var title: String {
@@ -114,6 +134,7 @@ struct ServerFormView: View {
                             Divider().overlay(Theme.divider)
 
                             SecureField(String(localized: "password"), text: $password)
+                                .id(secureFieldIdentity)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 12)
                                 .foregroundStyle(Theme.textPrimary)
@@ -156,6 +177,12 @@ struct ServerFormView: View {
         .presentationCornerRadius(Theme.sheetRadius)
         .presentationBackground(Theme.bg)
         .preferredColorScheme(.dark)
+        .task {
+            guard let seed = qrImportedPassword, !seed.isEmpty else { return }
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            password = seed
+            secureFieldIdentity = UUID()
+        }
     }
 
     private var formSummary: some View {

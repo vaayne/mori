@@ -13,6 +13,7 @@
 		376EEC1B30EE8565C4B085D1 /* MoriRemoteApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46F3182F8D251430A10B298E /* MoriRemoteApp.swift */; };
 		3E10DC5EF41F3B0DBD7E18E0 /* ServerFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93C9BF50025C03B0BCF8E77A /* ServerFormView.swift */; };
 		511FAAE001FB06AACCFC7E2C /* KeyBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAEB9A39277AB28A5B3718E3 /* KeyBarView.swift */; };
+		5357246AC842FF8B32752BED /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = AA5D58FE3F54BEE54223F79C /* InfoPlist.strings */; };
 		57768C47189EF8BE03AD3106 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = CB7E8BE74D0419BD18CEA5E3 /* SwiftTerm */; };
 		57A0B148D1B8D23CA120481C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 495654252F6CE455BE0201B3 /* Assets.xcassets */; };
 		58C6389AD3DF6D861F49D1DE /* ServerListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6666C37E7773D0C60B3D16BA /* ServerListView.swift */; };
@@ -35,6 +36,7 @@
 		D2F9125D254E9980272FA1F7 /* TmuxBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 879D7ABF80A185D8F5020407 /* TmuxBarView.swift */; };
 		DE5E3473363E4A48BB9FAE83 /* ServerCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3472384F8DA1C5278A47D40 /* ServerCardView.swift */; };
 		F005EC1ECFC968DF06655D7E /* SidebarContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 348894A19970D2C348B4A692 /* SidebarContainer.swift */; };
+		F86A43AF9F2748E65FEB7AE7 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E84D18B2A88E077AA497346E /* QRScannerView.swift */; };
 		F8BC0A57AF5F0A266F023AB0 /* TerminalAccessoryBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3314AE88EB123344D196346D /* TerminalAccessoryBar.swift */; };
 /* End PBXBuildFile section */
 
@@ -57,8 +59,10 @@
 		4A727118EE1EEE5BDC793991 /* TmuxWindowRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TmuxWindowRow.swift; sourceTree = "<group>"; };
 		58F100000000000000000002 /* RegularWidthServerBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegularWidthServerBrowserView.swift; sourceTree = "<group>"; };
 		58F100000000000000000004 /* TerminalSessionHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionHost.swift; sourceTree = "<group>"; };
+		5F44DE253944881F372D902F /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		6666C37E7773D0C60B3D16BA /* ServerListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerListView.swift; sourceTree = "<group>"; };
 		6C511C1314958A8D89FC53C8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		83155A65F8C242944490BF45 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		879D7ABF80A185D8F5020407 /* TmuxBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TmuxBarView.swift; sourceTree = "<group>"; };
 		93C9BF50025C03B0BCF8E77A /* ServerFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerFormView.swift; sourceTree = "<group>"; };
 		94A4540E9036A99292A5A06A /* ShellCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellCoordinator.swift; sourceTree = "<group>"; };
@@ -69,6 +73,7 @@
 		CAEB9A39277AB28A5B3718E3 /* KeyBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBarView.swift; sourceTree = "<group>"; };
 		D65F64A88926274343CB4D23 /* MoriTmux */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MoriTmux; path = ../Packages/MoriTmux; sourceTree = SOURCE_ROOT; };
 		E6317A1B56EED0B86D2F4D5D /* MoriRemote.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MoriRemote.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E84D18B2A88E077AA497346E /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
 		F3472384F8DA1C5278A47D40 /* ServerCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerCardView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -91,6 +96,7 @@
 		2A2C3E328CF35E08821257D9 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				AA5D58FE3F54BEE54223F79C /* InfoPlist.strings */,
 				9A1E86AC034B64B37F68A846 /* Localizable.strings */,
 			);
 			path = Resources;
@@ -161,6 +167,7 @@
 			children = (
 				4E3BB9B3445110B4B4503A85 /* Sidebar */,
 				58F100000000000000000002 /* RegularWidthServerBrowserView.swift */,
+				E84D18B2A88E077AA497346E /* QRScannerView.swift */,
 				93C9BF50025C03B0BCF8E77A /* ServerFormView.swift */,
 				6666C37E7773D0C60B3D16BA /* ServerListView.swift */,
 				348894A19970D2C348B4A692 /* SidebarContainer.swift */,
@@ -263,6 +270,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				57A0B148D1B8D23CA120481C /* Assets.xcassets in Resources */,
+				5357246AC842FF8B32752BED /* InfoPlist.strings in Resources */,
 				109E4551800EDCA43A760F80 /* Localizable.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -278,6 +286,7 @@
 				7C0AE4FDB467B008BCA2E721 /* KeyBarCustomizeView.swift in Sources */,
 				511FAAE001FB06AACCFC7E2C /* KeyBarView.swift in Sources */,
 				376EEC1B30EE8565C4B085D1 /* MoriRemoteApp.swift in Sources */,
+				F86A43AF9F2748E65FEB7AE7 /* QRScannerView.swift in Sources */,
 				97B5FB0C7E80E60AF0D59B0E /* Server.swift in Sources */,
 				DE5E3473363E4A48BB9FAE83 /* ServerCardView.swift in Sources */,
 				58F100000000000000000001 /* RegularWidthServerBrowserView.swift in Sources */,
@@ -309,6 +318,15 @@
 				405397F8D3FACA71D62B7717 /* zh-Hans */,
 			);
 			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		AA5D58FE3F54BEE54223F79C /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				5F44DE253944881F372D902F /* en */,
+				83155A65F8C242944490BF45 /* zh-Hans */,
+			);
+			name = InfoPlist.strings;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */

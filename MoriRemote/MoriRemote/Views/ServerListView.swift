@@ -1,3 +1,4 @@
+import MoriCore
 import SwiftUI
 
 struct ServerListView: View {
@@ -6,6 +7,11 @@ struct ServerListView: View {
 
     @State private var editingServer: Server?
     @State private var showingAddSheet = false
+    @State private var showingQRScanner = false
+    @State private var pendingQRString: String?
+    @State private var qrImportDraft: Server?
+    @State private var scanParseError: String?
+    @State private var duplicateContext: DuplicateImportContext?
 
     var body: some View {
         NavigationStack {
@@ -28,17 +34,17 @@ struct ServerListView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
+                        showingQRScanner = true
+                    } label: {
+                        toolbarIcon("qrcode.viewfinder")
+                    }
+                    .accessibilityLabel(String.localized("Scan QR Code"))
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
                         showingAddSheet = true
                     } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Theme.textPrimary)
-                            .frame(width: 32, height: 32)
-                            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.rowRadius))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: Theme.rowRadius)
-                                    .strokeBorder(Theme.accentBorder, lineWidth: 1)
-                            )
+                        toolbarIcon("plus")
                     }
                 }
             }
@@ -47,9 +53,65 @@ struct ServerListView: View {
                     addServer(server)
                 }
             }
+            .sheet(item: $qrImportDraft) { draft in
+                ServerFormView(importDraft: draft) { server in
+                    addServer(server)
+                }
+            }
             .sheet(item: $editingServer) { server in
                 ServerFormView(mode: .edit(server)) { updated in
                     updateServer(updated)
+                }
+            }
+            .fullScreenCover(isPresented: $showingQRScanner, onDismiss: {
+                if let raw = pendingQRString {
+                    pendingQRString = nil
+                    processScannedQR(raw)
+                }
+            }) {
+                QRScannerView(
+                    onScan: { raw in
+                        pendingQRString = raw
+                        showingQRScanner = false
+                    },
+                    onCancel: { showingQRScanner = false }
+                )
+                .ignoresSafeArea()
+            }
+            .confirmationDialog(
+                String.localized("Server Already Exists"),
+                isPresented: Binding(
+                    get: { duplicateContext != nil },
+                    set: { if !$0 { duplicateContext = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button(String.localized("Update Existing")) {
+                    if let ctx = duplicateContext {
+                        editingServer = Self.mergedServer(existing: ctx.existing, draft: ctx.draft)
+                    }
+                    duplicateContext = nil
+                }
+                Button(String.localized("Add New")) {
+                    if let ctx = duplicateContext {
+                        qrImportDraft = ctx.draft
+                    }
+                    duplicateContext = nil
+                }
+                Button(String.localized("Cancel"), role: .cancel) {
+                    duplicateContext = nil
+                }
+            } message: {
+                Text(String.localized("A server with this address and user is already saved. Update the saved entry or add a second one."))
+            }
+            .alert(String.localized("Invalid QR Code"), isPresented: Binding(
+                get: { scanParseError != nil },
+                set: { if !$0 { scanParseError = nil } }
+            )) {
+                Button(String.localized("OK"), role: .cancel) { scanParseError = nil }
+            } message: {
+                if let scanParseError {
+                    Text(scanParseError)
                 }
             }
             .overlay(alignment: .bottom) {
@@ -64,6 +126,18 @@ struct ServerListView: View {
             }
         }
         .preferredColorScheme(.dark)
+    }
+
+    private func toolbarIcon(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(Theme.textPrimary)
+            .frame(width: 32, height: 32)
+            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.rowRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.rowRadius)
+                    .strokeBorder(Theme.accentBorder, lineWidth: 1)
+            )
     }
 
     private var connectingServerID: Server.ID? {
@@ -93,6 +167,88 @@ struct ServerListView: View {
         }
         store.delete(server)
     }
+
+    private func processScannedQR(_ string: String) {
+        do {
+            let payload = try MoriRemoteTransferPayload.decode(qrString: string)
+            let draft = Self.server(from: payload)
+            if let existing = store.servers.first(where: { Self.sameEndpoint($0, draft) }) {
+                duplicateContext = DuplicateImportContext(existing: existing, draft: draft)
+            } else {
+                qrImportDraft = draft
+            }
+        } catch {
+            scanParseError = Self.scanErrorMessage(for: error)
+        }
+    }
+
+    private static func server(from payload: MoriRemoteTransferPayload) -> Server {
+        let session = payload.defaultSession?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return Server(
+            name: payload.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            host: payload.host.trimmingCharacters(in: .whitespacesAndNewlines),
+            port: payload.port,
+            username: payload.username.trimmingCharacters(in: .whitespacesAndNewlines),
+            password: payload.password ?? "",
+            defaultSession: session.isEmpty ? "main" : session
+        )
+    }
+
+    private static func sameEndpoint(_ a: Server, _ b: Server) -> Bool {
+        a.host.trimmingCharacters(in: .whitespacesAndNewlines)
+            == b.host.trimmingCharacters(in: .whitespacesAndNewlines)
+            && a.port == b.port
+            && a.username.trimmingCharacters(in: .whitespacesAndNewlines)
+                == b.username.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func mergedServer(existing: Server, draft: Server) -> Server {
+        var merged = existing
+        let trimmedName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedName.isEmpty {
+            merged.name = trimmedName
+        }
+        merged.host = draft.host.trimmingCharacters(in: .whitespacesAndNewlines)
+        merged.port = draft.port
+        merged.username = draft.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !draft.password.isEmpty {
+            merged.password = draft.password
+        }
+        let sess = draft.defaultSession.trimmingCharacters(in: .whitespacesAndNewlines)
+        merged.defaultSession = sess.isEmpty ? existing.defaultSession : sess
+        return merged
+    }
+
+    private static func scanErrorMessage(for error: Error) -> String {
+        if let e = error as? MoriRemoteTransferError {
+            switch e {
+            case .invalidPrefix:
+                return String.localized("This QR code is not a MoriRemote configuration.")
+            case .invalidBase64:
+                return String.localized("The QR code data could not be read.")
+            case .invalidJSON:
+                return String.localized("The QR code contains invalid configuration data.")
+            case .unsupportedVersion(let v):
+                return String(format: String.localized("Unsupported configuration version (%d)."), v)
+            case .invalidHost:
+                return String.localized("The configuration is missing a host name.")
+            case .invalidPort:
+                return String.localized("The configuration has an invalid port.")
+            case .invalidUsername:
+                return String.localized("The configuration is missing a user name.")
+            }
+        }
+        return error.localizedDescription
+    }
+}
+
+// MARK: - QR import duplicate alert
+
+private struct DuplicateImportContext: Identifiable {
+    let id = UUID()
+    let existing: Server
+    let draft: Server
 }
 
 struct ServerListContentView: View {

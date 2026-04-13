@@ -17,6 +17,7 @@ public struct WorktreeSidebarView: View {
     private let onRemoveWorktree: ((UUID) -> Void)?
     private let onRemoveProject: ((UUID) -> Void)?
     private let onEditRemoteProject: ((UUID) -> Void)?
+    private let onExportMoriRemoteQR: ((UUID) -> Void)?
     private let onCloseWindow: ((String) -> Void)?
     private let onToggleCollapse: ((UUID) -> Void)?
     private let onAddProject: (() -> Void)?
@@ -42,6 +43,7 @@ public struct WorktreeSidebarView: View {
         onRemoveWorktree: ((UUID) -> Void)? = nil,
         onRemoveProject: ((UUID) -> Void)? = nil,
         onEditRemoteProject: ((UUID) -> Void)? = nil,
+        onExportMoriRemoteQR: ((UUID) -> Void)? = nil,
         onCloseWindow: ((String) -> Void)? = nil,
         onToggleCollapse: ((UUID) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
@@ -64,6 +66,7 @@ public struct WorktreeSidebarView: View {
         self.onRemoveWorktree = onRemoveWorktree
         self.onRemoveProject = onRemoveProject
         self.onEditRemoteProject = onEditRemoteProject
+        self.onExportMoriRemoteQR = onExportMoriRemoteQR
         self.onCloseWindow = onCloseWindow
         self.onToggleCollapse = onToggleCollapse
         self.onAddProject = onAddProject
@@ -452,6 +455,14 @@ public struct WorktreeSidebarView: View {
                 onEditRemoteProject(project.id)
             } label: {
                 Label("Update Remote Credentials…", systemImage: "key")
+            }
+        }
+
+        if case .ssh = (project.location ?? .local), let onExportMoriRemoteQR {
+            Button {
+                onExportMoriRemoteQR(project.id)
+            } label: {
+                Label(String.localized("Show MoriRemote QR Code…"), systemImage: "qrcode")
             }
         }
 

@@ -21,6 +21,7 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         onRemoveWorktree: ((UUID) -> Void)? = nil,
         onRemoveProject: ((UUID) -> Void)? = nil,
         onEditRemoteProject: ((UUID) -> Void)? = nil,
+        onExportMoriRemoteQR: ((UUID) -> Void)? = nil,
         onCloseWindow: ((String) -> Void)? = nil,
         onToggleCollapse: ((UUID) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
@@ -40,6 +41,7 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
             onRemoveWorktree: onRemoveWorktree,
             onRemoveProject: onRemoveProject,
             onEditRemoteProject: onEditRemoteProject,
+            onExportMoriRemoteQR: onExportMoriRemoteQR,
             onCloseWindow: onCloseWindow,
             onToggleCollapse: onToggleCollapse,
             onAddProject: onAddProject,
@@ -82,6 +84,7 @@ struct SidebarContentView: View {
     let onRemoveWorktree: ((UUID) -> Void)?
     let onRemoveProject: ((UUID) -> Void)?
     let onEditRemoteProject: ((UUID) -> Void)?
+    let onExportMoriRemoteQR: ((UUID) -> Void)?
     let onCloseWindow: ((String) -> Void)?
     let onToggleCollapse: ((UUID) -> Void)?
     let onAddProject: (() -> Void)?
@@ -106,6 +109,7 @@ struct SidebarContentView: View {
             onRemoveWorktree: onRemoveWorktree,
             onRemoveProject: onRemoveProject,
             onEditRemoteProject: onEditRemoteProject,
+            onExportMoriRemoteQR: onExportMoriRemoteQR,
             onCloseWindow: onCloseWindow,
             onToggleCollapse: onToggleCollapse,
             onAddProject: onAddProject,
