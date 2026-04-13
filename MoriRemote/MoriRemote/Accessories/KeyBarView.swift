@@ -60,6 +60,7 @@ final class KeyBarView: UIView {
 
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.alwaysBounceHorizontal = true
+        scrollView.delaysContentTouches = false
         scrollView.delegate = self
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -178,6 +179,7 @@ final class KeyBarView: UIView {
         button.layer.borderColor = keyBorder.cgColor
         button.clipsToBounds = true
         button.adjustsImageWhenHighlighted = false
+        button.isExclusiveTouch = true
 
         let isArrow = action.iconName != nil
         let minWidth: CGFloat = isArrow ? 28 : 34
