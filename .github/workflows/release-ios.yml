@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   release-ios:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     env:
       DERIVED_DATA: .derived-data-ios
