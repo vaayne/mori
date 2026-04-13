@@ -2,48 +2,50 @@
 
 ## Overview
 
-This design system is **Mac-first**. The current Mori macOS app is the source of truth for Mori’s visual identity, and iPhone/iPad work should adapt that language rather than invent a parallel mobile style.
+This design system is **Mac-first**. The current Mori macOS app is the source of truth for Mori’s visual identity. iPhone and iPad work should adapt that language, not invent a separate mobile style.
 
-The current Mac app already establishes the right product character:
+The current Mac app already defines the right product character:
 
-- a **three-part workspace shell** built around navigation and terminal work
+- a **three-part workspace shell** centered on navigation and terminal work
 - a **quiet, compact, developer-oriented sidebar language**
-- **thin-material and low-chrome surfaces** instead of heavy cards or large shadows
+- **Ghostty-theme-backed window chrome with selective material**, not blanket card styling
 - **small radii, tight spacing, and muted typography** that keep attention on the work
-- **accent as selection/focus**, not decoration
+- **accent as selection and focus**, not decoration
 
 Across iPhone, iPad, and Mac, Mori should feel like the same product scaled to different constraints:
 
-- **Mac** = canonical layout and interaction language
-- **iPad** = Mac’s workspace model, simplified for touch and adaptive layouts
-- **iPhone** = the same hierarchy and component language, compressed into single-column navigation
+- **Mac**: the canonical layout and interaction model
+- **iPad**: the Mac workspace model adapted for touch and adaptive layouts
+- **iPhone**: the same hierarchy and components compressed into single-column navigation
 
-The goal is not “responsive consumer UI.” The goal is a **portable native terminal workspace** with one identity.
+The goal is not a generic responsive consumer UI. The goal is a **portable native terminal workspace** with one consistent identity.
 
 ### Source-of-truth references from the current Mac app
 
 These existing Mac patterns should drive cross-device consistency:
 
-- `ProjectRailView`: narrow project rail, circular project avatars, low-emphasis footer tools, material background
-- `SidebarContainerView`: segmented mode switcher (`Workspaces`, `Tasks`, `Agents`) at top
-- `WorktreeSidebarView`: flat grouped sidebar sections with uppercase headers and divider-based structure
-- `WorktreeRowView`: compact two-line rows, small rounded rectangles, hover reveal actions, subdued metadata
-- `WindowRowView`: tiny state dot, active row tint, small shortcut pill, compact utility density
-- `AgentSidebarView`: state-grouped sections, muted headers, selective semantic color for status
-- `MoriTokens`: current spacing, radius, icon, and typography scales
+- `MainWindowController` + `TerminalAreaViewController`: the window, panels, and terminal surfaces inherit `GhosttyThemeInfo` for appearance and background color
+- `ProjectRailView`: 36pt circular project avatars, ultra-thin-material rail, and muted icon-only footer tools
+- `WorktreeSidebarView`: flat grouped project sections with uppercase headers, compact summary chips, divider-based structure, and dense nested rows
+- `WorktreeRowView`: 28pt icon box, two-line rows, 7pt row radius, hover-reveal actions, and subdued git metadata
+- `WindowRowView`: tiny state dot, active row tint, subtle shortcut pill, compact utility density, and hover preview behavior
+- `AgentWindowRowView`: the same compact row geometry with semantic state color reserved for agent runtime state
+- `SidebarFooterView`: divider-separated footer with icon-first utility actions and ephemeral shortcut hint overlays
+- `MoriTokens`: current spacing, radius, icon, opacity, and typography scales
 
-When in doubt, **borrow from the current Mac sidebar and rail first**, then adapt to iPad/iPhone ergonomics.
+When in doubt, **start with the current Mac sidebar and rail patterns**, then adapt them for iPad and iPhone ergonomics.
 
 ## Colors
 
-Color behavior should follow the current Mac app’s logic more than MoriRemote’s current custom dark theme. The main product identity today comes from the Mac app’s restrained neutral surfaces plus accent-driven selection.
+Color behavior should follow the current Mac app more closely than MoriRemote’s custom dark theme. Mori’s identity today comes from restrained neutral surfaces with accent-driven selection.
 
 ### Color strategy
 
-- Use **semantic colors**, not ad hoc screen-level colors.
-- On **Mac**, preserve the current behavior where interactive selection tracks `Color.accentColor`.
-- On **iPhone/iPad**, introduce a shared Mori accent asset that visually matches the Mac accent behavior rather than keeping a separate mobile-only accent language.
-- Keep terminal-adjacent screens dark, but avoid making every surface a fully custom “neon terminal” aesthetic.
+- Use **semantic colors**, not ad hoc screen-specific colors.
+- On **Mac**, preserve the current interaction model where selection tracks `Color.accentColor`.
+- Window and panel backgrounds should follow the resolved **Ghostty theme background**; SwiftUI chrome should sit on top of that instead of inventing a separate app-level palette.
+- On **iPhone** and **iPad**, introduce a shared Mori accent asset that visually matches Mac accent behavior rather than keeping a mobile-only accent language.
+- Keep terminal-adjacent screens dark when appropriate, but avoid turning every surface into a neon terminal aesthetic.
 
 ### Semantic palette
 
@@ -60,35 +62,35 @@ Color behavior should follow the current Mac app’s logic more than MoriRemote�
 
 These should follow current Mac semantics rather than strong custom fills:
 
-- **Background Base**: window/sidebar canvas using system background/material behavior
-- **Background Material**: `.ultraThinMaterial` or equivalent system material for rails and light chrome surfaces
-- **Row Hover**: secondary/muted color at ~8% opacity
-- **Row Active**: accent at ~8–12% opacity
-- **Divider**: subtle separator matching current sidebar divider treatment
-- **Muted Surface**: secondary at ~4–8% opacity for pills, shortcut hints, subtle badges
+- **Background Base**: Ghostty theme background or effective background for windows, panels, and terminal-adjacent surfaces
+- **Background Material**: `.ultraThinMaterial` or equivalent system material for the project rail and similarly lightweight chrome surfaces
+- **Row Hover**: muted color at roughly 8% opacity
+- **Row Active**: accent at roughly 8–12% opacity
+- **Divider**: subtle separator matching the current sidebar divider treatment
+- **Muted Surface**: secondary at roughly 4–8% opacity for pills, shortcut hints, and subtle badges
 
 #### Status colors
 
 Use semantic status color only where the Mac app already does:
 
-- **Success**: running/healthy state
-- **Warning / Attention**: waiting for input, long-running, caution states
-- **Error**: failure/error state
-- **Info**: unread output / informational signal
-- **Muted**: inactive/default metadata
+- **Success**: running or healthy state
+- **Warning / Attention**: waiting for input, long-running, or caution states
+- **Error**: failure or error state
+- **Info**: unread output or informational signal
+- **Muted**: inactive or default metadata
 
 ### Color rules
 
 - Accent means **selected, active, or focused**.
-- Neutral/muted means **structural UI chrome**.
-- Success/warning/error/info should be reserved for **runtime state**, not general decoration.
+- Neutral and muted colors mean **structural UI chrome**.
+- Success, warning, error, and info should be reserved for **runtime state**, not decoration.
 - Do not fill large surfaces with accent color.
 - Do not introduce bright gradients, glow, or marketing-style color transitions.
-- On mobile, if a dark custom surface is needed around the terminal, it should still inherit the Mac hierarchy: background → muted row/panel → active accent tint.
+- On mobile, if a dark custom surface is needed around the terminal, it should still preserve the Mac hierarchy: background → muted row or panel → active accent tint.
 
 ## Typography
 
-Typography should follow the current Mac app’s compact system-driven hierarchy.
+Typography should follow the current Mac app’s compact, system-driven hierarchy.
 
 ### Font families
 
@@ -97,7 +99,7 @@ Typography should follow the current Mac app’s compact system-driven hierarchy
 
 ### Existing Mac-inspired scale
 
-This section intentionally mirrors the current `MoriTokens` scale and should be reused cross-device unless a touch target requires a larger control.
+This section mirrors the current `MoriTokens` scale and should be reused cross-device unless a touch target requires a larger control.
 
 - **Section Header**: 11pt bold, uppercase, tracking +1.2
 - **Project Header / Group Title**: 14pt bold
@@ -105,7 +107,7 @@ This section intentionally mirrors the current `MoriTokens` scale and should be 
 - **Window Row Title**: 12.5pt regular
 - **Label**: 12pt (`caption`-like)
 - **Caption**: 11pt (`caption2`-like)
-- **Badge Count**: 9–9.5pt bold/semibold
+- **Badge Count**: 9–9.5pt bold or semibold
 - **Monospaced Branch**: 11pt monospaced
 - **Monospaced Detail / Stats**: 10–10.5pt monospaced
 - **Monospaced Shortcut Pill**: 10pt monospaced
@@ -116,30 +118,30 @@ This section intentionally mirrors the current `MoriTokens` scale and should be 
 - Use **uppercase section headers** for navigation structure and grouped form sections.
 - Use monospaced text for:
   - branches
-  - window/session identifiers
+  - window or session identifiers
   - shortcuts
   - technical status counts
-  - ports, hosts, paths, shell values
+  - ports, hosts, paths, and shell values
 - Avoid oversized marketing-style headings in workspace screens.
 - On iPhone, increase line height and hit area before increasing headline size.
 
 ## Elevation
 
-The current Mac app is mostly flat. Keep that.
+The current Mac app is mostly flat. Keep it that way.
 
 ### Elevation model
 
-- **Layer 0 — Window canvas**: system background / app background
+- **Layer 0 — Window canvas**: system background or app background
 - **Layer 1 — Structural chrome**: material rail, segmented header region, sidebars
-- **Layer 2 — Interactive rows/pills**: hover tint, active tint, shortcut hint pills, compact grouped controls
-- **Layer 3 — Popovers/sheets/overlays**: pane previews, modals, transient overlays
+- **Layer 2 — Interactive rows and pills**: hover tint, active tint, shortcut hint pills, compact grouped controls
+- **Layer 3 — Popovers, sheets, and overlays**: pane previews, modals, transient overlays
 
 ### Elevation rules
 
 - Prefer **material, tint, divider, and contrast** over shadow.
-- Most surfaces should separate via **spacing and subtle opacity changes**, not card stacking.
+- Most surfaces should separate through **spacing and subtle opacity changes**, not card stacking.
 - Use shadows only for popovers, floating overlays, and sheets.
-- The terminal remains the deepest visual plane because of content and darkness, not because it is boxed into a card.
+- The terminal remains the deepest visual plane because of its content and darkness, not because it sits inside a heavy card.
 
 ## Components
 
@@ -151,25 +153,25 @@ Cross-device work should reuse the current Mac token system as the foundation.
 
 Based on `MoriTokens.Spacing`:
 
-- **1pt** `xxs`: hairline/internal micro spacing
+- **1pt** `xxs`: hairline or internal micro spacing
 - **2pt** `xs`: tight inline badge spacing
 - **4pt** `sm`: compact gaps, pills, inner badge padding
-- **8pt** `md`: default stack/row spacing
-- **10pt** `lg`: section/group spacing, row rhythm
+- **8pt** `md`: default stack or row spacing
+- **10pt** `lg`: section or group spacing, row rhythm
 - **16pt** `xl`: main content inset
-- **20pt** `xxl`: deeper indent / nested hierarchy offset
+- **20pt** `xxl`: deeper indent or nested hierarchy offset
 - **40pt** `emptyState`: top offset for empty states
 
 #### Radius
 
 Based on `MoriTokens.Radius` and current Mac usage:
 
-- **3pt**: badge/shortcut tiny pills
-- **7pt**: standard rows, hover/selection shapes, compact grouped surfaces
+- **3pt**: badge and shortcut tiny pills
+- **7pt**: standard rows, hover and selection shapes, compact grouped surfaces
 - **10pt**: previews, small cards, larger grouped controls
 - **12–14pt**: mobile forms and larger touch-first controls only when needed
 
-Rule: **default to the Mac app’s smaller radii**. Only grow radii on touch surfaces where it improves usability.
+Rule: **default to the Mac app’s smaller radii**. Only increase radius on touch surfaces when it clearly improves usability.
 
 ### Layout
 
@@ -186,61 +188,61 @@ Cross-device adaptations should preserve this mental model.
 #### Mac
 
 - Keep the current multi-column shell.
-- Project rail remains narrow and icon-first.
-- Sidebar remains structured, dense, and section-based.
-- Workspace remains dominant.
+- The project rail remains narrow and icon-first.
+- The sidebar remains structured, dense, and section-based.
+- The workspace remains dominant.
 
 #### iPad
 
 - In regular width, iPad should be the closest match to Mac.
 - Preferred structure:
   - server or workspace navigation at left
-  - persistent context/sidebar when connected
-  - terminal/workspace dominant at right
+  - persistent context or sidebar when connected
+  - terminal or workspace dominant at right
 - Use larger touch hit areas, but preserve Mac grouping, typography, and hierarchy.
-- Avoid converting everything into oversized cards.
+- Avoid turning everything into oversized cards.
 
 #### iPhone
 
 - Collapse the Mac shell into a single-column navigation flow.
-- Preserve the same hierarchy by turning rail/sidebar/workspace into navigation levels and contextual top bars.
+- Preserve the same hierarchy by turning rail, sidebar, and workspace into navigation levels and contextual top bars.
 - Keep row styling, section headers, and status language visually tied to Mac.
 
 ### Navigation
 
 #### Mac-first navigation language
 
-Use the current Mac app’s structural conventions as the basis:
+Use the current Mac app’s structural conventions as the base:
 
-- top-level mode switcher via segmented control when multiple operational views exist
 - uppercase section headers inside sidebars
-- divider-separated project/group sections
-- stable visible selection in rows
+- divider-separated project or group sections
+- stable visible row selection
 - footer utility actions with muted icons
+- contextual utility affordances revealed on hover instead of always-on chrome
 
 #### Cross-device navigation rules
 
 - If a Mac surface uses a persistent sidebar, iPad should prefer a persistent sidebar in regular width.
-- If persistence is impossible on iPhone, preserve context in the navigation title/subtitle or top identity block.
+- If persistence is impossible on iPhone, preserve context in the navigation title, subtitle, or top identity block.
 - Avoid decorative navigation chrome. Mori navigation should feel operational and compact.
 
 ### Project rail
 
-This is a Mac-defining component and should inform cross-device identity.
+This is a defining Mac component and should inform cross-device identity.
 
 #### Spec
 
-- Narrow vertical rail
-- Material background
-- Circular project avatars using first letter / simple identity
-- Selected state uses interactive accent
-- Project label below avatar in small caption style
-- Footer utilities are icon-only, muted, evenly spaced
+- narrow vertical rail
+- ultra-thin material background
+- 36pt circular project avatars using a first letter or simple identity
+- selected state uses interactive accent, unselected avatars use muted fill
+- project label below avatar in small caption style
+- footer utilities are icon-only, muted, and evenly spaced
 
 #### Adaptation guidance
 
-- iPad does not need a literal rail if that harms usability, but should preserve the same idea through a compact leading navigation column or project switcher.
-- iPhone may collapse this into a project/server switcher list or menu, but should preserve icon-first project identity.
+- iPad does not need a literal rail if that hurts usability, but it should preserve the same idea through a compact leading navigation column or project switcher.
+- iPhone may collapse this into a project or server switcher list or menu, but should preserve icon-first project identity.
 
 ### Sidebars
 
@@ -248,7 +250,7 @@ Current Mac sidebars are mostly **flat, grouped lists**, not card stacks.
 
 #### Sidebar structure
 
-1. Top mode/header control if needed
+1. Top mode or header control when needed
 2. Section label
 3. Flat section groups separated by dividers
 4. Dense rows for primary items
@@ -260,47 +262,48 @@ Current Mac sidebars are mostly **flat, grouped lists**, not card stacks.
 - Prefer transparent or lightly tinted row backgrounds over heavy card blocks.
 - Use 16pt horizontal padding for major headers and structure.
 - Use 7pt row radii by default.
-- Use hover reveal affordances on pointer platforms.
-- Use subtle dividers between project/group sections.
+- Use subtle dividers between project and group sections.
+- Reserve stronger tinting for compact summary chips and active-worktree callouts, not for the entire sidebar.
 
 #### Mobile adaptation
 
-- On iPad/iPhone, keep the row language and section structure.
+- On iPad and iPhone, keep the row language and section structure.
 - It is acceptable to wrap top identity blocks or forms in cards, but main navigation lists should still feel closer to the Mac sidebar than to a consumer settings app.
 
 ### Rows
 
 Rows are the most important reusable element.
 
-#### Worktree/server/session/window row language
+#### Worktree, server, session, and window row language
 
 All of these should inherit the current Mac row model:
 
 - compact vertical padding
-- leading identity glyph/dot/icon
-- primary title + secondary metadata
-- optional trailing status/badge/shortcut
+- leading identity glyph, dot, or icon
+- primary title plus secondary metadata
+- optional trailing status, badge, or shortcut
 - active state via accent-soft fill
 - hover state via muted-soft fill
-- small radius
+- 7pt row radius
+- preserve row geometry when badges, quick-reply affordances, or hover actions appear
 
 #### Row state rules
 
 - **Default**: transparent or muted surface
 - **Hover**: muted tint
 - **Selected**: accent-soft background, accent foreground where useful
-- **Busy**: swap leading icon for spinner, preserve row geometry
-- **Attention/Error**: add trailing semantic badge/icon, do not redraw the whole row as warning/error unless necessary
+- **Busy**: swap the leading icon for a spinner while preserving row geometry
+- **Attention / Error**: add a trailing semantic badge or icon; do not redraw the whole row as warning or error unless necessary
 
 ### Window rows and badges
 
 Mirror the current Mac `WindowRowView` behavior:
 
-- tiny leading state dot indicates active/type/runtime state
+- tiny leading state dot indicates active, type, or runtime state
 - title stays compact
 - trailing shortcut pill is subtle, never dominant
-- badge icons communicate running, waiting, error, unread, completed
-- hover can reveal richer preview/popover behavior on Mac/iPad pointer, but core information must remain visible without hover
+- badge icons communicate running, waiting, error, unread, or completed
+- hover can reveal richer preview or popover behavior on Mac and iPad pointer platforms, but core information must remain visible without hover
 
 ### Cards and panels
 
@@ -308,11 +311,11 @@ Cards should be used more sparingly than in the current mobile UI.
 
 #### Mac-based rule
 
-If the current Mac app would render something as a flat grouped list or sidebar section, do **not** turn it into a large rounded card on iPad/iPhone by default.
+If the current Mac app would render something as a flat grouped list or sidebar section, do **not** turn it into a large rounded card on iPad or iPhone by default.
 
 #### Appropriate card use
 
-Use cards/panels for:
+Use cards or panels for:
 
 - forms
 - empty states in detail panes
@@ -324,27 +327,27 @@ Use cards/panels for:
 
 - small-to-medium radius
 - subtle border or material separation
-- low/no shadow
+- low or no shadow
 - compact internal spacing
 
 ### Forms
 
-Forms should evolve from the current Mac sidebar/detail density, not generic iOS settings screens.
+Forms should evolve from the current Mac sidebar and detail density, not from generic iOS settings screens.
 
 #### Rules
 
-- Group inputs into clearly labeled uppercase sections
-- Keep forms narrow even on large screens
-- Use compact field heights and spacing
-- Prefer one-column forms across all devices
-- Primary action sits at the bottom of the form or in the sheet footer area
+- Group inputs into clearly labeled uppercase sections.
+- Keep forms narrow even on large screens.
+- Use compact field heights and spacing.
+- Prefer one-column forms across all devices.
+- Place the primary action at the bottom of the form or in the sheet footer.
 
 #### Field style
 
 - low-chrome field background
-- subtle border/divider
-- accent/focus treatment only on active field
-- monospaced text only for technical values where useful
+- subtle border or divider
+- accent or focus treatment only on the active field
+- monospaced text only for technical values when useful
 
 ### Buttons
 
@@ -352,15 +355,15 @@ Button styling should follow the Mac app’s restraint.
 
 #### Primary button
 
-- use accent-filled background
+- accent-filled background
 - dark or high-contrast text depending on accent
 - simple rounded rectangle
 - no large shadows or glossy effects
 
 #### Secondary button
 
-- plain or softly bordered/tinted
-- used for edit/manage actions
+- plain or softly bordered / tinted
+- used for edit and manage actions
 
 #### Utility button
 
@@ -391,7 +394,7 @@ Empty states should look like they belong in the Mac app.
 - calm
 - not playful or promotional
 
-Use the current Mac app’s empty-state restraint as the benchmark.
+Use the current Mac app’s restraint as the benchmark.
 
 ### Status and messaging
 
@@ -399,11 +402,11 @@ Current Mac patterns already provide the right model: small semantic icons, grou
 
 #### Status hierarchy
 
-- **Selection/focus**: accent
-- **Running/healthy**: success
-- **Waiting/attention**: attention/warning
+- **Selection / focus**: accent
+- **Running / healthy**: success
+- **Waiting / attention**: attention or warning
 - **Error**: error
-- **Unread/info**: info
+- **Unread / info**: info
 - **Inactive metadata**: muted
 
 #### Messaging rules
@@ -411,53 +414,54 @@ Current Mac patterns already provide the right model: small semantic icons, grou
 - Prefer inline message blocks over modal alerts when context matters.
 - Keep titles short and direct.
 - Show technical detail only after a plain-language summary.
-- On mobile, bottom banners can be used for transient dismissal-friendly errors, but longer technical problems should use inline panels or detail states.
+- On mobile, bottom banners can be used for transient, dismissible errors, but longer technical problems should use inline panels or detail states.
 
 ### Terminal and shell surfaces
 
-The terminal is still Mori’s main workspace, but cross-device design should anchor it back to the Mac product language.
+The terminal is still Mori’s main workspace, and the current Mac app ties it directly to Ghostty theme resolution.
 
 #### Rules
 
 - The terminal should remain the dominant workspace plane.
+- Window, panel, and terminal-adjacent surfaces should inherit the resolved Ghostty appearance before any custom styling is applied.
 - Overlays above the terminal should be compact and low-chrome.
-- Sidebar/context surfaces adjacent to terminal should feel like extensions of the Mac sidebar system.
-- Avoid making the mobile terminal experience look like a separate brand from the Mac app.
+- Sidebar and context surfaces adjacent to the terminal should feel like extensions of the Mac sidebar system.
+- Avoid making the mobile terminal experience feel like a different brand from the Mac app.
 
 ### Motion
 
 Follow the Mac app’s understated feel:
 
-- quick fade/opacity transitions
+- quick fade and opacity transitions
 - short hover animations
 - low-bounce selection transitions
 - no playful spring motion in core navigation
 
-## Do's and Don'ts
+## Do’s and Don’ts
 
 ### Do
 
 - Do treat the current Mac app as the canonical Mori design language.
-- Do reuse `MoriTokens` spacing, radius, and typography as the basis for iPad/iPhone work.
+- Do reuse `MoriTokens` spacing, radius, and typography as the basis for iPad and iPhone work.
 - Do keep sidebars flat, structured, and dense.
-- Do make active/selected state look the same across project rows, worktree rows, server rows, and tmux rows.
+- Do make active and selected state look consistent across project rows, worktree rows, server rows, and tmux rows.
 - Do preserve the Mac shell mental model even when layouts collapse on smaller devices.
 - Do use semantic status colors the same way the Mac app already uses them.
 - Do favor small radii, subtle dividers, muted metadata, and selective accent.
 
-### Don't
+### Don’t
 
 - Don’t let MoriRemote define a separate visual identity from Mori for Mac.
 - Don’t replace Mac-style grouped sidebars with stacks of oversized mobile cards.
 - Don’t introduce a stronger or more decorative color language than the current Mac app already has.
 - Don’t use heavy shadows, large blur panels, or over-rounded controls as the default style.
-- Don’t scale typography up so much on iPad/iPhone that the product stops feeling like Mori.
-- Don’t use accent as decoration instead of selection/focus.
-- Don’t design disconnected, server, and tmux states as if they belong to a different app than the Mac workspace browser.
+- Don’t scale typography so far up on iPad or iPhone that the product stops feeling like Mori.
+- Don’t use accent as decoration instead of selection or focus.
+- Don’t design disconnected, server, or tmux states as if they belong to a different app than the Mac workspace browser.
 
 ## Implementation Guidance
 
-Use this document to drive follow-up implementation work in this order:
+Use this document to guide follow-up implementation work in this order:
 
 1. **Token alignment first**
    - align `MoriRemote/Theme.swift` with `Packages/MoriUI/Sources/MoriUI/DesignTokens.swift`
