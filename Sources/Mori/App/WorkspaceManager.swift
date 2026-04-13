@@ -1926,6 +1926,15 @@ final class WorkspaceManager {
         return appState.worktrees.first { $0.id == id }
     }
 
+    func companionToolLaunchContext() -> CompanionToolLaunchContext? {
+        guard let worktree = selectedWorktree else { return nil }
+        return CompanionToolLaunchContext(
+            workspaceID: worktree.id.uuidString,
+            workingDirectory: activePaneCwd() ?? worktree.path,
+            location: location(for: worktree)
+        )
+    }
+
     /// Whether a worktree is currently selected (used to decide empty-state UI).
     var hasSelectedWorktree: Bool {
         selectedWorktree != nil
@@ -1980,7 +1989,7 @@ final class WorkspaceManager {
     }
 
     /// Open a CLI tool (e.g. lazygit, yazi) in a new tmux window at the active pane's cwd.
-    /// The window auto-names after the tool and closes when the tool exits.
+    /// Retained for fallback flows; the primary Mori UI now prefers the companion pane.
     func openToolWindow(command: String) async {
         guard let worktree = selectedWorktree,
               let sessionName = worktree.tmuxSessionName else { return }

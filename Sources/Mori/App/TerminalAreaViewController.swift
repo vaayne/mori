@@ -212,79 +212,42 @@ final class TerminalAreaViewController: NSViewController {
     ///   - location: Local or SSH remote endpoint.
     func attachToSession(sessionName: String, workingDirectory: String, location: WorkspaceLocation = .local) {
         let sessionKey = sessionIdentityKey(sessionName: sessionName, location: location)
-        isAutoReconnecting = false
-
-        // Skip if already showing this session
-        if sessionKey == currentSessionKey {
-            focusCurrentSurface()
-            return
-        }
-
-        hideEmptyState()
-
-        // Remove current surface from view (but keep in cache)
-        if let oldSurface = currentSurface {
-            oldSurface.removeFromSuperview()
-        }
-        removeResidualTerminalSubviews()
-
-        // Get or create surface from cache.
-        // Use `new-session -A` to atomically attach-or-create without shell
-        // fallback chains (`has-session && attach || new-session`).
         let escaped = shellEscape(sessionName)
         let escapedTmux = shellEscape(tmuxBinaryPath)
-        let command: String
-        let effectiveWorkingDirectory: String
+
         switch location {
         case .local:
             let escapedCwd = shellEscape(workingDirectory)
-            command = "export STARSHIP_LOG=error; export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH\"; \(escapedTmux) new-session -A -s \(escaped) -c \(escapedCwd)"
-            effectiveWorkingDirectory = workingDirectory
+            let command = "export STARSHIP_LOG=error; export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH\"; \(escapedTmux) new-session -A -s \(escaped) -c \(escapedCwd)"
+            attachSurface(identity: sessionKey, command: command, workingDirectory: workingDirectory)
         case .ssh(let ssh):
             let termProgram = ProcessInfo.processInfo.environment["TERM_PROGRAM"] ?? "ghostty"
             let remoteCwd = shellEscape(workingDirectory)
             let remoteTmux = "export STARSHIP_LOG=error; export TERM_PROGRAM=\(shellEscape(termProgram)); export COLORTERM=truecolor; export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/snap/bin:$PATH\"; tmux new-session -A -s \(escaped) -c \(remoteCwd)"
-            var sshCommand = "ssh -tt"
-            for option in sshOptionsForInteractiveTerminal(ssh) {
-                sshCommand += " \(shellEscape(option))"
-            }
-            if let port = ssh.port {
-                sshCommand += " -p \(port)"
-            }
-            sshCommand += " \(shellEscape(ssh.target)) \(shellEscape(remoteTmux))"
-            command = sshCommand
-            // Remote paths don't exist locally; use local home to avoid chdir failures.
-            effectiveWorkingDirectory = NSHomeDirectory()
+            attachSurface(identity: sessionKey, command: wrappedSSHCommand(ssh: ssh, remoteCommand: remoteTmux), workingDirectory: NSHomeDirectory())
         }
-        let surface = surfaceCache.surface(
-            forSessionKey: sessionKey,
-            command: command,
-            workingDirectory: effectiveWorkingDirectory
-        )
+    }
 
-        guard surface.frame.size != .zero || view.bounds.size != .zero else {
-            showError("Failed to create terminal surface for session '\(sessionName)'.")
-            return
+    /// Attach to an arbitrary terminal command in the current workspace context.
+    /// Used for embedded utility tools like Yazi and Lazygit that should live in
+    /// Mori's companion pane instead of opening a new tmux window.
+    func attachToCommand(
+        identity: String,
+        command: String,
+        workingDirectory: String,
+        location: WorkspaceLocation = .local,
+        focus: Bool = true
+    ) {
+        let localCommand = "export STARSHIP_LOG=error; export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH\"; cd \(shellEscape(workingDirectory)); exec \(command)"
+
+        switch location {
+        case .local:
+            attachSurface(identity: identity, command: localCommand, workingDirectory: workingDirectory, focus: focus)
+        case .ssh(let ssh):
+            let termProgram = ProcessInfo.processInfo.environment["TERM_PROGRAM"] ?? "ghostty"
+            let remoteCommand = "export STARSHIP_LOG=error; export TERM_PROGRAM=\(shellEscape(termProgram)); export COLORTERM=truecolor; export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/snap/bin:$PATH\"; cd \(shellEscape(workingDirectory)); exec \(command)"
+            attachSurface(identity: identity, command: wrappedSSHCommand(ssh: ssh, remoteCommand: remoteCommand), workingDirectory: NSHomeDirectory(), focus: focus)
         }
-
-        // Add to view hierarchy
-        surface.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(surface)
-        NSLayoutConstraint.activate([
-            surface.topAnchor.constraint(equalTo: view.topAnchor),
-            surface.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            surface.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            surface.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-        ])
-
-        currentSessionKey = sessionKey
-        currentSurface = surface
-
-        // Resize to current bounds
-        terminalHost.surfaceDidResize(surface, to: view.bounds.size)
-
-        // Focus the terminal
-        focusCurrentSurface()
     }
 
     /// Detach the current terminal surface and evict it from the cache.
@@ -437,6 +400,63 @@ final class TerminalAreaViewController: NSViewController {
 
     private func sessionIdentityKey(sessionName: String, location: WorkspaceLocation) -> String {
         "\(location.endpointKey)|\(sessionName)"
+    }
+
+    private func attachSurface(identity: String, command: String, workingDirectory: String, focus: Bool = true) {
+        isAutoReconnecting = false
+
+        if identity == currentSessionKey {
+            if focus {
+                focusCurrentSurface()
+            }
+            return
+        }
+
+        hideEmptyState()
+
+        if let oldSurface = currentSurface {
+            oldSurface.removeFromSuperview()
+        }
+        removeResidualTerminalSubviews()
+
+        let surface = surfaceCache.surface(
+            forSessionKey: identity,
+            command: command,
+            workingDirectory: workingDirectory
+        )
+
+        guard surface.frame.size != .zero || view.bounds.size != .zero else {
+            showError(.localized("Failed to create embedded terminal surface."))
+            return
+        }
+
+        surface.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(surface)
+        NSLayoutConstraint.activate([
+            surface.topAnchor.constraint(equalTo: view.topAnchor),
+            surface.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            surface.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            surface.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+
+        currentSessionKey = identity
+        currentSurface = surface
+        terminalHost.surfaceDidResize(surface, to: view.bounds.size)
+        if focus {
+            focusCurrentSurface()
+        }
+    }
+
+    private func wrappedSSHCommand(ssh: SSHWorkspaceLocation, remoteCommand: String) -> String {
+        var sshCommand = "ssh -tt"
+        for option in sshOptionsForInteractiveTerminal(ssh) {
+            sshCommand += " \(shellEscape(option))"
+        }
+        if let port = ssh.port {
+            sshCommand += " -p \(port)"
+        }
+        sshCommand += " \(shellEscape(ssh.target)) \(shellEscape(remoteCommand))"
+        return sshCommand
     }
 
     /// Defensive cleanup in case a dead surface view was not tracked as current.

@@ -3,48 +3,77 @@ import AppKit
 @MainActor
 final class RootSplitViewController: NSViewController {
 
+    private enum DividerDragTarget {
+        case sidebar
+        case companion
+    }
+
     private(set) var sidebarController: NSViewController
     private(set) var contentController: NSViewController
+    private(set) var companionController: NSViewController
 
-    private static let widthKey = "MoriSidebarWidth"
-    private static let minWidth: CGFloat = 180
-    private static let maxWidth: CGFloat = 400
-    private static let hitWidth: CGFloat = 8
+    private static let sidebarWidthKey = "MoriSidebarWidth"
+    private static let companionWidthKey = "MoriCompanionToolPaneWidth"
+    private static let sidebarMinWidth: CGFloat = 180
+    private static let sidebarMaxWidth: CGFloat = 400
+    private static let companionMinWidth: CGFloat = 320
+    private static let dividerHitWidth: CGFloat = 8
 
     private let sidebarContainer = NSView()
-    private let dividerView = NSView()
+    private let sidebarDividerView = NSView()
     private let contentContainer = NSView()
-    private var sidebarWidth: CGFloat = 280
-    private var isDragging = false
-    private var collapsed = false
+    private let companionDividerView = NSView()
+    private let companionContainer = NSView()
 
-    init(sidebarController: NSViewController, contentController: NSViewController) {
+    private var sidebarWidth: CGFloat = 280
+    private var companionWidth: CGFloat = CompanionToolPaneState.defaultWidth
+    private var dragTarget: DividerDragTarget?
+    private var collapsed = false
+    private var toolPaneState = CompanionToolPaneState()
+
+    var onCompanionWidthChanged: ((CGFloat) -> Void)?
+
+    init(
+        sidebarController: NSViewController,
+        contentController: NSViewController,
+        companionController: NSViewController
+    ) {
         self.sidebarController = sidebarController
         self.contentController = contentController
+        self.companionController = companionController
         super.init(nibName: nil, bundle: nil)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    // MARK: - Lifecycle
-
     override func loadView() {
         let root = NSView()
         root.wantsLayer = true
-        dividerView.wantsLayer = true
-        dividerView.layer?.backgroundColor = NSColor.separatorColor.cgColor
+        sidebarDividerView.wantsLayer = true
+        sidebarDividerView.layer?.backgroundColor = NSColor.separatorColor.cgColor
+        companionDividerView.wantsLayer = true
+        companionDividerView.layer?.backgroundColor = NSColor.separatorColor.cgColor
 
-        for v in [sidebarContainer, dividerView, contentContainer] {
-            root.addSubview(v)
+        for subview in [sidebarContainer, sidebarDividerView, contentContainer, companionDividerView, companionContainer] {
+            root.addSubview(subview)
         }
         self.view = root
 
         embed(sidebarController, in: sidebarContainer)
         embed(contentController, in: contentContainer)
+        embed(companionController, in: companionContainer)
 
-        let saved = UserDefaults.standard.double(forKey: Self.widthKey)
-        if saved > 0 { sidebarWidth = saved.clamped(to: Self.minWidth, Self.maxWidth) }
+        let savedSidebar = CGFloat(UserDefaults.standard.double(forKey: Self.sidebarWidthKey))
+        if savedSidebar > 0 {
+            sidebarWidth = savedSidebar.clamped(to: Self.sidebarMinWidth, Self.sidebarMaxWidth)
+        }
+
+        let savedCompanion = CGFloat(UserDefaults.standard.double(forKey: Self.companionWidthKey))
+        if savedCompanion > 0 {
+            companionWidth = max(Self.companionMinWidth, savedCompanion)
+            toolPaneState.width = companionWidth
+        }
     }
 
     override func viewDidLayout() {
@@ -52,57 +81,128 @@ final class RootSplitViewController: NSViewController {
         updateLayout()
     }
 
-    // MARK: - Layout
+    private func resolvedCompanionWidth(given availableWidth: CGFloat) -> CGFloat {
+        guard toolPaneState.isVisible else { return 0 }
+
+        let maxAllowed = max(0, availableWidth - 1)
+        let clampedWidth = max(Self.companionMinWidth, companionWidth)
+        return min(clampedWidth, maxAllowed)
+    }
 
     private func updateLayout() {
-        let b = view.bounds
-        let sw: CGFloat = collapsed ? 0 : sidebarWidth
-        let dw: CGFloat = collapsed ? 0 : 1
+        let bounds = view.bounds
+        let sidebarWidth = collapsed ? 0 : self.sidebarWidth
+        let sidebarDividerWidth: CGFloat = collapsed ? 0 : 1
+        let availableWidth = bounds.width - sidebarWidth - sidebarDividerWidth
+        let companionVisible = toolPaneState.isVisible
+        let companionDividerWidth: CGFloat = companionVisible ? 1 : 0
 
-        sidebarContainer.frame = NSRect(x: 0, y: 0, width: sw, height: b.height)
-        dividerView.frame = NSRect(x: sw, y: 0, width: dw, height: b.height)
-        contentContainer.frame = NSRect(x: sw + dw, y: 0, width: b.width - sw - dw, height: b.height)
+        let resolvedCompanionWidth = resolvedCompanionWidth(given: availableWidth)
+        let contentWidth = max(0, availableWidth - companionDividerWidth - resolvedCompanionWidth)
+
+        sidebarContainer.frame = NSRect(x: 0, y: 0, width: sidebarWidth, height: bounds.height)
+        sidebarDividerView.frame = NSRect(x: sidebarWidth, y: 0, width: sidebarDividerWidth, height: bounds.height)
+        contentContainer.frame = NSRect(x: sidebarWidth + sidebarDividerWidth, y: 0, width: contentWidth, height: bounds.height)
+        companionDividerView.frame = NSRect(
+            x: sidebarWidth + sidebarDividerWidth + contentWidth,
+            y: 0,
+            width: companionDividerWidth,
+            height: bounds.height
+        )
+        companionContainer.frame = NSRect(
+            x: sidebarWidth + sidebarDividerWidth + contentWidth + companionDividerWidth,
+            y: 0,
+            width: resolvedCompanionWidth,
+            height: bounds.height
+        )
+
         sidebarContainer.isHidden = collapsed
-        dividerView.isHidden = collapsed
+        sidebarDividerView.isHidden = collapsed
+        contentContainer.isHidden = false
+        companionContainer.isHidden = !companionVisible
+        companionDividerView.isHidden = !companionVisible
 
         view.discardCursorRects()
         if !collapsed {
-            let center = sw + dw / 2
-            let rect = NSRect(x: center - Self.hitWidth / 2, y: 0, width: Self.hitWidth, height: b.height)
-            view.addCursorRect(rect, cursor: .resizeLeftRight)
+            let sidebarCenter = sidebarWidth + sidebarDividerWidth / 2
+            let sidebarRect = NSRect(
+                x: sidebarCenter - Self.dividerHitWidth / 2,
+                y: 0,
+                width: Self.dividerHitWidth,
+                height: bounds.height
+            )
+            view.addCursorRect(sidebarRect, cursor: .resizeLeftRight)
+        }
+
+        if companionVisible {
+            let companionCenter = sidebarWidth + sidebarDividerWidth + contentWidth + companionDividerWidth / 2
+            let companionRect = NSRect(
+                x: companionCenter - Self.dividerHitWidth / 2,
+                y: 0,
+                width: Self.dividerHitWidth,
+                height: bounds.height
+            )
+            view.addCursorRect(companionRect, cursor: .resizeLeftRight)
         }
     }
 
-    // MARK: - Divider drag
-
-    private func hitDivider(_ event: NSEvent) -> Bool {
-        guard !collapsed else { return false }
+    private func hitDragTarget(_ event: NSEvent) -> DividerDragTarget? {
         let x = view.convert(event.locationInWindow, from: nil).x
-        return abs(x - sidebarWidth) <= Self.hitWidth / 2
+        if !collapsed, abs(x - sidebarWidth) <= Self.dividerHitWidth / 2 {
+            return .sidebar
+        }
+
+        guard toolPaneState.isVisible else { return nil }
+        let companionDividerX = companionContainer.frame.minX
+        if abs(x - companionDividerX) <= Self.dividerHitWidth / 2 {
+            return .companion
+        }
+        return nil
     }
 
     override func mouseDown(with event: NSEvent) {
-        if hitDivider(event) { isDragging = true; NSCursor.resizeLeftRight.push() }
-        else { super.mouseDown(with: event) }
+        if let target = hitDragTarget(event) {
+            dragTarget = target
+            NSCursor.resizeLeftRight.push()
+        } else {
+            super.mouseDown(with: event)
+        }
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard isDragging else { super.mouseDragged(with: event); return }
-        sidebarWidth = view.convert(event.locationInWindow, from: nil).x
-            .clamped(to: Self.minWidth, Self.maxWidth)
+        guard let dragTarget else {
+            super.mouseDragged(with: event)
+            return
+        }
+
+        let x = view.convert(event.locationInWindow, from: nil).x
+        switch dragTarget {
+        case .sidebar:
+            sidebarWidth = x.clamped(to: Self.sidebarMinWidth, Self.sidebarMaxWidth)
+        case .companion:
+            let availableWidth = view.bounds.width - sidebarVisibleWidth - sidebarDividerVisibleWidth
+            let rawWidth = view.bounds.width - x - 1
+            let maxAllowed = max(0, availableWidth - 1)
+            companionWidth = rawWidth.clamped(to: Self.companionMinWidth, maxAllowed)
+            toolPaneState.width = companionWidth
+            onCompanionWidthChanged?(companionWidth)
+        }
         updateLayout()
     }
 
     override func mouseUp(with event: NSEvent) {
-        guard isDragging else { super.mouseUp(with: event); return }
-        isDragging = false
+        guard dragTarget != nil else {
+            super.mouseUp(with: event)
+            return
+        }
+        dragTarget = nil
         NSCursor.pop()
         saveSidebarWidth()
+        saveCompanionWidth()
     }
 
-    // MARK: - Public
-
     var isSidebarCollapsed: Bool { collapsed }
+    var currentCompanionWidth: CGFloat { companionWidth }
 
     func toggleSidebar() {
         NSAnimationContext.runAnimationGroup { ctx in
@@ -113,9 +213,20 @@ final class RootSplitViewController: NSViewController {
         }
     }
 
+    func updateCompanionPane(state: CompanionToolPaneState) {
+        toolPaneState = state
+        companionWidth = max(Self.companionMinWidth, state.width)
+        updateLayout()
+    }
+
     func saveSidebarWidth() {
         guard !collapsed, sidebarWidth > 0 else { return }
-        UserDefaults.standard.set(Double(sidebarWidth), forKey: Self.widthKey)
+        UserDefaults.standard.set(Double(sidebarWidth), forKey: Self.sidebarWidthKey)
+    }
+
+    func saveCompanionWidth() {
+        guard toolPaneState.isVisible, companionWidth > 0 else { return }
+        UserDefaults.standard.set(Double(companionWidth), forKey: Self.companionWidthKey)
     }
 
     func replaceContentController(with controller: NSViewController) {
@@ -126,7 +237,13 @@ final class RootSplitViewController: NSViewController {
         updateLayout()
     }
 
-    // MARK: - Helpers
+    private var sidebarVisibleWidth: CGFloat {
+        collapsed ? 0 : sidebarWidth
+    }
+
+    private var sidebarDividerVisibleWidth: CGFloat {
+        collapsed ? 0 : 1
+    }
 
     private func embed(_ vc: NSViewController, in container: NSView) {
         addChild(vc)
@@ -144,11 +261,5 @@ final class RootSplitViewController: NSViewController {
 private extension CGFloat {
     func clamped(to minVal: CGFloat, _ maxVal: CGFloat) -> CGFloat {
         Swift.min(Swift.max(self, minVal), maxVal)
-    }
-}
-
-private extension Double {
-    func clamped(to minVal: CGFloat, _ maxVal: CGFloat) -> CGFloat {
-        CGFloat(self).clamped(to: minVal, maxVal)
     }
 }

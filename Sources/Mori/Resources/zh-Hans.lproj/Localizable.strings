@@ -45,6 +45,7 @@
 "Failed to create window" = "创建窗口失败";
 "Failed to delete worktree files" = "删除工作树文件失败";
 "Failed to open %@" = "打开 %@ 失败";
+"Failed to create embedded terminal surface." = "创建嵌入式终端界面失败。";
 "Failed to split pane" = "拆分窗格失败";
 "Hide Mori" = "隐藏 Mori";
 "in use" = "使用中";
@@ -60,6 +61,12 @@
 "No active session" = "无活跃会话";
 "now" = "刚刚";
 "OK" = "好";
+"Files" = "文件";
+"Git" = "Git";
+"Open Files Companion Pane (⌘E)" = "打开文件工具面板 (⌘E)";
+"Open Git Companion Pane (⌘G)" = "打开 Git 工具面板 (⌘G)";
+"Split the current pane to the right" = "向右拆分当前窗格";
+"Split the current pane downward" = "向下拆分当前窗格";
 "Open Lazygit" = "打开 Lazygit";
 "Open Project" = "打开项目";
 "Open Project..." = "打开项目...";

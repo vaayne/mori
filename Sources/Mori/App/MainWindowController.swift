@@ -10,9 +10,17 @@ final class MainWindowController: NSWindowController {
     private enum ToolbarID {
         static let main = NSToolbar.Identifier("MoriMainToolbar")
         static let toggleSidebar = NSToolbarItem.Identifier("toggleSidebar")
+        static let files = NSToolbarItem.Identifier("openFiles")
+        static let git = NSToolbarItem.Identifier("openGit")
+        static let splitRight = NSToolbarItem.Identifier("splitRight")
+        static let splitDown = NSToolbarItem.Identifier("splitDown")
     }
 
     var onToggleSidebar: (() -> Void)?
+    var onToggleFiles: (() -> Void)?
+    var onToggleGit: (() -> Void)?
+    var onSplitRight: (() -> Void)?
+    var onSplitDown: (() -> Void)?
     var onShowCreateWorktreePanel: (() -> Void)?
 
     /// The hosting view for the update pill, overlaid on the titlebar.
@@ -110,6 +118,22 @@ final class MainWindowController: NSWindowController {
     @objc private func toggleSidebarClicked() {
         onToggleSidebar?()
     }
+
+    @objc private func toggleFilesClicked() {
+        onToggleFiles?()
+    }
+
+    @objc private func toggleGitClicked() {
+        onToggleGit?()
+    }
+
+    @objc private func splitRightClicked() {
+        onSplitRight?()
+    }
+
+    @objc private func splitDownClicked() {
+        onSplitDown?()
+    }
 }
 
 // MARK: - NSToolbarDelegate
@@ -135,11 +159,25 @@ extension MainWindowController: NSWindowDelegate {
 extension MainWindowController: NSToolbarDelegate {
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [ToolbarID.toggleSidebar, .flexibleSpace]
+        [
+            ToolbarID.toggleSidebar,
+            .flexibleSpace,
+            ToolbarID.files,
+            ToolbarID.git,
+            ToolbarID.splitRight,
+            ToolbarID.splitDown,
+        ]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [ToolbarID.toggleSidebar, .flexibleSpace]
+        [
+            ToolbarID.toggleSidebar,
+            ToolbarID.files,
+            ToolbarID.git,
+            ToolbarID.splitRight,
+            ToolbarID.splitDown,
+            .flexibleSpace,
+        ]
     }
 
     func toolbar(
@@ -147,14 +185,58 @@ extension MainWindowController: NSToolbarDelegate {
         itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
         willBeInsertedIntoToolbar flag: Bool
     ) -> NSToolbarItem? {
-        guard itemIdentifier == ToolbarID.toggleSidebar else { return nil }
-        let item = NSToolbarItem(itemIdentifier: ToolbarID.toggleSidebar)
-        item.label = .localized("Toggle Sidebar")
-        item.paletteLabel = .localized("Toggle Sidebar")
-        item.toolTip = .localized("Show or hide the sidebar (⌘0)")
-        item.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: .localized("Toggle Sidebar"))
-        item.target = self
-        item.action = #selector(toggleSidebarClicked)
-        return item
+        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+        let compactSplitSymbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
+
+        switch itemIdentifier {
+        case ToolbarID.toggleSidebar:
+            item.label = .localized("Toggle Sidebar")
+            item.paletteLabel = .localized("Toggle Sidebar")
+            item.toolTip = .localized("Show or hide the sidebar (⌘0)")
+            item.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: .localized("Toggle Sidebar"))
+            item.target = self
+            item.action = #selector(toggleSidebarClicked)
+            return item
+        case ToolbarID.files:
+            item.label = .localized("Files")
+            item.paletteLabel = .localized("Files")
+            item.toolTip = .localized("Open Files Companion Pane (⌘E)")
+            item.image = NSImage(systemSymbolName: "folder", accessibilityDescription: .localized("Files"))
+            item.target = self
+            item.action = #selector(toggleFilesClicked)
+            return item
+        case ToolbarID.git:
+            item.label = .localized("Git")
+            item.paletteLabel = .localized("Git")
+            item.toolTip = .localized("Open Git Companion Pane (⌘G)")
+            item.image = NSImage(systemSymbolName: "point.topleft.down.curvedto.point.bottomright.up", accessibilityDescription: .localized("Git"))
+            item.target = self
+            item.action = #selector(toggleGitClicked)
+            return item
+        case ToolbarID.splitRight:
+            item.label = .localized("Split Right")
+            item.paletteLabel = .localized("Split Right")
+            item.toolTip = .localized("Split the current pane to the right")
+            item.image = NSImage(
+                systemSymbolName: "rectangle.split.2x1",
+                accessibilityDescription: .localized("Split Right")
+            )?.withSymbolConfiguration(compactSplitSymbolConfiguration)
+            item.target = self
+            item.action = #selector(splitRightClicked)
+            return item
+        case ToolbarID.splitDown:
+            item.label = .localized("Split Down")
+            item.paletteLabel = .localized("Split Down")
+            item.toolTip = .localized("Split the current pane downward")
+            item.image = NSImage(
+                systemSymbolName: "rectangle.split.1x2",
+                accessibilityDescription: .localized("Split Down")
+            )?.withSymbolConfiguration(compactSplitSymbolConfiguration)
+            item.target = self
+            item.action = #selector(splitDownClicked)
+            return item
+        default:
+            return nil
+        }
     }
 }
