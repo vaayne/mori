@@ -82,7 +82,7 @@ struct SidebarFooterView: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 13))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(MoriTokens.Color.muted)
         }
         .buttonStyle(.plain)
