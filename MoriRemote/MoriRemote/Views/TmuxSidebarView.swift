@@ -1,41 +1,58 @@
 #if os(iOS)
 import SwiftUI
 
-/// Slide-over sidebar showing server info and tmux sessions/windows.
-///
-/// Layout matches the design mockup:
-/// - Server card at top (name, status, Switch Host / Disconnect)
-/// - Flat session labels (uppercase, always expanded) with windows
-/// - Footer with + Window / + Session buttons
-/// - Long-press context menus on sessions and windows
+enum TmuxSidebarPresentation {
+    case overlay
+    case persistent
+
+    var showsDismissButton: Bool {
+        self == .overlay
+    }
+
+    var dismissesAfterSelection: Bool {
+        self == .overlay
+    }
+}
+
+/// Sidebar showing the active server and tmux sessions/windows.
 struct TmuxSidebarView: View {
     @Environment(ShellCoordinator.self) private var coordinator
 
-    let onDismiss: () -> Void
+    let presentation: TmuxSidebarPresentation
+    let onDismiss: (() -> Void)?
     let onDisconnect: () -> Void
-    var onSwitchHost: (() -> Void)?
+    let onSwitchHost: () -> Void
 
     @State private var renameTarget: TmuxSession?
     @State private var renameText = ""
 
     var body: some View {
         VStack(spacing: 0) {
-            ServerCardView(
-                server: coordinator.activeServer,
-                onSwitchHost: { onSwitchHost?() },
-                onDisconnect: {
-                    onDismiss()
-                    onDisconnect()
-                },
-                onDismiss: onDismiss
-            )
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    ServerCardView(
+                        server: coordinator.activeServer,
+                        showsDismissButton: onDismiss != nil,
+                        onSwitchHost: onSwitchHost,
+                        onDisconnect: onDisconnect,
+                        onDismiss: { onDismiss?() }
+                    )
 
-            divider
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(String(localized: "Session"))
+                            .moriSectionHeaderStyle()
+                            .padding(.horizontal, 16)
 
-            if coordinator.tmuxSessions.isEmpty {
-                emptyState
-            } else {
-                sessionList
+                        if coordinator.tmuxSessions.isEmpty {
+                            emptyState
+                        } else {
+                            sessionList
+                        }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 12)
+                .padding(.bottom, 18)
             }
 
             if !coordinator.tmuxSessions.isEmpty {
@@ -46,11 +63,11 @@ struct TmuxSidebarView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(red: 0.07, green: 0.07, blue: 0.10))
-        .alert("Rename Session", isPresented: showRenameAlert) {
-            TextField("Session name", text: $renameText)
-            Button("Cancel", role: .cancel) { }
-            Button("Rename") {
+        .background(Theme.sidebarBg)
+        .alert(String(localized: "Rename Session"), isPresented: showRenameAlert) {
+            TextField(String(localized: "Session name"), text: $renameText)
+            Button(String(localized: "Cancel"), role: .cancel) { }
+            Button(String(localized: "Rename")) {
                 if let session = renameTarget, !renameText.isEmpty {
                     coordinator.renameTmuxSession(session.name, to: renameText)
                 }
@@ -58,28 +75,19 @@ struct TmuxSidebarView: View {
         }
     }
 
-    // MARK: - Subviews
-
-    private var divider: some View {
-        Rectangle()
-            .fill(Color.white.opacity(0.04))
-            .frame(height: 1)
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-    }
-
     private var sessionList: some View {
-        ScrollView {
-            LazyVStack(spacing: 1) {
-                ForEach(coordinator.tmuxSessions) { session in
-                    let isActive = session.name == coordinator.tmuxActiveSession?.name
+        LazyVStack(spacing: 10) {
+            ForEach(coordinator.tmuxSessions) { session in
+                let isActive = session.name == coordinator.tmuxActiveSession?.name
+                let isActiveSession = session.name == coordinator.tmuxActiveSession?.name
 
+                VStack(spacing: 6) {
                     TmuxSessionHeader(
                         session: session,
                         isActive: isActive,
                         onSwitch: {
                             coordinator.switchTmuxSession(session.name)
-                            onDismiss()
+                            dismissIfNeeded()
                         },
                         onRename: {
                             renameTarget = session
@@ -90,88 +98,85 @@ struct TmuxSidebarView: View {
                         }
                     )
 
-                    let isActiveSession = session.name == coordinator.tmuxActiveSession?.name
-
-                    ForEach(session.windows) { window in
-                        TmuxWindowRow(
-                            window: window,
-                            isActiveSession: isActiveSession,
-                            onSelect: {
-                                coordinator.selectTmuxWindow(
-                                    session: session.name,
-                                    windowIndex: window.index
-                                )
-                                onDismiss()
-                            },
-                            onNewAfter: {
-                                coordinator.newTmuxWindowAfter(
-                                    session: session.name,
-                                    windowIndex: window.index
-                                )
-                            },
-                            onClose: {
-                                coordinator.closeTmuxWindow(
-                                    session: session.name,
-                                    windowIndex: window.index
-                                )
-                            }
-                        )
+                    VStack(spacing: 4) {
+                        ForEach(session.windows) { window in
+                            TmuxWindowRow(
+                                window: window,
+                                isActiveSession: isActiveSession,
+                                onSelect: {
+                                    coordinator.selectTmuxWindow(
+                                        session: session.name,
+                                        windowIndex: window.index
+                                    )
+                                    dismissIfNeeded()
+                                },
+                                onNewAfter: {
+                                    coordinator.newTmuxWindowAfter(
+                                        session: session.name,
+                                        windowIndex: window.index
+                                    )
+                                },
+                                onClose: {
+                                    coordinator.closeTmuxWindow(
+                                        session: session.name,
+                                        windowIndex: window.index
+                                    )
+                                }
+                            )
+                        }
                     }
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
                 }
+                .cardStyle(padding: 0)
             }
-            .padding(.top, 4)
         }
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Spacer()
-
+        VStack(alignment: .center, spacing: 10) {
             Image(systemName: "square.grid.2x2")
-                .font(.system(size: 28))
-                .foregroundStyle(Color.white.opacity(0.1))
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
 
-            Text("No tmux sessions")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.25))
+            Text(String(localized: "No tmux sessions"))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
 
-            Text("Start tmux to manage\nwindows from here.")
+            Text(String(localized: "Start tmux to manage\nwindows from here."))
                 .font(.system(size: 12))
-                .foregroundStyle(Color.white.opacity(0.15))
+                .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
 
             Button {
                 coordinator.newTmuxSession()
             } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 11))
-                    Text("New Session")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                .foregroundStyle(Theme.accent)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
-                .background(Theme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Theme.accent.opacity(0.15), lineWidth: 1)
-                )
+                Label(String(localized: "New Session"), systemImage: "plus")
             }
-            .padding(.top, 8)
-
-            Spacer()
+            .buttonStyle(Theme.SecondaryButtonStyle(
+                foreground: Theme.accent,
+                background: Theme.accentSoft,
+                border: Theme.accentBorder
+            ))
+            .frame(maxWidth: 180)
+            .padding(.top, 2)
         }
-        .padding(.horizontal, 24)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 26)
+        .cardStyle(padding: 20)
     }
-
-    // MARK: - Rename Alert Binding
 
     private var showRenameAlert: Binding<Bool> {
         Binding(
             get: { renameTarget != nil },
             set: { if !$0 { renameTarget = nil } }
         )
+    }
+
+    private func dismissIfNeeded() {
+        guard presentation.dismissesAfterSelection else { return }
+        onDismiss?()
     }
 }
 #endif

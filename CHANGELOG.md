@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- **MoriRemote**: add adaptive iPad layouts with split-view server browsing while disconnected and a persistent two-pane workspace while connected
+- **MoriRemote**: polish iPhone and iPad UI to follow the shared Mac-first `DESIGN.md` language with denser server rows, flatter tmux sidebars, compact terminal chrome, and normalized dark semantic styling
+- **MoriRemote**: restyle the terminal accessory bar and key customization sheet with compact Mori tokens, semantic accent usage, and localized tmux actions
+- **MoriRemote**: polish terminal connection microstates with richer iPad connection/failure detail states and a calmer in-terminal shell preparation overlay
+
+### 🐛 Bug Fixes
+
+- **MoriRemote**: make the regular-width terminal sidebar collapsible again and replace the crashing iPad keyboard-accessory tmux menu with a stable confirmation dialog
+- **MoriRemote**: move compact terminal navigation into the accessory row by adding a back control beside tmux, keeping the terminal viewport free of extra chrome
+- **MoriRemote**: harden terminal session lifecycle handling so disconnects, host switches, stale shell callbacks, and accessory-bar reuse no longer race into broken shell/tmux state
+- **MoriRemote**: defer accessory-bar navigation and tmux/customization presentation until after the keyboard responder cycle, preventing crashes when tapping Back or tmux actions
+- **MoriRemote**: preserve reconnect reliability after Back/disconnect by preventing stale disconnect tasks from overwriting a newer SSH connection attempt
+- **MoriRemote**: stop the server list from hanging in "Connecting…" forever by surfacing missing-password and SSH timeout failures as explicit errors
+
 ### ♻️ Changes
 
 - Remove legacy workflow-status and sidebar-mode code paths after the unified sidebar redesign, including the `mori status` CLI command and manual sidebar status controls

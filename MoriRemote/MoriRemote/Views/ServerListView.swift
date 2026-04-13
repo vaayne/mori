@@ -12,34 +12,44 @@ struct ServerListView: View {
             ZStack {
                 Theme.bg.ignoresSafeArea()
 
-                if store.servers.isEmpty {
-                    emptyState
-                } else {
-                    serverList
-                }
+                ServerListContentView(
+                    servers: store.servers,
+                    selectedServerID: nil,
+                    connectingServerID: connectingServerID,
+                    onSelect: connectToServer,
+                    onAdd: { showingAddSheet = true },
+                    onEdit: { editingServer = $0 },
+                    onDelete: deleteServer
+                )
             }
-            .navigationTitle("Servers")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationTitle(String(localized: "Servers"))
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         showingAddSheet = true
                     } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(Theme.accent)
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Theme.textPrimary)
+                            .frame(width: 32, height: 32)
+                            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.rowRadius))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: Theme.rowRadius)
+                                    .strokeBorder(Theme.accentBorder, lineWidth: 1)
+                            )
                     }
                 }
             }
             .sheet(isPresented: $showingAddSheet) {
                 ServerFormView(mode: .add) { server in
-                    store.add(server)
+                    addServer(server)
                 }
             }
             .sheet(item: $editingServer) { server in
                 ServerFormView(mode: .edit(server)) { updated in
-                    store.update(updated)
+                    updateServer(updated)
                 }
             }
             .overlay(alignment: .bottom) {
@@ -48,7 +58,7 @@ struct ServerListView: View {
                         coordinator.lastError = nil
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, Theme.contentInset)
                     .padding(.bottom, 8)
                 }
             }
@@ -56,66 +66,112 @@ struct ServerListView: View {
         .preferredColorScheme(.dark)
     }
 
-    // MARK: - Empty State
-
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "server.rack")
-                .font(.system(size: 48))
-                .foregroundStyle(Theme.textTertiary)
-
-            Text("No Servers")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Theme.textPrimary)
-
-            Text("Add a server to get started.")
-                .font(.subheadline)
-                .foregroundStyle(Theme.textSecondary)
-
-            Button {
-                showingAddSheet = true
-            } label: {
-                Label("Add Server", systemImage: "plus")
-            }
-            .buttonStyle(Theme.PrimaryButtonStyle())
-            .frame(maxWidth: 220)
-            .padding(.top, 8)
-        }
+    private var connectingServerID: Server.ID? {
+        coordinator.state == .connecting ? coordinator.activeServer?.id : nil
     }
-
-    // MARK: - Server List
-
-    private var serverList: some View {
-        ScrollView {
-            LazyVStack(spacing: 10) {
-                ForEach(store.servers) { server in
-                    ServerRow(
-                        server: server,
-                        isConnecting: coordinator.state == .connecting && coordinator.activeServer?.id == server.id,
-                        onTap: { connectToServer(server) },
-                        onEdit: { editingServer = server },
-                        onDelete: { store.delete(server) }
-                    )
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
-        }
-    }
-
-    // MARK: - Connect
 
     private func connectToServer(_ server: Server) {
         guard coordinator.state == .disconnected else { return }
         Task { await coordinator.connect(server: server) }
     }
+
+    private func addServer(_ server: Server) {
+        coordinator.lastError = nil
+        store.add(server)
+    }
+
+    private func updateServer(_ server: Server) {
+        if coordinator.activeServer?.id == server.id {
+            coordinator.lastError = nil
+        }
+        store.update(server)
+    }
+
+    private func deleteServer(_ server: Server) {
+        if coordinator.activeServer?.id == server.id {
+            coordinator.lastError = nil
+        }
+        store.delete(server)
+    }
 }
 
-// MARK: - Server Row
+struct ServerListContentView: View {
+    let servers: [Server]
+    let selectedServerID: Server.ID?
+    let connectingServerID: Server.ID?
+    let onSelect: (Server) -> Void
+    let onAdd: () -> Void
+    let onEdit: (Server) -> Void
+    let onDelete: (Server) -> Void
+
+    var body: some View {
+        if servers.isEmpty {
+            ServerListEmptyState(onAdd: onAdd)
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
+                    Text(String(localized: "Servers"))
+                        .moriSectionHeaderStyle()
+                        .padding(.horizontal, Theme.contentInset)
+
+                    LazyVStack(spacing: Theme.rowSpacing) {
+                        ForEach(servers) { server in
+                            ServerRow(
+                                server: server,
+                                isSelected: server.id == selectedServerID,
+                                isConnecting: server.id == connectingServerID,
+                                onTap: { onSelect(server) },
+                                onEdit: { onEdit(server) },
+                                onDelete: { onDelete(server) }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, Theme.contentInset)
+                }
+                .padding(.top, 12)
+                .padding(.bottom, 32)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+}
+
+private struct ServerListEmptyState: View {
+    let onAdd: () -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Spacer(minLength: 40)
+
+            Image(systemName: "server.rack")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+
+            Text(String(localized: "No Servers"))
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+
+            Text(String(localized: "Add a server to get started."))
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+
+            Button(action: onAdd) {
+                Label(String(localized: "Add Server"), systemImage: "plus")
+            }
+            .buttonStyle(Theme.PrimaryButtonStyle())
+            .frame(maxWidth: 220)
+            .padding(.top, 4)
+
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+    }
+}
 
 private struct ServerRow: View {
     let server: Server
+    let isSelected: Bool
     let isConnecting: Bool
     let onTap: () -> Void
     let onEdit: () -> Void
@@ -125,57 +181,71 @@ private struct ServerRow: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 14) {
+            HStack(spacing: 12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Theme.accent.opacity(0.12))
-                        .frame(width: 42, height: 42)
+                    RoundedRectangle(cornerRadius: Theme.rowRadius)
+                        .fill(isSelected ? Theme.accentSoft : Theme.mutedSurface)
+                        .frame(width: 36, height: 36)
 
                     if isConnecting {
                         ProgressView()
                             .tint(Theme.accent)
+                            .scaleEffect(0.9)
                     } else {
                         Image(systemName: "terminal")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(Theme.accent)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(isSelected ? Theme.accent : Theme.textSecondary)
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(server.displayName)
-                        .font(.body.weight(.medium))
+                        .font(Theme.rowTitleFont)
                         .foregroundStyle(Theme.textPrimary)
                         .lineLimit(1)
 
                     Text(server.subtitle)
-                        .font(.caption)
+                        .font(Theme.monoCaptionFont)
                         .foregroundStyle(Theme.textSecondary)
                         .lineLimit(1)
                 }
 
-                Spacer()
+                Spacer(minLength: 8)
 
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Theme.textTertiary)
+                if isConnecting {
+                    Text(String(localized: "Connecting…"))
+                        .font(Theme.shortcutFont)
+                        .foregroundStyle(Theme.accent)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
+                        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 5))
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Theme.textTertiary)
+                }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .rowSurfaceStyle(selected: isSelected)
         }
-        .cardStyle()
+        .buttonStyle(.plain)
         .contextMenu {
             Button { onEdit() } label: {
-                Label("Edit", systemImage: "pencil")
+                Label(String(localized: "Edit"), systemImage: "pencil")
             }
             Button(role: .destructive) { showDeleteConfirm = true } label: {
-                Label("Delete", systemImage: "trash")
+                Label(String(localized: "Delete"), systemImage: "trash")
             }
         }
-        .confirmationDialog("Delete \(server.displayName)?", isPresented: $showDeleteConfirm) {
-            Button("Delete", role: .destructive) { onDelete() }
+        .confirmationDialog(String(
+            format: String(localized: "Delete %@?"),
+            server.displayName
+        ), isPresented: $showDeleteConfirm) {
+            Button(String(localized: "Delete"), role: .destructive) { onDelete() }
         }
     }
 }
-
-// MARK: - Error Banner
 
 struct ErrorBanner: View {
     let message: String
@@ -184,26 +254,26 @@ struct ErrorBanner: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.yellow)
+                .foregroundStyle(Theme.warning)
 
             Text(message)
-                .font(.subheadline)
+                .font(.system(size: 13))
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(2)
 
-            Spacer()
+            Spacer(minLength: 8)
 
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
-                    .font(.caption.weight(.bold))
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(Theme.textSecondary)
             }
         }
-        .padding(14)
-        .background(Color(red: 0.15, green: 0.12, blue: 0.08), in: RoundedRectangle(cornerRadius: 12))
+        .padding(12)
+        .background(Color(red: 0.18, green: 0.14, blue: 0.08), in: RoundedRectangle(cornerRadius: Theme.cardRadius))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color.yellow.opacity(0.25), lineWidth: 1)
+            RoundedRectangle(cornerRadius: Theme.cardRadius)
+                .strokeBorder(Theme.warning.opacity(0.24), lineWidth: 1)
         )
     }
 }

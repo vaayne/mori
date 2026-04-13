@@ -2,16 +2,11 @@
 import SwiftUI
 
 /// Container that adds a slide-from-left sidebar overlay to terminal content.
-///
-/// The sidebar can be opened by:
-/// - Swiping from the left edge of the content area
-/// - Tapping the sidebar button
-/// - Setting `isOpen` to true
 struct SidebarContainer<Sidebar: View, Content: View>: View {
     @Binding var isOpen: Bool
     let content: Content
 
-    private let sidebarWidth: CGFloat = 280
+    private let sidebarWidth: CGFloat = 300
 
     let sidebar: () -> Sidebar
 
@@ -25,14 +20,12 @@ struct SidebarContainer<Sidebar: View, Content: View>: View {
     @GestureState private var isDragging = false
 
     var body: some View {
-        GeometryReader { geo in
+        GeometryReader { _ in
             ZStack(alignment: .leading) {
-                // Main content — carries the edge-open gesture
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .gesture(edgeOpenGesture)
 
-                // Dimming overlay — carries the close gesture
                 if isOpen || isDragging {
                     Color.black
                         .opacity(dimmingOpacity)
@@ -42,7 +35,6 @@ struct SidebarContainer<Sidebar: View, Content: View>: View {
                         .allowsHitTesting(isOpen)
                 }
 
-                // Sidebar panel — NO gesture, so ScrollView works freely
                 if isOpen || isDragging {
                     sidebarPanel
                         .frame(width: sidebarWidth)
@@ -53,24 +45,24 @@ struct SidebarContainer<Sidebar: View, Content: View>: View {
         }
     }
 
-    // MARK: - Sidebar Panel
-
     private var sidebarPanel: some View {
         sidebar()
             .clipShape(
                 UnevenRoundedRectangle(
                     topLeadingRadius: 0,
                     bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 16,
-                    topTrailingRadius: 16
+                    bottomTrailingRadius: 12,
+                    topTrailingRadius: 12
                 )
             )
-            .shadow(color: .black.opacity(0.5), radius: 20, x: 5)
+            .overlay(alignment: .trailing) {
+                Rectangle()
+                    .fill(Theme.divider)
+                    .frame(width: 1)
+            }
+            .shadow(color: .black.opacity(0.28), radius: 18, x: 8)
     }
 
-    // MARK: - Gestures
-
-    /// Edge swipe from left to open the sidebar (only on content area).
     private var edgeOpenGesture: some Gesture {
         DragGesture(minimumDistance: 15, coordinateSpace: .global)
             .updating($isDragging) { _, state, _ in
@@ -93,7 +85,6 @@ struct SidebarContainer<Sidebar: View, Content: View>: View {
             }
     }
 
-    /// Swipe left on dimming overlay to close the sidebar.
     private var closeGesture: some Gesture {
         DragGesture(minimumDistance: 15, coordinateSpace: .global)
             .onChanged { value in
@@ -113,30 +104,24 @@ struct SidebarContainer<Sidebar: View, Content: View>: View {
             }
     }
 
-    // MARK: - Animation Helpers
-
     private var sidebarOffset: CGFloat {
-        if isOpen {
-            return dragOffset
-        } else {
-            return dragOffset
-        }
+        dragOffset
     }
 
     private var dimmingOpacity: Double {
         let progress = 1.0 + Double(dragOffset) / Double(sidebarWidth)
-        return 0.4 * max(0, min(1, progress))
+        return 0.34 * max(0, min(1, progress))
     }
 
     private func open() {
-        withAnimation(.spring(duration: 0.3, bounce: 0.0)) {
+        withAnimation(.easeOut(duration: 0.18)) {
             isOpen = true
             dragOffset = 0
         }
     }
 
     private func close() {
-        withAnimation(.spring(duration: 0.25, bounce: 0.0)) {
+        withAnimation(.easeOut(duration: 0.16)) {
             isOpen = false
             dragOffset = 0
         }

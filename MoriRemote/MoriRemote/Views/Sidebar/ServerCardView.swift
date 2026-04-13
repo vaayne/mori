@@ -1,113 +1,110 @@
 #if os(iOS)
 import SwiftUI
 
-/// Server info card at the top of the tmux sidebar.
-///
-/// Shows server avatar, name, user@host, connection status dot,
-/// and action buttons for "Switch Host" and "Disconnect".
+/// Server summary block at the top of the tmux sidebar.
 struct ServerCardView: View {
     let server: Server?
+    let showsDismissButton: Bool
     let onSwitchHost: () -> Void
     let onDisconnect: () -> Void
     let onDismiss: () -> Void
 
     var body: some View {
-        VStack(spacing: 10) {
-            topRow
+        VStack(alignment: .leading, spacing: 14) {
+            header
             actionButtons
         }
-        .padding(12)
-        .background(Color.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
-        )
-        .padding(.horizontal, 10)
-        .padding(.top, 12)
+        .cardStyle(padding: 16)
     }
 
-    // MARK: - Top Row
-
-    private var topRow: some View {
-        HStack(spacing: 10) {
-            // Avatar
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Theme.accent.opacity(0.1))
-                .frame(width: 36, height: 36)
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            RoundedRectangle(cornerRadius: Theme.cardRadius)
+                .fill(server != nil ? Theme.accentSoft : Theme.mutedSurface)
+                .frame(width: 38, height: 38)
                 .overlay {
-                    Text("🖥")
-                        .font(.system(size: 16))
+                    Image(systemName: "server.rack")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(server != nil ? Theme.accent : Theme.textSecondary)
                 }
 
-            // Server info
-            VStack(alignment: .leading, spacing: 2) {
-                Text(server?.displayName ?? "Not Connected")
-                    .font(.system(size: 14, weight: .semibold))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(String(localized: "Servers"))
+                    .moriSectionHeaderStyle()
+
+                Text(server?.displayName ?? String(localized: "Not Connected"))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
                     .lineLimit(1)
 
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(server != nil ? Theme.accent : Theme.destructive)
-                        .frame(width: 6, height: 6)
-
-                    Text(server?.subtitle ?? "—")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textTertiary)
-                        .lineLimit(1)
-                }
+                Text(server?.subtitle ?? "—")
+                    .font(Theme.monoCaptionFont)
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1)
             }
 
-            Spacer()
+            Spacer(minLength: 8)
 
-            // Close button
-            Button(action: onDismiss) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Theme.textTertiary)
-                    .frame(width: 28, height: 28)
-                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 7))
+            if showsDismissButton {
+                HStack(spacing: 8) {
+                    connectionBadge
+
+                    Button(action: onDismiss) {
+                        Image(systemName: "sidebar.left")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.textSecondary)
+                            .frame(width: 28, height: 28)
+                            .background(Theme.mutedSurface, in: RoundedRectangle(cornerRadius: 7))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 7)
+                                    .strokeBorder(Theme.cardBorder, lineWidth: 1)
+                            )
+                    }
+                }
+            } else {
+                connectionBadge
             }
         }
     }
 
-    // MARK: - Action Buttons
+    private var connectionBadge: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(server != nil ? Theme.success : Theme.destructive)
+                .frame(width: 6, height: 6)
+
+            Text(server != nil ? String(localized: "Connected") : String(localized: "Offline"))
+                .font(Theme.shortcutFont)
+                .foregroundStyle(server != nil ? Theme.success : Theme.destructive)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Theme.mutedSurface, in: RoundedRectangle(cornerRadius: 6))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(Theme.cardBorder, lineWidth: 1)
+        )
+    }
 
     private var actionButtons: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Button(action: onSwitchHost) {
-                HStack(spacing: 5) {
-                    Image(systemName: "arrow.left.arrow.right")
-                        .font(.system(size: 10))
-                    Text("Switch Host")
-                        .font(.system(size: 11, weight: .medium))
-                }
-                .foregroundStyle(Color.white.opacity(0.5))
-                .frame(maxWidth: .infinity)
-                .frame(height: 30)
-                .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 7))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7)
-                        .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-                )
+                Label(String(localized: "Switch Host"), systemImage: "arrow.left.arrow.right")
             }
+            .buttonStyle(Theme.SecondaryButtonStyle(
+                foreground: Theme.textSecondary,
+                background: Theme.mutedSurface,
+                border: Theme.cardBorder
+            ))
 
             Button(action: onDisconnect) {
-                HStack(spacing: 5) {
-                    Image(systemName: "power")
-                        .font(.system(size: 10))
-                    Text("Disconnect")
-                        .font(.system(size: 11, weight: .medium))
-                }
-                .foregroundStyle(Theme.destructive)
-                .frame(maxWidth: .infinity)
-                .frame(height: 30)
-                .background(Theme.destructive.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7)
-                        .strokeBorder(Theme.destructive.opacity(0.15), lineWidth: 1)
-                )
+                Label(String(localized: "Disconnect"), systemImage: "power")
             }
+            .buttonStyle(Theme.SecondaryButtonStyle(
+                foreground: Theme.destructive,
+                background: Theme.destructive.opacity(0.10),
+                border: Theme.destructive.opacity(0.24)
+            ))
         }
     }
 }

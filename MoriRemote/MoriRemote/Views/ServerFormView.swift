@@ -17,6 +17,7 @@ struct ServerFormView: View {
     let onSave: (Server) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @State private var name: String
     @State private var host: String
@@ -49,8 +50,8 @@ struct ServerFormView: View {
 
     private var title: String {
         switch mode {
-        case .add: return "Add Server"
-        case .edit: return "Edit Server"
+        case .add: return String(localized: "Add Server")
+        case .edit: return String(localized: "Edit Server")
         }
     }
 
@@ -62,75 +63,82 @@ struct ServerFormView: View {
             p > 0 && p <= 65535
     }
 
+    private var formMaxWidth: CGFloat {
+        horizontalSizeClass == .regular ? 560 : .infinity
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
                 Theme.bg.ignoresSafeArea()
 
                 ScrollView {
-                    VStack(spacing: 20) {
-                        // Name (optional)
-                        fieldSection("LABEL") {
-                            field("My Server", text: $name)
+                    VStack(alignment: .leading, spacing: 18) {
+                        formSummary
+
+                        fieldSection(String(localized: "LABEL")) {
+                            field(String(localized: "My Server"), text: $name)
                         }
 
-                        // Connection
-                        fieldSection("CONNECTION") {
-                            field("hostname or IP", text: $host)
+                        fieldSection(String(localized: "CONNECTION")) {
+                            field(String(localized: "hostname or IP"), text: $host)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
                                 .keyboardType(.URL)
 
-                            Divider().overlay(Theme.cardBorder)
+                            Divider().overlay(Theme.divider)
 
                             HStack(spacing: 12) {
-                                Text("Port")
+                                Text(String(localized: "Port"))
+                                    .font(.system(size: 13, weight: .medium))
                                     .foregroundStyle(Theme.textSecondary)
-                                    .font(.subheadline)
+
                                 Spacer()
-                                TextField("22", text: $port)
+
+                                TextField(String(localized: "22"), text: $port)
                                     .keyboardType(.numberPad)
                                     .multilineTextAlignment(.trailing)
-                                    .frame(width: 80)
+                                    .frame(width: 92)
+                                    .font(Theme.monoDetailFont)
                                     .foregroundStyle(Theme.textPrimary)
                             }
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 12)
                         }
 
-                        // Auth
-                        fieldSection("AUTHENTICATION") {
-                            field("username", text: $username)
+                        fieldSection(String(localized: "AUTHENTICATION")) {
+                            field(String(localized: "username"), text: $username)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
 
-                            Divider().overlay(Theme.cardBorder)
+                            Divider().overlay(Theme.divider)
 
-                            SecureField("password", text: $password)
+                            SecureField(String(localized: "password"), text: $password)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 12)
                                 .foregroundStyle(Theme.textPrimary)
                         }
 
-                        // tmux
-                        fieldSection("TMUX SESSION") {
-                            field("main", text: $defaultSession)
+                        fieldSection(String(localized: "TMUX SESSION")) {
+                            field(String(localized: "main"), text: $defaultSession)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
                         }
 
-                        // Save
                         Button {
                             save()
                         } label: {
-                            Text(mode.isAdd ? "Add Server" : "Save Changes")
+                            Text(mode.isAdd ? String(localized: "Add Server") : String(localized: "Save Changes"))
                         }
                         .buttonStyle(Theme.PrimaryButtonStyle(disabled: !isValid))
                         .disabled(!isValid)
-                        .padding(.top, 4)
+                        .padding(.top, 2)
                     }
-                    .padding(16)
-                    .padding(.bottom, 16)
+                    .frame(maxWidth: formMaxWidth, alignment: .leading)
+                    .padding(.horizontal, Theme.contentInset)
+                    .padding(.top, 16)
+                    .padding(.bottom, 24)
+                    .frame(maxWidth: .infinity)
                 }
             }
             .navigationTitle(title)
@@ -138,39 +146,50 @@ struct ServerFormView: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundStyle(Theme.accent)
+                    Button(String(localized: "Cancel")) { dismiss() }
+                        .foregroundStyle(Theme.textSecondary)
                 }
             }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .presentationCornerRadius(Theme.sheetRadius)
+        .presentationBackground(Theme.bg)
         .preferredColorScheme(.dark)
     }
 
-    // MARK: - Helpers
+    private var formSummary: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+
+            Text(mode.isAdd
+                ? String(localized: "Add a server to get started.")
+                : String(localized: "Review the server settings, then connect when you're ready."))
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textSecondary)
+        }
+        .cardStyle(padding: 18)
+    }
 
     @ViewBuilder
     private func fieldSection(_ header: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(header)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.textTertiary)
-                .padding(.leading, 4)
+                .moriSectionHeaderStyle()
+                .padding(.leading, 2)
 
             VStack(spacing: 0) {
                 content()
             }
-            .background(Theme.cardBg, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.cardRadius)
-                    .strokeBorder(Theme.cardBorder, lineWidth: 1)
-            )
+            .cardStyle(padding: 0)
         }
     }
 
     private func field(_ placeholder: String, text: Binding<String>) -> some View {
         TextField(placeholder, text: text)
+            .font(.system(size: 14))
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .foregroundStyle(Theme.textPrimary)
@@ -178,6 +197,11 @@ struct ServerFormView: View {
 
     private func save() {
         let portValue = Int(port) ?? 22
+        let normalizedDefaultSession = {
+            let trimmed = defaultSession.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "main" : trimmed
+        }()
+
         switch mode {
         case .add:
             let server = Server(
@@ -186,7 +210,7 @@ struct ServerFormView: View {
                 port: portValue,
                 username: username.trimmingCharacters(in: .whitespacesAndNewlines),
                 password: password,
-                defaultSession: defaultSession.trimmingCharacters(in: .whitespacesAndNewlines)
+                defaultSession: normalizedDefaultSession
             )
             onSave(server)
         case .edit(var server):
@@ -195,7 +219,7 @@ struct ServerFormView: View {
             server.port = portValue
             server.username = username.trimmingCharacters(in: .whitespacesAndNewlines)
             server.password = password
-            server.defaultSession = defaultSession.trimmingCharacters(in: .whitespacesAndNewlines)
+            server.defaultSession = normalizedDefaultSession
             onSave(server)
         }
         dismiss()
