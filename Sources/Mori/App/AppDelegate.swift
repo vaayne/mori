@@ -1267,18 +1267,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     private func toggleCompanionTool(_ tool: CompanionTool) {
-        guard let manager = workspaceManager,
-              let context = manager.companionToolLaunchContext() else {
-            NSSound.beep()
-            return
-        }
-
         let sameToolVisible = companionToolState.activeTool == tool && companionToolState.isVisible
         let toolIsFocused = companionToolController?.isFocused(in: mainWindowController?.window) == true
 
         if sameToolVisible && toolIsFocused {
             closeCompanionTool()
             terminalAreaController?.focusCurrentSurface()
+            return
+        }
+
+        guard let manager = workspaceManager,
+              let context = manager.companionToolLaunchContext() else {
+            NSSound.beep()
             return
         }
 

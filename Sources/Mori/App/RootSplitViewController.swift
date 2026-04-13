@@ -182,9 +182,9 @@ final class RootSplitViewController: NSViewController {
         case .sidebar:
             sidebarWidth = x.clamped(to: Self.sidebarMinWidth, Self.sidebarMaxWidth)
         case .companion:
-            let availableRight = view.bounds.width - sidebarVisibleWidth - sidebarDividerVisibleWidth
-            let rawWidth = availableRight - x
-            let maxAllowed = max(Self.companionMinWidth, availableRight - Self.minimumContentWidth)
+            let availableWidth = view.bounds.width - sidebarVisibleWidth - sidebarDividerVisibleWidth
+            let rawWidth = view.bounds.width - x
+            let maxAllowed = max(Self.companionMinWidth, availableWidth - Self.minimumContentWidth)
             companionWidth = rawWidth.clamped(to: Self.companionMinWidth, min(Self.companionMaxWidth, maxAllowed))
             toolPaneState.width = companionWidth
             onCompanionWidthChanged?(companionWidth)
