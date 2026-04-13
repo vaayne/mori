@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-04-13
+
+### ✨ Features
+
+- Drag-to-reorder projects in the sidebar ([#64](https://github.com/vaayne/mori/pull/64))
+- Cmd-hold shortcut hints for toolbar and sidebar footer buttons ([#63](https://github.com/vaayne/mori/pull/63))
+
+### 🐛 Bug Fixes
+
+- Prevent key bar gesture recognizer crash on MoriRemote ([#62](https://github.com/vaayne/mori/pull/62))
+- Remove noisy PreToolUse agent hook to reduce log clutter ([#65](https://github.com/vaayne/mori/pull/65))
+
+**Full Changelog**: [v0.3.5...v0.3.6](https://github.com/vaayne/mori/compare/v0.3.5...v0.3.6)
+
 ## [0.3.5] - 2026-04-13
 
 ### ✨ Features

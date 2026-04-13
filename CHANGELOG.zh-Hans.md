@@ -7,6 +7,20 @@
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-04-13
+
+### ✨ 新功能
+
+- 侧边栏项目支持拖拽排序 ([#64](https://github.com/vaayne/mori/pull/64))
+- 工具栏和侧边栏底部按钮长按 Cmd 显示快捷键提示 ([#63](https://github.com/vaayne/mori/pull/63))
+
+### 🐛 问题修复
+
+- 修复 MoriRemote 快捷键栏手势识别器崩溃 ([#62](https://github.com/vaayne/mori/pull/62))
+- 移除多余的 PreToolUse 代理钩子以减少日志干扰 ([#65](https://github.com/vaayne/mori/pull/65))
+
+**完整变更记录**: [v0.3.5...v0.3.6](https://github.com/vaayne/mori/compare/v0.3.5...v0.3.6)
+
 ## [0.1.0] - 2026-03-20
 
 Mori 首次发布——一款原生 macOS 工作区终端，围绕项目、工作树和 tmux 会话组织。
