@@ -63,6 +63,8 @@
 "OK" = "OK";
 "Files" = "Files";
 "Git" = "Git";
+"Open Files Companion Pane (⌘E)" = "Open Files Companion Pane (⌘E)";
+"Open Git Companion Pane (⌘G)" = "Open Git Companion Pane (⌘G)";
 "Open Lazygit" = "Open Lazygit";
 "Open Project" = "Open Project";
 "Open Project…" = "Open Project…";
