@@ -243,6 +243,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         windowController.onToggleGit = { [weak self] in
             self?.toggleCompanionTool(.lazygit)
         }
+        windowController.onSplitRight = { [weak self] in
+            self?.splitRightMenuAction()
+        }
+        windowController.onSplitDown = { [weak self] in
+            self?.splitDownMenuAction()
+        }
 
         windowController.onShowCreateWorktreePanel = { [weak self] in
             self?.showCreateWorktreePanel()

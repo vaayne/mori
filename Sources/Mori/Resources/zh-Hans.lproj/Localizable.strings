@@ -65,6 +65,8 @@
 "Git" = "Git";
 "Open Files Companion Pane (⌘E)" = "打开文件工具面板 (⌘E)";
 "Open Git Companion Pane (⌘G)" = "打开 Git 工具面板 (⌘G)";
+"Split the current pane to the right" = "向右拆分当前窗格";
+"Split the current pane downward" = "向下拆分当前窗格";
 "Open Lazygit" = "打开 Lazygit";
 "Open Project" = "打开项目";
 "Open Project..." = "打开项目...";
