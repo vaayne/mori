@@ -17,9 +17,7 @@ final class RootSplitViewController: NSViewController {
     private static let sidebarMinWidth: CGFloat = 180
     private static let sidebarMaxWidth: CGFloat = 400
     private static let companionMinWidth: CGFloat = 320
-    private static let companionMaxWidth: CGFloat = 720
     private static let dividerHitWidth: CGFloat = 8
-    private static let minimumContentWidth: CGFloat = 420
 
     private let sidebarContainer = NSView()
     private let sidebarDividerView = NSView()
@@ -73,7 +71,7 @@ final class RootSplitViewController: NSViewController {
 
         let savedCompanion = CGFloat(UserDefaults.standard.double(forKey: Self.companionWidthKey))
         if savedCompanion > 0 {
-            companionWidth = savedCompanion.clamped(to: Self.companionMinWidth, Self.companionMaxWidth)
+            companionWidth = max(Self.companionMinWidth, savedCompanion)
             toolPaneState.width = companionWidth
         }
     }
@@ -86,8 +84,8 @@ final class RootSplitViewController: NSViewController {
     private func resolvedCompanionWidth(given availableWidth: CGFloat) -> CGFloat {
         guard toolPaneState.isVisible else { return 0 }
 
-        let maxAllowed = max(Self.companionMinWidth, availableWidth - Self.minimumContentWidth)
-        let clampedWidth = companionWidth.clamped(to: Self.companionMinWidth, Self.companionMaxWidth)
+        let maxAllowed = max(0, availableWidth - 1)
+        let clampedWidth = max(Self.companionMinWidth, companionWidth)
         return min(clampedWidth, maxAllowed)
     }
 
@@ -183,9 +181,9 @@ final class RootSplitViewController: NSViewController {
             sidebarWidth = x.clamped(to: Self.sidebarMinWidth, Self.sidebarMaxWidth)
         case .companion:
             let availableWidth = view.bounds.width - sidebarVisibleWidth - sidebarDividerVisibleWidth
-            let rawWidth = view.bounds.width - x
-            let maxAllowed = max(Self.companionMinWidth, availableWidth - Self.minimumContentWidth)
-            companionWidth = rawWidth.clamped(to: Self.companionMinWidth, min(Self.companionMaxWidth, maxAllowed))
+            let rawWidth = view.bounds.width - x - 1
+            let maxAllowed = max(0, availableWidth - 1)
+            companionWidth = rawWidth.clamped(to: Self.companionMinWidth, maxAllowed)
             toolPaneState.width = companionWidth
             onCompanionWidthChanged?(companionWidth)
         }
@@ -217,7 +215,7 @@ final class RootSplitViewController: NSViewController {
 
     func updateCompanionPane(state: CompanionToolPaneState) {
         toolPaneState = state
-        companionWidth = state.width.clamped(to: Self.companionMinWidth, Self.companionMaxWidth)
+        companionWidth = max(Self.companionMinWidth, state.width)
         updateLayout()
     }
 
