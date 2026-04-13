@@ -1380,7 +1380,7 @@ private struct ToolSettingsContent: View {
                 title: "tmux",
                 description: .localized("Required for local Mori workspaces. Supports custom installs such as ~/homebrew/bin/tmux."),
                 value: $model.tmuxPath,
-                placeholder: "/opt/homebrew/bin/tmux"
+                placeholder: .localized("Resolved automatically")
             )
 
             CardDivider()
@@ -1389,7 +1389,7 @@ private struct ToolSettingsContent: View {
                 title: "lazygit",
                 description: .localized("Optional Git companion tool path."),
                 value: $model.lazygitPath,
-                placeholder: "/opt/homebrew/bin/lazygit"
+                placeholder: .localized("Resolved automatically")
             )
 
             CardDivider()
@@ -1398,7 +1398,7 @@ private struct ToolSettingsContent: View {
                 title: "yazi",
                 description: .localized("Optional file manager companion tool path."),
                 value: $model.yaziPath,
-                placeholder: "/opt/homebrew/bin/yazi"
+                placeholder: .localized("Resolved automatically")
             )
         }
 

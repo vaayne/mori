@@ -173,6 +173,7 @@
 "Unassign shortcut" = "取消分配快捷键";
 "Reset" = "重置";
 "Reset All Shortcuts" = "重置所有快捷键";
+"Resolved automatically" = "自动解析";
 "Conflict with %@" = "与 %@ 冲突";
 "Assign Anyway" = "仍然分配";
 "Cancel" = "取消";

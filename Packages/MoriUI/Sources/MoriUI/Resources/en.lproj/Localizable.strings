@@ -173,6 +173,7 @@
 "Unassign shortcut" = "Unassign shortcut";
 "Reset" = "Reset";
 "Reset All Shortcuts" = "Reset All Shortcuts";
+"Resolved automatically" = "Resolved automatically";
 "Conflict with %@" = "Conflict with %@";
 "Assign Anyway" = "Assign Anyway";
 "Cancel" = "Cancel";
