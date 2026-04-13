@@ -45,6 +45,7 @@
 "Failed to create window" = "Failed to create window";
 "Failed to delete worktree files" = "Failed to delete worktree files";
 "Failed to open %@" = "Failed to open %@";
+"Failed to create embedded terminal surface." = "Failed to create embedded terminal surface.";
 "Failed to split pane" = "Failed to split pane";
 "Hide Mori" = "Hide Mori";
 "in use" = "in use";
@@ -60,6 +61,8 @@
 "No active session" = "No active session";
 "now" = "now";
 "OK" = "OK";
+"Files" = "Files";
+"Git" = "Git";
 "Open Lazygit" = "Open Lazygit";
 "Open Project" = "Open Project";
 "Open Project…" = "Open Project…";

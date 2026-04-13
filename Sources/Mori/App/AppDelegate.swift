@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var workspaceManager: WorkspaceManager?
     private var appState: AppState?
     private var terminalAreaController: TerminalAreaViewController?
+    private var companionToolController: CompanionToolPaneController?
     private var commandPaletteController: CommandPaletteController?
     private var rootSplitVC: RootSplitViewController?
     private var keyMonitor: Any?
@@ -37,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var configurableMenuItems: [String: NSMenuItem] = [:]
     private var keyMonitorActionMap: [String: () -> Void] = [:]
     private let tmuxThemeDebounceNanoseconds: UInt64 = 250_000_000
+    private var companionToolState = CompanionToolPaneState()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -84,7 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Load persisted state
         try? manager.loadAll()
 
-        // Create terminal area first — this initializes GhosttyApp and extracts theme
+        // Create terminal areas first — this initializes GhosttyApp and extracts theme.
         let terminalArea = TerminalAreaViewController()
         terminalArea.onCreateSession = { [weak self] in
             guard let self else { return }
@@ -96,6 +98,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             }
         }
         self.terminalAreaController = terminalArea
+
+        let companionTool = CompanionToolPaneController()
+        self.companionToolController = companionTool
 
         // Wire ghostty keybinding actions to Mori's tmux-based implementation.
         // Ghostty maps keys to intents (new_tab, close_tab, etc.); Mori provides
@@ -118,14 +123,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             onSelectProject: { [weak manager, weak self] projectId in
                 manager?.selectProject(projectId)
                 self?.updateWindowTitle()
+                self?.syncVisibleCompanionToolToSelection()
             },
             onSelectWorktree: { [weak manager, weak self] worktreeId in
                 manager?.selectWorktree(worktreeId)
                 self?.updateWindowTitle()
+                self?.syncVisibleCompanionToolToSelection()
             },
             onSelectWindow: { [weak manager, weak self] windowId in
                 manager?.selectWindow(windowId)
                 self?.updateWindowTitle()
+                self?.syncVisibleCompanionToolToSelection()
             },
             onShowCreatePanel: { [weak self] in
                 self?.showCreateWorktreePanel()
@@ -216,9 +224,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         let splitVC = RootSplitViewController(
             sidebarController: sidebarController,
-            contentController: terminalArea
+            contentController: terminalArea,
+            companionController: companionTool
         )
         self.rootSplitVC = splitVC
+        companionToolState.width = splitVC.currentCompanionWidth
+        splitVC.onCompanionWidthChanged = { [weak self] width in
+            self?.companionToolState.width = width
+        }
+        splitVC.updateCompanionPane(state: companionToolState)
 
         windowController.onToggleSidebar = { [weak splitVC] in
             splitVC?.toggleSidebar()
@@ -241,6 +255,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
            let window = windowController.window {
             adapter.syncWorkspaceWindowAppearance(window)
         }
+        companionTool.updateAppearance(themeInfo: themeInfo, isKeyWindow: windowController.window?.isKeyWindow ?? true)
         // Restore saved frame after all layout is complete
         windowController.restoreSavedFrame()
         NSApp.activate(ignoringOtherApps: true)
@@ -333,9 +348,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Save window frame and sidebar width before teardown
+        // Save window frame and split widths before teardown
         mainWindowController?.saveFrame()
         rootSplitVC?.saveSidebarWidth()
+        rootSplitVC?.saveCompanionWidth()
 
         // Remove key monitor
         if let monitor = keyMonitor {
@@ -843,11 +859,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     private func refreshGhosttyThemeBackgrounds(themeInfo: GhosttyThemeInfo) {
+        let isKeyWindow = mainWindowController?.window?.isKeyWindow ?? true
         sidebarController?.updateAppearance(themeInfo: themeInfo)
-        terminalAreaController?.updateAppearance(
-            themeInfo: themeInfo,
-            isKeyWindow: mainWindowController?.window?.isKeyWindow ?? true
-        )
+        terminalAreaController?.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
+        companionToolController?.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
     }
 
     private func refreshSettingsWindowAppearance(adapter: GhosttyAdapter, themeInfo: GhosttyThemeInfo) {
@@ -1239,14 +1254,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         agentDashboardPanel?.updateAppearance(themeInfo: themeInfo)
     }
 
+    private func toggleCompanionTool(_ tool: CompanionTool) {
+        guard let manager = workspaceManager,
+              let context = manager.companionToolLaunchContext() else {
+            NSSound.beep()
+            return
+        }
+
+        if companionToolState.activeTool == tool, companionToolState.isVisible {
+            if companionToolController?.isFocused(in: mainWindowController?.window) == true {
+                companionToolState.activeTool = nil
+                companionToolState.presentation = .closed
+                rootSplitVC?.updateCompanionPane(state: companionToolState)
+                terminalAreaController?.focusCurrentSurface()
+            } else {
+                companionToolController?.show(tool: tool, context: context)
+                rootSplitVC?.updateCompanionPane(state: companionToolState)
+            }
+            return
+        }
+
+        companionToolState.activeTool = tool
+        if companionToolState.presentation == .closed {
+            companionToolState.presentation = .docked
+        }
+
+        companionToolController?.show(tool: tool, context: context)
+        rootSplitVC?.updateCompanionPane(state: companionToolState)
+    }
+
+    private func syncVisibleCompanionToolToSelection() {
+        guard companionToolState.isVisible,
+              let tool = companionToolState.activeTool,
+              let manager = workspaceManager else {
+            return
+        }
+
+        guard let context = manager.companionToolLaunchContext() else {
+            companionToolState.activeTool = nil
+            companionToolState.presentation = .closed
+            rootSplitVC?.updateCompanionPane(state: companionToolState)
+            return
+        }
+
+        companionToolController?.show(tool: tool, context: context, focus: false)
+        rootSplitVC?.updateCompanionPane(state: companionToolState)
+    }
+
     @objc private func openLazygitMenuAction() {
-        guard let manager = workspaceManager else { return }
-        Task { @MainActor in await manager.openToolWindow(command: "lazygit") }
+        toggleCompanionTool(.lazygit)
     }
 
     @objc private func openYaziMenuAction() {
-        guard let manager = workspaceManager else { return }
-        Task { @MainActor in await manager.openToolWindow(command: "yazi") }
+        toggleCompanionTool(.yazi)
     }
 
     @objc private func splitRightMenuAction() {
@@ -1411,8 +1471,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             "panes.resizeRight": managerAction { await $0.resizePane(direction: .right) },
             "panes.equalize": managerAction { await $0.equalizePanes() },
             "panes.toggleZoom": managerAction { await $0.togglePaneZoom() },
-            "tools.lazygit": managerAction { await $0.openToolWindow(command: "lazygit") },
-            "tools.yazi": managerAction { await $0.openToolWindow(command: "yazi") },
+            "tools.lazygit": { [weak self] in self?.toggleCompanionTool(.lazygit) },
+            "tools.yazi": { [weak self] in self?.toggleCompanionTool(.yazi) },
             "window.toggleSidebar": { [weak self] in self?.rootSplitVC?.toggleSidebar() },
             "window.closeWindow": { [weak self] in self?.mainWindowController?.window?.close() },
             "settings.open": { [weak self] in self?.showSettingsWindow() },
@@ -1449,15 +1509,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         case .project(let id, _):
             manager.selectProject(id)
             mainWindowController?.updateTitle(projectName: appState?.selectedProject?.name)
+            syncVisibleCompanionToolToSelection()
 
         case .worktree(let id, _, _, _):
             manager.selectWorktree(id)
+            syncVisibleCompanionToolToSelection()
 
         case .window(let id, _, _, _):
             manager.selectWindow(id)
+            syncVisibleCompanionToolToSelection()
 
         case .agent(let windowId, _, _, _):
             manager.selectWindow(windowId)
+            syncVisibleCompanionToolToSelection()
 
         case .action(let id, _, _):
             handlePaletteAction(id, manager: manager)
