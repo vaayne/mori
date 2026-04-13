@@ -25,6 +25,7 @@ public struct WorktreeSidebarView: View {
     private let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     private let onSendKeys: ((String, String) -> Void)?
     private let onUpdateProject: ((Project) -> Void)?
+    private let onReorderProjects: (([UUID]) -> Void)?
     private let shortcutHintsVisible: Bool
 
     public init(
@@ -49,7 +50,8 @@ public struct WorktreeSidebarView: View {
         onOpenCommandPalette: (() -> Void)? = nil,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil,
-        onUpdateProject: ((Project) -> Void)? = nil
+        onUpdateProject: ((Project) -> Void)? = nil,
+        onReorderProjects: (([UUID]) -> Void)? = nil
     ) {
         self.projects = projects
         self.selectedProjectId = selectedProjectId
@@ -72,6 +74,7 @@ public struct WorktreeSidebarView: View {
         self.onRequestPaneOutput = onRequestPaneOutput
         self.onSendKeys = onSendKeys
         self.onUpdateProject = onUpdateProject
+        self.onReorderProjects = onReorderProjects
         self.shortcutHintsVisible = shortcutHintsVisible
     }
 
@@ -197,6 +200,8 @@ public struct WorktreeSidebarView: View {
     @State private var hoveredProjectId: UUID?
     @State private var renamingProjectId: UUID?
     @State private var renameText: String = ""
+    @State private var draggingProjectId: UUID?
+    @State private var dropTargetProjectId: UUID?
 
     @ViewBuilder
     private func projectSection(_ project: Project) -> some View {
@@ -239,7 +244,45 @@ public struct WorktreeSidebarView: View {
         .padding(.top, 14)
         .padding(.bottom, MoriTokens.Spacing.sm)
         .contentShape(Rectangle())
+        .overlay(alignment: .top) {
+            if dropTargetProjectId == project.id && draggingProjectId != project.id {
+                Rectangle()
+                    .fill(MoriTokens.Color.active)
+                    .frame(height: 2)
+                    .padding(.horizontal, MoriTokens.Spacing.xl)
+            }
+        }
         .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
+        .draggable(project.id.uuidString) {
+            Text(project.name)
+                .font(MoriTokens.Font.projectTitle)
+                .padding(.horizontal, MoriTokens.Spacing.lg)
+                .padding(.vertical, MoriTokens.Spacing.sm)
+                .background(.regularMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
+        }
+        .dropDestination(for: String.self) { items, _ in
+            guard let draggedIdStr = items.first,
+                  let draggedId = UUID(uuidString: draggedIdStr),
+                  draggedId != project.id else {
+                dropTargetProjectId = nil
+                return false
+            }
+            var ids = projects.map { $0.id }
+            guard let fromIdx = ids.firstIndex(of: draggedId),
+                  let toIdx = ids.firstIndex(of: project.id) else {
+                dropTargetProjectId = nil
+                return false
+            }
+            ids.remove(at: fromIdx)
+            ids.insert(draggedId, at: toIdx)
+            onReorderProjects?(ids)
+            dropTargetProjectId = nil
+            draggingProjectId = nil
+            return true
+        } isTargeted: { targeted in
+            dropTargetProjectId = targeted ? project.id : nil
+        }
         .onTapGesture {
             onToggleCollapse?(project.id)
             onSelectProject?(project.id)
