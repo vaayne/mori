@@ -186,6 +186,7 @@ extension MainWindowController: NSToolbarDelegate {
         willBeInsertedIntoToolbar flag: Bool
     ) -> NSToolbarItem? {
         let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+        let compactSplitSymbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
 
         switch itemIdentifier {
         case ToolbarID.toggleSidebar:
@@ -216,7 +217,10 @@ extension MainWindowController: NSToolbarDelegate {
             item.label = .localized("Split Right")
             item.paletteLabel = .localized("Split Right")
             item.toolTip = .localized("Split the current pane to the right")
-            item.image = NSImage(systemSymbolName: "rectangle.split.2x1", accessibilityDescription: .localized("Split Right"))
+            item.image = NSImage(
+                systemSymbolName: "rectangle.split.2x1",
+                accessibilityDescription: .localized("Split Right")
+            )?.withSymbolConfiguration(compactSplitSymbolConfiguration)
             item.target = self
             item.action = #selector(splitRightClicked)
             return item
@@ -224,7 +228,10 @@ extension MainWindowController: NSToolbarDelegate {
             item.label = .localized("Split Down")
             item.paletteLabel = .localized("Split Down")
             item.toolTip = .localized("Split the current pane downward")
-            item.image = NSImage(systemSymbolName: "rectangle.split.1x2", accessibilityDescription: .localized("Split Down"))
+            item.image = NSImage(
+                systemSymbolName: "rectangle.split.1x2",
+                accessibilityDescription: .localized("Split Down")
+            )?.withSymbolConfiguration(compactSplitSymbolConfiguration)
             item.target = self
             item.action = #selector(splitDownClicked)
             return item
