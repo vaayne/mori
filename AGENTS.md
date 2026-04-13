@@ -68,6 +68,10 @@ Existing examples: `MainWindowController`, settings window, `WorktreeCreationCon
 
 See [release skill](.agents/skills/release/SKILL.md) for the full release workflow.
 
+### TestFlight Version Rule
+
+For MoriRemote TestFlight uploads, keep the iOS marketing version fixed at `0.3.5` unless the user explicitly asks to change it. When publishing a new TestFlight build, reuse version `0.3.5` and only increment the build number.
+
 ## Docs to Keep in Sync
 
 - **`CHANGELOG.md`** — entry under `[Unreleased]` for every user-visible change

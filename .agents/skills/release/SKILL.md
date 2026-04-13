@@ -59,6 +59,10 @@ The generated cask installs `Mori.app`, depends on `tmux`, and exposes the embed
 
 ## iOS Release (MoriRemote → TestFlight)
 
+### Version Rule
+
+For MoriRemote TestFlight uploads, keep the App Store Connect marketing version fixed at `0.3.5` unless the user explicitly asks to change it. New TestFlight uploads must reuse version `0.3.5` and only increment the build number.
+
 ### Tag Format
 
 Use semantic versioning with `ios-v` prefix: `ios-v0.1.0`, `ios-v1.0.0`.
@@ -70,15 +74,16 @@ Use semantic versioning with `ios-v` prefix: `ios-v0.1.0`, `ios-v1.0.0`.
 ```bash
 gh workflow run release-ios.yml -R vaayne/mori \
   --ref <branch> \
-  -f version=X.Y.Z \
+  -f version=0.3.5 \
   -f build_number=N
 ```
 
 **Option B: Tag-based**
 
-1. Tag: `git tag ios-vX.Y.Z`
-2. Push: `git push origin ios-vX.Y.Z`
-3. CI triggers `.github/workflows/release-ios.yml` → archives, exports IPA, uploads to TestFlight
+1. Keep the TestFlight marketing version at `0.3.5` unless explicitly told otherwise
+2. Tag: `git tag ios-vX.Y.Z`
+3. Push: `git push origin ios-vX.Y.Z`
+4. CI triggers `.github/workflows/release-ios.yml` → archives, exports IPA, uploads to TestFlight
 
 ### Required Secrets
 
