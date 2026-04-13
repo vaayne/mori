@@ -25,9 +25,9 @@ struct ToolDetector: Sendable {
     static func detectAll() -> [Tool] {
         let settings = ToolSettings.load()
         return knownTools.map { tool in
-            let resolvedCommand = BinaryResolver.resolve(
+            let resolvedCommand = BinaryResolver.resolveTool(
                 command: tool.command,
-                configuredPath: settings.configuredPath(for: tool.command)
+                settings: settings
             )
             let available = resolvedCommand != nil
             return Tool(

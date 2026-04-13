@@ -115,20 +115,12 @@ public actor TmuxCommandRunner {
 
     /// Quick check: is tmux findable on PATH in the given environment?
     private func hasTmuxOnPath(_ env: [String: String]) -> Bool {
-        BinaryResolver.exists(
-            command: "tmux",
-            configuredPath: ToolSettings.load().configuredPath(for: "tmux"),
-            environment: env
-        )
+        BinaryResolver.toolExists(command: "tmux", environment: env)
     }
 
     /// Best-effort synchronous lookup for UI launch commands before async resolution completes.
     public static func preferredBinaryPath(in environment: [String: String] = ProcessInfo.processInfo.environment) -> String? {
-        BinaryResolver.resolve(
-            command: "tmux",
-            configuredPath: ToolSettings.load().configuredPath(for: "tmux"),
-            environment: environment
-        )
+        BinaryResolver.resolveTool(command: "tmux", environment: environment)
     }
 
     // MARK: - Binary Resolution
@@ -139,7 +131,7 @@ public actor TmuxCommandRunner {
         if sshConfig != nil {
             return "tmux"
         }
-        let configuredPath = ToolSettings.load().configuredPath(for: "tmux")
+        let configuredPath = BinaryResolver.configuredPath(for: "tmux")
         if let cached = resolvedBinaryPath,
            resolvedConfiguredPath == configuredPath {
             return cached
@@ -148,9 +140,8 @@ public actor TmuxCommandRunner {
         // Load user shell env and search configured path, common package-manager
         // locations, then the resolved PATH from the login shell.
         let env = await loadShellEnvironment()
-        if let candidate = BinaryResolver.resolve(
+        if let candidate = BinaryResolver.resolveTool(
             command: "tmux",
-            configuredPath: configuredPath,
             environment: env
         ) {
             resolvedBinaryPath = candidate

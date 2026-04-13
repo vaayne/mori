@@ -1279,6 +1279,27 @@ func testBinaryResolverFallsBackToPATH() {
     assertEqual(resolved, "/tmp/bin/lazygit")
 }
 
+func testBinaryResolverResolveToolUsesToolSettings() {
+    let settings = ToolSettings(lazygitPath: "~/tools/lazygit")
+    let expected = NSString(string: "~/tools/lazygit").expandingTildeInPath
+    let resolved = BinaryResolver.resolveTool(
+        command: "lazygit",
+        settings: settings,
+        environment: ["PATH": "/usr/bin:/bin"],
+        additionalSearchDirectories: [],
+        isExecutable: { $0 == expected }
+    )
+    assertEqual(resolved, expected)
+}
+
+func testBinaryResolverPathDirectoriesParsing() {
+    let directories = BinaryResolver.pathDirectories(from: "~/bin:/usr/local/bin::/usr/bin")
+    assertEqual(directories[0], NSString(string: "~/bin").expandingTildeInPath)
+    assertEqual(directories[1], "/usr/local/bin")
+    assertEqual(directories[2], "/usr/bin")
+    assertEqual(directories.count, 3)
+}
+
 // MARK: - Main
 
 print("=== MoriCore Model Tests ===")
@@ -1401,6 +1422,8 @@ testToolSettingsConfiguredPathExpandsTilde()
 testBinaryResolverPrefersConfiguredPath()
 testBinaryResolverChecksFallbackDirectoriesBeforePATH()
 testBinaryResolverFallsBackToPATH()
+testBinaryResolverResolveToolUsesToolSettings()
+testBinaryResolverPathDirectoriesParsing()
 
 // KeyBinding
 runKeyBindingTests()

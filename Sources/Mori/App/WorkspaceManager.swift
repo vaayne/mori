@@ -2003,10 +2003,7 @@ final class WorkspaceManager {
         // Resolve cwd from the active pane, falling back to worktree path
         let cwd = activePaneCwd() ?? worktree.path
         let resolvedLocalCommand = location(for: worktree) == .local
-            ? BinaryResolver.resolve(
-                command: command,
-                configuredPath: ToolSettings.load().configuredPath(for: command)
-            )
+            ? BinaryResolver.resolveTool(command: command)
             : nil
         let launchCommand = resolvedLocalCommand ?? command
 

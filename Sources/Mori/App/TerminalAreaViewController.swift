@@ -241,10 +241,7 @@ final class TerminalAreaViewController: NSViewController {
         location: WorkspaceLocation = .local,
         focus: Bool = true
     ) {
-        let resolvedLocalCommand = BinaryResolver.resolve(
-            command: command,
-            configuredPath: ToolSettings.load().configuredPath(for: command)
-        ) ?? command
+        let resolvedLocalCommand = BinaryResolver.resolveTool(command: command) ?? command
         let localCommand = "export STARSHIP_LOG=error; cd \(shellEscape(workingDirectory)); exec \(shellEscape(resolvedLocalCommand))"
 
         switch location {

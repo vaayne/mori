@@ -1,6 +1,31 @@
 import Foundation
 
 public enum BinaryResolver {
+    public static func configuredPath(
+        for command: String,
+        settings: ToolSettings = ToolSettings.load()
+    ) -> String? {
+        settings.configuredPath(for: command)
+    }
+
+    public static func resolveTool(
+        command: String,
+        settings: ToolSettings = ToolSettings.load(),
+        bundledPath: String? = nil,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        additionalSearchDirectories: [String] = defaultSearchDirectories,
+        isExecutable: (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) }
+    ) -> String? {
+        resolve(
+            command: command,
+            configuredPath: configuredPath(for: command, settings: settings),
+            bundledPath: bundledPath,
+            environment: environment,
+            additionalSearchDirectories: additionalSearchDirectories,
+            isExecutable: isExecutable
+        )
+    }
+
     public static var defaultSearchDirectories: [String] {
         uniqueDirectories(
             from: [
@@ -69,7 +94,25 @@ public enum BinaryResolver {
         ) != nil
     }
 
-    static func pathDirectories(from pathValue: String?) -> [String] {
+    public static func toolExists(
+        command: String,
+        settings: ToolSettings = ToolSettings.load(),
+        bundledPath: String? = nil,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        additionalSearchDirectories: [String] = defaultSearchDirectories,
+        isExecutable: (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) }
+    ) -> Bool {
+        resolveTool(
+            command: command,
+            settings: settings,
+            bundledPath: bundledPath,
+            environment: environment,
+            additionalSearchDirectories: additionalSearchDirectories,
+            isExecutable: isExecutable
+        ) != nil
+    }
+
+    public static func pathDirectories(from pathValue: String?) -> [String] {
         guard let pathValue else { return [] }
         return pathValue
             .split(separator: ":")

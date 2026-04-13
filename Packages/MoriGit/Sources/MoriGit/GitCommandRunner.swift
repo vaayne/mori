@@ -41,7 +41,7 @@ public actor GitCommandRunner {
 
     // MARK: - Binary Resolution
 
-    /// Resolve the git binary path. Checks common locations first, then falls back to `which git`.
+    /// Resolve the git binary path through the shared binary resolver.
     public func resolveBinaryPath() async throws -> String {
         if sshConfig != nil {
             return "git"
@@ -50,31 +50,9 @@ public actor GitCommandRunner {
             return cached
         }
 
-        let commonPaths = [
-            "/opt/homebrew/bin/git",
-            "/usr/local/bin/git",
-            "/usr/bin/git",
-        ]
-
-        for path in commonPaths {
-            if FileManager.default.isExecutableFile(atPath: path) {
-                resolvedBinaryPath = path
-                return path
-            }
-        }
-
-        // Fall back to `which git`
-        let (output, exitCode) = try await runProcess(
-            executablePath: "/usr/bin/which",
-            arguments: ["git"]
-        )
-
-        if exitCode == 0 {
-            let path = output.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !path.isEmpty {
-                resolvedBinaryPath = path
-                return path
-            }
+        if let path = BinaryResolver.resolve(command: "git") {
+            resolvedBinaryPath = path
+            return path
         }
 
         throw GitError.binaryNotFound
