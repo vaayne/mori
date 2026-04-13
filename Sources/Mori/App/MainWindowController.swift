@@ -1,6 +1,8 @@
 import AppKit
+import Combine
 import SwiftUI
 import MoriTerminal
+import MoriUI
 
 final class MainWindowController: NSWindowController {
     var onWindowAppearanceInvalidated: (() -> Void)?
@@ -16,6 +18,15 @@ final class MainWindowController: NSWindowController {
         static let splitDown = NSToolbarItem.Identifier("splitDown")
     }
 
+    /// Maps toolbar item identifiers to their shortcut hint strings.
+    private static let toolbarShortcutHints: [NSToolbarItem.Identifier: String] = [
+        ToolbarID.toggleSidebar: "⌘B",
+        ToolbarID.files: "⌘E",
+        ToolbarID.git: "⌘G",
+        ToolbarID.splitRight: "⌘D",
+        ToolbarID.splitDown: "⇧⌘D",
+    ]
+
     var onToggleSidebar: (() -> Void)?
     var onToggleFiles: (() -> Void)?
     var onToggleGit: (() -> Void)?
@@ -25,6 +36,12 @@ final class MainWindowController: NSWindowController {
 
     /// The hosting view for the update pill, overlaid on the titlebar.
     private var updateOverlay: NSView?
+
+    // MARK: - Shortcut Hints
+
+    private let shortcutHintMonitor = ShortcutHintModifierMonitor()
+    private var shortcutHintCancellable: AnyCancellable?
+    private var shortcutHintOverlays: [NSView] = []
 
     // MARK: - Init
 
@@ -47,6 +64,7 @@ final class MainWindowController: NSWindowController {
 
         window.delegate = self
         configureToolbar()
+        startShortcutHintMonitor()
     }
 
     @available(*, unavailable)
@@ -134,6 +152,68 @@ final class MainWindowController: NSWindowController {
     @objc private func splitDownClicked() {
         onSplitDown?()
     }
+
+    // MARK: - Shortcut Hint Overlays
+
+    private func startShortcutHintMonitor() {
+        shortcutHintMonitor.start()
+        shortcutHintCancellable = shortcutHintMonitor.$areHintsVisible
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] visible in
+                if visible {
+                    self?.showToolbarShortcutHints()
+                } else {
+                    self?.hideToolbarShortcutHints()
+                }
+            }
+    }
+
+    private func showToolbarShortcutHints() {
+        guard let toolbar = window?.toolbar else { return }
+
+        for item in toolbar.items {
+            guard let hint = Self.toolbarShortcutHints[item.itemIdentifier],
+                  let itemView = item.value(forKey: "view") as? NSView else { continue }
+
+            let pill = NSHostingView(rootView: ShortcutHintPill(hint))
+            pill.translatesAutoresizingMaskIntoConstraints = false
+            itemView.addSubview(pill)
+            NSLayoutConstraint.activate([
+                pill.centerXAnchor.constraint(equalTo: itemView.centerXAnchor),
+                pill.bottomAnchor.constraint(equalTo: itemView.topAnchor, constant: 2),
+            ])
+            pill.alphaValue = 0
+            shortcutHintOverlays.append(pill)
+        }
+
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.14
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            for overlay in shortcutHintOverlays {
+                overlay.animator().alphaValue = 1
+            }
+        }
+    }
+
+    private func hideToolbarShortcutHints() {
+        let overlays = shortcutHintOverlays
+        shortcutHintOverlays.removeAll()
+
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.14
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            for overlay in overlays {
+                overlay.animator().alphaValue = 0
+            }
+        }, completionHandler: {
+            Task { @MainActor in
+                for overlay in overlays {
+                    overlay.removeFromSuperview()
+                }
+            }
+        })
+    }
 }
 
 // MARK: - NSToolbarDelegate
@@ -192,7 +272,7 @@ extension MainWindowController: NSToolbarDelegate {
         case ToolbarID.toggleSidebar:
             item.label = .localized("Toggle Sidebar")
             item.paletteLabel = .localized("Toggle Sidebar")
-            item.toolTip = .localized("Show or hide the sidebar (⌘0)")
+            item.toolTip = .localized("Show or hide the sidebar (⌘B)")
             item.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: .localized("Toggle Sidebar"))
             item.target = self
             item.action = #selector(toggleSidebarClicked)
@@ -216,7 +296,7 @@ extension MainWindowController: NSToolbarDelegate {
         case ToolbarID.splitRight:
             item.label = .localized("Split Right")
             item.paletteLabel = .localized("Split Right")
-            item.toolTip = .localized("Split the current pane to the right")
+            item.toolTip = .localized("Split the current pane to the right (⌘D)")
             item.image = NSImage(
                 systemSymbolName: "rectangle.split.2x1",
                 accessibilityDescription: .localized("Split Right")
@@ -227,7 +307,7 @@ extension MainWindowController: NSToolbarDelegate {
         case ToolbarID.splitDown:
             item.label = .localized("Split Down")
             item.paletteLabel = .localized("Split Down")
-            item.toolTip = .localized("Split the current pane downward")
+            item.toolTip = .localized("Split the current pane downward (⇧⌘D)")
             item.image = NSImage(
                 systemSymbolName: "rectangle.split.1x2",
                 accessibilityDescription: .localized("Split Down")

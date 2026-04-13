@@ -29,8 +29,9 @@ struct SidebarFooterView: View {
                 if let onAddProject {
                     footerButton(
                         systemImage: "plus.rectangle.on.folder",
-                        helpText: String.localized("Add Repository"),
-                        accessibilityLabel: String.localized("Add Repository"),
+                        helpText: String.localized("Open Project (⇧⌘O)"),
+                        accessibilityLabel: String.localized("Open Project"),
+                        shortcutHint: "⇧⌘O",
                         action: onAddProject
                     )
                 }
