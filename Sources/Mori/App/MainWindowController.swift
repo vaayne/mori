@@ -173,12 +173,24 @@ final class MainWindowController: NSWindowController {
         guard let toolbar = window?.toolbar else { return }
 
         for item in toolbar.items {
-            guard let hint = Self.toolbarShortcutHints[item.itemIdentifier],
-                  let itemView = item.value(forKey: "view") as? NSView else { continue }
+            guard let hint = Self.toolbarShortcutHints[item.itemIdentifier] else { continue }
+
+            // Resolve the toolbar item's rendered view: custom `view` or the internal button.
+            let itemView: NSView
+            if let custom = item.view {
+                itemView = custom
+            } else if let internal_ = toolbarItemButton(for: item) {
+                itemView = internal_
+            } else {
+                continue
+            }
 
             let pill = NSHostingView(rootView: ShortcutHintPill(hint))
             pill.translatesAutoresizingMaskIntoConstraints = false
-            itemView.addSubview(pill)
+
+            // Add to the item view's superview so it can appear above the button.
+            guard let parent = itemView.superview else { continue }
+            parent.addSubview(pill)
             NSLayoutConstraint.activate([
                 pill.centerXAnchor.constraint(equalTo: itemView.centerXAnchor),
                 pill.bottomAnchor.constraint(equalTo: itemView.topAnchor, constant: 2),
@@ -194,6 +206,26 @@ final class MainWindowController: NSWindowController {
                 overlay.animator().alphaValue = 1
             }
         }
+    }
+
+    /// Finds the system-created button view for an image-based NSToolbarItem
+    /// by matching the accessibility identifier in the toolbar view hierarchy.
+    private func toolbarItemButton(for item: NSToolbarItem) -> NSView? {
+        guard let themeFrame = window?.contentView?.superview else { return nil }
+        return findToolbarButton(in: themeFrame, identifier: item.itemIdentifier.rawValue)
+    }
+
+    private func findToolbarButton(in view: NSView, identifier: String) -> NSView? {
+        // NSToolbarItemViewer sets its identifier to the toolbar item's identifier
+        if let viewId = view.identifier?.rawValue, viewId == identifier {
+            return view
+        }
+        for subview in view.subviews {
+            if let found = findToolbarButton(in: subview, identifier: identifier) {
+                return found
+            }
+        }
+        return nil
     }
 
     private func hideToolbarShortcutHints() {
