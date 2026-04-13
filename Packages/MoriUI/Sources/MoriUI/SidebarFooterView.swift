@@ -29,8 +29,9 @@ struct SidebarFooterView: View {
                 if let onAddProject {
                     footerButton(
                         systemImage: "plus.rectangle.on.folder",
-                        helpText: String.localized("Add Repository"),
-                        accessibilityLabel: String.localized("Add Repository"),
+                        helpText: String.localized("Open Project (⇧⌘O)"),
+                        accessibilityLabel: String.localized("Open Project"),
+                        shortcutHint: "⇧⌘O",
                         action: onAddProject
                     )
                 }
@@ -81,7 +82,7 @@ struct SidebarFooterView: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 13))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(MoriTokens.Color.muted)
         }
         .buttonStyle(.plain)

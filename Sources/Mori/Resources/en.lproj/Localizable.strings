@@ -66,7 +66,9 @@
 "Open Files Companion Pane (⌘E)" = "Open Files Companion Pane (⌘E)";
 "Open Git Companion Pane (⌘G)" = "Open Git Companion Pane (⌘G)";
 "Split the current pane to the right" = "Split the current pane to the right";
+"Split the current pane to the right (⌘D)" = "Split the current pane to the right (⌘D)";
 "Split the current pane downward" = "Split the current pane downward";
+"Split the current pane downward (⇧⌘D)" = "Split the current pane downward (⇧⌘D)";
 "Open Lazygit" = "Open Lazygit";
 "Open Project" = "Open Project";
 "Open Project…" = "Open Project…";
@@ -104,7 +106,7 @@
 "Settings" = "Settings";
 "Settings…" = "Settings…";
 "Show All" = "Show All";
-"Show or hide the sidebar (⌘0)" = "Show or hide the sidebar (⌘0)";
+"Show or hide the sidebar (⌘B)" = "Show or hide the sidebar (⌘B)";
 "Split Down" = "Split Down";
 "Split Right" = "Split Right";
 "Template:" = "Template:";

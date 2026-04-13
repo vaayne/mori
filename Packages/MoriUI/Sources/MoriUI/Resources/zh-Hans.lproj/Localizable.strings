@@ -3,7 +3,7 @@
 "Active" = "活跃";
 "Active window" = "活跃窗口";
 "Add Project" = "添加项目";
-"Add Repository" = "添加仓库";
+"Open Project (⇧⌘O)" = "打开项目 (⇧⌘O)";
 "Adds a notify entry to ~/.codex/config.toml for agent turn completion events." = "向 ~/.codex/config.toml 添加通知条目，用于代理回合完成事件。";
 "Adds hooks to ~/.claude/settings.json for prompt submit, tool use, stop, and notification events." = "向 ~/.claude/settings.json 添加钩子，用于提示提交、工具使用、停止和通知事件。";
 "Agent" = "代理";

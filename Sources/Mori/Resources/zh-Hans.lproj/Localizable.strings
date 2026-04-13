@@ -66,7 +66,9 @@
 "Open Files Companion Pane (⌘E)" = "打开文件工具面板 (⌘E)";
 "Open Git Companion Pane (⌘G)" = "打开 Git 工具面板 (⌘G)";
 "Split the current pane to the right" = "向右拆分当前窗格";
+"Split the current pane to the right (⌘D)" = "向右拆分当前窗格 (⌘D)";
 "Split the current pane downward" = "向下拆分当前窗格";
+"Split the current pane downward (⇧⌘D)" = "向下拆分当前窗格 (⇧⌘D)";
 "Open Lazygit" = "打开 Lazygit";
 "Open Project" = "打开项目";
 "Open Project..." = "打开项目...";
@@ -104,7 +106,7 @@
 "Settings" = "设置";
 "Settings..." = "设置...";
 "Show All" = "全部显示";
-"Show or hide the sidebar (⌘0)" = "显示或隐藏侧栏(⌘0)";
+"Show or hide the sidebar (⌘B)" = "显示或隐藏侧栏 (⌘B)";
 "Split Down" = "向下拆分";
 "Split Right" = "向右拆分";
 "Template:" = "模板:";
