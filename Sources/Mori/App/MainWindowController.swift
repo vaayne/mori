@@ -18,13 +18,31 @@ final class MainWindowController: NSWindowController {
         static let splitDown = NSToolbarItem.Identifier("splitDown")
     }
 
-    /// Maps toolbar item identifiers to their shortcut hint strings.
-    private static let toolbarShortcutHints: [NSToolbarItem.Identifier: String] = [
-        ToolbarID.toggleSidebar: "⌘B",
-        ToolbarID.files: "⌘E",
-        ToolbarID.git: "⌘G",
-        ToolbarID.splitRight: "⌘D",
-        ToolbarID.splitDown: "⇧⌘D",
+    private struct ToolbarItemDef {
+        let id: NSToolbarItem.Identifier
+        let label: String
+        let toolTip: String
+        let symbol: String
+        let hint: String
+        let callback: KeyPath<MainWindowController, (() -> Void)?>
+    }
+
+    private static let toolbarItemDefs: [ToolbarItemDef] = [
+        ToolbarItemDef(id: ToolbarID.toggleSidebar, label: .localized("Toggle Sidebar"),
+                       toolTip: .localized("Show or hide the sidebar (⌘B)"),
+                       symbol: "sidebar.left", hint: "⌘B", callback: \.onToggleSidebar),
+        ToolbarItemDef(id: ToolbarID.files, label: .localized("Files"),
+                       toolTip: .localized("Open Files Companion Pane (⌘E)"),
+                       symbol: "folder", hint: "⌘E", callback: \.onToggleFiles),
+        ToolbarItemDef(id: ToolbarID.git, label: .localized("Git"),
+                       toolTip: .localized("Open Git Companion Pane (⌘G)"),
+                       symbol: "point.topleft.down.curvedto.point.bottomright.up", hint: "⌘G", callback: \.onToggleGit),
+        ToolbarItemDef(id: ToolbarID.splitRight, label: .localized("Split Right"),
+                       toolTip: .localized("Split the current pane to the right (⌘D)"),
+                       symbol: "rectangle.split.2x1", hint: "⌘D", callback: \.onSplitRight),
+        ToolbarItemDef(id: ToolbarID.splitDown, label: .localized("Split Down"),
+                       toolTip: .localized("Split the current pane downward (⇧⌘D)"),
+                       symbol: "rectangle.split.1x2", hint: "⇧⌘D", callback: \.onSplitDown),
     ]
 
     var onToggleSidebar: (() -> Void)?
@@ -42,8 +60,6 @@ final class MainWindowController: NSWindowController {
     private let shortcutHintMonitor = ShortcutHintModifierMonitor()
     private var shortcutHintCancellable: AnyCancellable?
     private var shortcutHintOverlays: [NSView] = []
-
-    /// Retained references to toolbar button views keyed by item identifier.
     private var toolbarButtonViews: [NSToolbarItem.Identifier: NSView] = [:]
 
     // MARK: - Init
@@ -89,20 +105,15 @@ final class MainWindowController: NSWindowController {
 
     func saveFrame() {
         guard let window else { return }
-        let frameString = NSStringFromRect(window.frame)
-        UserDefaults.standard.set(frameString, forKey: Self.frameKey)
+        UserDefaults.standard.set(NSStringFromRect(window.frame), forKey: Self.frameKey)
     }
 
-    /// Show the worktree creation panel. Delegates to the callback wired by AppDelegate.
     func showCreateWorktreePanel() {
         onShowCreateWorktreePanel?()
     }
 
-    /// Adds the update pill as an overlay pinned to the top-right of the titlebar area.
     func addUpdateAccessory(viewModel: UpdateViewModel) {
         guard let window else { return }
-
-        // Find the titlebar container (themeFrame) to overlay onto
         guard let themeFrame = window.contentView?.superview else { return }
 
         let hostingView = NSHostingView(rootView: UpdatePill(model: viewModel))
@@ -138,49 +149,30 @@ final class MainWindowController: NSWindowController {
 
     private static let symbolConfig = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
 
-    private func makeToolbarItem(
-        id: NSToolbarItem.Identifier,
-        label: String,
-        toolTip: String,
-        systemImageName: String,
-        action: Selector
-    ) -> NSToolbarItem {
-        let item = NSToolbarItem(itemIdentifier: id)
-        item.label = label
-        item.paletteLabel = label
-        item.toolTip = toolTip
+    private func makeToolbarItem(for def: ToolbarItemDef) -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: def.id)
+        item.label = def.label
+        item.paletteLabel = def.label
+        item.toolTip = def.toolTip
 
-        let image = NSImage(systemSymbolName: systemImageName, accessibilityDescription: label)?
+        let image = NSImage(systemSymbolName: def.symbol, accessibilityDescription: def.label)?
             .withSymbolConfiguration(Self.symbolConfig) ?? NSImage()
 
-        let button = NSButton(image: image, target: self, action: action)
-        button.bezelStyle = .toolbar
-        button.imagePosition = .imageOnly
-        button.setAccessibilityLabel(label)
+        let button = NSButton(image: image, target: self, action: #selector(toolbarAction(_:)))
+        button.bezelStyle = NSButton.BezelStyle.toolbar
+        button.imagePosition = NSControl.ImagePosition.imageOnly
+        button.setAccessibilityLabel(def.label)
+        button.identifier = NSUserInterfaceItemIdentifier(def.id.rawValue)
 
         item.view = button
-        toolbarButtonViews[id] = button
+        toolbarButtonViews[def.id] = button
         return item
     }
 
-    @objc private func toggleSidebarClicked() {
-        onToggleSidebar?()
-    }
-
-    @objc private func toggleFilesClicked() {
-        onToggleFiles?()
-    }
-
-    @objc private func toggleGitClicked() {
-        onToggleGit?()
-    }
-
-    @objc private func splitRightClicked() {
-        onSplitRight?()
-    }
-
-    @objc private func splitDownClicked() {
-        onSplitDown?()
+    @objc private func toolbarAction(_ sender: NSButton) {
+        guard let senderId = sender.identifier?.rawValue,
+              let def = Self.toolbarItemDefs.first(where: { $0.id.rawValue == senderId }) else { return }
+        self[keyPath: def.callback]?()
     }
 
     // MARK: - Shortcut Hint Overlays
@@ -204,32 +196,28 @@ final class MainWindowController: NSWindowController {
         guard let themeFrame = window?.contentView?.superview else { return }
         themeFrame.layoutSubtreeIfNeeded()
 
-        for (id, hint) in Self.toolbarShortcutHints {
-            guard let anchor = toolbarButtonViews[id], anchor.window != nil else { continue }
+        for def in Self.toolbarItemDefs {
+            guard let anchor = toolbarButtonViews[def.id], anchor.window != nil else { continue }
 
-            // Convert button rect to themeFrame coords (bottom-left origin).
             let anchorRect = anchor.convert(anchor.bounds, to: themeFrame)
-
-            let pill = NSHostingView(rootView: ShortcutHintPill(hint))
+            let pill = NSHostingView(rootView: ShortcutHintPill(def.hint))
             let pillSize = pill.fittingSize
 
-            // Center horizontally on the button, position above it (y increases upward).
             pill.frame = NSRect(
                 x: anchorRect.midX - pillSize.width / 2,
                 y: anchorRect.maxY + 2,
                 width: pillSize.width,
                 height: pillSize.height
             )
-            themeFrame.addSubview(pill)
-
             pill.alphaValue = 0
+            themeFrame.addSubview(pill)
             shortcutHintOverlays.append(pill)
         }
 
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.14
             ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            for overlay in shortcutHintOverlays {
+            for overlay in self.shortcutHintOverlays {
                 overlay.animator().alphaValue = 1
             }
         }
@@ -280,26 +268,21 @@ extension MainWindowController: NSWindowDelegate {
 
 extension MainWindowController: NSToolbarDelegate {
 
+    private static let defaultItemIds: [NSToolbarItem.Identifier] = [
+        ToolbarID.toggleSidebar,
+        .flexibleSpace,
+        ToolbarID.files,
+        ToolbarID.git,
+        ToolbarID.splitRight,
+        ToolbarID.splitDown,
+    ]
+
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [
-            ToolbarID.toggleSidebar,
-            .flexibleSpace,
-            ToolbarID.files,
-            ToolbarID.git,
-            ToolbarID.splitRight,
-            ToolbarID.splitDown,
-        ]
+        Self.defaultItemIds
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [
-            ToolbarID.toggleSidebar,
-            ToolbarID.files,
-            ToolbarID.git,
-            ToolbarID.splitRight,
-            ToolbarID.splitDown,
-            .flexibleSpace,
-        ]
+        Self.defaultItemIds
     }
 
     func toolbar(
@@ -307,49 +290,9 @@ extension MainWindowController: NSToolbarDelegate {
         itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
         willBeInsertedIntoToolbar flag: Bool
     ) -> NSToolbarItem? {
-        switch itemIdentifier {
-        case ToolbarID.toggleSidebar:
-            return makeToolbarItem(
-                id: ToolbarID.toggleSidebar,
-                label: .localized("Toggle Sidebar"),
-                toolTip: .localized("Show or hide the sidebar (⌘B)"),
-                systemImageName: "sidebar.left",
-                action: #selector(toggleSidebarClicked)
-            )
-        case ToolbarID.files:
-            return makeToolbarItem(
-                id: ToolbarID.files,
-                label: .localized("Files"),
-                toolTip: .localized("Open Files Companion Pane (⌘E)"),
-                systemImageName: "folder",
-                action: #selector(toggleFilesClicked)
-            )
-        case ToolbarID.git:
-            return makeToolbarItem(
-                id: ToolbarID.git,
-                label: .localized("Git"),
-                toolTip: .localized("Open Git Companion Pane (⌘G)"),
-                systemImageName: "point.topleft.down.curvedto.point.bottomright.up",
-                action: #selector(toggleGitClicked)
-            )
-        case ToolbarID.splitRight:
-            return makeToolbarItem(
-                id: ToolbarID.splitRight,
-                label: .localized("Split Right"),
-                toolTip: .localized("Split the current pane to the right (⌘D)"),
-                systemImageName: "rectangle.split.2x1",
-                action: #selector(splitRightClicked)
-            )
-        case ToolbarID.splitDown:
-            return makeToolbarItem(
-                id: ToolbarID.splitDown,
-                label: .localized("Split Down"),
-                toolTip: .localized("Split the current pane downward (⇧⌘D)"),
-                systemImageName: "rectangle.split.1x2",
-                action: #selector(splitDownClicked)
-            )
-        default:
+        guard let def = Self.toolbarItemDefs.first(where: { $0.id == itemIdentifier }) else {
             return nil
         }
+        return makeToolbarItem(for: def)
     }
 }
