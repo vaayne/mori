@@ -1,5 +1,54 @@
 import Foundation
 
+#if os(macOS)
+private enum BinaryResolverHostEnvironment {
+    static func launchctlPath() -> String? {
+        runAndCapture(
+            executablePath: "/bin/launchctl",
+            arguments: ["getenv", "PATH"]
+        )?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func pathHelperPath() -> String? {
+        guard let output = runAndCapture(
+            executablePath: "/usr/libexec/path_helper",
+            arguments: ["-s"]
+        ) else {
+            return nil
+        }
+
+        for line in output.split(separator: "\n") {
+            let text = String(line)
+            guard let start = text.range(of: "PATH=\"")?.upperBound,
+                  let end = text[start...].firstIndex(of: "\"") else { continue }
+            return String(text[start..<end])
+        }
+        return nil
+    }
+
+    private static func runAndCapture(executablePath: String, arguments: [String]) -> String? {
+        let process = Process()
+        let stdout = Pipe()
+        process.executableURL = URL(fileURLWithPath: executablePath)
+        process.arguments = arguments
+        process.standardOutput = stdout
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return nil
+        }
+
+        guard process.terminationStatus == 0 else { return nil }
+        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8)
+    }
+}
+#endif
+
 public enum BinaryResolver {
     public static func configuredPath(
         for command: String,
@@ -27,12 +76,16 @@ public enum BinaryResolver {
     }
 
     public static var defaultSearchDirectories: [String] {
-        uniqueDirectories(
+        #if os(macOS)
+        return uniqueDirectories(
             from: [
-                pathDirectories(from: launchctlPath()),
-                pathDirectories(from: pathHelperPath()),
+                pathDirectories(from: BinaryResolverHostEnvironment.launchctlPath()),
+                pathDirectories(from: BinaryResolverHostEnvironment.pathHelperPath()),
             ]
         )
+        #else
+        return []
+        #endif
     }
 
     public static func resolve(
@@ -131,48 +184,4 @@ public enum BinaryResolver {
         return result
     }
 
-    private static func launchctlPath() -> String? {
-        runAndCapture(
-            executablePath: "/bin/launchctl",
-            arguments: ["getenv", "PATH"]
-        )?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private static func pathHelperPath() -> String? {
-        guard let output = runAndCapture(
-            executablePath: "/usr/libexec/path_helper",
-            arguments: ["-s"]
-        ) else {
-            return nil
-        }
-
-        for line in output.split(separator: "\n") {
-            let text = String(line)
-            guard let start = text.range(of: "PATH=\"")?.upperBound,
-                  let end = text[start...].firstIndex(of: "\"") else { continue }
-            return String(text[start..<end])
-        }
-        return nil
-    }
-
-    private static func runAndCapture(executablePath: String, arguments: [String]) -> String? {
-        let process = Process()
-        let stdout = Pipe()
-        process.executableURL = URL(fileURLWithPath: executablePath)
-        process.arguments = arguments
-        process.standardOutput = stdout
-        process.standardError = FileHandle.nullDevice
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            return nil
-        }
-
-        guard process.terminationStatus == 0 else { return nil }
-        let data = stdout.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8)
-    }
 }
