@@ -207,17 +207,20 @@ final class MainWindowController: NSWindowController {
         for (id, hint) in Self.toolbarShortcutHints {
             guard let anchor = toolbarButtonViews[id], anchor.window != nil else { continue }
 
+            // Convert button rect to themeFrame coords (bottom-left origin).
             let anchorRect = anchor.convert(anchor.bounds, to: themeFrame)
 
             let pill = NSHostingView(rootView: ShortcutHintPill(hint))
-            pill.translatesAutoresizingMaskIntoConstraints = false
-            themeFrame.addSubview(pill)
+            let pillSize = pill.fittingSize
 
-            // Center horizontally on the button, position above it.
-            NSLayoutConstraint.activate([
-                pill.centerXAnchor.constraint(equalTo: themeFrame.leadingAnchor, constant: anchorRect.midX),
-                pill.topAnchor.constraint(equalTo: themeFrame.topAnchor, constant: anchorRect.maxY + 2),
-            ])
+            // Center horizontally on the button, position above it (y increases upward).
+            pill.frame = NSRect(
+                x: anchorRect.midX - pillSize.width / 2,
+                y: anchorRect.maxY + 2,
+                width: pillSize.width,
+                height: pillSize.height
+            )
+            themeFrame.addSubview(pill)
 
             pill.alphaValue = 0
             shortcutHintOverlays.append(pill)
