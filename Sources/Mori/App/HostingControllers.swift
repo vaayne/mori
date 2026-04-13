@@ -28,7 +28,8 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         onOpenCommandPalette: (() -> Void)? = nil,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil,
-        onUpdateProject: ((Project) -> Void)? = nil
+        onUpdateProject: ((Project) -> Void)? = nil,
+        onReorderProjects: (([UUID]) -> Void)? = nil
     ) {
         self.appState = appState
         let rootView = SidebarContentView(
@@ -47,7 +48,8 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
             onOpenCommandPalette: onOpenCommandPalette,
             onRequestPaneOutput: onRequestPaneOutput,
             onSendKeys: onSendKeys,
-            onUpdateProject: onUpdateProject
+            onUpdateProject: onUpdateProject,
+            onReorderProjects: onReorderProjects
         )
         super.init(rootView: rootView)
         // Prevent SwiftUI's layout from dictating the view size.
@@ -90,6 +92,7 @@ struct SidebarContentView: View {
     let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     let onSendKeys: ((String, String) -> Void)?
     let onUpdateProject: ((Project) -> Void)?
+    let onReorderProjects: (([UUID]) -> Void)?
 
     var body: some View {
         SidebarContainerView(
@@ -113,7 +116,8 @@ struct SidebarContentView: View {
             onOpenCommandPalette: onOpenCommandPalette,
             onRequestPaneOutput: onRequestPaneOutput,
             onSendKeys: onSendKeys,
-            onUpdateProject: onUpdateProject
+            onUpdateProject: onUpdateProject,
+            onReorderProjects: onReorderProjects
         )
     }
 }

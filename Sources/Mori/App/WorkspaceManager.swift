@@ -563,6 +563,13 @@ final class WorkspaceManager {
         try? projectRepo.save(project)
     }
 
+    /// Reorder projects to match the given ID sequence and persist.
+    func reorderProjects(_ orderedIds: [UUID]) {
+        let lookup = Dictionary(uniqueKeysWithValues: appState.projects.map { ($0.id, $0) })
+        appState.projects = orderedIds.compactMap { lookup[$0] }
+        try? projectRepo.reorder(ids: orderedIds)
+    }
+
     // MARK: - Add Project
 
     /// Add a new project from a directory path. Creates Project, default Worktree,

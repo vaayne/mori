@@ -216,6 +216,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             onUpdateProject: { [weak manager] project in
                 manager?.updateProject(project)
+            },
+            onReorderProjects: { [weak manager] orderedIds in
+                manager?.reorderProjects(orderedIds)
             }
         )
 

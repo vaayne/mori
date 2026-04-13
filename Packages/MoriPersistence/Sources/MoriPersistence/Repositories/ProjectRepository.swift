@@ -35,4 +35,13 @@ public struct ProjectRepository: Sendable {
             data.projects.removeAll { $0.project.id == id }
         }
     }
+
+    public func reorder(ids: [UUID]) throws {
+        store.mutate { data in
+            let lookup = Dictionary(uniqueKeysWithValues: data.projects.map { ($0.project.id, $0) })
+            let reordered = ids.compactMap { lookup[$0] }
+            let remaining = data.projects.filter { !ids.contains($0.project.id) }
+            data.projects = reordered + remaining
+        }
+    }
 }
