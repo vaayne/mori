@@ -1259,14 +1259,17 @@ func testBinaryResolverPrefersConfiguredPath() {
     assertEqual(resolved, NSString(string: "~/custom/tmux").expandingTildeInPath)
 }
 
-func testBinaryResolverChecksFallbackDirectoriesBeforePATH() {
+func testBinaryResolverPrefersPATHBeforeFallbackDirectories() {
     let resolved = BinaryResolver.resolve(
         command: "tmux",
-        environment: ["PATH": "/usr/bin:/bin"],
+        environment: ["PATH": "/custom/bin:/usr/bin:/bin"],
         additionalSearchDirectories: ["~/homebrew/bin"],
-        isExecutable: { $0 == NSString(string: "~/homebrew/bin/tmux").expandingTildeInPath }
+        isExecutable: {
+            $0 == "/custom/bin/tmux" ||
+            $0 == NSString(string: "~/homebrew/bin/tmux").expandingTildeInPath
+        }
     )
-    assertEqual(resolved, NSString(string: "~/homebrew/bin/tmux").expandingTildeInPath)
+    assertEqual(resolved, "/custom/bin/tmux")
 }
 
 func testBinaryResolverFallsBackToPATH() {
@@ -1298,6 +1301,27 @@ func testBinaryResolverPathDirectoriesParsing() {
     assertEqual(directories[1], "/usr/local/bin")
     assertEqual(directories[2], "/usr/bin")
     assertEqual(directories.count, 3)
+}
+
+func testBinaryResolverSynthesizedPATHPreservesPATHPrecedence() {
+    let pathValue = BinaryResolver.synthesizedPATH(
+        environment: ["PATH": "/custom/bin:/usr/bin"],
+        additionalSearchDirectories: ["~/homebrew/bin", "/usr/bin", "/opt/homebrew/bin"]
+    )
+    let expected = [
+        "/custom/bin",
+        "/usr/bin",
+        NSString(string: "~/homebrew/bin").expandingTildeInPath,
+        "/opt/homebrew/bin",
+    ].joined(separator: ":")
+    assertEqual(pathValue, expected)
+}
+
+func testBinaryResolverDefaultSearchDirectoriesIncludeExplicitFallbacks() {
+    let directories = Set(BinaryResolver.defaultSearchDirectories)
+    assertTrue(directories.contains(NSString(string: "~/homebrew/bin").expandingTildeInPath))
+    assertTrue(directories.contains("/opt/homebrew/bin"))
+    assertTrue(directories.contains("/usr/local/bin"))
 }
 
 // MARK: - Main
@@ -1421,10 +1445,12 @@ testAgentMessageCodable()
 // Tool resolution
 testToolSettingsConfiguredPathExpandsTilde()
 testBinaryResolverPrefersConfiguredPath()
-testBinaryResolverChecksFallbackDirectoriesBeforePATH()
+testBinaryResolverPrefersPATHBeforeFallbackDirectories()
 testBinaryResolverFallsBackToPATH()
 testBinaryResolverResolveToolUsesToolSettings()
 testBinaryResolverPathDirectoriesParsing()
+testBinaryResolverSynthesizedPATHPreservesPATHPrecedence()
+testBinaryResolverDefaultSearchDirectoriesIncludeExplicitFallbacks()
 
 // KeyBinding
 runKeyBindingTests()

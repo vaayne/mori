@@ -2046,7 +2046,10 @@ final class WorkspaceManager {
     ) -> String {
         switch location {
         case .local:
-            return SSHCommandSupport.shellEscape(resolvedLocalCommand ?? command)
+            let executable = SSHCommandSupport.shellEscape(resolvedLocalCommand ?? command)
+            let pathValue = BinaryResolver.synthesizedPATH()
+            let pathExport = pathValue.isEmpty ? "" : "export PATH=\(SSHCommandSupport.shellEscape(pathValue)); "
+            return "\(pathExport)exec \(executable)"
         case .ssh:
             return command
         }

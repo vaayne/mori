@@ -50,6 +50,33 @@ private enum BinaryResolverHostEnvironment {
 #endif
 
 public enum BinaryResolver {
+    #if os(macOS)
+    private static let cachedDefaultSearchDirectories: [String] = uniqueDirectories(
+        from: [
+            pathDirectories(from: BinaryResolverHostEnvironment.launchctlPath()),
+            pathDirectories(from: BinaryResolverHostEnvironment.pathHelperPath()),
+            explicitFallbackDirectories,
+        ]
+    )
+    #endif
+
+    private static let explicitFallbackDirectories: [String] = uniqueDirectories(
+        from: [[
+            "~/homebrew/bin",
+            "~/.homebrew/bin",
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/opt/local/bin",
+            "~/.local/bin",
+            "~/.nix-profile/bin",
+            "/nix/var/nix/profiles/default/bin",
+            "~/.local/share/mise/shims",
+            "~/.asdf/shims",
+            "~/.cargo/bin",
+            "~/bin",
+        ]]
+    )
+
     public static func configuredPath(
         for command: String,
         settings: ToolSettings = ToolSettings.load()
@@ -77,15 +104,37 @@ public enum BinaryResolver {
 
     public static var defaultSearchDirectories: [String] {
         #if os(macOS)
-        return uniqueDirectories(
-            from: [
-                pathDirectories(from: BinaryResolverHostEnvironment.launchctlPath()),
-                pathDirectories(from: BinaryResolverHostEnvironment.pathHelperPath()),
-            ]
-        )
+        return cachedDefaultSearchDirectories
         #else
-        return []
+        return explicitFallbackDirectories
         #endif
+    }
+
+    public static func synthesizedPATH(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        additionalSearchDirectories: [String] = defaultSearchDirectories
+    ) -> String {
+        uniqueDirectories(
+            from: [
+                pathDirectories(from: environment["PATH"]),
+                additionalSearchDirectories,
+            ]
+        ).joined(separator: ":")
+    }
+
+    public static func synthesizedEnvironment(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        additionalSearchDirectories: [String] = defaultSearchDirectories
+    ) -> [String: String] {
+        var merged = environment
+        let pathValue = synthesizedPATH(
+            environment: environment,
+            additionalSearchDirectories: additionalSearchDirectories
+        )
+        if !pathValue.isEmpty {
+            merged["PATH"] = pathValue
+        }
+        return merged
     }
 
     public static func resolve(
@@ -106,7 +155,7 @@ public enum BinaryResolver {
 
         if let resolvedPath = firstExecutablePath(
             for: command,
-            searchDirectories: additionalSearchDirectories,
+            searchDirectories: pathDirectories(from: environment["PATH"]),
             isExecutable: isExecutable
         ) {
             return resolvedPath
@@ -114,7 +163,7 @@ public enum BinaryResolver {
 
         return firstExecutablePath(
             for: command,
-            searchDirectories: pathDirectories(from: environment["PATH"]),
+            searchDirectories: additionalSearchDirectories,
             isExecutable: isExecutable
         )
     }
@@ -203,9 +252,9 @@ public enum BinaryResolver {
         var seen = Set<String>()
         var result: [String] = []
         for directory in groups.joined() {
-            if seen.insert(directory).inserted {
-                result.append(directory)
-            }
+            let expanded = NSString(string: directory).expandingTildeInPath
+            guard !expanded.isEmpty, seen.insert(expanded).inserted else { continue }
+            result.append(expanded)
         }
         return result
     }

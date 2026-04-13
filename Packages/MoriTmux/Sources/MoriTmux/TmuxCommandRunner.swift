@@ -75,11 +75,15 @@ public actor TmuxCommandRunner {
         }
 
         // Try the inherited process environment first — this is instant and works
-        // when launched from a terminal that already has the full PATH.
+        // when launched from a terminal that already has the full PATH. For app
+        // launches with a constrained environment, synthesize PATH from the shared
+        // resolver's host probing and fallback directories before deciding whether
+        // a login shell probe is still necessary.
         let processEnv = ProcessInfo.processInfo.environment
-        if hasTmuxOnPath(processEnv) {
-            shellEnvironment = processEnv
-            return processEnv
+        let synthesizedEnv = BinaryResolver.synthesizedEnvironment(environment: processEnv)
+        if hasTmuxOnPath(synthesizedEnv) {
+            shellEnvironment = synthesizedEnv
+            return synthesizedEnv
         }
 
         // Fallback: spawn a login shell to discover the full PATH.

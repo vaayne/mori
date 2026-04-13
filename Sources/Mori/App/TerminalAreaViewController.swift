@@ -218,7 +218,7 @@ final class TerminalAreaViewController: NSViewController {
         switch location {
         case .local:
             let escapedCwd = shellEscape(workingDirectory)
-            let command = "export STARSHIP_LOG=error; \(escapedTmux) new-session -A -s \(escaped) -c \(escapedCwd)"
+            let command = "\(localEnvironmentExports())\(escapedTmux) new-session -A -s \(escaped) -c \(escapedCwd)"
             attachSurface(identity: sessionKey, command: command, workingDirectory: workingDirectory)
         case .ssh(let ssh):
             let termProgram = ProcessInfo.processInfo.environment["TERM_PROGRAM"] ?? "ghostty"
@@ -246,7 +246,7 @@ final class TerminalAreaViewController: NSViewController {
         focus: Bool = true
     ) {
         let resolvedLocalCommand = BinaryResolver.resolveTool(command: command) ?? command
-        let localCommand = "export STARSHIP_LOG=error; cd \(shellEscape(workingDirectory)); exec \(shellEscape(resolvedLocalCommand))"
+        let localCommand = "\(localEnvironmentExports())cd \(shellEscape(workingDirectory)); exec \(shellEscape(resolvedLocalCommand))"
 
         switch location {
         case .local:
@@ -403,6 +403,12 @@ final class TerminalAreaViewController: NSViewController {
 
     private func shellEscape(_ str: String) -> String {
         "'" + str.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    private func localEnvironmentExports() -> String {
+        let synthesizedPath = BinaryResolver.synthesizedPATH()
+        let pathExport = synthesizedPath.isEmpty ? "" : "export PATH=\(shellEscape(synthesizedPath)); "
+        return "\(pathExport)export STARSHIP_LOG=error; "
     }
 
     private func sshOptionsForInteractiveTerminal(_ ssh: SSHWorkspaceLocation) -> [String] {

@@ -1417,24 +1417,39 @@ private struct ToolSettingsContent: View {
 
     private func toolRow(command: String, description: String) -> some View {
         let value = toolBinding(for: command)
+        let resolvedPath = model.displayPath(for: command)
+        let hasOverride = !(model.trimmedRawPath(for: command) ?? "").isEmpty
+
         return SettingRow(title: command, description: description) {
-            TextField(String.localized("Resolved automatically"), text: value)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 280)
-                .font(.system(size: 12, design: .monospaced))
-                .onChange(of: value.wrappedValue) { _, _ in
-                    hasUnappliedChanges = true
+            VStack(alignment: .trailing, spacing: 4) {
+                TextField(String.localized("Resolved automatically"), text: value)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 280)
+                    .font(.system(size: 12, design: .monospaced))
+                    .onChange(of: value.wrappedValue) { _, _ in
+                        hasUnappliedChanges = true
+                    }
+
+                if !resolvedPath.isEmpty {
+                    Text(
+                        hasOverride
+                            ? String(format: .localized("Using override: %@"), resolvedPath)
+                            : String(format: .localized("Auto-detected: %@"), resolvedPath)
+                    )
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 280, alignment: .trailing)
+                    .multilineTextAlignment(.trailing)
+                    .textSelection(.enabled)
                 }
+            }
         }
     }
 
     private func toolBinding(for command: String) -> Binding<String> {
         Binding(
             get: {
-                if let rawValue = model.trimmedRawPath(for: command), !rawValue.isEmpty {
-                    return rawValue
-                }
-                return model.displayPath(for: command)
+                model.rawPath(for: command) ?? ""
             },
             set: { newValue in
                 model.setRawPath(newValue, for: command)
