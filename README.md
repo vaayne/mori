@@ -62,6 +62,10 @@ brew tap vaayne/tap
 brew install --cask mori
 ```
 
+### MoriRemote (iOS/iPadOS)
+
+Join the [TestFlight beta](https://testflight.apple.com/join/k2GFJPC2) to install MoriRemote on iPhone or iPad.
+
 ### GitHub Releases
 
 Download the latest release from [GitHub Releases](https://github.com/vaayne/mori/releases).
