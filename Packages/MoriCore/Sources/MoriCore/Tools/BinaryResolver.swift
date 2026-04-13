@@ -96,37 +96,27 @@ public enum BinaryResolver {
         additionalSearchDirectories: [String] = defaultSearchDirectories,
         isExecutable: (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) }
     ) -> String? {
-        if let configuredPath {
-            let expanded = NSString(string: configuredPath).expandingTildeInPath
-            if isExecutable(expanded) {
-                return expanded
-            }
+        if let configuredPath = validatedExecutablePath(configuredPath, isExecutable: isExecutable) {
+            return configuredPath
         }
 
-        if let bundledPath, isExecutable(bundledPath) {
+        if let bundledPath = validatedExecutablePath(bundledPath, isExecutable: isExecutable) {
             return bundledPath
         }
 
-        var seen = Set<String>()
-
-        for directory in additionalSearchDirectories {
-            let expanded = NSString(string: directory).expandingTildeInPath
-            let candidate = expanded.hasSuffix("/\(command)") ? expanded : "\(expanded)/\(command)"
-            if seen.insert(candidate).inserted, isExecutable(candidate) {
-                return candidate
-            }
+        if let resolvedPath = firstExecutablePath(
+            for: command,
+            searchDirectories: additionalSearchDirectories,
+            isExecutable: isExecutable
+        ) {
+            return resolvedPath
         }
 
-        guard let pathVar = environment["PATH"] else { return nil }
-        for directory in pathVar.split(separator: ":") {
-            let expanded = NSString(string: String(directory)).expandingTildeInPath
-            let candidate = "\(expanded)/\(command)"
-            if seen.insert(candidate).inserted, isExecutable(candidate) {
-                return candidate
-            }
-        }
-
-        return nil
+        return firstExecutablePath(
+            for: command,
+            searchDirectories: pathDirectories(from: environment["PATH"]),
+            isExecutable: isExecutable
+        )
     }
 
     public static func exists(
@@ -173,6 +163,42 @@ public enum BinaryResolver {
             .filter { !$0.isEmpty }
     }
 
+    private static func validatedExecutablePath(
+        _ path: String?,
+        isExecutable: (String) -> Bool
+    ) -> String? {
+        guard let path else { return nil }
+        let expandedPath = NSString(string: path).expandingTildeInPath
+        guard isExecutable(expandedPath) else { return nil }
+        return expandedPath
+    }
+
+    private static func firstExecutablePath(
+        for command: String,
+        searchDirectories: [String],
+        isExecutable: (String) -> Bool
+    ) -> String? {
+        var seen = Set<String>()
+
+        for directory in searchDirectories {
+            let candidate = executablePath(for: command, in: directory)
+            guard seen.insert(candidate).inserted else { continue }
+            if isExecutable(candidate) {
+                return candidate
+            }
+        }
+
+        return nil
+    }
+
+    private static func executablePath(for command: String, in directory: String) -> String {
+        let expandedDirectory = NSString(string: directory).expandingTildeInPath
+        if expandedDirectory.hasSuffix("/\(command)") {
+            return expandedDirectory
+        }
+        return "\(expandedDirectory)/\(command)"
+    }
+
     private static func uniqueDirectories(from groups: [[String]]) -> [String] {
         var seen = Set<String>()
         var result: [String] = []
@@ -183,5 +209,4 @@ public enum BinaryResolver {
         }
         return result
     }
-
 }

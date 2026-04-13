@@ -1364,6 +1364,12 @@ private struct WindowSettingsContent: View {
 // MARK: - Tool Settings
 
 private struct ToolSettingsContent: View {
+    private static let tools: [(command: String, description: String)] = [
+        ("tmux", .localized("Required for local Mori workspaces. Supports custom installs such as ~/homebrew/bin/tmux.")),
+        ("lazygit", .localized("Optional Git companion tool path.")),
+        ("yazi", .localized("Optional file manager companion tool path.")),
+    ]
+
     @Binding var model: ToolSettings
     let onApply: () -> Void
 
@@ -1376,27 +1382,13 @@ private struct ToolSettingsContent: View {
             .fixedSize(horizontal: false, vertical: true)
 
         SettingsCard {
-            toolRow(
-                title: "tmux",
-                description: .localized("Required for local Mori workspaces. Supports custom installs such as ~/homebrew/bin/tmux."),
-                command: "tmux"
-            )
+            ForEach(Array(Self.tools.enumerated()), id: \.element.command) { index, tool in
+                toolRow(command: tool.command, description: tool.description)
 
-            CardDivider()
-
-            toolRow(
-                title: "lazygit",
-                description: .localized("Optional Git companion tool path."),
-                command: "lazygit"
-            )
-
-            CardDivider()
-
-            toolRow(
-                title: "yazi",
-                description: .localized("Optional file manager companion tool path."),
-                command: "yazi"
-            )
+                if index < Self.tools.count - 1 {
+                    CardDivider()
+                }
+            }
         }
 
         SettingsCard {
@@ -1423,13 +1415,9 @@ private struct ToolSettingsContent: View {
         }
     }
 
-    private func toolRow(
-        title: String,
-        description: String,
-        command: String
-    ) -> some View {
+    private func toolRow(command: String, description: String) -> some View {
         let value = toolBinding(for: command)
-        return SettingRow(title: title, description: description) {
+        return SettingRow(title: command, description: description) {
             TextField(String.localized("Resolved automatically"), text: value)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 280)
@@ -1443,23 +1431,13 @@ private struct ToolSettingsContent: View {
     private func toolBinding(for command: String) -> Binding<String> {
         Binding(
             get: {
-                let rawValue = model.rawPath(for: command)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                if rawValue.isEmpty {
-                    return model.displayPath(for: command)
+                if let rawValue = model.trimmedRawPath(for: command), !rawValue.isEmpty {
+                    return rawValue
                 }
-                return rawValue
+                return model.displayPath(for: command)
             },
             set: { newValue in
-                switch command {
-                case "tmux":
-                    model.tmuxPath = newValue
-                case "lazygit":
-                    model.lazygitPath = newValue
-                case "yazi":
-                    model.yaziPath = newValue
-                default:
-                    return
-                }
+                model.setRawPath(newValue, for: command)
             }
         )
     }

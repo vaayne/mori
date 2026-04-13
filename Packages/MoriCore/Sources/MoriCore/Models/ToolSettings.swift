@@ -1,6 +1,8 @@
 import Foundation
 
 public struct ToolSettings: Codable, Equatable, Sendable {
+    public static let supportedCommands = ["tmux", "lazygit", "yazi"]
+
     public var tmuxPath: String
     public var lazygitPath: String
     public var yaziPath: String
@@ -31,8 +33,10 @@ public struct ToolSettings: Codable, Equatable, Sendable {
     }
 
     public func configuredPath(for command: String) -> String? {
-        let trimmed = rawPath(for: command)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? nil : NSString(string: trimmed).expandingTildeInPath
+        guard let trimmed = trimmedRawPath(for: command), !trimmed.isEmpty else {
+            return nil
+        }
+        return NSString(string: trimmed).expandingTildeInPath
     }
 
     public func displayPath(for command: String) -> String {
@@ -48,6 +52,23 @@ public struct ToolSettings: Codable, Equatable, Sendable {
         case "lazygit": lazygitPath
         case "yazi": yaziPath
         default: nil
+        }
+    }
+
+    public func trimmedRawPath(for command: String) -> String? {
+        rawPath(for: command)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    public mutating func setRawPath(_ value: String, for command: String) {
+        switch command {
+        case "tmux":
+            tmuxPath = value
+        case "lazygit":
+            lazygitPath = value
+        case "yazi":
+            yaziPath = value
+        default:
+            break
         }
     }
 }
