@@ -75,8 +75,10 @@ For MoriRemote TestFlight uploads, keep the iOS marketing version fixed at `0.3.
 ## Docs to Keep in Sync
 
 - **`CHANGELOG.md`** — entry under `[Unreleased]` for every user-visible change
+- **`CHANGELOG.zh-Hans.md`** — always update Chinese changelog when updating English version
 - **`AGENTS.md`** — update if build commands or conventions change
 - **`README.md`** — update if features, install steps, or usage change
+- **`README.zh-Hans.md`** — always update Chinese README when updating English version
 
 ## i18n / Localization
 
