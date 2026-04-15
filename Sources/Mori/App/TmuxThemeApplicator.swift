@@ -33,10 +33,12 @@ enum TmuxThemeApplicator {
 
     private static let cache = Cache()
 
-    static func apply(themeInfo: GhosttyThemeInfo, tmuxBackend: TmuxBackend) async {
+    static func apply(themeInfo: GhosttyThemeInfo, tmuxBackend: TmuxBackend, force: Bool = false) async {
         let payload = makePayload(themeInfo: themeInfo)
         let backendID = ObjectIdentifier(tmuxBackend)
-        guard await cache.shouldApply(payload, backendID: backendID) else { return }
+        if !force {
+            guard await cache.shouldApply(payload, backendID: backendID) else { return }
+        }
 
         let styles = makeStyles(payload: payload)
         await applyGlobalCompatibilityOptions(tmuxBackend: tmuxBackend)
