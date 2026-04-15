@@ -21,7 +21,7 @@ final class KeyBarView: UIView {
     }
 
     private var ctrlActive = false
-    private var isAutoRepeating = false
+    private var repeatingButton: UIButton?
     private var repeatAction: KeyAction?
     private var repeatTask: Task<Void, Never>?
     private var repeatTimer: Timer?
@@ -376,14 +376,13 @@ final class KeyBarView: UIView {
 
     @objc private func buttonTouchDown(_ sender: UIButton) {
         guard let action = action(for: sender) else { return }
-        isAutoRepeating = false
         applyStyle(to: sender, action: action, active: true)
     }
 
     @objc private func buttonTouchUpInside(_ sender: UIButton) {
         guard let action = action(for: sender) else { return }
-        if isAutoRepeating {
-            isAutoRepeating = false
+        if sender === repeatingButton {
+            repeatingButton = nil
             if !action.isToggle || !ctrlActive {
                 applyStyle(to: sender, action: action, active: false)
             }
@@ -397,7 +396,9 @@ final class KeyBarView: UIView {
     }
 
     @objc private func buttonTouchUpOutside(_ sender: UIButton) {
-        isAutoRepeating = false
+        if sender === repeatingButton {
+            repeatingButton = nil
+        }
         if let action = action(for: sender), (!action.isToggle || !ctrlActive) {
             applyStyle(to: sender, action: action, active: false)
         }
@@ -410,7 +411,7 @@ final class KeyBarView: UIView {
               action.supportsAutoRepeat else { return }
         switch gesture.state {
         case .began:
-            isAutoRepeating = true
+            repeatingButton = button
             UIDevice.current.playInputClick()
             startAutoRepeat(action)
         case .ended, .cancelled:
