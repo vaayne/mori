@@ -301,7 +301,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
             // Apply theme (including status bar off) to the newly created session
             if let self {
-                self.scheduleTmuxThemeApply(immediate: true, tmuxBackend: tmuxBackend)
+                self.scheduleTmuxThemeApply(immediate: true, force: true, tmuxBackend: tmuxBackend)
             }
         }
 
@@ -867,7 +867,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
-    private func scheduleTmuxThemeApply(immediate: Bool, tmuxBackend: TmuxBackend) {
+    private func scheduleTmuxThemeApply(immediate: Bool, force: Bool = false, tmuxBackend: TmuxBackend) {
         tmuxThemeApplyTask?.cancel()
         let delayNanoseconds = immediate ? 0 : tmuxThemeDebounceNanoseconds
         tmuxThemeApplyTask = Task { [weak self] in
@@ -876,7 +876,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             }
             guard !Task.isCancelled,
                   let themeInfo = self?.terminalAreaController?.themeInfo else { return }
-            await TmuxThemeApplicator.apply(themeInfo: themeInfo, tmuxBackend: tmuxBackend)
+            await TmuxThemeApplicator.apply(themeInfo: themeInfo, tmuxBackend: tmuxBackend, force: force)
         }
     }
 
