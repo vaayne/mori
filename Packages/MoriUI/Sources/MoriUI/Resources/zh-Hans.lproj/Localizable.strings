@@ -265,3 +265,5 @@
 "Exit agent mode" = "退出代理模式";
 "Agent mode" = "代理模式";
 "No agents running" = "没有运行中的代理";
+"Pin Project" = "置顶项目";
+"Unpin Project" = "取消置顶";

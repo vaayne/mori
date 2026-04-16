@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- Pin projects to the top of the sidebar via context menu or drag-and-drop
+
 ## [0.3.6] - 2026-04-13
 
 ### ✨ Features

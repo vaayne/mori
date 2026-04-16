@@ -131,12 +131,17 @@ public struct WorktreeSidebarView: View {
             }
     }
 
+    /// Projects sorted for display: pinned first, then unpinned, preserving array order within each group.
+    private var sortedProjects: [Project] {
+        projects.filter { $0.isFavorite } + projects.filter { !$0.isFavorite }
+    }
+
     /// Global 1-based index for each window across all projects and worktrees.
     /// Iterates projects in display order so indices match ⌘1-9 quick jump.
     private var globalWindowIndices: [String: Int] {
         var result: [String: Int] = [:]
         var globalIndex = 1
-        for project in projects where !project.isCollapsed {
+        for project in sortedProjects where !project.isCollapsed {
             let projectWorktrees = worktrees
                 .filter { $0.projectId == project.id && $0.status != .unavailable }
             for worktree in projectWorktrees {
@@ -159,10 +164,20 @@ public struct WorktreeSidebarView: View {
                     activeWorktreeSection
                     projectsSectionHeader
 
-                    ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
+                    let sorted = sortedProjects
+                    let firstUnpinnedIndex = sorted.firstIndex(where: { !$0.isFavorite })
+
+                    ForEach(Array(sorted.enumerated()), id: \.element.id) { index, project in
                         if index > 0 {
-                            Divider()
-                                .padding(.horizontal, MoriTokens.Spacing.xl)
+                            if index == firstUnpinnedIndex {
+                                // Separator between pinned and unpinned groups
+                                Divider()
+                                    .padding(.horizontal, MoriTokens.Spacing.xl)
+                                    .padding(.vertical, MoriTokens.Spacing.xs)
+                            } else {
+                                Divider()
+                                    .padding(.horizontal, MoriTokens.Spacing.xl)
+                            }
                         }
                         projectSection(project)
                     }
@@ -205,8 +220,15 @@ public struct WorktreeSidebarView: View {
 
     @ViewBuilder
     private func projectSection(_ project: Project) -> some View {
-        // Section header: chevron + name + hover-reveal + button
+        // Section header: pin icon + chevron + name + hover-reveal + button
         HStack(spacing: MoriTokens.Spacing.md) {
+            if project.isFavorite {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(MoriTokens.Color.muted)
+                    .frame(width: 12)
+            }
+
             Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(MoriTokens.Color.muted)
@@ -267,6 +289,12 @@ public struct WorktreeSidebarView: View {
                   draggedId != project.id else {
                 dropTargetProjectId = nil
                 return false
+            }
+            // Match the dropped project's pin state to the target group
+            if var draggedProject = projects.first(where: { $0.id == draggedId }),
+               draggedProject.isFavorite != project.isFavorite {
+                draggedProject.isFavorite = project.isFavorite
+                onUpdateProject?(draggedProject)
             }
             var ids = projects.map { $0.id }
             guard let fromIdx = ids.firstIndex(of: draggedId),
@@ -488,6 +516,18 @@ public struct WorktreeSidebarView: View {
             renamingProjectId = project.id
         } label: {
             Label("Rename Project…", systemImage: "pencil")
+        }
+
+        Button {
+            var updated = project
+            updated.isFavorite.toggle()
+            onUpdateProject?(updated)
+        } label: {
+            if project.isFavorite {
+                Label(String.localized("Unpin Project"), systemImage: "pin.slash")
+            } else {
+                Label(String.localized("Pin Project"), systemImage: "pin.fill")
+            }
         }
 
         if case .ssh = (project.location ?? .local), let onEditRemoteProject {

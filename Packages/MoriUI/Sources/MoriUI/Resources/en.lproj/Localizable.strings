@@ -265,3 +265,5 @@
 "Exit agent mode" = "Exit agent mode";
 "Agent mode" = "Agent mode";
 "No agents running" = "No agents running";
+"Pin Project" = "Pin Project";
+"Unpin Project" = "Unpin Project";
