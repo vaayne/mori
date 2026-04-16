@@ -2123,7 +2123,10 @@ final class WorkspaceManager {
     /// Iterates projects in display order, skipping collapsed ones, to match sidebar hints.
     /// Index 9 selects the last window regardless of count.
     private func selectWindowByGlobalIndex(_ index: Int) {
-        let allWindows = appState.projects
+        // Sort pinned-first to match sidebar display order.
+        let sortedProjects = appState.projects.filter { $0.isFavorite }
+            + appState.projects.filter { !$0.isFavorite }
+        let allWindows = sortedProjects
             .filter { !$0.isCollapsed }
             .flatMap { project in
                 appState.worktrees
