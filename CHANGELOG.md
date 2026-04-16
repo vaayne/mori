@@ -7,9 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-04-16
+
 ### ✨ Features
 
-- Pin projects to the top of the sidebar via context menu or drag-and-drop
+- Pin projects to the top of the sidebar via context menu or drag-and-drop ([#74](https://github.com/vaayne/mori/pull/74))
+
+### 🐛 Bug Fixes
+
+- Allow horizontal scrolling in MoriRemote KeyBarView even when touch starts on a button ([#69](https://github.com/vaayne/mori/pull/69))
+- Apply `tmux status off` to newly created sessions ([#67](https://github.com/vaayne/mori/pull/67))
+
+**Full Changelog**: [v0.3.6...v0.3.7](https://github.com/vaayne/mori/compare/v0.3.6...v0.3.7)
 
 ## [0.3.6] - 2026-04-13
 
@@ -340,7 +349,11 @@ Initial release of Mori — a macOS native workspace terminal organized around P
 
 **Full Changelog**: [v0.1.0](https://github.com/vaayne/mori/commits/v0.1.0)
 
-[Unreleased]: https://github.com/vaayne/mori/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/vaayne/mori/compare/v0.3.7...HEAD
+[0.3.7]: https://github.com/vaayne/mori/compare/v0.3.6...v0.3.7
+[0.3.6]: https://github.com/vaayne/mori/compare/v0.3.5...v0.3.6
+[0.3.5]: https://github.com/vaayne/mori/compare/v0.3.4...v0.3.5
+[0.3.4]: https://github.com/vaayne/mori/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/vaayne/mori/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/vaayne/mori/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/vaayne/mori/compare/v0.3.0...v0.3.1

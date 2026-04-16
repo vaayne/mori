@@ -7,9 +7,18 @@
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-04-16
+
 ### ✨ 新功能
 
-- 支持置顶项目到侧边栏顶部，可通过右键菜单或拖拽操作
+- 支持置顶项目到侧边栏顶部，可通过右键菜单或拖拽操作 ([#74](https://github.com/vaayne/mori/pull/74))
+
+### 🐛 问题修复
+
+- 修复 MoriRemote 快捷键栏触摸从按钮开始时无法水平滚动的问题 ([#69](https://github.com/vaayne/mori/pull/69))
+- 对新创建的会话应用 `tmux status off` ([#67](https://github.com/vaayne/mori/pull/67))
+
+**完整变更记录**: [v0.3.6...v0.3.7](https://github.com/vaayne/mori/compare/v0.3.6...v0.3.7)
 
 ## [0.3.6] - 2026-04-13
 
@@ -341,7 +350,8 @@ Mori 首次发布 —— 一款原生 macOS 工作区终端，围绕项目、工
 
 **完整变更记录**: [v0.1.0](https://github.com/vaayne/mori/commits/v0.1.0)
 
-[Unreleased]: https://github.com/vaayne/mori/compare/v0.3.6...HEAD
+[Unreleased]: https://github.com/vaayne/mori/compare/v0.3.7...HEAD
+[0.3.7]: https://github.com/vaayne/mori/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/vaayne/mori/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/vaayne/mori/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/vaayne/mori/compare/v0.3.3...v0.3.4
