@@ -21,6 +21,7 @@ final class KeyBarView: UIView {
     }
 
     private var ctrlActive = false
+    private var repeatingButton: UIButton?
     private var repeatAction: KeyAction?
     private var repeatTask: Task<Void, Never>?
     private var repeatTimer: Timer?
@@ -171,15 +172,30 @@ final class KeyBarView: UIView {
         return view
     }
 
+    private func configurePanScrolling(_ button: KeyBarButton) {
+        button.onHorizontalPan = { [weak self] deltaX in
+            guard let self else { return }
+            let newOffset = self.scrollView.contentOffset.x + deltaX
+            let maxOffset = max(0, self.scrollView.contentSize.width - self.scrollView.bounds.width)
+            self.scrollView.contentOffset.x = max(0, min(newOffset, maxOffset))
+            self.updateFadeVisibility()
+        }
+        button.onPanBegan = { [weak self] sender in
+            self?.cancelAutoRepeat()
+            if let action = self?.action(for: sender), (!action.isToggle || self?.ctrlActive != true) {
+                self?.applyStyle(to: sender, action: action, active: false)
+            }
+        }
+    }
+
     private func makeKeyButton(for action: KeyAction) -> UIButton {
-        let button = UIButton(type: .system)
+        let button = KeyBarButton()
         button.tag = action.hashValue
         button.layer.cornerRadius = 7
         button.layer.borderWidth = 1
         button.layer.borderColor = keyBorder.cgColor
         button.clipsToBounds = true
         button.adjustsImageWhenHighlighted = false
-        button.isExclusiveTouch = true
 
         let isArrow = action.iconName != nil
         let minWidth: CGFloat = isArrow ? 28 : 34
@@ -204,10 +220,19 @@ final class KeyBarView: UIView {
         applyStyle(to: button, action: action, active: false)
         objc_setAssociatedObject(button, &KeyBarView.actionKey, action, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
 
-        button.addTarget(self, action: #selector(keyDown(_:)), for: .touchDown)
-        button.addTarget(self, action: #selector(keyUp(_:)), for: .touchUpInside)
-        button.addTarget(self, action: #selector(keyUp(_:)), for: .touchUpOutside)
-        button.addTarget(self, action: #selector(keyUp(_:)), for: .touchCancel)
+        button.addTarget(self, action: #selector(buttonTouchDown(_:)), for: .touchDown)
+        button.addTarget(self, action: #selector(buttonTouchUpInside(_:)), for: .touchUpInside)
+        button.addTarget(self, action: #selector(buttonTouchUpOutside(_:)), for: .touchUpOutside)
+        button.addTarget(self, action: #selector(buttonTouchUpOutside(_:)), for: .touchCancel)
+
+        configurePanScrolling(button)
+
+        if action.supportsAutoRepeat {
+            let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+            longPress.minimumPressDuration = 0.45
+            longPress.cancelsTouchesInView = false
+            button.addGestureRecognizer(longPress)
+        }
 
         return button
     }
@@ -238,7 +263,8 @@ final class KeyBarView: UIView {
     }
 
     private func makeBackButton() -> UIButton {
-        let button = UIButton(type: .system)
+        let button = KeyBarButton()
+        configurePanScrolling(button)
         let config = UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
         button.setImage(UIImage(systemName: "chevron.backward", withConfiguration: config), for: .normal)
         button.tintColor = textDim
@@ -265,7 +291,8 @@ final class KeyBarView: UIView {
     }
 
     private func makeTmuxMenuButton() -> UIButton {
-        let button = UIButton(type: .system)
+        let button = KeyBarButton()
+        configurePanScrolling(button)
         button.setTitle(String(localized: "tmux"), for: .normal)
         button.titleLabel?.font = .monospacedSystemFont(ofSize: 10, weight: .bold)
         button.setTitleColor(accentColor, for: .normal)
@@ -292,7 +319,8 @@ final class KeyBarView: UIView {
     }
 
     private func makeKeyboardDismissButton() -> UIButton {
-        let button = UIButton(type: .system)
+        let button = KeyBarButton()
+        configurePanScrolling(button)
         let config = UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
         button.setImage(UIImage(systemName: "keyboard.chevron.compact.down", withConfiguration: config), for: .normal)
         button.tintColor = textDim
@@ -316,7 +344,8 @@ final class KeyBarView: UIView {
     }
 
     private func makeGearButton() -> UIButton {
-        let button = UIButton(type: .system)
+        let button = KeyBarButton()
+        configurePanScrolling(button)
         let config = UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
         button.setImage(UIImage(systemName: "slider.horizontal.3", withConfiguration: config), for: .normal)
         button.tintColor = textDim
@@ -345,24 +374,54 @@ final class KeyBarView: UIView {
         _ = terminalView?.resignFirstResponder()
     }
 
-    @objc private func keyDown(_ sender: UIButton) {
+    @objc private func buttonTouchDown(_ sender: UIButton) {
         guard let action = action(for: sender) else { return }
-        UIDevice.current.playInputClick()
-
         applyStyle(to: sender, action: action, active: true)
+    }
 
-        if action.supportsAutoRepeat {
-            startAutoRepeat(action)
-        } else {
-            executeAction(action, button: sender)
+    @objc private func buttonTouchUpInside(_ sender: UIButton) {
+        guard let action = action(for: sender) else { return }
+        if sender === repeatingButton {
+            repeatingButton = nil
+            if !action.isToggle || !ctrlActive {
+                applyStyle(to: sender, action: action, active: false)
+            }
+            return
+        }
+        UIDevice.current.playInputClick()
+        executeAction(action, button: sender)
+        if !action.isToggle || !ctrlActive {
+            applyStyle(to: sender, action: action, active: false)
         }
     }
 
-    @objc private func keyUp(_ sender: UIButton) {
+    @objc private func buttonTouchUpOutside(_ sender: UIButton) {
+        if sender === repeatingButton {
+            repeatingButton = nil
+        }
         if let action = action(for: sender), (!action.isToggle || !ctrlActive) {
             applyStyle(to: sender, action: action, active: false)
         }
         cancelAutoRepeat()
+    }
+
+    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+        guard let button = gesture.view as? UIButton,
+              let action = action(for: button),
+              action.supportsAutoRepeat else { return }
+        switch gesture.state {
+        case .began:
+            repeatingButton = button
+            UIDevice.current.playInputClick()
+            startAutoRepeat(action)
+        case .ended, .cancelled:
+            cancelAutoRepeat()
+            if !action.isToggle || !ctrlActive {
+                applyStyle(to: button, action: action, active: false)
+            }
+        default:
+            break
+        }
     }
 
     private func executeAction(_ action: KeyAction, button: UIButton? = nil) {
@@ -388,20 +447,16 @@ final class KeyBarView: UIView {
         repeatAction = action
         executeAction(action)
 
-        repeatTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 450_000_000)
-            guard !Task.isCancelled else { return }
-            self.repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.075, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.executeAction(action)
-                }
+        // The long-press gesture already enforces a 0.45s hold before calling
+        // startAutoRepeat, so we can begin repeating immediately.
+        repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.075, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.executeAction(action)
             }
         }
     }
 
     private func cancelAutoRepeat() {
-        repeatTask?.cancel()
-        repeatTask = nil
         repeatTimer?.invalidate()
         repeatTimer = nil
         repeatAction = nil
@@ -426,6 +481,82 @@ final class KeyBarView: UIView {
 extension KeyBarView: UIScrollViewDelegate {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         updateFadeVisibility()
+    }
+}
+
+// MARK: - KeyBarButton
+
+/// Custom button (type == .custom) that detects horizontal pans and forwards
+/// deltaX to the parent key bar so scrolling works even when
+/// `delaysContentTouches` is false. Uses `.custom` to avoid a UIKit crash
+/// (`_delayTouchesForEvent:inPhase:`) that can occur with `.system` buttons
+/// inside a `UIScrollView`.
+final class KeyBarButton: UIButton {
+    var onHorizontalPan: ((CGFloat) -> Void)?
+    var onPanBegan: ((UIButton) -> Void)?
+    private var beganPoint: CGPoint = .zero
+    private let panThreshold: CGFloat = 6.0
+    private var didCancelForPan = false
+    private var lastPanX: CGFloat = 0
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        didCancelForPan = false
+        beganPoint = touches.first?.location(in: nil) ?? .zero
+        lastPanX = beganPoint.x
+        super.touchesBegan(touches, with: event)
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else {
+            super.touchesMoved(touches, with: event)
+            return
+        }
+
+        if !didCancelForPan {
+            let point = touch.location(in: nil)
+            let dx = abs(point.x - beganPoint.x)
+            let dy = abs(point.y - beganPoint.y)
+
+            if dx > panThreshold && dx > dy {
+                didCancelForPan = true
+                cancelTracking(with: event)
+                onPanBegan?(self)
+                lastPanX = point.x
+                return
+            }
+
+            super.touchesMoved(touches, with: event)
+        } else {
+            let currentX = touch.location(in: nil).x
+            let delta = lastPanX - currentX
+            lastPanX = currentX
+            onHorizontalPan?(delta)
+        }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if didCancelForPan {
+            didCancelForPan = false
+        } else {
+            super.touchesEnded(touches, with: event)
+        }
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if didCancelForPan {
+            didCancelForPan = false
+        } else {
+            super.touchesCancelled(touches, with: event)
+        }
     }
 }
 #endif
