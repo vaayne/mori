@@ -45,9 +45,24 @@ NSSplitViewController (3 columns)
        └─ GhosttySurfaceView (libghostty Metal rendering)
 ```
 
-## Key Mapping: Worktree → tmux
+## Concept → tmux Mapping
 
-Each worktree binds to exactly one tmux session named `<project-short-name>/<branch-slug>` (e.g. `mori/main`, `api/auth-flow`). Projects have a user-editable `shortName` (auto-generated from dir name). Common branch prefixes (`feature/`, `fix/`, etc.) are stripped. The terminal surface runs `tmux attach-session -t <name>`. An LRU cache (max 3) keeps recently-used surfaces alive to avoid recreate latency on switch.
+Mori's four UI concepts map 1-to-1 onto tmux's hierarchy:
+
+```
+Mori concept          tmux entity          naming / notes
+─────────────────     ──────────────────   ──────────────────────────────────────
+Project               (no direct entity)   owns N worktrees; has a short name
+Worktree              session              "<project-shortname>/<branch-slug>"
+Window                window               user-editable name, e.g. "shell", "logs"
+Pane                  pane                 tmux pane ID, e.g. %3
+```
+
+**Session naming** — `shortName` is auto-generated from the repo directory name and is user-editable. Branch slugs strip common prefixes (`feature/`, `fix/`, `chore/`, etc.) so `feature/auth-flow` becomes `auth-flow`. Example: a project named `api` on branch `feature/auth-flow` → session `api/auth-flow`.
+
+**Attachment** — the terminal surface runs `tmux attach-session -t <session-name>`. An LRU cache (max 3) keeps recently-used Ghostty surfaces alive to avoid recreate latency on worktree switch.
+
+**Environment variables** — Mori injects `MORI_PROJECT`, `MORI_WORKTREE`, `MORI_WINDOW`, and `MORI_PANE_ID` into every pane's environment so CLI tools and agents can resolve their own address without arguments.
 
 ## Terminal Rendering
 
