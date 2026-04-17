@@ -1,87 +1,62 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#4a7c3f"/>
-      <stop offset="100%" stop-color="#2d5a27"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1f3324"/>
+      <stop offset="52%" stop-color="#122017"/>
+      <stop offset="100%" stop-color="#09100b"/>
     </linearGradient>
-    <linearGradient id="stump" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#c4944a"/>
-      <stop offset="100%" stop-color="#8b6834"/>
-    </linearGradient>
-    <linearGradient id="stumpTop" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#d4a45a"/>
-      <stop offset="100%" stop-color="#c4944a"/>
-    </linearGradient>
-    <linearGradient id="leaf" x1="0" y1="0" x2="0.5" y2="1">
-      <stop offset="0%" stop-color="#6abf4b"/>
-      <stop offset="100%" stop-color="#3d8c2e"/>
-    </linearGradient>
-    <linearGradient id="leaf2" x1="0" y1="0" x2="0.5" y2="1">
-      <stop offset="0%" stop-color="#5aaf3b"/>
-      <stop offset="100%" stop-color="#2d7c1e"/>
-    </linearGradient>
-    <radialGradient id="groundGlow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0%" stop-color="#5a9e3a" stop-opacity="0.6"/>
-      <stop offset="100%" stop-color="#3d7a28" stop-opacity="0"/>
+    <radialGradient id="ambient" cx="0.5" cy="0.22" r="0.72">
+      <stop offset="0%" stop-color="#a4ff67" stop-opacity="0.34"/>
+      <stop offset="45%" stop-color="#53b547" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#53b547" stop-opacity="0"/>
     </radialGradient>
+    <linearGradient id="woodFront" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c48942"/>
+      <stop offset="100%" stop-color="#7b4d22"/>
+    </linearGradient>
+    <linearGradient id="woodTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#edbc7b"/>
+      <stop offset="100%" stop-color="#b6793c"/>
+    </linearGradient>
+    <linearGradient id="leafLeft" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0%" stop-color="#bfff69"/>
+      <stop offset="100%" stop-color="#33a53e"/>
+    </linearGradient>
+    <linearGradient id="leafRight" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0%" stop-color="#98f157"/>
+      <stop offset="100%" stop-color="#237d38"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity="0.30"/>
+    </filter>
   </defs>
 
-  <!-- Background rounded square (macOS icon shape) -->
   <rect width="512" height="512" rx="112" ry="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" ry="112" fill="url(#ambient)"/>
 
-  <!-- Subtle ground shadow -->
-  <ellipse cx="256" cy="390" rx="140" ry="25" fill="rgba(0,0,0,0.2)"/>
+  <g filter="url(#shadow)">
+    <ellipse cx="256" cy="388" rx="124" ry="28" fill="#050705" opacity="0.34"/>
 
-  <!-- Ground moss/grass bumps -->
-  <ellipse cx="180" cy="375" rx="22" ry="14" fill="#4a8f35"/>
-  <ellipse cx="220" cy="380" rx="18" ry="11" fill="#55a03e"/>
-  <ellipse cx="290" cy="378" rx="20" ry="12" fill="#4a8f35"/>
-  <ellipse cx="330" cy="375" rx="16" ry="10" fill="#55a03e"/>
-  <ellipse cx="256" cy="382" rx="25" ry="13" fill="#509839"/>
+    <path d="M176 252 C162 260, 152 288, 152 326 C152 375, 168 408, 190 408 H322 C344 408, 360 375, 360 326 C360 288, 350 260, 336 252 Z"
+      fill="url(#woodFront)"/>
 
-  <!-- Tree stump body -->
-  <path d="M196 250 C192 250, 185 260, 183 290 C180 330, 182 360, 188 375 C192 382, 320 382, 324 375 C330 360, 332 330, 329 290 C327 260, 320 250, 316 250 Z" fill="url(#stump)"/>
+    <path d="M197 284 Q256 296 315 284" stroke="#7d4d23" stroke-width="5" opacity="0.20" fill="none" stroke-linecap="round"/>
+    <path d="M192 331 Q256 342 320 331" stroke="#6a411d" stroke-width="4" opacity="0.16" fill="none" stroke-linecap="round"/>
 
-  <!-- Stump wood grain lines -->
-  <path d="M210 280 Q256 285 302 280" stroke="#a07830" stroke-width="2" fill="none" opacity="0.5"/>
-  <path d="M205 310 Q256 315 307 310" stroke="#a07830" stroke-width="2" fill="none" opacity="0.4"/>
-  <path d="M200 340 Q256 345 312 340" stroke="#a07830" stroke-width="2" fill="none" opacity="0.3"/>
+    <ellipse cx="256" cy="244" rx="108" ry="44" fill="url(#woodTop)"/>
+    <ellipse cx="256" cy="244" rx="72" ry="27" fill="#422916"/>
+    <ellipse cx="256" cy="244" rx="56" ry="21" fill="#151a16"/>
+    <ellipse cx="256" cy="244" rx="84" ry="33" fill="none" stroke="#8b5b30" stroke-width="4" opacity="0.28"/>
 
-  <!-- Stump top (cut surface) -->
-  <ellipse cx="256" cy="250" rx="62" ry="22" fill="url(#stumpTop)"/>
+    <path d="M256 245 C257 215, 251 181, 254 151 C257 126, 270 111, 271 90" stroke="#61ca4e" stroke-width="12" fill="none" stroke-linecap="round"/>
 
-  <!-- Tree ring on top -->
-  <ellipse cx="256" cy="250" rx="40" ry="14" fill="none" stroke="#b8884a" stroke-width="2" opacity="0.5"/>
-  <ellipse cx="256" cy="250" rx="22" ry="8" fill="none" stroke="#b8884a" stroke-width="1.5" opacity="0.4"/>
+    <path d="M250 176 C229 151, 189 146, 164 167 C173 191, 218 201, 249 185 Z" fill="url(#leafLeft)"/>
+    <path d="M263 159 C283 134, 322 129, 347 147 C338 171, 295 180, 264 168 Z" fill="url(#leafRight)"/>
+    <path d="M266 98 C258 88, 251 79, 249 73 C252 67, 262 70, 268 79 C272 86, 272 93, 266 98 Z" fill="#aefd63"/>
 
-  <!-- Sprout stem -->
-  <path d="M256 250 C256 230, 252 200, 250 180 C248 160, 256 140, 256 120" stroke="#5a9040" stroke-width="6" fill="none" stroke-linecap="round"/>
-
-  <!-- Left leaf -->
-  <path d="M250 170 C240 150, 210 125, 200 115 C195 110, 200 105, 210 108 C225 112, 245 135, 250 160 Z" fill="url(#leaf)"/>
-  <!-- Left leaf vein -->
-  <path d="M248 165 C238 148, 218 128, 208 118" stroke="#3d8c2e" stroke-width="1.5" fill="none" opacity="0.5"/>
-
-  <!-- Right leaf -->
-  <path d="M258 150 C268 130, 295 110, 308 105 C314 102, 318 107, 312 112 C300 120, 272 138, 260 155 Z" fill="url(#leaf2)"/>
-  <!-- Right leaf vein -->
-  <path d="M259 148 C270 132, 290 116, 304 108" stroke="#2d7c1e" stroke-width="1.5" fill="none" opacity="0.5"/>
-
-  <!-- Top tiny leaf -->
-  <path d="M256 120 C252 108, 244 95, 240 88 C238 84, 242 82, 246 85 C252 90, 255 105, 256 118 Z" fill="#6abf4b"/>
-  <path d="M256 120 C260 108, 268 98, 272 92 C274 89, 270 86, 267 90 C262 95, 257 108, 256 118 Z" fill="#5aaf3b"/>
-
-  <!-- Face - eyes -->
-  <ellipse cx="234" cy="300" rx="8" ry="10" fill="#3a2a15"/>
-  <ellipse cx="278" cy="300" rx="8" ry="10" fill="#3a2a15"/>
-  <!-- Eye highlights -->
-  <ellipse cx="237" cy="296" rx="3" ry="4" fill="white" opacity="0.8"/>
-  <ellipse cx="281" cy="296" rx="3" ry="4" fill="white" opacity="0.8"/>
-
-  <!-- Smile -->
-  <path d="M240 320 Q256 338 272 320" stroke="#3a2a15" stroke-width="4" fill="none" stroke-linecap="round"/>
-
-  <!-- Cheek blush -->
-  <ellipse cx="222" cy="318" rx="12" ry="8" fill="#e88" opacity="0.35"/>
-  <ellipse cx="290" cy="318" rx="12" ry="8" fill="#e88" opacity="0.35"/>
+    <g stroke="#f5f8f2" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M213 322 L245 345 L213 368"/>
+      <path d="M273 366 H311"/>
+    </g>
+  </g>
 </svg>

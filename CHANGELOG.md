@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Features
 
+- **App icon refresh** — replace the scenic mascot Dock tile with a darker, terminal-aligned Mori mark: simplified stump silhouette, carved prompt glyph, and cleaner macOS-friendly composition
 - **CLI redesign: context-aware addressing** — all address components (`--project`, `--worktree`, `--window`, `--pane`) are now optional flags that default to the matching `MORI_*` env var, eliminating repeated arguments inside Mori terminals
 - **New `mori window` group** — `window list`, `window new`, `window rename`, `window close`
 - **New `mori worktree list` and `worktree delete`** — list all worktrees for a project; delete a worktree (kills tmux session + removes git worktree)

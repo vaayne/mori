@@ -9,6 +9,7 @@
 
 ### ✨ 新功能
 
+- **应用图标焕新** — 用更贴近终端气质的 Mori 新标记替换原来的风景吉祥物 Dock 图标：更简化的树桩轮廓、刻入式提示符图形，以及更适合 macOS 的构图
 - **CLI 重设计：上下文感知寻址** — 所有地址组件（`--project`、`--worktree`、`--window`、`--pane`）现为可选标志，默认读取对应的 `MORI_*` 环境变量，在 Mori 终端内无需重复输入
 - **新增 `mori window` 命令组** — `window list`、`window new`、`window rename`、`window close`
 - **新增 `mori worktree list` 和 `worktree delete`** — 列出项目的所有工作树；删除工作树（终止 tmux 会话并移除 git 工作树）
