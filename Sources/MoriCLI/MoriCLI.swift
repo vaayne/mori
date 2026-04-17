@@ -21,11 +21,10 @@ struct MoriCLI: ParsableCommand {
         subcommands: [
             Project.self,
             WorktreeCmd.self,
-            Focus.self,
-            Send.self,
-            NewWindow.self,
-            Open.self,
+            WindowCmd.self,
             PaneCmd.self,
+            Focus.self,
+            Open.self,
         ]
     )
 }
@@ -33,7 +32,6 @@ struct MoriCLI: ParsableCommand {
 /// Resolve the Mori.app bundle URL relative to the CLI binary.
 /// When bundled: .../Mori.app/Contents/MacOS/bin/mori
 private func appBundleURL() -> URL {
-    // Resolve argv[0] to an absolute path (it may be just "mori" via PATH)
     let argv0 = CommandLine.arguments[0]
     let execURL: URL
     if argv0.hasPrefix("/") {
@@ -52,12 +50,10 @@ private func appBundleURL() -> URL {
 
 private func resolveExecutableInPATH(_ name: String) -> URL? {
     let fm = FileManager.default
-    // If it contains a slash, resolve relative to cwd
     if name.contains("/") {
         let url = URL(fileURLWithPath: name).resolvingSymlinksInPath()
         return fm.fileExists(atPath: url.path) ? url : nil
     }
-    // Search PATH
     guard let pathEnv = ProcessInfo.processInfo.environment["PATH"] else { return nil }
     for dir in pathEnv.split(separator: ":") {
         let candidate = URL(fileURLWithPath: String(dir)).appendingPathComponent(name)
@@ -85,14 +81,34 @@ struct OutputOptions: ParsableArguments {
     var json = false
 }
 
+// MARK: - Address Resolution
+
+enum CLIError: Error, CustomStringConvertible {
+    case missingAddress(label: String, envKey: String)
+    var description: String {
+        switch self {
+        case .missingAddress(let label, let envKey):
+            return "\(label) not specified. Pass --\(label) or set \(envKey)."
+        }
+    }
+}
+
+func resolveRequired(_ flag: String?, envKey: String, label: String) throws -> String {
+    if let v = flag { return v }
+    if let v = ProcessInfo.processInfo.environment[envKey] { return v }
+    throw CLIError.missingAddress(label: label, envKey: envKey)
+}
+
+func resolveOptional(_ flag: String?, envKey: String) -> String? {
+    flag ?? ProcessInfo.processInfo.environment[envKey]
+}
+
 // MARK: - IPC Helpers
 
-/// Write a message to stderr.
 private func writeStderr(_ message: String) {
     FileHandle.standardError.write(Data(message.utf8))
 }
 
-/// Write a localized error to stderr and throw ExitCode.failure.
 private func exitWithError(_ message: String) throws -> Never {
     writeStderr(String.localized("Error: \(message)"))
     throw ExitCode.failure
@@ -141,9 +157,8 @@ private func launchMoriAppAndWait(socketPath: String) throws {
         try exitWithError(.localized("Failed to launch Mori.app."))
     }
 
-    // Poll for socket readiness (up to 10 seconds, check before sleeping)
     let maxAttempts = 20
-    let intervalMicroseconds: useconds_t = 500_000 // 0.5s
+    let intervalMicroseconds: useconds_t = 500_000
     for _ in 0..<maxAttempts {
         if case .ready = diagnoseIPCSocket(at: socketPath) { return }
         usleep(intervalMicroseconds)
@@ -158,24 +173,20 @@ private func findMoriApp() -> URL? {
         fm.fileExists(atPath: url.appendingPathComponent("Contents/MacOS/Mori").path)
     }
 
-    // 1. Relative to CLI binary (inside app bundle)
     let bundleCandidate = appBundleURL()
     if bundleCandidate.lastPathComponent == "Mori.app", isValidApp(bundleCandidate) {
         return bundleCandidate
     }
 
-    // 2. /Applications/Mori.app
     let applicationsApp = URL(fileURLWithPath: "/Applications/Mori.app")
     if isValidApp(applicationsApp) { return applicationsApp }
 
-    // 3. ~/Applications/Mori.app
     let homeApps = fm.homeDirectoryForCurrentUser.appendingPathComponent("Applications/Mori.app")
     if isValidApp(homeApps) { return homeApps }
 
     return nil
 }
 
-/// Print payload as raw JSON or using the given formatter.
 func printResult(_ data: Data?, json: Bool, formatter: (Data) -> String, fallback: String = "✓ OK") {
     guard let data else {
         if json {
@@ -192,7 +203,6 @@ func printResult(_ data: Data?, json: Bool, formatter: (Data) -> String, fallbac
     }
 }
 
-/// Convenience for commands that return no structured data.
 func printSuccess(_ data: Data?, json: Bool, label: String) {
     printResult(data, json: json, formatter: { _ in "" }, fallback: "✓ \(label)")
 }
@@ -282,138 +292,6 @@ struct ProjectList: ParsableCommand {
     }
 }
 
-// MARK: - mori worktree
-
-struct WorktreeCmd: ParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "worktree",
-        abstract: .localized("Manage git worktrees"),
-        subcommands: [WorktreeCreate.self]
-    )
-}
-
-struct WorktreeCreate: ParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "create",
-        abstract: .localized("Create a new worktree"),
-        discussion: """
-        \(String.localized("Creates a git worktree and a corresponding tmux session."))
-
-        \(String.localized("Examples:"))
-          mori worktree create myproject feature/auth
-          mori worktree create myproject bugfix/login --json
-        """
-    )
-
-    @Argument(help: ArgumentHelp(.localized("Project name")))
-    var project: String
-
-    @Argument(help: ArgumentHelp(.localized("Branch name")))
-    var branch: String
-
-    @OptionGroup var output: OutputOptions
-
-    func run() throws {
-        let data = try sendIPCRequest(.worktreeCreate(project: project, branch: branch))
-        printResult(data, json: output.json, formatter: OutputFormat.formatWorktreeCreate)
-    }
-}
-
-// MARK: - mori focus
-
-struct Focus: ParsableCommand {
-    static let configuration = CommandConfiguration(
-        abstract: .localized("Focus a project and worktree"),
-        discussion: """
-        \(String.localized("Switches the Mori UI to show the specified project and worktree."))
-
-        \(String.localized("Examples:"))
-          mori focus myproject main
-          mori focus myproject feature/auth
-        """
-    )
-
-    @Argument(help: ArgumentHelp(.localized("Project name")))
-    var project: String
-
-    @Argument(help: ArgumentHelp(.localized("Worktree name")))
-    var worktree: String
-
-    @OptionGroup var output: OutputOptions
-
-    func run() throws {
-        let data = try sendIPCRequest(.focus(project: project, worktree: worktree))
-        printSuccess(data, json: output.json, label: String(format: .localized("Focused %@/%@"), project, worktree))
-    }
-}
-
-// MARK: - mori send
-
-struct Send: ParsableCommand {
-    static let configuration = CommandConfiguration(
-        abstract: .localized("Send keys to a tmux window"),
-        discussion: """
-        \(String.localized("Keys use tmux send-keys syntax. Common keys: Enter, Escape, C-c (Ctrl+C), C-d, Space, Tab."))
-
-        \(String.localized("Examples:"))
-          mori send myproject main shell "echo hello Enter"
-          mori send myproject main shell "C-c"
-          mori send myproject main shell "mise run test Enter"
-        """
-    )
-
-    @Argument(help: ArgumentHelp(.localized("Project name")))
-    var project: String
-
-    @Argument(help: ArgumentHelp(.localized("Worktree name")))
-    var worktree: String
-
-    @Argument(help: ArgumentHelp(.localized("Window name")))
-    var window: String
-
-    @Argument(help: ArgumentHelp(.localized("Keys to send (tmux send-keys syntax)")))
-    var keys: String
-
-    @OptionGroup var output: OutputOptions
-
-    func run() throws {
-        let data = try sendIPCRequest(.send(project: project, worktree: worktree, window: window, keys: keys))
-        printSuccess(data, json: output.json, label: String(format: .localized("Sent keys to %@/%@/%@"), project, worktree, window))
-    }
-}
-
-// MARK: - mori new-window
-
-struct NewWindow: ParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "new-window",
-        abstract: .localized("Create a new window in a worktree"),
-        discussion: """
-        \(String.localized("Creates a new tmux window (tab) in the worktree's session."))
-
-        \(String.localized("Examples:"))
-          mori new-window myproject main
-          mori new-window myproject main --name logs
-        """
-    )
-
-    @Argument(help: ArgumentHelp(.localized("Project name")))
-    var project: String
-
-    @Argument(help: ArgumentHelp(.localized("Worktree name")))
-    var worktree: String
-
-    @Option(name: .long, help: ArgumentHelp(.localized("Window name (default: shell)")))
-    var name: String?
-
-    @OptionGroup var output: OutputOptions
-
-    func run() throws {
-        let data = try sendIPCRequest(.newWindow(project: project, worktree: worktree, name: name))
-        printSuccess(data, json: output.json, label: String(format: .localized("Created window '%@' in %@/%@"), name ?? "shell", project, worktree))
-    }
-}
-
 // MARK: - mori open
 
 struct Open: ParsableCommand {
@@ -439,6 +317,230 @@ struct Open: ParsableCommand {
     }
 }
 
+// MARK: - mori worktree
+
+struct WorktreeCmd: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "worktree",
+        abstract: .localized("Manage git worktrees"),
+        subcommands: [WorktreeList.self, WorktreeNew.self, WorktreeDelete.self]
+    )
+}
+
+struct WorktreeList: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "list",
+        abstract: .localized("List worktrees for a project"),
+        discussion: """
+        \(String.localized("Examples:"))
+          mori worktree list --project myapp
+          mori worktree list   # uses MORI_PROJECT env var
+        """
+    )
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Project name")))
+    var project: String?
+
+    @OptionGroup var output: OutputOptions
+
+    func run() throws {
+        let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
+        let data = try sendIPCRequest(.worktreeList(project: proj))
+        printResult(data, json: output.json, formatter: OutputFormat.formatWorktreeList)
+    }
+}
+
+struct WorktreeNew: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "new",
+        abstract: .localized("Create a new worktree"),
+        discussion: """
+        \(String.localized("Creates a git worktree and a corresponding tmux session."))
+
+        \(String.localized("Examples:"))
+          mori worktree new feature/auth --project myapp
+          mori worktree new feature/auth   # uses MORI_PROJECT
+        """
+    )
+
+    @Argument(help: ArgumentHelp(.localized("Branch name")))
+    var branch: String
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Project name")))
+    var project: String?
+
+    @OptionGroup var output: OutputOptions
+
+    func run() throws {
+        let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
+        let data = try sendIPCRequest(.worktreeCreate(project: proj, branch: branch))
+        printResult(data, json: output.json, formatter: OutputFormat.formatWorktreeCreate)
+    }
+}
+
+struct WorktreeDelete: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "delete",
+        abstract: .localized("Delete a worktree"),
+        discussion: """
+        \(String.localized("Kills the tmux session and removes the git worktree. The main worktree cannot be deleted."))
+
+        \(String.localized("Examples:"))
+          mori worktree delete --project myapp --worktree feat/auth
+          mori worktree delete   # uses MORI_PROJECT and MORI_WORKTREE
+        """
+    )
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Project name")))
+    var project: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Worktree name")))
+    var worktree: String?
+
+    @OptionGroup var output: OutputOptions
+
+    func run() throws {
+        let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
+        let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
+        let data = try sendIPCRequest(.worktreeDelete(project: proj, worktree: wt))
+        printSuccess(data, json: output.json, label: "Deleted worktree '\(wt)'")
+    }
+}
+
+// MARK: - mori window
+
+struct WindowCmd: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "window",
+        abstract: .localized("Manage tmux windows"),
+        subcommands: [WindowList.self, WindowNew.self, WindowRename.self, WindowClose.self]
+    )
+}
+
+struct WindowList: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "list",
+        abstract: .localized("List windows in a worktree"),
+        discussion: """
+        \(String.localized("Examples:"))
+          mori window list --project myapp --worktree main
+          mori window list   # uses MORI_PROJECT and MORI_WORKTREE
+        """
+    )
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Project name")))
+    var project: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Worktree name")))
+    var worktree: String?
+
+    @OptionGroup var output: OutputOptions
+
+    func run() throws {
+        let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
+        let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
+        let data = try sendIPCRequest(.windowList(project: proj, worktree: wt))
+        printResult(data, json: output.json, formatter: OutputFormat.formatWindowList)
+    }
+}
+
+struct WindowNew: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "new",
+        abstract: .localized("Create a new window"),
+        discussion: """
+        \(String.localized("Creates a new tmux window (tab) in the worktree's session."))
+
+        \(String.localized("Examples:"))
+          mori window new --name logs
+          mori window new --project myapp --worktree main --name tests
+        """
+    )
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Project name")))
+    var project: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Worktree name")))
+    var worktree: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Window name (default: shell)")))
+    var name: String?
+
+    @OptionGroup var output: OutputOptions
+
+    func run() throws {
+        let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
+        let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
+        let data = try sendIPCRequest(.windowNew(project: proj, worktree: wt, name: name))
+        printSuccess(data, json: output.json, label: "Created window '\(name ?? "shell")' in \(proj)/\(wt)")
+    }
+}
+
+struct WindowRename: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "rename",
+        abstract: .localized("Rename a window"),
+        discussion: """
+        \(String.localized("Examples:"))
+          mori window rename terminal
+          mori window rename terminal --window shell
+        """
+    )
+
+    @Argument(help: ArgumentHelp(.localized("New window name")))
+    var newName: String
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Project name")))
+    var project: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Worktree name")))
+    var worktree: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Window name")))
+    var window: String?
+
+    @OptionGroup var output: OutputOptions
+
+    func run() throws {
+        let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
+        let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
+        let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
+        let data = try sendIPCRequest(.windowRename(project: proj, worktree: wt, window: win, newName: newName))
+        printSuccess(data, json: output.json, label: "Renamed window '\(win)' → '\(newName)'")
+    }
+}
+
+struct WindowClose: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "close",
+        abstract: .localized("Close a window"),
+        discussion: """
+        \(String.localized("Examples:"))
+          mori window close
+          mori window close --window logs
+        """
+    )
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Project name")))
+    var project: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Worktree name")))
+    var worktree: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Window name")))
+    var window: String?
+
+    @OptionGroup var output: OutputOptions
+
+    func run() throws {
+        let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
+        let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
+        let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
+        let data = try sendIPCRequest(.windowClose(project: proj, worktree: wt, window: win))
+        printSuccess(data, json: output.json, label: "Closed window '\(win)'")
+    }
+}
+
 // MARK: - mori pane
 
 struct PaneCmd: ParsableCommand {
@@ -446,21 +548,21 @@ struct PaneCmd: ParsableCommand {
         commandName: "pane",
         abstract: .localized("Pane commands for agent communication"),
         discussion: .localized("Enables agents to discover, observe, and interact with other panes."),
-        subcommands: [PaneList.self, PaneRead.self, PaneMessage.self, PaneId.self]
+        subcommands: [PaneList.self, PaneNew.self, PaneSend.self, PaneRead.self, PaneRename.self, PaneClose.self, PaneMessage.self, PaneId.self]
     )
 }
 
 struct PaneList: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "list",
-        abstract: .localized("List all panes with project/worktree/window info"),
+        abstract: .localized("List panes"),
         discussion: """
-        \(String.localized("Shows all panes across projects with agent state and detected agent type."))
+        \(String.localized("Inside a Mori terminal: scopes to the current window by default."))
+        \(String.localized("No env vars and no flags: shows all panes across all projects."))
 
         \(String.localized("Examples:"))
           mori pane list
-          mori pane list --project myproject
-          mori pane list --project myproject --worktree main
+          mori pane list --project myapp --worktree main --window shell
         """
     )
 
@@ -470,11 +572,95 @@ struct PaneList: ParsableCommand {
     @Option(name: .long, help: ArgumentHelp(.localized("Filter by worktree name")))
     var worktree: String?
 
+    @Option(name: .long, help: ArgumentHelp(.localized("Filter by window name")))
+    var window: String?
+
     @OptionGroup var output: OutputOptions
 
     func run() throws {
-        let data = try sendIPCRequest(.paneList(project: project, worktree: worktree))
+        let proj = resolveOptional(project, envKey: "MORI_PROJECT")
+        let wt = resolveOptional(worktree, envKey: "MORI_WORKTREE")
+        let win = resolveOptional(window, envKey: "MORI_WINDOW")
+        let data = try sendIPCRequest(.paneList(project: proj, worktree: wt, window: win))
         printResult(data, json: output.json, formatter: OutputFormat.formatPaneList)
+    }
+}
+
+struct PaneNew: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "new",
+        abstract: .localized("Split a new pane"),
+        discussion: """
+        \(String.localized("Examples:"))
+          mori pane new
+          mori pane new --split v --name agent
+        """
+    )
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Project name")))
+    var project: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Worktree name")))
+    var worktree: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Window name")))
+    var window: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Split direction: h (horizontal) or v (vertical, default: h)")))
+    var split: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Pane title")))
+    var name: String?
+
+    @OptionGroup var output: OutputOptions
+
+    func run() throws {
+        let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
+        let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
+        let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
+        let data = try sendIPCRequest(.paneNew(project: proj, worktree: wt, window: win, split: split, name: name))
+        printResult(data, json: output.json, formatter: OutputFormat.formatPaneNew)
+    }
+}
+
+struct PaneSend: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "send",
+        abstract: .localized("Send keys to a pane"),
+        discussion: """
+        \(String.localized("Keys use tmux send-keys syntax. Common keys: Enter, Escape, C-c (Ctrl+C), C-d, Space, Tab."))
+
+        \(String.localized("Examples:"))
+          mori pane send "npm test Enter"
+          mori pane send --window logs "q"
+          mori pane send --pane %5 "C-c"
+        """
+    )
+
+    @Argument(help: ArgumentHelp(.localized("Keys to send (tmux send-keys syntax)")))
+    var keys: String
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Project name")))
+    var project: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Worktree name")))
+    var worktree: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Window name")))
+    var window: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Pane ID (e.g. %3); defaults to active pane")))
+    var pane: String?
+
+    @OptionGroup var output: OutputOptions
+
+    func run() throws {
+        let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
+        let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
+        let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
+        let paneId = resolveOptional(pane, envKey: "MORI_PANE_ID")
+        let data = try sendIPCRequest(.paneSend(project: proj, worktree: wt, window: win, pane: paneId, keys: keys))
+        printSuccess(data, json: output.json, label: "Sent keys to \(proj)/\(wt)/\(win)")
     }
 }
 
@@ -486,19 +672,23 @@ struct PaneRead: ParsableCommand {
         \(String.localized("Reads recent terminal output from a pane without switching to it."))
 
         \(String.localized("Examples:"))
-          mori pane read myproject main shell
-          mori pane read myproject main logs --lines 100
+          mori pane read
+          mori pane read --lines 200
+          mori pane read --pane %4
         """
     )
 
-    @Argument(help: ArgumentHelp(.localized("Project name")))
-    var project: String
+    @Option(name: .long, help: ArgumentHelp(.localized("Project name")))
+    var project: String?
 
-    @Argument(help: ArgumentHelp(.localized("Worktree name")))
-    var worktree: String
+    @Option(name: .long, help: ArgumentHelp(.localized("Worktree name")))
+    var worktree: String?
 
-    @Argument(help: ArgumentHelp(.localized("Window name")))
-    var window: String
+    @Option(name: .long, help: ArgumentHelp(.localized("Window name")))
+    var window: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Pane ID (e.g. %3); defaults to active pane")))
+    var pane: String?
 
     @Option(name: .long, help: ArgumentHelp(.localized("Number of lines to capture (1-200, default: 50)")))
     var lines: Int = 50
@@ -506,10 +696,13 @@ struct PaneRead: ParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() throws {
-        let data = try sendIPCRequest(.paneRead(project: project, worktree: worktree, window: window, lines: lines))
+        let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
+        let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
+        let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
+        let paneId = resolveOptional(pane, envKey: "MORI_PANE_ID")
+        let data = try sendIPCRequest(.paneRead(project: proj, worktree: wt, window: win, pane: paneId, lines: lines))
         guard let data, let text = String(data: data, encoding: .utf8) else { return }
         if output.json {
-            // Wrap plain text in a JSON object for machine consumption
             let envelope = ["output": text]
             if let jsonData = try? JSONSerialization.data(withJSONObject: envelope, options: [.prettyPrinted, .sortedKeys]),
                let jsonStr = String(data: jsonData, encoding: .utf8) {
@@ -518,6 +711,79 @@ struct PaneRead: ParsableCommand {
         } else {
             print(text)
         }
+    }
+}
+
+struct PaneRename: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "rename",
+        abstract: .localized("Rename a pane"),
+        discussion: """
+        \(String.localized("Examples:"))
+          mori pane rename agent
+          mori pane rename agent --pane %3
+        """
+    )
+
+    @Argument(help: ArgumentHelp(.localized("New pane title")))
+    var newName: String
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Project name")))
+    var project: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Worktree name")))
+    var worktree: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Window name")))
+    var window: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Pane ID (e.g. %3); defaults to MORI_PANE_ID")))
+    var pane: String?
+
+    @OptionGroup var output: OutputOptions
+
+    func run() throws {
+        let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
+        let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
+        let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
+        let paneId = try resolveRequired(pane, envKey: "MORI_PANE_ID", label: "pane")
+        let data = try sendIPCRequest(.paneRename(project: proj, worktree: wt, window: win, pane: paneId, newName: newName))
+        printSuccess(data, json: output.json, label: "Renamed pane \(paneId) → '\(newName)'")
+    }
+}
+
+struct PaneClose: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "close",
+        abstract: .localized("Close a pane"),
+        discussion: """
+        \(String.localized("Examples:"))
+          mori pane close
+          mori pane close --pane %3
+        """
+    )
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Project name")))
+    var project: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Worktree name")))
+    var worktree: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Window name")))
+    var window: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Pane ID (e.g. %3); defaults to active pane")))
+    var pane: String?
+
+    @OptionGroup var output: OutputOptions
+
+    func run() throws {
+        let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
+        let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
+        let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
+        let paneId = resolveOptional(pane, envKey: "MORI_PANE_ID")
+        let data = try sendIPCRequest(.paneClose(project: proj, worktree: wt, window: win, pane: paneId))
+        printSuccess(data, json: output.json, label: "Closed pane \(paneId ?? "active")")
     }
 }
 
@@ -530,37 +796,41 @@ struct PaneMessage: ParsableCommand {
         \(String.localized("Sender identity is read from MORI_PROJECT, MORI_WORKTREE, MORI_WINDOW, MORI_PANE_ID environment variables (set automatically in Mori terminals)."))
 
         \(String.localized("Examples:"))
-          mori pane message myproject main shell "build completed"
-          mori pane message myproject main editor "please review changes"
+          mori pane message "build completed"
+          mori pane message --project myapp --worktree main --window editor "please review changes"
         """
     )
-
-    @Argument(help: ArgumentHelp(.localized("Target project name")))
-    var project: String
-
-    @Argument(help: ArgumentHelp(.localized("Target worktree name")))
-    var worktree: String
-
-    @Argument(help: ArgumentHelp(.localized("Target window name")))
-    var window: String
 
     @Argument(help: ArgumentHelp(.localized("Message text")))
     var text: String
 
+    @Option(name: .long, help: ArgumentHelp(.localized("Target project name")))
+    var project: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Target worktree name")))
+    var worktree: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Target window name")))
+    var window: String?
+
     @OptionGroup var output: OutputOptions
 
     func run() throws {
+        let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
+        let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
+        let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
+
         let senderProject = ProcessInfo.processInfo.environment["MORI_PROJECT"]
         let senderWorktree = ProcessInfo.processInfo.environment["MORI_WORKTREE"]
         let senderWindow = ProcessInfo.processInfo.environment["MORI_WINDOW"]
         let senderPaneId = ProcessInfo.processInfo.environment["MORI_PANE_ID"]
 
         let data = try sendIPCRequest(.paneMessage(
-            project: project, worktree: worktree, window: window, text: text,
+            project: proj, worktree: wt, window: win, text: text,
             senderProject: senderProject, senderWorktree: senderWorktree,
             senderWindow: senderWindow, senderPaneId: senderPaneId
         ))
-        printSuccess(data, json: output.json, label: String(format: .localized("Message sent to %@/%@/%@"), project, worktree, window))
+        printSuccess(data, json: output.json, label: String(format: .localized("Message sent to %@/%@/%@"), proj, wt, win))
     }
 }
 
@@ -582,5 +852,53 @@ struct PaneId: ParsableCommand {
         let window = ProcessInfo.processInfo.environment["MORI_WINDOW"] ?? "unknown"
         let paneId = ProcessInfo.processInfo.environment["MORI_PANE_ID"] ?? "unknown"
         print("\(project)/\(worktree)/\(window) pane:\(paneId)")
+    }
+}
+
+// MARK: - mori focus
+
+struct Focus: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: .localized("Focus a project, worktree, or window in the Mori UI"),
+        discussion: """
+        \(String.localized("Behavior:"))
+          --project only           → focus the project's last active worktree
+          --project --worktree     → focus the worktree
+          all three                → focus the specific window
+
+        \(String.localized("Examples:"))
+          mori focus --project myapp
+          mori focus --project myapp --worktree feat/auth
+          mori focus --window logs
+        """
+    )
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Project name")))
+    var project: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Worktree name")))
+    var worktree: String?
+
+    @Option(name: .long, help: ArgumentHelp(.localized("Window name")))
+    var window: String?
+
+    @OptionGroup var output: OutputOptions
+
+    func run() throws {
+        let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
+        let resolvedWorktree = resolveOptional(worktree, envKey: "MORI_WORKTREE")
+        let resolvedWindow = resolveOptional(window, envKey: "MORI_WINDOW")
+
+        if let wt = resolvedWorktree, let win = resolvedWindow {
+            let data = try sendIPCRequest(.focusWindow(project: proj, worktree: wt, window: win))
+            printSuccess(data, json: output.json, label: "Focused \(proj)/\(wt)/\(win)")
+        } else if let wt = resolvedWorktree {
+            let data = try sendIPCRequest(.focus(project: proj, worktree: wt))
+            printSuccess(data, json: output.json, label: "Focused \(proj)/\(wt)")
+        } else {
+            // project only — focus its last active worktree; requires a worktree to be known
+            // Fall back to requiring worktree
+            throw CLIError.missingAddress(label: "worktree", envKey: "MORI_WORKTREE")
+        }
     }
 }

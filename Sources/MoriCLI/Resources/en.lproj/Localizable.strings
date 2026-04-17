@@ -19,6 +19,10 @@
 "Worktree name" = "Worktree name";
 "Window name" = "Window name";
 "Branch name" = "Branch name";
+"New window name" = "New window name";
+"New pane title" = "New pane title";
+"Pane ID (e.g. %3); defaults to active pane" = "Pane ID (e.g. %3); defaults to active pane";
+"Pane ID (e.g. %3); defaults to MORI_PANE_ID" = "Pane ID (e.g. %3); defaults to MORI_PANE_ID";
 "Examples:" = "Examples:";
 
 /* Project commands */
@@ -26,40 +30,45 @@
 "List all projects" = "List all projects";
 "Shows all projects tracked by Mori with their names and paths." = "Shows all projects tracked by Mori with their names and paths.";
 
-/* Worktree commands */
-"Manage git worktrees" = "Manage git worktrees";
-"Create a new worktree" = "Create a new worktree";
-"Creates a git worktree and a corresponding tmux session." = "Creates a git worktree and a corresponding tmux session.";
-
-/* Focus */
-"Focus a project and worktree" = "Focus a project and worktree";
-"Switches the Mori UI to show the specified project and worktree." = "Switches the Mori UI to show the specified project and worktree.";
-
-/* Send */
-"Send keys to a tmux window" = "Send keys to a tmux window";
-"Keys use tmux send-keys syntax. Common keys: Enter, Escape, C-c (Ctrl+C), C-d, Space, Tab." = "Keys use tmux send-keys syntax. Common keys: Enter, Escape, C-c (Ctrl+C), C-d, Space, Tab.";
-"Keys to send (tmux send-keys syntax)" = "Keys to send (tmux send-keys syntax)";
-
-/* New Window */
-"Create a new window in a worktree" = "Create a new window in a worktree";
-"Creates a new tmux window (tab) in the worktree's session." = "Creates a new tmux window (tab) in the worktree's session.";
-"Window name (default: shell)" = "Window name (default: shell)";
-
 /* Open */
 "Open a project from a path" = "Open a project from a path";
 "Opens an existing project or creates a new one from the directory. Use '.' for the current directory." = "Opens an existing project or creates a new one from the directory. Use '.' for the current directory.";
 "Path to project directory" = "Path to project directory";
 
+/* Worktree commands */
+"Manage git worktrees" = "Manage git worktrees";
+"List worktrees for a project" = "List worktrees for a project";
+"Create a new worktree" = "Create a new worktree";
+"Creates a git worktree and a corresponding tmux session." = "Creates a git worktree and a corresponding tmux session.";
+"Delete a worktree" = "Delete a worktree";
+"Kills the tmux session and removes the git worktree. The main worktree cannot be deleted." = "Kills the tmux session and removes the git worktree. The main worktree cannot be deleted.";
+
+/* Window commands */
+"Manage tmux windows" = "Manage tmux windows";
+"List windows in a worktree" = "List windows in a worktree";
+"Create a new window" = "Create a new window";
+"Creates a new tmux window (tab) in the worktree's session." = "Creates a new tmux window (tab) in the worktree's session.";
+"Window name (default: shell)" = "Window name (default: shell)";
+"Rename a window" = "Rename a window";
+"Close a window" = "Close a window";
+
 /* Pane commands */
 "Pane commands for agent communication" = "Pane commands for agent communication";
 "Enables agents to discover, observe, and interact with other panes." = "Enables agents to discover, observe, and interact with other panes.";
-"List all panes with project/worktree/window info" = "List all panes with project/worktree/window info";
-"Shows all panes across projects with agent state and detected agent type." = "Shows all panes across projects with agent state and detected agent type.";
-"Filter by project name" = "Filter by project name";
-"Filter by worktree name" = "Filter by worktree name";
+"List panes" = "List panes";
+"Inside a Mori terminal: scopes to the current window by default." = "Inside a Mori terminal: scopes to the current window by default.";
+"No env vars and no flags: shows all panes across all projects." = "No env vars and no flags: shows all panes across all projects.";
+"Split a new pane" = "Split a new pane";
+"Split direction: h (horizontal) or v (vertical, default: h)" = "Split direction: h (horizontal) or v (vertical, default: h)";
+"Pane title" = "Pane title";
+"Send keys to a pane" = "Send keys to a pane";
+"Keys use tmux send-keys syntax. Common keys: Enter, Escape, C-c (Ctrl+C), C-d, Space, Tab." = "Keys use tmux send-keys syntax. Common keys: Enter, Escape, C-c (Ctrl+C), C-d, Space, Tab.";
+"Keys to send (tmux send-keys syntax)" = "Keys to send (tmux send-keys syntax)";
 "Capture output from a pane" = "Capture output from a pane";
 "Reads recent terminal output from a pane without switching to it." = "Reads recent terminal output from a pane without switching to it.";
 "Number of lines to capture (1-200, default: 50)" = "Number of lines to capture (1-200, default: 50)";
+"Rename a pane" = "Rename a pane";
+"Close a pane" = "Close a pane";
 "Send a message to a pane with sender metadata" = "Send a message to a pane with sender metadata";
 "Sends a message to another pane for inter-agent communication." = "Sends a message to another pane for inter-agent communication.";
 "Sender identity is read from MORI_PROJECT, MORI_WORKTREE, MORI_WINDOW, MORI_PANE_ID environment variables (set automatically in Mori terminals)." = "Sender identity is read from MORI_PROJECT, MORI_WORKTREE, MORI_WINDOW, MORI_PANE_ID environment variables (set automatically in Mori terminals).";
@@ -67,14 +76,25 @@
 "Target worktree name" = "Target worktree name";
 "Target window name" = "Target window name";
 "Message text" = "Message text";
+"Filter by project name" = "Filter by project name";
+"Filter by worktree name" = "Filter by worktree name";
+"Filter by window name" = "Filter by window name";
 "Print the current pane's identity" = "Print the current pane's identity";
 "Reads MORI_* environment variables to identify the current pane. Does not require Mori.app to be running." = "Reads MORI_* environment variables to identify the current pane. Does not require Mori.app to be running.";
 
+/* Focus */
+"Focus a project, worktree, or window in the Mori UI" = "Focus a project, worktree, or window in the Mori UI";
+"Behavior:" = "Behavior:";
+
 /* Formatted output */
 "No projects found." = "No projects found.";
+"No worktrees found." = "No worktrees found.";
+"No windows found." = "No windows found.";
 "No panes found." = "No panes found.";
 "Name" = "Name";
 "Path" = "Path";
+"Branch" = "Branch";
+"Panes" = "Panes";
 "Project" = "Project";
 "Worktree" = "Worktree";
 "Window" = "Window";
@@ -84,7 +104,6 @@
 "Created worktree '%@' on branch '%@' at %@" = "Created worktree '%@' on branch '%@' at %@";
 "Opened project '%@' (%@)" = "Opened project '%@' (%@)";
 "Focused %@/%@" = "Focused %@/%@";
-"Sent keys to %@/%@/%@" = "Sent keys to %@/%@/%@";
-"Created window '%@' in %@/%@" = "Created window '%@' in %@/%@";
+"Created pane %@ in %@" = "Created pane %@ in %@";
 "Set %@/%@ status to '%@'" = "Set %@/%@ status to '%@'";
 "Message sent to %@/%@/%@" = "Message sent to %@/%@/%@";
