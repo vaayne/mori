@@ -1,9 +1,9 @@
 # Mori CLI
 
 The `mori` CLI communicates with the running Mori app over a Unix socket
-(`~/Library/Application Support/Mori/mori.sock`). It can list projects, create
-worktrees, focus windows, send keystrokes, and facilitate inter-agent
-communication through pane commands.
+(`~/Library/Application Support/Mori/mori.sock`). It can manage projects,
+worktrees, windows, and panes, and enables inter-agent communication through
+context-aware addressing.
 
 ## Installation
 
@@ -19,18 +19,47 @@ The CLI communicates with Mori.app via a Unix socket. If the app is not running,
 the CLI **automatically launches it** and waits for the socket to become ready
 (up to 10 seconds).
 
-The CLI locates Mori.app by checking (in order):
-1. Relative to the CLI binary (inside the app bundle)
-2. `/Applications/Mori.app`
-3. `~/Applications/Mori.app`
+## Context-Aware Addressing
 
-If Mori.app cannot be found, the CLI exits with:
+Every address component — `--project`, `--worktree`, `--window`, `--pane` — is
+an optional flag. When omitted, the CLI falls back to the matching `MORI_*`
+environment variable that Mori sets in every managed pane.
 
 ```
-Error: Mori.app not found. Install Mori and try again.
+--project  →  MORI_PROJECT  →  required (error if missing)
+--worktree →  MORI_WORKTREE →  required (error if missing)
+--window   →  MORI_WINDOW   →  required (error if missing)
+--pane     →  MORI_PANE_ID  →  optional (nil = active pane)
 ```
 
-## Commands
+Inside a Mori terminal, most commands reduce to their bare form:
+
+```bash
+mori pane send "npm test Enter"   # all context from env vars
+mori pane list                    # scopes to current window
+mori window new --name logs       # uses current project/worktree
+```
+
+Outside a Mori terminal, pass flags explicitly:
+
+```bash
+mori pane send --project myapp --worktree main --window shell "npm test Enter"
+```
+
+## Environment Variables
+
+Mori injects these into every managed pane:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `MORI_PROJECT` | Project name | `myapp` |
+| `MORI_WORKTREE` | Worktree name | `main` |
+| `MORI_WINDOW` | Window (tab) name | `shell` |
+| `MORI_PANE_ID` | tmux pane ID | `%42` |
+
+---
+
+## Command Reference
 
 ### `mori project list`
 
@@ -38,241 +67,261 @@ List all projects known to Mori.
 
 ```bash
 mori project list
+mori project list --json
 ```
 
-Example output:
+### `mori project open PATH`
 
-```json
-[{"name":"dotfiles","path":"/Users/v/.dotfiles"},{"name":"mori","path":"/Users/v/workspace/mori"}]
-```
-
-### `mori worktree create`
-
-Create a new worktree under an existing project.
+Open a project from a filesystem path. Creates it if not already tracked.
 
 ```bash
-mori worktree create <project> <branch>
-```
-
-| Argument | Description |
-|----------|-------------|
-| `project` | Project name |
-| `branch` | Branch name for the new worktree |
-
-```bash
-mori worktree create mori feature/cli-docs
-```
-
-### `mori focus`
-
-Focus (select) a specific project and worktree in the Mori UI.
-
-```bash
-mori focus <project> <worktree>
-```
-
-| Argument | Description |
-|----------|-------------|
-| `project` | Project name |
-| `worktree` | Worktree name |
-
-```bash
-mori focus mori main
-```
-
-### `mori send`
-
-Send keys to a specific tmux window. Keys are forwarded via `tmux send-keys`,
-so tmux key names like `Enter`, `C-c`, and `Escape` are supported.
-
-```bash
-mori send <project> <worktree> <window> <keys>
-```
-
-| Argument | Description |
-|----------|-------------|
-| `project` | Project name |
-| `worktree` | Worktree name |
-| `window` | Window (tab) name |
-| `keys` | Keys to send (tmux syntax) |
-
-```bash
-mori send mori main shell "echo hello Enter"
-mori send mori main shell "C-c"
-```
-
-### `mori new-window`
-
-Create a new window (tab) in a worktree's tmux session.
-
-```bash
-mori new-window <project> <worktree> [--name <name>]
-```
-
-| Argument / Option | Description |
-|-------------------|-------------|
-| `project` | Project name |
-| `worktree` | Worktree name |
-| `--name` | Optional window name (defaults to shell) |
-
-```bash
-mori new-window mori main --name logs
-```
-
-### `mori open`
-
-Open a project from a filesystem path. If the path matches an existing project,
-Mori focuses it. Otherwise Mori creates a new project from the directory.
-
-```bash
-mori open <path>
-```
-
-| Argument | Description |
-|----------|-------------|
-| `path` | Path to project directory |
-
-```bash
-mori open ~/workspace/mori
 mori open .
+mori open ~/workspace/myapp
 ```
+
+---
+
+### `mori worktree list`
+
+List worktrees for a project.
+
+```bash
+mori worktree list                       # uses MORI_PROJECT
+mori worktree list --project myapp
+```
+
+### `mori worktree new BRANCH`
+
+Create a new git worktree and tmux session.
+
+```bash
+mori worktree new feat/auth              # uses MORI_PROJECT
+mori worktree new feat/auth --project myapp
+```
+
+### `mori worktree delete`
+
+Delete a worktree: kills its tmux session and removes the git worktree.
+The main worktree cannot be deleted.
+
+```bash
+mori worktree delete                     # uses MORI_PROJECT + MORI_WORKTREE
+mori worktree delete --project myapp --worktree feat/auth
+```
+
+---
+
+### `mori window list`
+
+List tmux windows in a worktree.
+
+```bash
+mori window list                         # uses MORI_PROJECT + MORI_WORKTREE
+mori window list --project myapp --worktree main
+```
+
+### `mori window new`
+
+Create a new tmux window (tab) in a worktree's session.
+
+```bash
+mori window new --name logs              # uses MORI_PROJECT + MORI_WORKTREE
+mori window new --project myapp --worktree main --name tests
+```
+
+### `mori window rename NEWNAME`
+
+Rename a window.
+
+```bash
+mori window rename terminal              # uses MORI_WINDOW (and project/worktree)
+mori window rename terminal --window shell
+```
+
+### `mori window close`
+
+Close (kill) a window.
+
+```bash
+mori window close                        # uses MORI_WINDOW
+mori window close --window logs
+```
+
+---
 
 ### `mori pane list`
 
-List all panes across projects and worktrees. Optionally filter by project
-and/or worktree.
+List panes. Inside a Mori terminal, scopes to the current window by default.
+No env vars and no flags shows all panes across all projects.
 
 ```bash
-mori pane list [--project <name>] [--worktree <name>]
+mori pane list                           # current window (from env vars)
+mori pane list --project myapp --worktree main --window shell
+mori pane list --json
+```
+
+### `mori pane new`
+
+Split a new pane in a window.
+
+```bash
+mori pane new                            # horizontal split in current window
+mori pane new --split v --name agent
+mori pane new --project myapp --worktree main --window shell
 ```
 
 | Option | Description |
 |--------|-------------|
-| `--project` | Filter by project name |
-| `--worktree` | Filter by worktree name |
+| `--split h\|v` | Split direction: `h` horizontal (default), `v` vertical |
+| `--name NAME` | Pane title |
+
+### `mori pane send KEYS`
+
+Send keystrokes to a pane. Keys use `tmux send-keys` syntax.
 
 ```bash
-mori pane list
-mori pane list --project mori
-mori pane list --project mori --worktree main
+mori pane send "npm test Enter"          # active pane, current window
+mori pane send --window logs "q"         # different window (pane auto-cleared)
+mori pane send --pane %5 "C-c"          # specific pane by ID
 ```
+
+> **Note:** When `--window` is overridden, `MORI_PANE_ID` is not inherited —
+> the command targets the active pane of the specified window.
 
 ### `mori pane read`
 
-Capture recent output from a pane. Useful for agents to inspect another pane's
-terminal contents without switching to it.
+Capture recent terminal output from a pane without switching to it.
 
 ```bash
-mori pane read <project> <worktree> <window> [--lines <n>]
+mori pane read                           # active pane, 50 lines
+mori pane read --lines 200
+mori pane read --pane %4 --lines 100
 ```
 
-| Argument / Option | Description |
-|-------------------|-------------|
-| `project` | Project name |
-| `worktree` | Worktree name |
-| `window` | Window (tab) name |
-| `--lines` | Number of lines to capture (default: 50, max: 200) |
+| Option | Description |
+|--------|-------------|
+| `--lines N` | Lines to capture (1–200, default: 50) |
+| `--pane ID` | tmux pane ID (default: active pane) |
+
+### `mori pane rename NEWNAME`
+
+Set a pane's title.
 
 ```bash
-mori pane read mori main shell
-mori pane read mori main logs --lines 100
+mori pane rename agent                   # uses MORI_PANE_ID
+mori pane rename agent --pane %3
 ```
 
-### `mori pane message`
+### `mori pane close`
 
-Send a message to another pane with sender metadata. The sender's identity is
-automatically read from environment variables (see below), so the receiving pane
-knows who sent the message.
+Close (kill) a pane.
 
 ```bash
-mori pane message <project> <worktree> <window> <text>
+mori pane close                          # active pane
+mori pane close --pane %3
 ```
 
-| Argument | Description |
-|----------|-------------|
-| `project` | Target project name |
-| `worktree` | Target worktree name |
-| `window` | Target window (tab) name |
-| `text` | Message text |
+### `mori pane message TEXT`
+
+Send a message to another pane with automatic sender attribution.
+The sender's identity is read from the caller's `MORI_*` env vars.
 
 ```bash
-mori pane message mori main shell "build completed successfully"
+mori pane message "build done"           # targets current window
+mori pane message "review ready" --window orchestrator
+mori pane message "done" --project myapp --worktree main --window editor
 ```
 
 ### `mori pane id`
 
-Print the current pane's identity. This is a local-only command that reads
-environment variables — it does not require the Mori app to be running.
+Print the current pane's identity. Local only — does not require Mori.app.
 
 ```bash
 mori pane id
+# myapp/main/shell pane:%42
 ```
 
-Example output:
+---
 
+### `mori focus`
+
+Focus a project, worktree, or specific window in the Mori UI.
+
+```bash
+mori focus --project myapp                          # focus project
+mori focus --project myapp --worktree feat/auth     # focus worktree
+mori focus --window logs                            # focus window (context-aware)
+mori focus --project myapp --worktree main --window logs
 ```
-mori/main/shell pane:%42
-```
 
-## Environment Variables
-
-Mori sets these environment variables in every tmux pane it manages. They
-identify the pane's location within the project/worktree/window hierarchy.
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `MORI_PROJECT` | Project name | `mori` |
-| `MORI_WORKTREE` | Worktree name | `main` |
-| `MORI_WINDOW` | Window (tab) name | `shell` |
-| `MORI_PANE_ID` | tmux pane ID | `%42` |
-
-These variables are used automatically by `mori pane message` to attach sender
-metadata, and by `mori pane id` to print the current identity.
+---
 
 ## Agent Integration
 
-The pane commands enable inter-agent communication within Mori. A coding agent
-running in one pane can observe and interact with other panes without leaving
-its own terminal.
+The pane commands enable inter-agent communication. A coding agent running in
+one pane can discover, observe, and control other panes without leaving its
+own terminal.
 
 ### Discovering other panes
 
-An agent can list all available panes, then read output from a specific one:
-
 ```bash
-# List panes in the current project
-mori pane list --project mori
+# List all panes in the current worktree
+mori pane list --worktree main
 
-# Read the last 50 lines from the "logs" tab
-mori pane read mori main logs
+# Read the last 100 lines from the "tests" window
+mori pane read --window tests --lines 100
 
-# Read more history
-mori pane read mori main logs --lines 200
+# Read a specific pane
+mori pane read --pane %5 --lines 50
 ```
 
 ### Sending commands to other panes
 
-An agent can send keystrokes to run commands in another pane:
+```bash
+# Run tests in another window
+mori pane send --window tests "mise run test Enter"
+
+# Interrupt a running process in a specific pane
+mori pane send --pane %3 "C-c"
+```
+
+### Splitting panes for parallel work
 
 ```bash
-# Run a test suite in the "tests" tab
-mori send mori main tests "mise run test Enter"
+# Open a vertical split for a watching process
+mori pane new --split v --name watcher
 
-# Interrupt a running process
-mori send mori main server "C-c"
+# Get the new pane's ID
+mori pane list --json | jq '.[-1].tmuxPaneId'
 ```
 
 ### Messaging between agents
 
 When multiple agents run in different panes, they can exchange messages with
-sender attribution:
+full sender attribution:
 
 ```bash
-# Agent in "shell" pane sends a message to "editor" pane
-mori pane message mori main editor "refactoring complete, please review"
+# Agent in "shell" sends to "orchestrator"
+mori pane message "subtask complete" --window orchestrator
 ```
 
-The receiving pane sees the message along with metadata identifying the sender's
-project, worktree, window, and pane ID — all populated automatically from the
-sender's `MORI_*` environment variables.
+The receiving pane sees the message formatted with the sender's
+project/worktree/window/pane identity, all populated automatically from
+the sender's `MORI_*` environment variables.
 
+### Minimal automation example (inside Mori terminal)
+
+```bash
+#!/usr/bin/env bash
+# Run tests and report result to orchestrator
+
+mori pane send --window tests "mise run test Enter"
+sleep 5
+output=$(mori pane read --window tests --lines 20)
+
+if echo "$output" | grep -q "passed"; then
+    mori pane message "tests passed" --window orchestrator
+else
+    mori pane message "tests FAILED" --window orchestrator
+fi
+```
