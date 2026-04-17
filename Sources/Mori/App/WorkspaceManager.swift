@@ -9,6 +9,8 @@ import MoriTmux
 enum WorkspaceError: Error, LocalizedError {
     case projectNotFound
     case projectNotRemote
+    case worktreeNotFound
+    case cannotDeleteMainWorktree
     case branchNameEmpty
     case branchNameInvalid(String)
     case remoteHostEmpty
@@ -26,6 +28,10 @@ enum WorkspaceError: Error, LocalizedError {
             return "Project not found."
         case .projectNotRemote:
             return "Project is not configured as a remote SSH project."
+        case .worktreeNotFound:
+            return "Worktree not found."
+        case .cannotDeleteMainWorktree:
+            return "The main worktree cannot be deleted."
         case .branchNameEmpty:
             return "Branch name cannot be empty."
         case .branchNameInvalid(let name):
@@ -1115,6 +1121,32 @@ final class WorkspaceManager {
     }
 
     /// Mark a worktree as unavailable and persist. Also deselect if currently selected.
+    /// Headless worktree deletion for IPC (no UI dialogs).
+    /// Kills the tmux session, removes the git worktree, and soft-deletes from state.
+    func deleteWorktree(worktreeId: UUID) async throws {
+        guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }) else {
+            throw WorkspaceError.worktreeNotFound
+        }
+        let worktree = appState.worktrees[index]
+
+        if worktree.isMainWorktree {
+            throw WorkspaceError.cannotDeleteMainWorktree
+        }
+
+        fireHook(event: .onWorktreeClose, worktreeId: worktree.id)
+
+        if let sessionName = worktree.tmuxSessionName {
+            try? await tmuxBackend(for: worktree).killSession(id: sessionName)
+        }
+
+        if let project = appState.projects.first(where: { $0.id == worktree.projectId }) {
+            let git = gitBackend(for: worktree)
+            try await git.removeWorktree(repoPath: project.repoRootPath, path: worktree.path, force: false)
+        }
+
+        softDeleteWorktree(at: index)
+    }
+
     private func softDeleteWorktree(at index: Int) {
         let worktree = appState.worktrees[index]
         let wasSelected = appState.uiState.selectedWorktreeId == worktree.id

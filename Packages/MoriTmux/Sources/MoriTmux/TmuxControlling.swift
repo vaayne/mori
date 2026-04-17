@@ -39,6 +39,9 @@ public protocol TmuxControlling: Sendable {
     /// Rename a window.
     func renameWindow(sessionId: String, windowId: String, newName: String) async throws
 
+    /// Rename a pane (sets its title).
+    func renamePane(paneId: String, newName: String) async throws
+
     /// Send keystrokes to a pane.
     func sendKeys(sessionId: String, paneId: String, keys: String) async throws
 
@@ -109,6 +112,10 @@ public extension TmuxControlling {
 
     func renameWindow(sessionId: String, windowId: String, newName: String) async throws {
         throw TmuxError.notYetImplemented("renameWindow")
+    }
+
+    func renamePane(paneId: String, newName: String) async throws {
+        throw TmuxError.notYetImplemented("renamePane")
     }
 
     func sendKeys(sessionId: String, paneId: String, keys: String) async throws {

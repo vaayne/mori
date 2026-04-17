@@ -54,6 +54,17 @@ struct CLIWorktreeEntry: Decodable {
     let path: String
 }
 
+struct CLIWindowEntry: Decodable {
+    let name: String
+    let windowId: String
+    let paneCount: Int
+}
+
+struct CLIPaneNewEntry: Decodable {
+    let paneId: String
+    let window: String
+}
+
 struct CLIPaneInfo: Decodable {
     let endpoint: String
     let tmuxPaneId: String
@@ -86,6 +97,37 @@ enum OutputFormat {
             return prettyJSON(data)
         }
         return "✓ " + String(format: .localized("Created worktree '%@' on branch '%@' at %@"), wt.name, wt.branch, wt.path)
+    }
+
+    static func formatWorktreeList(_ data: Data) -> String {
+        guard let worktrees = try? JSONDecoder().decode([CLIWorktreeEntry].self, from: data) else {
+            return prettyJSON(data)
+        }
+        if worktrees.isEmpty { return .localized("No worktrees found.") }
+        let rows = worktrees.map { [$0.name, $0.branch, $0.path] }
+        return TableFormatter.format(
+            headers: [.localized("Name"), .localized("Branch"), .localized("Path")],
+            rows: rows
+        )
+    }
+
+    static func formatWindowList(_ data: Data) -> String {
+        guard let windows = try? JSONDecoder().decode([CLIWindowEntry].self, from: data) else {
+            return prettyJSON(data)
+        }
+        if windows.isEmpty { return .localized("No windows found.") }
+        let rows = windows.map { [$0.name, String($0.paneCount)] }
+        return TableFormatter.format(
+            headers: [.localized("Name"), .localized("Panes")],
+            rows: rows
+        )
+    }
+
+    static func formatPaneNew(_ data: Data) -> String {
+        guard let entry = try? JSONDecoder().decode(CLIPaneNewEntry.self, from: data) else {
+            return prettyJSON(data)
+        }
+        return "✓ " + String(format: .localized("Created pane %@ in %@"), entry.paneId, entry.window)
     }
 
     static func formatProjectOpen(_ data: Data) -> String {

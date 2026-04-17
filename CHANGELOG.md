@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- **CLI redesign: context-aware addressing** — all address components (`--project`, `--worktree`, `--window`, `--pane`) are now optional flags that default to the matching `MORI_*` env var, eliminating repeated arguments inside Mori terminals
+- **New `mori window` group** — `window list`, `window new`, `window rename`, `window close`
+- **New `mori worktree list` and `worktree delete`** — list all worktrees for a project; delete a worktree (kills tmux session + removes git worktree)
+- **New pane subcommands** — `pane new` (split), `pane send`, `pane rename`, `pane close` replace the old top-level `send` and `new-window` commands
+- **`mori focus` improvements** — optionally targets a specific window via `--window`
+- **`pane list` scoping** — now accepts `--window` to scope to a single window; inside a Mori terminal the current window is the default scope
+
+### 🗑️ Breaking Changes
+
+- Removed top-level `mori send`, `mori new-window`, and positional-arg `mori focus` — replaced by `mori pane send`, `mori window new`, and flag-based `mori focus`
+
 ## [0.3.7] - 2026-04-16
 
 ### ✨ Features

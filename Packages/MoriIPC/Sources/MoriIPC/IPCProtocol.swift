@@ -4,17 +4,36 @@ import Foundation
 
 /// All commands the `ws` CLI can send to the Mori app over Unix socket.
 public enum IPCCommand: Codable, Sendable, Equatable {
+    // Project
     case projectList
-    case worktreeCreate(project: String, branch: String)
-    case focus(project: String, worktree: String)
-    case send(project: String, worktree: String, window: String, keys: String)
-    case newWindow(project: String, worktree: String, name: String?)
     case open(path: String)
-    case paneList(project: String? = nil, worktree: String? = nil)
-    case paneRead(project: String, worktree: String, window: String, lines: Int)
+
+    // Worktree
+    case worktreeList(project: String)
+    case worktreeCreate(project: String, branch: String)
+    case worktreeDelete(project: String, worktree: String)
+
+    // Window
+    case windowList(project: String, worktree: String)
+    case windowNew(project: String, worktree: String, name: String?)
+    case windowRename(project: String, worktree: String, window: String, newName: String)
+    case windowClose(project: String, worktree: String, window: String)
+
+    // Pane
+    case paneList(project: String? = nil, worktree: String? = nil, window: String? = nil)
+    case paneNew(project: String, worktree: String, window: String, split: String?, name: String?)
+    case paneSend(project: String, worktree: String, window: String, pane: String?, keys: String)
+    case paneRead(project: String, worktree: String, window: String, pane: String?, lines: Int)
+    case paneRename(project: String, worktree: String, window: String, pane: String, newName: String)
+    case paneClose(project: String, worktree: String, window: String, pane: String?)
     case paneMessage(project: String, worktree: String, window: String, text: String,
                      senderProject: String? = nil, senderWorktree: String? = nil,
                      senderWindow: String? = nil, senderPaneId: String? = nil)
+
+    // Focus
+    case focusProject(project: String)
+    case focus(project: String, worktree: String)
+    case focusWindow(project: String, worktree: String, window: String)
 }
 
 // MARK: - IPC Request

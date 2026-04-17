@@ -7,6 +7,19 @@
 
 ## [Unreleased]
 
+### ✨ 新功能
+
+- **CLI 重设计：上下文感知寻址** — 所有地址组件（`--project`、`--worktree`、`--window`、`--pane`）现为可选标志，默认读取对应的 `MORI_*` 环境变量，在 Mori 终端内无需重复输入
+- **新增 `mori window` 命令组** — `window list`、`window new`、`window rename`、`window close`
+- **新增 `mori worktree list` 和 `worktree delete`** — 列出项目的所有工作树；删除工作树（终止 tmux 会话并移除 git 工作树）
+- **新增面板子命令** — `pane new`（分割）、`pane send`、`pane rename`、`pane close`，替代原有的顶层 `send` 和 `new-window` 命令
+- **`mori focus` 增强** — 新增 `--window` 参数，可聚焦到指定窗口
+- **`pane list` 范围优化** — 新增 `--window` 过滤；在 Mori 终端内默认范围为当前窗口
+
+### 🗑️ 破坏性变更
+
+- 移除顶层 `mori send`、`mori new-window` 及位置参数形式的 `mori focus`，分别由 `mori pane send`、`mori window new` 和基于标志的 `mori focus` 替代
+
 ## [0.3.7] - 2026-04-16
 
 ### ✨ 新功能

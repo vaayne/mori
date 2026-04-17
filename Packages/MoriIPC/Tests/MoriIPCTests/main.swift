@@ -17,6 +17,20 @@ func testCommandWorktreeCreateRoundTrip() {
     assertEqual(decoded, cmd, "worktreeCreate round-trip")
 }
 
+func testCommandWorktreeListRoundTrip() {
+    let cmd = IPCCommand.worktreeList(project: "mori")
+    let data = try! JSONEncoder().encode(cmd)
+    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
+    assertEqual(decoded, cmd, "worktreeList round-trip")
+}
+
+func testCommandWorktreeDeleteRoundTrip() {
+    let cmd = IPCCommand.worktreeDelete(project: "mori", worktree: "feat/auth")
+    let data = try! JSONEncoder().encode(cmd)
+    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
+    assertEqual(decoded, cmd, "worktreeDelete round-trip")
+}
+
 func testCommandFocusRoundTrip() {
     let cmd = IPCCommand.focus(project: "mori", worktree: "main")
     let data = try! JSONEncoder().encode(cmd)
@@ -24,25 +38,46 @@ func testCommandFocusRoundTrip() {
     assertEqual(decoded, cmd, "focus round-trip")
 }
 
-func testCommandSendRoundTrip() {
-    let cmd = IPCCommand.send(project: "mori", worktree: "main", window: "shell", keys: "ls -la\n")
+func testCommandFocusWindowRoundTrip() {
+    let cmd = IPCCommand.focusWindow(project: "mori", worktree: "main", window: "shell")
     let data = try! JSONEncoder().encode(cmd)
     let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
-    assertEqual(decoded, cmd, "send round-trip")
+    assertEqual(decoded, cmd, "focusWindow round-trip")
 }
 
-func testCommandNewWindowRoundTrip() {
-    let cmd = IPCCommand.newWindow(project: "mori", worktree: "main", name: "logs")
+func testCommandWindowListRoundTrip() {
+    let cmd = IPCCommand.windowList(project: "mori", worktree: "main")
     let data = try! JSONEncoder().encode(cmd)
     let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
-    assertEqual(decoded, cmd, "newWindow round-trip")
+    assertEqual(decoded, cmd, "windowList round-trip")
 }
 
-func testCommandNewWindowNilNameRoundTrip() {
-    let cmd = IPCCommand.newWindow(project: "mori", worktree: "main", name: nil)
+func testCommandWindowNewRoundTrip() {
+    let cmd = IPCCommand.windowNew(project: "mori", worktree: "main", name: "logs")
     let data = try! JSONEncoder().encode(cmd)
     let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
-    assertEqual(decoded, cmd, "newWindow nil name round-trip")
+    assertEqual(decoded, cmd, "windowNew round-trip")
+}
+
+func testCommandWindowNewNilNameRoundTrip() {
+    let cmd = IPCCommand.windowNew(project: "mori", worktree: "main", name: nil)
+    let data = try! JSONEncoder().encode(cmd)
+    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
+    assertEqual(decoded, cmd, "windowNew nil name round-trip")
+}
+
+func testCommandWindowRenameRoundTrip() {
+    let cmd = IPCCommand.windowRename(project: "mori", worktree: "main", window: "shell", newName: "terminal")
+    let data = try! JSONEncoder().encode(cmd)
+    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
+    assertEqual(decoded, cmd, "windowRename round-trip")
+}
+
+func testCommandWindowCloseRoundTrip() {
+    let cmd = IPCCommand.windowClose(project: "mori", worktree: "main", window: "logs")
+    let data = try! JSONEncoder().encode(cmd)
+    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
+    assertEqual(decoded, cmd, "windowClose round-trip")
 }
 
 func testCommandOpenRoundTrip() {
@@ -62,24 +97,59 @@ func testCommandPaneListRoundTrip() {
 }
 
 func testCommandPaneListWithFiltersRoundTrip() {
-    let cmd = IPCCommand.paneList(project: "mori", worktree: "main")
+    let cmd = IPCCommand.paneList(project: "mori", worktree: "main", window: "shell")
     let data = try! JSONEncoder().encode(cmd)
     let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
     assertEqual(decoded, cmd, "paneList filtered round-trip")
 }
 
+func testCommandPaneNewRoundTrip() {
+    let cmd = IPCCommand.paneNew(project: "mori", worktree: "main", window: "shell", split: "h", name: "agent")
+    let data = try! JSONEncoder().encode(cmd)
+    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
+    assertEqual(decoded, cmd, "paneNew round-trip")
+}
+
+func testCommandPaneSendRoundTrip() {
+    let cmd = IPCCommand.paneSend(project: "mori", worktree: "main", window: "shell", pane: nil, keys: "ls -la\n")
+    let data = try! JSONEncoder().encode(cmd)
+    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
+    assertEqual(decoded, cmd, "paneSend round-trip")
+}
+
+func testCommandPaneSendWithPaneRoundTrip() {
+    let cmd = IPCCommand.paneSend(project: "mori", worktree: "main", window: "shell", pane: "%3", keys: "C-c")
+    let data = try! JSONEncoder().encode(cmd)
+    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
+    assertEqual(decoded, cmd, "paneSend with pane round-trip")
+}
+
 func testCommandPaneReadRoundTrip() {
-    let cmd = IPCCommand.paneRead(project: "mori", worktree: "main", window: "shell", lines: 50)
+    let cmd = IPCCommand.paneRead(project: "mori", worktree: "main", window: "shell", pane: nil, lines: 50)
     let data = try! JSONEncoder().encode(cmd)
     let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
     assertEqual(decoded, cmd, "paneRead round-trip")
 }
 
 func testCommandPaneReadMaxLines() {
-    let cmd = IPCCommand.paneRead(project: "mori", worktree: "feat", window: "agent", lines: 200)
+    let cmd = IPCCommand.paneRead(project: "mori", worktree: "feat", window: "agent", pane: "%4", lines: 200)
     let data = try! JSONEncoder().encode(cmd)
     let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
     assertEqual(decoded, cmd, "paneRead max lines round-trip")
+}
+
+func testCommandPaneRenameRoundTrip() {
+    let cmd = IPCCommand.paneRename(project: "mori", worktree: "main", window: "shell", pane: "%3", newName: "agent")
+    let data = try! JSONEncoder().encode(cmd)
+    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
+    assertEqual(decoded, cmd, "paneRename round-trip")
+}
+
+func testCommandPaneCloseRoundTrip() {
+    let cmd = IPCCommand.paneClose(project: "mori", worktree: "main", window: "shell", pane: "%3")
+    let data = try! JSONEncoder().encode(cmd)
+    let decoded = try! JSONDecoder().decode(IPCCommand.self, from: data)
+    assertEqual(decoded, cmd, "paneClose round-trip")
 }
 
 func testCommandPaneListFraming() {
@@ -93,7 +163,7 @@ func testCommandPaneListFraming() {
 }
 
 func testCommandPaneReadFraming() {
-    let cmd = IPCCommand.paneRead(project: "proj", worktree: "wt", window: "win", lines: 30)
+    let cmd = IPCCommand.paneRead(project: "proj", worktree: "wt", window: "win", pane: nil, lines: 30)
     let request = IPCRequest(command: cmd, requestId: "pane-2")
     let data = try! IPCFraming.encode(request)
     assertEqual(data.last, 0x0A, "paneRead framed request ends with newline")
@@ -335,17 +405,27 @@ print("Running MoriIPC tests...")
 // Command round-trips
 testCommandProjectListRoundTrip()
 testCommandWorktreeCreateRoundTrip()
+testCommandWorktreeListRoundTrip()
+testCommandWorktreeDeleteRoundTrip()
 testCommandFocusRoundTrip()
-testCommandSendRoundTrip()
-testCommandNewWindowRoundTrip()
-testCommandNewWindowNilNameRoundTrip()
+testCommandFocusWindowRoundTrip()
+testCommandWindowListRoundTrip()
+testCommandWindowNewRoundTrip()
+testCommandWindowNewNilNameRoundTrip()
+testCommandWindowRenameRoundTrip()
+testCommandWindowCloseRoundTrip()
 testCommandOpenRoundTrip()
 
 // Pane command round-trips
 testCommandPaneListRoundTrip()
-    testCommandPaneListWithFiltersRoundTrip()
+testCommandPaneListWithFiltersRoundTrip()
+testCommandPaneNewRoundTrip()
+testCommandPaneSendRoundTrip()
+testCommandPaneSendWithPaneRoundTrip()
 testCommandPaneReadRoundTrip()
 testCommandPaneReadMaxLines()
+testCommandPaneRenameRoundTrip()
+testCommandPaneCloseRoundTrip()
 testCommandPaneListFraming()
 testCommandPaneReadFraming()
 testCommandPaneMessageRoundTrip()

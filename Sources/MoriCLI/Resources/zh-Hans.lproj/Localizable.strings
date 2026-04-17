@@ -19,6 +19,10 @@
 "Worktree name" = "工作树名称";
 "Window name" = "窗口名称";
 "Branch name" = "分支名称";
+"New window name" = "新窗口名称";
+"New pane title" = "新面板标题";
+"Pane ID (e.g. %3); defaults to active pane" = "面板 ID（如 %3）；默认使用活动面板";
+"Pane ID (e.g. %3); defaults to MORI_PANE_ID" = "面板 ID（如 %3）；默认使用 MORI_PANE_ID";
 "Examples:" = "示例：";
 
 /* Project commands */
@@ -26,40 +30,45 @@
 "List all projects" = "列出所有项目";
 "Shows all projects tracked by Mori with their names and paths." = "显示 Mori 管理的所有项目及其名称和路径。";
 
-/* Worktree commands */
-"Manage git worktrees" = "管理 git 工作树";
-"Create a new worktree" = "创建新工作树";
-"Creates a git worktree and a corresponding tmux session." = "创建 git 工作树及对应的 tmux 会话。";
-
-/* Focus */
-"Focus a project and worktree" = "聚焦到项目和工作树";
-"Switches the Mori UI to show the specified project and worktree." = "切换 Mori 界面以显示指定的项目和工作树。";
-
-/* Send */
-"Send keys to a tmux window" = "向 tmux 窗口发送按键";
-"Keys use tmux send-keys syntax. Common keys: Enter, Escape, C-c (Ctrl+C), C-d, Space, Tab." = "按键使用 tmux send-keys 语法。常用键：Enter、Escape、C-c (Ctrl+C)、C-d、Space、Tab。";
-"Keys to send (tmux send-keys syntax)" = "要发送的按键（tmux send-keys 语法）";
-
-/* New Window */
-"Create a new window in a worktree" = "在工作树中创建新窗口";
-"Creates a new tmux window (tab) in the worktree's session." = "在工作树的 tmux 会话中创建新窗口（标签页）。";
-"Window name (default: shell)" = "窗口名称（默认：shell）";
-
 /* Open */
 "Open a project from a path" = "从路径打开项目";
 "Opens an existing project or creates a new one from the directory. Use '.' for the current directory." = "打开已有项目或从目录创建新项目。使用 '.' 表示当前目录。";
 "Path to project directory" = "项目目录路径";
 
+/* Worktree commands */
+"Manage git worktrees" = "管理 git 工作树";
+"List worktrees for a project" = "列出项目的工作树";
+"Create a new worktree" = "创建新工作树";
+"Creates a git worktree and a corresponding tmux session." = "创建 git 工作树及对应的 tmux 会话。";
+"Delete a worktree" = "删除工作树";
+"Kills the tmux session and removes the git worktree. The main worktree cannot be deleted." = "终止 tmux 会话并删除 git 工作树。主工作树不可删除。";
+
+/* Window commands */
+"Manage tmux windows" = "管理 tmux 窗口";
+"List windows in a worktree" = "列出工作树中的窗口";
+"Create a new window" = "创建新窗口";
+"Creates a new tmux window (tab) in the worktree's session." = "在工作树的 tmux 会话中创建新窗口（标签页）。";
+"Window name (default: shell)" = "窗口名称（默认：shell）";
+"Rename a window" = "重命名窗口";
+"Close a window" = "关闭窗口";
+
 /* Pane commands */
 "Pane commands for agent communication" = "面板命令（用于 Agent 通信）";
 "Enables agents to discover, observe, and interact with other panes." = "使 Agent 能够发现、观察和交互其他面板。";
-"List all panes with project/worktree/window info" = "列出所有面板及项目/工作树/窗口信息";
-"Shows all panes across projects with agent state and detected agent type." = "显示所有项目的面板及其 Agent 状态和检测到的 Agent 类型。";
-"Filter by project name" = "按项目名称筛选";
-"Filter by worktree name" = "按工作树名称筛选";
+"List panes" = "列出面板";
+"Inside a Mori terminal: scopes to the current window by default." = "在 Mori 终端内：默认范围为当前窗口。";
+"No env vars and no flags: shows all panes across all projects." = "无环境变量且无标志：显示所有项目的全部面板。";
+"Split a new pane" = "分割新面板";
+"Split direction: h (horizontal) or v (vertical, default: h)" = "分割方向：h（水平）或 v（垂直，默认：h）";
+"Pane title" = "面板标题";
+"Send keys to a pane" = "向面板发送按键";
+"Keys use tmux send-keys syntax. Common keys: Enter, Escape, C-c (Ctrl+C), C-d, Space, Tab." = "按键使用 tmux send-keys 语法。常用键：Enter、Escape、C-c (Ctrl+C)、C-d、Space、Tab。";
+"Keys to send (tmux send-keys syntax)" = "要发送的按键（tmux send-keys 语法）";
 "Capture output from a pane" = "捕获面板输出";
 "Reads recent terminal output from a pane without switching to it." = "读取面板的最近终端输出，无需切换到该面板。";
 "Number of lines to capture (1-200, default: 50)" = "要捕获的行数（1-200，默认：50）";
+"Rename a pane" = "重命名面板";
+"Close a pane" = "关闭面板";
 "Send a message to a pane with sender metadata" = "向面板发送带发送者元数据的消息";
 "Sends a message to another pane for inter-agent communication." = "向另一个面板发送消息，用于 Agent 间通信。";
 "Sender identity is read from MORI_PROJECT, MORI_WORKTREE, MORI_WINDOW, MORI_PANE_ID environment variables (set automatically in Mori terminals)." = "发送者身份从 MORI_PROJECT、MORI_WORKTREE、MORI_WINDOW、MORI_PANE_ID 环境变量读取（在 Mori 终端中自动设置）。";
@@ -67,14 +76,37 @@
 "Target worktree name" = "目标工作树名称";
 "Target window name" = "目标窗口名称";
 "Message text" = "消息文本";
+"Filter by project name" = "按项目名称筛选";
+"Filter by worktree name" = "按工作树名称筛选";
+"Filter by window name" = "按窗口名称筛选";
 "Print the current pane's identity" = "打印当前面板的标识";
 "Reads MORI_* environment variables to identify the current pane. Does not require Mori.app to be running." = "读取 MORI_* 环境变量以识别当前面板。无需运行 Mori.app。";
 
+/* Focus */
+"Focus a project, worktree, or window in the Mori UI" = "在 Mori 界面中聚焦项目、工作树或窗口";
+"Behavior:" = "行为：";
+
+/* Success messages */
+"Deleted worktree '%@'" = "已删除工作树 '%@'";
+"Created window '%@' in %@/%@" = "已在 %2$@/%3$@ 中创建窗口 '%1$@'";
+"Renamed window '%@' → '%@'" = "已将窗口 '%@' 重命名为 '%@'";
+"Closed window '%@'" = "已关闭窗口 '%@'";
+"Renamed pane %@ → '%@'" = "已将面板 %@ 重命名为 '%@'";
+"Closed pane %@" = "已关闭面板 %@";
+"active" = "活动面板";
+"Focused %@/%@/%@" = "已聚焦到 %@/%@/%@";
+"Focused %@" = "已聚焦到 %@";
+"Sent keys to %@/%@/%@" = "已发送按键到 %@/%@/%@";
+
 /* Formatted output */
 "No projects found." = "未找到项目。";
+"No worktrees found." = "未找到工作树。";
+"No windows found." = "未找到窗口。";
 "No panes found." = "未找到面板。";
 "Name" = "名称";
 "Path" = "路径";
+"Branch" = "分支";
+"Panes" = "面板数";
 "Project" = "项目";
 "Worktree" = "工作树";
 "Window" = "窗口";
@@ -84,7 +116,6 @@
 "Created worktree '%@' on branch '%@' at %@" = "已在 %3$@ 创建工作树 '%1$@'，分支 '%2$@'";
 "Opened project '%@' (%@)" = "已打开项目 '%@'（%@）";
 "Focused %@/%@" = "已聚焦到 %@/%@";
-"Sent keys to %@/%@/%@" = "已发送按键到 %@/%@/%@";
-"Created window '%@' in %@/%@" = "已在 %2$@/%3$@ 中创建窗口 '%1$@'";
+"Created pane %@ in %@" = "已在 %2$@ 中创建面板 %1$@";
 "Set %@/%@ status to '%@'" = "已将 %@/%@ 状态设为 '%@'";
 "Message sent to %@/%@/%@" = "消息已发送到 %@/%@/%@";
