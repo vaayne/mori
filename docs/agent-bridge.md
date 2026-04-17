@@ -46,7 +46,7 @@ $ mori pane list
 ### 2. Read another agent's output
 
 ```bash
-$ mori pane read myapp main codex --lines 20
+$ mori pane read --window codex --lines 20
 ```
 
 Returns the last 20 lines of visible terminal output from the Codex pane.
@@ -54,7 +54,7 @@ Returns the last 20 lines of visible terminal output from the Codex pane.
 ### 3. Send a message
 
 ```bash
-$ mori pane message myapp main codex "The API schema changed — update your tests"
+$ mori pane message "The API schema changed — update your tests" --window codex
 ```
 
 Codex's pane receives this as typed input:
@@ -72,55 +72,16 @@ myapp/main/claude pane:%5
 
 ## CLI Reference
 
-### `mori pane list`
+The full command reference is in [CLI](cli.md). The pane commands relevant to agent communication:
 
-List all panes across all projects, worktrees, and windows. Output is JSON.
-
-| Field | Description |
+| Command | Description |
 |---|---|
-| `projectName` | Git repository / project name |
-| `worktreeName` | Worktree (branch) name |
-| `windowName` | Tmux window title (often the agent name) |
-| `agentState` | `running`, `waiting`, `completed`, or `null` |
-| `detectedAgent` | Agent name (`claude`, `codex`, `pi`) or `null` |
-| `tmuxPaneId` | Tmux pane ID (e.g., `%5`) |
-| `endpoint` | `local` or SSH remote identifier |
+| `mori pane list` | List panes; scopes to current window from env vars |
+| `mori pane read [--window W] [--pane ID] [--lines N]` | Capture terminal output |
+| `mori pane message TEXT [--window W]` | Send a message with sender attribution |
+| `mori pane id` | Print current pane identity (no app required) |
 
-### `mori pane read <project> <worktree> <window> [--lines N]`
-
-Capture visible terminal output from a pane.
-
-- **Default**: 50 lines
-- **Maximum**: 200 lines
-- Output is raw text (not JSON)
-
-```bash
-# Last 10 lines from the claude window
-mori pane read myapp main claude --lines 10
-```
-
-### `mori pane message <project> <worktree> <window> <text>`
-
-Send a message to a pane. The message is wrapped in an envelope that includes sender identity, then delivered as typed keystrokes (via `tmux send-keys`) followed by Enter.
-
-```bash
-mori pane message myapp main codex "Please review src/auth.ts"
-```
-
-The sender's identity is read automatically from `MORI_*` environment variables (set by Mori in each pane's hook context). If unavailable, defaults to `cli/cli/cli`.
-
-### `mori pane id`
-
-Print the current pane's identity. Reads from environment variables:
-
-| Variable | Description | Example |
-|---|---|---|
-| `MORI_PROJECT` | Project name | `myapp` |
-| `MORI_WORKTREE` | Worktree name | `main` |
-| `MORI_WINDOW` | Window title | `claude` |
-| `MORI_PANE_ID` | Tmux pane ID | `%5` |
-
-Output format: `<project>/<worktree>/<window> pane:<id>`
+All address components (`--project`, `--worktree`, `--window`, `--pane`) fall back to `MORI_*` environment variables when omitted, so inside a Mori terminal most commands need no flags at all.
 
 ## Message Envelope Format
 
@@ -169,53 +130,6 @@ if let msg = AgentMessage.parse(line) {
 }
 ```
 
-## How It Works Internally
-
-### Data Flow
-
-```
-Agent A's pane
-  │
-  ▼
-mori pane message myapp main codex "review auth"
-  │  reads MORI_* env vars for sender identity
-  ▼
-CLI sends IPC request over Unix domain socket
-  │  IPCCommand.paneMessage(project, worktree, window, text, sender*)
-  ▼
-Mori app (IPCHandler)
-  │  resolveWindow() — case-insensitive match: project → worktree → window
-  │  constructs AgentMessage envelope from sender metadata
-  ▼
-tmux send-keys "<envelope text>" Enter
-  │
-  ▼
-Agent B's pane receives the text as terminal input
-```
-
-### Target Resolution
-
-When you specify `<project> <worktree> <window>`:
-
-1. **Project** — matched by name (case-insensitive)
-2. **Worktree** — matched within the project (case-insensitive)
-3. **Window** — matched by title within the worktree (case-insensitive)
-4. **Pane** — the window's active pane (`activePaneId`) receives the command
-5. Remote/SSH worktrees use their own `TmuxBackend` instance
-
-If any step fails, you get an error like: `Window not found: myapp/main/codex`
-
-### Sender Identity
-
-The CLI reads sender identity from environment variables set by Mori's hook system:
-
-- `MORI_PROJECT` — which project this pane belongs to
-- `MORI_WORKTREE` — which worktree/branch
-- `MORI_WINDOW` — the window title
-- `MORI_PANE_ID` — the tmux pane ID
-
-These are set when Mori runs hook scripts (see [Agent Hooks](agent-hooks.md)). If you run `mori pane message` from a plain terminal outside Mori, the sender fields default to `cli`.
-
 ## UI Features
 
 ### Hover Peek
@@ -248,13 +162,13 @@ Press **⌘⇧A** to toggle a floating dashboard showing live output from all ag
 You're in Claude working on a feature. Ask Codex to handle the tests:
 
 ```bash
-mori pane message myapp main codex "Write unit tests for UserService in src/services/user.ts. Run them and fix any failures."
+mori pane message "Write unit tests for UserService in src/services/user.ts. Run them and fix any failures." --window codex
 ```
 
 Check back later:
 
 ```bash
-mori pane read myapp main codex --lines 30
+mori pane read --window codex --lines 30
 ```
 
 ### Coordinate File Ownership
@@ -262,7 +176,7 @@ mori pane read myapp main codex --lines 30
 Prevent two agents from editing the same files:
 
 ```bash
-mori pane message myapp main codex "I'm refactoring src/auth/ — don't touch those files until I message you again."
+mori pane message "I'm refactoring src/auth/ — don't touch those files until I message you again." --window codex
 ```
 
 ### Cross-Branch Communication
@@ -270,7 +184,7 @@ mori pane message myapp main codex "I'm refactoring src/auth/ — don't touch th
 Agent on `feat/api` tells agent on `feat/ui` about an API change:
 
 ```bash
-mori pane message myapp feat/ui pi "UserDTO.role is now UserDTO.roles (string → string[]). Update your fetch calls."
+mori pane message "UserDTO.role is now UserDTO.roles (string → string[]). Update your fetch calls." --project myapp --worktree feat/ui --window pi
 ```
 
 ### Build/Test Watcher
@@ -281,7 +195,7 @@ A script in one pane notifies the coding agent when tests break:
 while true; do
   output=$(mise run test 2>&1)
   if echo "$output" | grep -q "FAILED"; then
-    mori pane message myapp main claude "Tests failed. Output: $(echo "$output" | tail -5)"
+    mori pane message "Tests failed. Output: $(echo "$output" | tail -5)" --window claude
   fi
   sleep 60
 done
@@ -292,7 +206,7 @@ done
 A less capable agent escalates a hard problem:
 
 ```bash
-mori pane message myapp main claude "Stuck on Swift 6 sendability error in TmuxBackend.swift:142. Can you take a look?"
+mori pane message "Stuck on Swift 6 sendability error in TmuxBackend.swift:142. Can you take a look?" --window claude
 ```
 
 ### Orchestrator Pattern
@@ -301,14 +215,14 @@ One agent coordinates multiple workers:
 
 ```bash
 # Orchestrator distributes work
-mori pane message myapp main claude "Implement the caching layer in src/cache/"
-mori pane message myapp main codex "Update API docs in docs/api.md"
-mori pane message myapp feat/ui pi "Build the settings form per the Figma spec"
+mori pane message "Implement the caching layer in src/cache/" --window claude
+mori pane message "Update API docs in docs/api.md" --window codex
+mori pane message "Build the settings form per the Figma spec" --project myapp --worktree feat/ui --window pi
 
 # Poll for completion
 for agent in claude codex pi; do
   echo "=== $agent ==="
-  mori pane read myapp main $agent --lines 5
+  mori pane read --window $agent --lines 5
 done
 ```
 
@@ -321,7 +235,7 @@ An agent can learn about its environment and peers:
 mori pane id
 
 # Who else is running?
-mori pane list | jq '.[] | select(.agentState == "running") | .windowName'
+mori pane list --json | jq '.[] | select(.agentState == "running") | .windowName'
 ```
 
 ## Teaching Agents to Use the Bridge
@@ -331,12 +245,15 @@ Add this to the agent's skill file, system prompt, or `AGENTS.md`:
 ```markdown
 ## Inter-Agent Communication
 
-You can communicate with other coding agents via the `mori` CLI:
+You can communicate with other coding agents via the `mori` CLI.
+Inside a Mori terminal, MORI_* env vars supply your context automatically.
 
 - **List agents**: `mori pane list` — JSON list of all panes with agent state
-- **Read output**: `mori pane read <project> <worktree> <window> --lines 50`
-- **Send message**: `mori pane message <project> <worktree> <window> "your message"`
+- **Read output**: `mori pane read --window <window> [--lines 50]`
+- **Send message**: `mori pane message "your message" --window <window>`
 - **Your identity**: `mori pane id`
+
+Cross-project/worktree: add `--project P --worktree W` flags as needed.
 
 Messages arrive as text input in the format:
 `[mori-bridge project:<p> worktree:<w> window:<win> pane:<id>] <text>`
@@ -371,6 +288,28 @@ coordinates and the message text, then respond appropriately.
 - **Single active pane.** In multi-pane windows, only the active pane receives messages.
 - **Environment variables required.** `mori pane id` and sender metadata in `mori pane message` depend on `MORI_*` environment variables. These are set by Mori's hook system — if hooks aren't enabled, sender identity defaults to `cli`.
 
+## How It Works Internally
+
+```
+Agent A's pane
+  │
+  ▼
+mori pane message "review auth" --window codex
+  │  reads MORI_* env vars for sender identity
+  ▼
+CLI sends IPC request over Unix domain socket
+  │  IPCCommand.paneMessage(project, worktree, window, text, sender*)
+  ▼
+Mori app (IPCHandler)
+  │  resolveWindow() — case-insensitive match: project → worktree → window
+  │  constructs AgentMessage envelope from sender metadata
+  ▼
+tmux send-keys "<envelope text>" Enter
+  │
+  ▼
+Agent B's pane receives the text as terminal input
+```
+
 ## Architecture
 
 | Layer | Component | Location |
@@ -383,6 +322,7 @@ coordinates and the message text, then respond appropriately.
 
 ## See Also
 
+- [CLI](cli.md) — full command reference including all pane, window, and worktree commands
 - [Agent Hooks](agent-hooks.md) — how Mori detects agent state and sets `MORI_*` environment variables
 - [Architecture](architecture.md) — package structure and data flow
 - [Keymaps](keymaps.md) — keyboard shortcuts including ⌘⇧A for the agent dashboard
