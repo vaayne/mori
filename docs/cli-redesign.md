@@ -3,12 +3,16 @@
 ## Problem
 
 Every command that targets a resource repeats `PROJECT WORKTREE WINDOW` as positional
-arguments. This creates three concrete issues:
+arguments. This creates four concrete issues:
 
 1. **Verbose scripts** — agent automations repeat the same address on every call.
-2. **Missing resource operations** — no `worktree list`, no pane splits, no renames.
+2. **Missing resource operations** — no `worktree list/delete`, no pane splits, no renames.
 3. **Window/pane conflation** — `send` and `read` target the *active pane of a window*
    with no way to address a specific pane.
+4. **No pane listing** — `pane list` exists but scopes vaguely via optional filters rather
+   than being a first-class `pane list` that mirrors `window list`.
+
+No backward compatibility is maintained. Old commands are removed.
 
 ## Solution: Context-Aware Addressing
 
@@ -22,7 +26,7 @@ defaults to the matching env var when omitted.
 --project flag  >  MORI_PROJECT env var  >  error
 --worktree flag >  MORI_WORKTREE env var >  error
 --window flag   >  MORI_WINDOW env var   >  error
---pane flag     >  MORI_PANE_ID env var  >  (none — pane is optional in most commands)
+--pane flag     >  MORI_PANE_ID env var  >  nil (pane is optional — means "active pane")
 ```
 
 ### Before / After
@@ -30,20 +34,20 @@ defaults to the matching env var when omitted.
 ```bash
 # Outside Mori terminal — fully explicit
 mori pane send --project myapp --worktree main --window shell "npm test Enter"
-mori pane read --project myapp --worktree main --window shell --lines 100
+mori pane list --project myapp --worktree main --window shell
 
-# Inside a Mori terminal — use current context
+# Inside a Mori terminal — zero ceremony
 mori pane send "npm test Enter"
-mori pane read --lines 100
+mori pane list                         # lists panes in current window
 
-# Inside a Mori terminal — partial override (same project, different window)
+# Partial override — same project/worktree, different window
 mori pane send --window logs "q"
-mori pane send --worktree feat/auth --window shell "git status Enter"
+mori pane list --window logs
 ```
 
 ---
 
-## New Command Tree
+## Command Tree
 
 ```
 mori
@@ -54,13 +58,13 @@ mori
 ├── worktree
 │   ├── list   [--project P]
 │   ├── new    BRANCH [--project P]
-│   └── delete [--project P] [--worktree W]
+│   └── delete [--project P] [--worktree W] [--force]
 │
 ├── window
 │   ├── list   [--project P] [--worktree W]
 │   ├── new    [--project P] [--worktree W] [--name NAME]
 │   ├── rename NEWNAME [--project P] [--worktree W] [--window W]
-│   └── close  [--project P] [--worktree W] [--window W]
+│   └── close  [--project P] [--worktree W] [--window W] [--force]
 │
 ├── pane
 │   ├── list    [--project P] [--worktree W] [--window W]
@@ -68,7 +72,7 @@ mori
 │   ├── send    KEYS [--project P] [--worktree W] [--window W] [--pane ID]
 │   ├── read    [--project P] [--worktree W] [--window W] [--pane ID] [--lines N]
 │   ├── rename  NEWNAME [--project P] [--worktree W] [--window W] [--pane ID]
-│   ├── close   [--project P] [--worktree W] [--window W] [--pane ID]
+│   ├── close   [--project P] [--worktree W] [--window W] [--pane ID] [--force]
 │   ├── message TEXT [--project P] [--worktree W] [--window W]
 │   └── id
 │
@@ -76,85 +80,109 @@ mori
 └── open   PATH
 ```
 
+### Symmetry across resource levels
+
+Each resource (worktree, window, pane) supports the same lifecycle verbs:
+
+| Verb | worktree | window | pane |
+|---|---|---|---|
+| `list` | ✓ | ✓ | ✓ |
+| `new` | ✓ (creates git worktree + tmux session) | ✓ (new tmux window) | ✓ (split) |
+| `rename` | — | ✓ | ✓ |
+| `close` / `delete` | `delete` | `close` | `close` |
+
+Worktrees use `delete` (heavier — removes git worktree + session).
+Windows and panes use `close` (lighter — kills the tmux entity).
+
 ---
 
 ## Command Reference
 
 ### `mori project`
 
-| Command | Description |
-|---|---|
-| `project list` | List all tracked projects |
-| `project open PATH` | Register + open project from directory (`.` supported) |
+**`project list`**
+```
+Flags: --json
+
+Output:
+  Name     Path
+  ───────  ────────────────────────
+  myapp    ~/workspace/myapp
+  infra    ~/workspace/infra
+```
+
+**`project open PATH`**
+```
+Arguments:
+  PATH   Directory path. Use '.' for current directory.
+
+Flags: --json
+
+Output:
+  ✓ Opened project 'myapp' (~/workspace/myapp)
+```
+
+---
 
 ### `mori worktree`
-
-| Command | Description |
-|---|---|
-| `worktree list` | List all worktrees for a project |
-| `worktree new BRANCH` | Create git worktree + tmux session |
-| `worktree delete` | Delete worktree and its tmux session |
 
 **`worktree list`**
 ```
 Flags:
-  --project   Project name  [env: MORI_PROJECT]
-  --json      Machine-readable output
+  --project P   [env: MORI_PROJECT]
+  --json
 
-Output (human):
+Output:
   Name        Branch          Path
-  ──────────  ──────────────  ──────────────────────────
+  ──────────  ──────────────  ──────────────────────────────────
   main        main            ~/workspace/myapp
   feat/auth   feat/auth       ~/workspace/myapp-feat-auth
-
-Output (JSON):
-  [{"name":"main","branch":"main","path":"..."},...]
 ```
 
 **`worktree new BRANCH`**
 ```
 Arguments:
-  BRANCH      Branch name (new or existing)
+  BRANCH   Branch name (new or existing)
 
 Flags:
-  --project   Project name  [env: MORI_PROJECT]
+  --project P   [env: MORI_PROJECT]
   --json
 
 Output:
   ✓ Created worktree 'feat/auth' on branch 'feat/auth' at ~/workspace/myapp-feat-auth
+
+JSON: {"name":"feat/auth","branch":"feat/auth","path":"..."}
 ```
 
 **`worktree delete`**
 ```
 Flags:
-  --project   Project name    [env: MORI_PROJECT]
-  --worktree  Worktree name   [env: MORI_WORKTREE]
-  --force     Skip confirmation (for scripts)
+  --project P    [env: MORI_PROJECT]
+  --worktree W   [env: MORI_WORKTREE]
+  --force        Skip confirmation
   --json
 
 Behavior:
-  - Confirms interactively unless --force
-  - Kills tmux session, removes git worktree
-  - Errors if worktree is currently focused in the UI
+  - Prompts for confirmation unless --force
+  - Kills tmux session, removes git worktree directory
+  - Errors if the worktree is currently focused in the UI
+
+Output:
+  ✓ Deleted worktree 'feat/auth'
 ```
 
-### `mori window`
+---
 
-| Command | Description |
-|---|---|
-| `window list` | List all windows in a worktree |
-| `window new` | Create a new tmux window (tab) |
-| `window rename NEWNAME` | Rename a window |
-| `window close` | Close a window |
+### `mori window`
 
 **`window list`**
 ```
 Flags:
-  --project   [env: MORI_PROJECT]
-  --worktree  [env: MORI_WORKTREE]
+  --project P    [env: MORI_PROJECT]
+  --worktree W   [env: MORI_WORKTREE]
   --json
 
-Output (human):
+Output:
   Name    Active  Panes
   ──────  ──────  ─────
   shell   yes     2
@@ -165,148 +193,170 @@ Output (human):
 **`window new`**
 ```
 Flags:
-  --project   [env: MORI_PROJECT]
-  --worktree  [env: MORI_WORKTREE]
-  --name      Window name (default: shell)
+  --project P    [env: MORI_PROJECT]
+  --worktree W   [env: MORI_WORKTREE]
+  --name NAME    Window name (default: shell)
   --json
+
+Output:
+  ✓ Created window 'logs' in myapp/main
 ```
 
 **`window rename NEWNAME`**
 ```
 Arguments:
-  NEWNAME     New window name
+  NEWNAME   New window name
 
 Flags:
-  --project   [env: MORI_PROJECT]
-  --worktree  [env: MORI_WORKTREE]
-  --window    Current window name  [env: MORI_WINDOW]
+  --project P    [env: MORI_PROJECT]
+  --worktree W   [env: MORI_WORKTREE]
+  --window W     [env: MORI_WINDOW]
   --json
+
+Output:
+  ✓ Renamed window 'shell' → 'terminal'
 ```
 
 **`window close`**
 ```
 Flags:
-  --project   [env: MORI_PROJECT]
-  --worktree  [env: MORI_WORKTREE]
-  --window    [env: MORI_WINDOW]
-  --force     Skip confirmation
+  --project P    [env: MORI_PROJECT]
+  --worktree W   [env: MORI_WORKTREE]
+  --window W     [env: MORI_WINDOW]
+  --force        Skip confirmation
   --json
+
+Output:
+  ✓ Closed window 'logs'
 ```
+
+---
 
 ### `mori pane`
 
-| Command | Description |
-|---|---|
-| `pane list` | List panes with agent state |
-| `pane new` | Split active window into a new pane |
-| `pane send KEYS` | Send tmux keys to a pane |
-| `pane read` | Capture pane output |
-| `pane rename NEWNAME` | Rename a pane |
-| `pane close` | Close a pane |
-| `pane message TEXT` | Send inter-agent message |
-| `pane id` | Print current pane identity |
+`pane list` scopes to the current/specified window by default, matching the pattern of
+`window list` scoping to the current worktree. Pass no `--window` to see all panes across
+all windows (useful for the agent dashboard view).
 
 **`pane list`**
 ```
 Flags:
-  --project   [env: MORI_PROJECT]    (optional filter)
-  --worktree  [env: MORI_WORKTREE]   (optional filter)
-  --window    [env: MORI_WINDOW]     (optional filter — NEW)
+  --project P    [env: MORI_PROJECT]   (optional filter)
+  --worktree W   [env: MORI_WORKTREE]  (optional filter)
+  --window W     [env: MORI_WINDOW]    (optional filter)
   --json
 
-Output (human):
-  Project  Worktree   Window  Pane    Agent    State
-  ───────  ─────────  ──────  ──────  ───────  ──────────
-  myapp    main       shell   %3      claude   ⚡ running
-  myapp    main       logs    %4      –        –
+Scoping behavior:
+  - No flags in Mori terminal → shows panes in current window (from env vars)
+  - --window → scopes to that window
+  - No env vars, no flags → shows all panes (global view, like old behavior)
+
+Output:
+  Project  Worktree  Window  Pane  Title       Agent    State
+  ───────  ────────  ──────  ────  ──────────  ───────  ──────────
+  myapp    main      shell   %3    (claude)    claude   ⚡ running
+  myapp    main      shell   %4    (vim)       –        –
+
+JSON: [{"tmuxPaneId":"%3","projectName":"myapp","worktreeName":"main",
+        "windowName":"shell","paneTitle":"claude","agentState":"running",
+        "detectedAgent":"claude"},...]
 ```
 
 **`pane new`**
 ```
 Flags:
-  --project   [env: MORI_PROJECT]
-  --worktree  [env: MORI_WORKTREE]
-  --window    [env: MORI_WINDOW]
-  --split     Split direction: h (horizontal) | v (vertical)  [default: h]
-  --name      Pane title
+  --project P    [env: MORI_PROJECT]
+  --worktree W   [env: MORI_WORKTREE]
+  --window W     [env: MORI_WINDOW]
+  --split h|v    Split direction: h = horizontal, v = vertical (default: h)
+  --name NAME    Pane title
   --json
 
-Output (JSON):
-  {"paneId":"%5","window":"shell"}
+Output:
+  ✓ Created pane %5 in myapp/main/shell
+
+JSON: {"paneId":"%5","window":"shell"}
 ```
 
 **`pane send KEYS`**
 ```
 Arguments:
-  KEYS        tmux send-keys syntax (e.g. "npm test Enter", "C-c")
+  KEYS   tmux send-keys syntax. Examples: "npm test Enter", "C-c", "q"
 
 Flags:
-  --project   [env: MORI_PROJECT]
-  --worktree  [env: MORI_WORKTREE]
-  --window    [env: MORI_WINDOW]
-  --pane      tmux pane ID (e.g. %3)  [env: MORI_PANE_ID]
-              If omitted: targets the active pane of the window
+  --project P    [env: MORI_PROJECT]
+  --worktree W   [env: MORI_WORKTREE]
+  --window W     [env: MORI_WINDOW]
+  --pane ID      tmux pane ID, e.g. %3  [env: MORI_PANE_ID]
+                 If omitted: active pane of the window
   --json
 
 Examples:
-  mori pane send "npm test Enter"            # context from env vars
-  mori pane send --window logs "q"           # different window, same project/worktree
-  mori pane send --pane %5 "C-c"            # specific pane
+  mori pane send "npm test Enter"           # current context
+  mori pane send --window logs "q"          # different window
+  mori pane send --pane %5 "C-c"           # specific pane
 ```
 
 **`pane read`**
 ```
 Flags:
-  --project   [env: MORI_PROJECT]
-  --worktree  [env: MORI_WORKTREE]
-  --window    [env: MORI_WINDOW]
-  --pane      tmux pane ID  [env: MORI_PANE_ID]
-              If omitted: active pane of the window
-  --lines     Lines to capture (1–200, default: 50)
-  --json      Wraps output in {"output":"..."}
+  --project P    [env: MORI_PROJECT]
+  --worktree W   [env: MORI_WORKTREE]
+  --window W     [env: MORI_WINDOW]
+  --pane ID      tmux pane ID  [env: MORI_PANE_ID]
+                 If omitted: active pane of the window
+  --lines N      Lines to capture (1–200, default: 50)
+  --json         Wraps output in {"output":"..."}
 
 Examples:
-  mori pane read                     # read current pane (50 lines)
-  mori pane read --lines 200         # read more
-  mori pane read --pane %4           # read a specific pane
+  mori pane read                   # current pane, 50 lines
+  mori pane read --lines 200
+  mori pane read --pane %4         # read a non-active pane
 ```
 
 **`pane rename NEWNAME`**
 ```
 Arguments:
-  NEWNAME     New pane title
+  NEWNAME   New pane title
 
 Flags:
-  --project   [env: MORI_PROJECT]
-  --worktree  [env: MORI_WORKTREE]
-  --window    [env: MORI_WINDOW]
-  --pane      tmux pane ID  [env: MORI_PANE_ID]
+  --project P    [env: MORI_PROJECT]
+  --worktree W   [env: MORI_WORKTREE]
+  --window W     [env: MORI_WINDOW]
+  --pane ID      tmux pane ID  [env: MORI_PANE_ID]
   --json
+
+Output:
+  ✓ Renamed pane %3 → 'agent'
 ```
 
 **`pane close`**
 ```
 Flags:
-  --project   [env: MORI_PROJECT]
-  --worktree  [env: MORI_WORKTREE]
-  --window    [env: MORI_WINDOW]
-  --pane      tmux pane ID  [env: MORI_PANE_ID]
-  --force     Skip confirmation
+  --project P    [env: MORI_PROJECT]
+  --worktree W   [env: MORI_WORKTREE]
+  --window W     [env: MORI_WINDOW]
+  --pane ID      tmux pane ID  [env: MORI_PANE_ID]
+                 If omitted: active pane of the window
+  --force        Skip confirmation
   --json
+
+Output:
+  ✓ Closed pane %3
 ```
 
 **`pane message TEXT`**
 ```
 Arguments:
-  TEXT        Message body
+  TEXT   Message body
 
 Flags:
-  --project   Target project   [env: MORI_PROJECT as sender default]
-  --worktree  Target worktree  [env: MORI_WORKTREE as sender default]
-  --window    Target window    [env: MORI_WINDOW as sender default]
+  --project P    Target project   (default: MORI_PROJECT — used as *sender* when not overriding)
+  --worktree W   Target worktree
+  --window W     Target window
   --json
 
-Note: Sender identity always comes from MORI_* env vars automatically.
+Note: Sender identity is always read from MORI_* env vars automatically.
 ```
 
 **`pane id`**
@@ -317,26 +367,31 @@ Output:
   myapp/main/shell pane:%3
 ```
 
+---
+
 ### `mori focus`
 
 ```
 Flags:
-  --project   [env: MORI_PROJECT]
-  --worktree  [env: MORI_WORKTREE]  (optional — focuses project only if omitted)
-  --window    [env: MORI_WINDOW]    (optional — focuses worktree only if omitted)
+  --project P    [env: MORI_PROJECT]
+  --worktree W   [env: MORI_WORKTREE]   optional
+  --window W     [env: MORI_WINDOW]     optional
   --json
 
+Behavior:
+  - --project only       → focus the project (selects its last active worktree)
+  - --project --worktree → focus the worktree
+  - all three            → focus the specific window
+
 Examples:
-  mori focus --project myapp                       # focus project
-  mori focus --project myapp --worktree feat/auth  # focus worktree
-  mori focus --window logs                          # focus window (context-aware)
+  mori focus --project myapp
+  mori focus --project myapp --worktree feat/auth
+  mori focus --window logs               # context-aware: same project/worktree
 ```
 
 ---
 
 ## New IPC Commands Required
-
-The following cases must be added to `IPCCommand` in `MoriIPC/IPCProtocol.swift`:
 
 ```swift
 // Worktree
@@ -350,99 +405,76 @@ case windowClose(project: String, worktree: String, window: String)
 
 // Pane
 case paneNew(project: String, worktree: String, window: String,
-             split: String?, name: String?)            // split: "h" | "v" | nil
+             split: String?,   // "h" | "v" | nil (default h)
+             name: String?)
 case paneSend(project: String, worktree: String, window: String,
-              pane: String?, keys: String)              // pane: tmux pane ID or nil
+              pane: String?,   // tmux pane ID or nil = active pane
+              keys: String)
 case paneRename(project: String, worktree: String, window: String,
                 pane: String, newName: String)
 case paneClose(project: String, worktree: String, window: String,
-               pane: String?)                          // nil = active pane
+               pane: String?)  // nil = active pane
 
-// Focus (extend existing to accept optional worktree/window)
+// Focus — extend to optionally include window
 case focusWindow(project: String, worktree: String, window: String)
 ```
 
-Existing commands kept as-is (app-side handlers unchanged):
-- `.projectList` → unchanged
-- `.worktreeCreate` → kept, new `.worktreeNew` is an alias at CLI layer only
-- `.focus` → unchanged (project + worktree only)
-- `.send` → **deprecated**, replaced by `.paneSend`
-- `.newWindow` → **deprecated**, replaced by `.windowNew` at CLI layer mapping to existing handler
-- `.open` → unchanged
-- `.paneList` → gains optional `window` filter parameter
-- `.paneRead` → gains optional `pane` parameter
-- `.paneMessage` → unchanged
+Existing commands removed from `IPCCommand`:
+- `.send` → replaced by `.paneSend`
+- `.newWindow` → replaced by `.windowNew` (maps to new `windowList`/`windowClose` group)
+
+Existing commands unchanged:
+- `.projectList`, `.worktreeCreate`, `.focus`, `.open`
+- `.paneList` — gains optional `window` parameter
+- `.paneRead` — gains optional `pane` parameter
+- `.paneMessage` — unchanged
 
 ---
 
-## Migration / Breaking Changes
+## Shared Address Resolution
 
-### Deprecated commands (print warning, still work)
-
-| Old | New |
-|---|---|
-| `mori send PROJECT WORKTREE WINDOW KEYS` | `mori pane send --project P --worktree W --window W KEYS` |
-| `mori new-window PROJECT WORKTREE` | `mori window new --project P --worktree W` |
-| `mori worktree create PROJECT BRANCH` | `mori worktree new BRANCH --project P` |
-| `mori focus PROJECT WORKTREE` | `mori focus --project P --worktree W` |
-
-Deprecated commands print to stderr:
-```
-⚠ 'mori send' is deprecated. Use 'mori pane send' instead.
-```
-
-### Changed behavior
-
-- `pane list --project` / `--worktree` remain optional filters (no breaking change)
-- `pane list` gains `--window` filter (additive, no breaking change)
-- `pane read` and `pane send` gain `--pane` flag (additive, no breaking change)
-- All address arguments change from **positional** to **flags** in the new commands
-
----
-
-## Implementation Order
-
-1. **IPC layer** — Add new `IPCCommand` cases to `MoriIPC/IPCProtocol.swift`
-2. **App handler** — Add new handlers in `IPCHandler.swift`
-   - `worktreeList`, `worktreeDelete`
-   - `windowList`, `windowRename`, `windowClose`
-   - `paneNew`, `paneSend` (pane-targeted), `paneRename`, `paneClose`
-3. **CLI layer** — Rewrite command structs in `MoriCLI.swift`
-   - New `Window` command group
-   - New subcommands under `Worktree`, `Pane`
-   - Replace positional args with flags + env-var defaults
-   - Wrap old positional commands as deprecated aliases
-4. **Output formatters** — Add `formatWorktreeList`, `formatWindowList`
-5. **Localization** — Add all new user-facing strings to `en.lproj` and `zh-Hans.lproj`
-
----
-
-## Shared Address Resolution Helper
-
-All commands should resolve addresses through a single helper to avoid duplication:
+All commands resolve addresses through one helper to avoid duplication:
 
 ```swift
-/// Resolves an address component from an explicit flag or env var.
-/// Throws a localized error if neither source provides a value.
-func resolveAddress(
-    flag: String?,
-    envKey: String,
-    label: String
-) throws -> String {
+enum CLIError: Error {
+    case missingAddress(label: String, envKey: String)
+}
+
+extension CLIError: CustomStringConvertible {
+    var description: String {
+        switch self {
+        case .missingAddress(let label, let envKey):
+            return "\(label) not specified. Pass --\(label) or set \(envKey)."
+        }
+    }
+}
+
+func resolveRequired(_ flag: String?, envKey: String, label: String) throws -> String {
     if let v = flag { return v }
     if let v = ProcessInfo.processInfo.environment[envKey] { return v }
     throw CLIError.missingAddress(label: label, envKey: envKey)
 }
 
-// Usage in a command:
-let project  = try resolveAddress(flag: projectFlag,  envKey: "MORI_PROJECT",  label: "project")
-let worktree = try resolveAddress(flag: worktreeFlag, envKey: "MORI_WORKTREE", label: "worktree")
-let window   = try resolveAddress(flag: windowFlag,   envKey: "MORI_WINDOW",   label: "window")
-// pane is optional — nil means "active pane of window"
-let pane     = paneFlag ?? ProcessInfo.processInfo.environment["MORI_PANE_ID"]
+func resolveOptional(_ flag: String?, envKey: String) -> String? {
+    flag ?? ProcessInfo.processInfo.environment[envKey]
+}
 ```
 
-Error message format:
+Usage in every command's `run()`:
+```swift
+let project  = try resolveRequired(projectFlag,  envKey: "MORI_PROJECT",  label: "project")
+let worktree = try resolveRequired(worktreeFlag, envKey: "MORI_WORKTREE", label: "worktree")
+let window   = try resolveRequired(windowFlag,   envKey: "MORI_WINDOW",   label: "window")
+let pane     = resolveOptional(paneFlag, envKey: "MORI_PANE_ID")  // nil = active pane
 ```
-Error: project not specified. Pass --project or set MORI_PROJECT.
-```
+
+---
+
+## Implementation Order
+
+1. **IPC layer** — Add new `IPCCommand` cases; remove `.send` and `.newWindow`
+2. **App handler** — `IPCHandler.swift`: add handlers for all new cases; remove old ones
+3. **CLI layer** — Rewrite `MoriCLI.swift`: new `Window` group; convert all address args
+   to flags with env-var defaults; remove deprecated top-level commands
+4. **Output formatters** — Add `formatWorktreeList`, `formatWindowList`, `formatPaneNew`
+5. **Localization** — New strings in `en.lproj` and `zh-Hans.lproj`
