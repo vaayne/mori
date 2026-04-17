@@ -86,6 +86,18 @@
 "Focus a project, worktree, or window in the Mori UI" = "Focus a project, worktree, or window in the Mori UI";
 "Behavior:" = "Behavior:";
 
+/* Success messages */
+"Deleted worktree '%@'" = "Deleted worktree '%@'";
+"Created window '%@' in %@/%@" = "Created window '%@' in %@/%@";
+"Renamed window '%@' → '%@'" = "Renamed window '%@' → '%@'";
+"Closed window '%@'" = "Closed window '%@'";
+"Renamed pane %@ → '%@'" = "Renamed pane %@ → '%@'";
+"Closed pane %@" = "Closed pane %@";
+"active" = "active";
+"Focused %@/%@/%@" = "Focused %@/%@/%@";
+"Focused %@" = "Focused %@";
+"Sent keys to %@/%@/%@" = "Sent keys to %@/%@/%@";
+
 /* Formatted output */
 "No projects found." = "No projects found.";
 "No worktrees found." = "No worktrees found.";

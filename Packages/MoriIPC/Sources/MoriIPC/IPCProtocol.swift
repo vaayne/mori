@@ -31,6 +31,7 @@ public enum IPCCommand: Codable, Sendable, Equatable {
                      senderWindow: String? = nil, senderPaneId: String? = nil)
 
     // Focus
+    case focusProject(project: String)
     case focus(project: String, worktree: String)
     case focusWindow(project: String, worktree: String, window: String)
 }

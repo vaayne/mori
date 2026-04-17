@@ -80,6 +80,9 @@ final class IPCHandler {
                                            senderWindow: senderWindow, senderPaneId: senderPaneId)
 
         // MARK: Focus
+        case .focusProject(let project):
+            return handleFocusProject(manager: manager, projectName: project)
+
         case .focus(let project, let worktree):
             return handleFocus(manager: manager, projectName: project, worktreeName: worktree)
 
@@ -456,6 +459,16 @@ final class IPCHandler {
     }
 
     // MARK: - Focus Handlers
+
+    private func handleFocusProject(manager: WorkspaceManager, projectName: String) -> IPCResponse {
+        guard let project = manager.appState.projects.first(where: {
+            $0.name.caseInsensitiveCompare(projectName) == .orderedSame
+        }) else {
+            return .error(message: "Project not found: \(projectName)")
+        }
+        manager.selectProject(project.id)
+        return .success(payload: nil)
+    }
 
     private func handleFocus(manager: WorkspaceManager, projectName: String, worktreeName: String) -> IPCResponse {
         guard let project = manager.appState.projects.first(where: {

@@ -86,6 +86,18 @@
 "Focus a project, worktree, or window in the Mori UI" = "在 Mori 界面中聚焦项目、工作树或窗口";
 "Behavior:" = "行为：";
 
+/* Success messages */
+"Deleted worktree '%@'" = "已删除工作树 '%@'";
+"Created window '%@' in %@/%@" = "已在 %2$@/%3$@ 中创建窗口 '%1$@'";
+"Renamed window '%@' → '%@'" = "已将窗口 '%@' 重命名为 '%@'";
+"Closed window '%@'" = "已关闭窗口 '%@'";
+"Renamed pane %@ → '%@'" = "已将面板 %@ 重命名为 '%@'";
+"Closed pane %@" = "已关闭面板 %@";
+"active" = "活动面板";
+"Focused %@/%@/%@" = "已聚焦到 %@/%@/%@";
+"Focused %@" = "已聚焦到 %@";
+"Sent keys to %@/%@/%@" = "已发送按键到 %@/%@/%@";
+
 /* Formatted output */
 "No projects found." = "未找到项目。";
 "No worktrees found." = "未找到工作树。";

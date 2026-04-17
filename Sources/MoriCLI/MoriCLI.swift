@@ -403,7 +403,7 @@ struct WorktreeDelete: ParsableCommand {
         let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
         let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
         let data = try sendIPCRequest(.worktreeDelete(project: proj, worktree: wt))
-        printSuccess(data, json: output.json, label: "Deleted worktree '\(wt)'")
+        printSuccess(data, json: output.json, label: String(format: .localized("Deleted worktree '%@'"), wt))
     }
 }
 
@@ -472,7 +472,7 @@ struct WindowNew: ParsableCommand {
         let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
         let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
         let data = try sendIPCRequest(.windowNew(project: proj, worktree: wt, name: name))
-        printSuccess(data, json: output.json, label: "Created window '\(name ?? "shell")' in \(proj)/\(wt)")
+        printSuccess(data, json: output.json, label: String(format: .localized("Created window '%@' in %@/%@"), name ?? "shell", proj, wt))
     }
 }
 
@@ -506,7 +506,7 @@ struct WindowRename: ParsableCommand {
         let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
         let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
         let data = try sendIPCRequest(.windowRename(project: proj, worktree: wt, window: win, newName: newName))
-        printSuccess(data, json: output.json, label: "Renamed window '\(win)' → '\(newName)'")
+        printSuccess(data, json: output.json, label: String(format: .localized("Renamed window '%@' → '%@'"), win, newName))
     }
 }
 
@@ -537,7 +537,7 @@ struct WindowClose: ParsableCommand {
         let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
         let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
         let data = try sendIPCRequest(.windowClose(project: proj, worktree: wt, window: win))
-        printSuccess(data, json: output.json, label: "Closed window '\(win)'")
+        printSuccess(data, json: output.json, label: String(format: .localized("Closed window '%@'"), win))
     }
 }
 
@@ -658,9 +658,19 @@ struct PaneSend: ParsableCommand {
         let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
         let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
         let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
-        let paneId = resolveOptional(pane, envKey: "MORI_PANE_ID")
+        // Only inherit MORI_PANE_ID when the window is also from the env (not overridden).
+        // An explicit --window means we're targeting a different window, so MORI_PANE_ID
+        // (which belongs to the current window) must not carry over.
+        let paneId: String?
+        if pane != nil {
+            paneId = pane
+        } else if window == nil {
+            paneId = resolveOptional(nil, envKey: "MORI_PANE_ID")
+        } else {
+            paneId = nil
+        }
         let data = try sendIPCRequest(.paneSend(project: proj, worktree: wt, window: win, pane: paneId, keys: keys))
-        printSuccess(data, json: output.json, label: "Sent keys to \(proj)/\(wt)/\(win)")
+        printSuccess(data, json: output.json, label: String(format: .localized("Sent keys to %@/%@/%@"), proj, wt, win))
     }
 }
 
@@ -748,7 +758,7 @@ struct PaneRename: ParsableCommand {
         let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
         let paneId = try resolveRequired(pane, envKey: "MORI_PANE_ID", label: "pane")
         let data = try sendIPCRequest(.paneRename(project: proj, worktree: wt, window: win, pane: paneId, newName: newName))
-        printSuccess(data, json: output.json, label: "Renamed pane \(paneId) → '\(newName)'")
+        printSuccess(data, json: output.json, label: String(format: .localized("Renamed pane %@ → '%@'"), paneId, newName))
     }
 }
 
@@ -783,7 +793,7 @@ struct PaneClose: ParsableCommand {
         let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
         let paneId = resolveOptional(pane, envKey: "MORI_PANE_ID")
         let data = try sendIPCRequest(.paneClose(project: proj, worktree: wt, window: win, pane: paneId))
-        printSuccess(data, json: output.json, label: "Closed pane \(paneId ?? "active")")
+        printSuccess(data, json: output.json, label: String(format: .localized("Closed pane %@"), paneId ?? .localized("active")))
     }
 }
 
@@ -891,14 +901,13 @@ struct Focus: ParsableCommand {
 
         if let wt = resolvedWorktree, let win = resolvedWindow {
             let data = try sendIPCRequest(.focusWindow(project: proj, worktree: wt, window: win))
-            printSuccess(data, json: output.json, label: "Focused \(proj)/\(wt)/\(win)")
+            printSuccess(data, json: output.json, label: String(format: .localized("Focused %@/%@/%@"), proj, wt, win))
         } else if let wt = resolvedWorktree {
             let data = try sendIPCRequest(.focus(project: proj, worktree: wt))
-            printSuccess(data, json: output.json, label: "Focused \(proj)/\(wt)")
+            printSuccess(data, json: output.json, label: String(format: .localized("Focused %@/%@"), proj, wt))
         } else {
-            // project only — focus its last active worktree; requires a worktree to be known
-            // Fall back to requiring worktree
-            throw CLIError.missingAddress(label: "worktree", envKey: "MORI_WORKTREE")
+            let data = try sendIPCRequest(.focusProject(project: proj))
+            printSuccess(data, json: output.json, label: String(format: .localized("Focused %@"), proj))
         }
     }
 }
