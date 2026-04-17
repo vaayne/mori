@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-04-17
+
 ### ✨ 新功能
 
 - **应用图标焕新** — 用更贴近终端气质的 Mori 新标记替换原来的风景吉祥物 Dock 图标：更简化的树桩轮廓、刻入式提示符图形，以及更适合 macOS 的构图
@@ -20,6 +22,8 @@
 ### 🗑️ 破坏性变更
 
 - 移除顶层 `mori send`、`mori new-window` 及位置参数形式的 `mori focus`，分别由 `mori pane send`、`mori window new` 和基于标志的 `mori focus` 替代
+
+**完整变更记录**: [v0.3.7...v0.3.8](https://github.com/vaayne/mori/compare/v0.3.7...v0.3.8)
 
 ## [0.3.7] - 2026-04-16
 

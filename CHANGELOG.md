@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-04-17
+
 ### ✨ Features
 
 - **App icon refresh** — replace the scenic mascot Dock tile with a darker, terminal-aligned Mori mark: simplified stump silhouette, carved prompt glyph, and cleaner macOS-friendly composition
@@ -20,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🗑️ Breaking Changes
 
 - Removed top-level `mori send`, `mori new-window`, and positional-arg `mori focus` — replaced by `mori pane send`, `mori window new`, and flag-based `mori focus`
+
+**Full Changelog**: [v0.3.7...v0.3.8](https://github.com/vaayne/mori/compare/v0.3.7...v0.3.8)
 
 ## [0.3.7] - 2026-04-16
 
