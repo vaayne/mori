@@ -121,6 +121,9 @@
 "User Overrides" = "User Overrides";
 "Waiting" = "Waiting";
 "Waiting for input" = "Waiting for input";
+"waiting" = "waiting";
+"running" = "running";
+"trees" = "trees";
 "Whether the cursor blinks when idle." = "Whether the cursor blinks when idle.";
 "Window" = "Window";
 "Window %lld" = "Window %lld";

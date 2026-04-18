@@ -66,6 +66,17 @@ public struct WorktreeRowView: View {
         }
         .buttonStyle(.plain)
         .background(rowBackground)
+        .overlay(alignment: .leading) {
+            if isSelected {
+                // 2pt accent bar, inset 6pt top/bottom, rounded on the trailing edge.
+                // Mirrors `.wt.sel::before` in the V1 design.
+                Rectangle()
+                    .fill(MoriTokens.Color.active)
+                    .frame(width: 2)
+                    .padding(.vertical, 6)
+                    .clipShape(RoundedRectangle(cornerRadius: 1))
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -185,9 +196,19 @@ public struct WorktreeRowView: View {
         .help(String.localized("More Actions"))
     }
 
-    private var rowBackground: some ShapeStyle {
+    private var rowBackground: AnyShapeStyle {
         if isSelected {
-            return AnyShapeStyle(MoriTokens.Color.active.opacity(MoriTokens.Opacity.light))
+            // Left-anchored gradient fade — accent fog on the left, clear on the right.
+            // Gives the selected row real presence without a flat tinted block.
+            let gradient = LinearGradient(
+                gradient: Gradient(colors: [
+                    MoriTokens.Color.active.opacity(MoriTokens.Opacity.light),
+                    Color.clear
+                ]),
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            return AnyShapeStyle(gradient)
         }
         if isHovered {
             return AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))

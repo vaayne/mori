@@ -118,6 +118,52 @@ public enum MoriTokens {
         /// 0.2 — medium highlight (e.g., unselected avatar circle)
         public static let medium: Double = 0.2
     }
+
+    // MARK: - Project Avatar Palette
+
+    /// Seven warm/cool duotone pairs (background + foreground) for project letter
+    /// avatars. Deterministic per project id so the same project always reads the
+    /// same colour across sessions.
+    public enum ProjectPalette {
+        public struct Pair: Sendable {
+            public let background: SwiftUI.Color
+            public let foreground: SwiftUI.Color
+        }
+
+        public static let pairs: [Pair] = [
+            .init(background: SwiftUI.Color(hex: "#1e3d2e"), foreground: SwiftUI.Color(hex: "#7dd3a8")), // mint
+            .init(background: SwiftUI.Color(hex: "#3a2a5e"), foreground: SwiftUI.Color(hex: "#c6a0ff")), // violet
+            .init(background: SwiftUI.Color(hex: "#1e3a4a"), foreground: SwiftUI.Color(hex: "#7cb0ff")), // sky
+            .init(background: SwiftUI.Color(hex: "#4a1f2a"), foreground: SwiftUI.Color(hex: "#ff8a9e")), // rose
+            .init(background: SwiftUI.Color(hex: "#3d351e"), foreground: SwiftUI.Color(hex: "#e6b450")), // amber
+            .init(background: SwiftUI.Color(hex: "#2a2620"), foreground: SwiftUI.Color(hex: "#c9b991")), // sand
+            .init(background: SwiftUI.Color(hex: "#2d1e3d"), foreground: SwiftUI.Color(hex: "#b092e6")), // lilac
+        ]
+
+        /// Stable index derived from the first, middle, and last bytes of the
+        /// UUID — avoids `hashValue`, which is unstable across processes.
+        public static func pair(for id: UUID) -> Pair {
+            let u = id.uuid
+            let sum = Int(u.0) &+ Int(u.4) &+ Int(u.8) &+ Int(u.12)
+            return pairs[abs(sum) % pairs.count]
+        }
+    }
+}
+
+// MARK: - Hex Color convenience
+
+extension SwiftUI.Color {
+    /// Parse an sRGB hex colour (e.g. `#7dd3a8`). Internal helper for the palette.
+    init(hex: String) {
+        let c = nsColor(hex: hex)
+        self.init(
+            .sRGB,
+            red: Double(c.redComponent),
+            green: Double(c.greenComponent),
+            blue: Double(c.blueComponent),
+            opacity: Double(c.alphaComponent)
+        )
+    }
 }
 
 // MARK: - Hex Color Helper (package-internal)
