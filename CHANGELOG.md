@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🎨 Design
+
+- **Sidebar refinement** — calmer status strip with a right-aligned tree count, colorful per-project letter tiles for faster scanning, and a left accent bar plus soft gradient on the selected worktree row
+
 ## [0.3.8] - 2026-04-17
 
 ### ✨ Features

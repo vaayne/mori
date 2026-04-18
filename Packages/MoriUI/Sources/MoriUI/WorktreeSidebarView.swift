@@ -220,23 +220,26 @@ public struct WorktreeSidebarView: View {
 
     @ViewBuilder
     private func projectSection(_ project: Project) -> some View {
-        // Section header: pin icon + chevron + name + hover-reveal + button
+        // Section header: chevron + letter avatar + name + hover-reveal + count
         HStack(spacing: MoriTokens.Spacing.md) {
-            if project.isFavorite {
-                Image(systemName: "pin.fill")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(MoriTokens.Color.muted)
-                    .frame(width: 12)
-            }
-
             Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(MoriTokens.Color.muted)
-                .frame(width: 12)
+                .foregroundStyle(MoriTokens.Color.inactive)
+                .frame(width: 10)
+
+            ProjectLetterTile(project: project)
 
             Text(project.name)
                 .font(MoriTokens.Font.projectTitle)
-                .foregroundStyle(MoriTokens.Color.muted)
+                .foregroundStyle(Color.primary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            if project.isFavorite {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(MoriTokens.Color.inactive)
+            }
 
             Spacer()
 
@@ -556,26 +559,49 @@ public struct WorktreeSidebarView: View {
             || window.hasUnreadOutput
     }
 
+    /// Total worktree count across projects, excluding unavailable rows.
+    private var availableWorktreeCount: Int {
+        worktrees.filter { $0.status != .unavailable }.count
+    }
+
+    /// Quiet indicator strip: status dots + counts on the left, tree total on the right.
+    /// Replaces the earlier Attention/Running tab-like chips so it stops competing with the list.
     @ViewBuilder
     private var summaryStrip: some View {
-        if attentionCount > 0 || runningCount > 0 {
-            HStack(spacing: MoriTokens.Spacing.sm) {
-                summaryChip(
-                    icon: "exclamationmark.bubble.fill",
-                    text: "\(attentionCount) \(String.localized("Attention"))",
-                    tint: MoriTokens.Color.attention,
-                    isProminent: attentionCount > 0
-                )
+        HStack(spacing: MoriTokens.Spacing.xl) {
+            summaryIndicator(
+                text: "\(attentionCount) \(String.localized("waiting"))",
+                tint: MoriTokens.Color.attention,
+                isActive: attentionCount > 0
+            )
 
-                summaryChip(
-                    icon: "bolt.fill",
-                    text: "\(runningCount) \(String.localized("Running"))",
-                    tint: MoriTokens.Color.success,
-                    isProminent: runningCount > 0
-                )
-            }
-            .padding(.horizontal, MoriTokens.Spacing.sm)
-            .padding(.bottom, MoriTokens.Spacing.sm)
+            summaryIndicator(
+                text: "\(runningCount) \(String.localized("running"))",
+                tint: MoriTokens.Color.success,
+                isActive: runningCount > 0
+            )
+
+            Spacer(minLength: 0)
+
+            Text("\(availableWorktreeCount) \(String.localized("trees"))")
+                .font(MoriTokens.Font.monoShortcut)
+                .foregroundStyle(MoriTokens.Color.inactive)
+        }
+        .padding(.horizontal, MoriTokens.Spacing.xl)
+        .padding(.bottom, MoriTokens.Spacing.md)
+    }
+
+    private func summaryIndicator(text: String, tint: Color, isActive: Bool) -> some View {
+        HStack(spacing: MoriTokens.Spacing.sm) {
+            Circle()
+                .fill(isActive ? tint : MoriTokens.Color.inactive.opacity(MoriTokens.Opacity.medium))
+                .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
+                .shadow(color: isActive ? tint.opacity(0.55) : .clear, radius: 3)
+
+            Text(text)
+                .font(.system(size: 11.5))
+                .foregroundStyle(isActive ? Color.primary : MoriTokens.Color.muted)
+                .lineLimit(1)
         }
     }
 
@@ -618,23 +644,7 @@ public struct WorktreeSidebarView: View {
         .padding(.bottom, MoriTokens.Spacing.sm)
     }
 
-    private func summaryChip(icon: String, text: String, tint: Color, isProminent: Bool) -> some View {
-        HStack(spacing: MoriTokens.Spacing.sm) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(tint)
-            Text(text)
-                .font(MoriTokens.Font.caption)
-                .foregroundStyle(isProminent ? Color.primary : MoriTokens.Color.muted)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, MoriTokens.Spacing.lg)
-        .padding(.vertical, MoriTokens.Spacing.md)
-        .background(tint.opacity(MoriTokens.Opacity.subtle))
-        .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
-    }
-
-    private func activeWorktreeCard(_ item: ActiveWorktreeItem) -> some View {
+private func activeWorktreeCard(_ item: ActiveWorktreeItem) -> some View {
         let style = activeWorktreeStyle(item.worktree.agentState)
 
         return Button {

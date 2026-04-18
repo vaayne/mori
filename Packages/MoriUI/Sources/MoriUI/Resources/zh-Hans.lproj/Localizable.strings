@@ -121,6 +121,9 @@
 "User Overrides" = "用户自定义";
 "Waiting" = "等待中";
 "Waiting for input" = "等待输入";
+"waiting" = "等待";
+"running" = "运行";
+"trees" = "棵";
 "Whether the cursor blinks when idle." = "空闲时光标是否闪烁。";
 "Window" = "窗口";
 "Window %lld" = "窗口 %lld";
