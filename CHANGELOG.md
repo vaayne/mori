@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-04-18
+
 ### 🎨 Design
 
-- **Sidebar refinement** — calmer status strip with a right-aligned tree count, colorful per-project letter tiles for faster scanning, and a left accent bar plus soft gradient on the selected worktree row
+- **Sidebar refinement** — calmer status strip with a right-aligned tree count, colorful per-project letter tiles for faster scanning, and a left accent bar plus soft gradient on the selected worktree row ([#77](https://github.com/vaayne/mori/pull/77))
+
+**Full Changelog**: [v0.3.8...v0.4.0](https://github.com/vaayne/mori/compare/v0.3.8...v0.4.0)
 
 ## [0.3.8] - 2026-04-17
 
