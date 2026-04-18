@@ -45,6 +45,7 @@ let package = Package(
                 .copy("Resources/mori-codex-hook.sh"),
                 .copy("Resources/mori-droid-hook.sh"),
                 .copy("Resources/mori-pi-extension.ts"),
+                .copy("Resources/mori-tmux-preset.conf"),
                 .process("Resources/en.lproj"),
                 .process("Resources/zh-Hans.lproj"),
             ]

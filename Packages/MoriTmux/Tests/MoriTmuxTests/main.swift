@@ -270,6 +270,69 @@ func testTmuxSessionMoriDetection() {
     assertNil(regularSession.branchSlug)
 }
 
+// MARK: - TmuxPresetParser Tests
+
+func testTmuxPresetParserParsesSessionOptions() {
+    let source = """
+    # comment
+    set -g mouse on
+    set-option -g status off
+    """
+
+    let assignments = try! TmuxPresetParser.parse(source)
+    assertEqual(assignments.count, 2)
+    assertEqual(assignments[0], TmuxPresetAssignment(scope: .session, option: "mouse", value: "on"))
+    assertEqual(assignments[1], TmuxPresetAssignment(scope: .session, option: "status", value: "off"))
+}
+
+func testTmuxPresetParserParsesWindowOptionsAndQuotes() {
+    let source = """
+    setw -g pane-border-format "#{window_name} #{pane_index}"
+    set -wg window-status-format 'main #I:#W'
+    """
+
+    let assignments = try! TmuxPresetParser.parse(source)
+    assertEqual(assignments.count, 2)
+    assertEqual(
+        assignments[0],
+        TmuxPresetAssignment(scope: .window, option: "pane-border-format", value: "#{window_name} #{pane_index}")
+    )
+    assertEqual(
+        assignments[1],
+        TmuxPresetAssignment(scope: .window, option: "window-status-format", value: "main #I:#W")
+    )
+}
+
+func testTmuxPresetParserAllowsEmptyQuotedValues() {
+    let source = """
+    set -g status-left ""
+    setw -g window-status-format ''
+    """
+
+    let assignments = try! TmuxPresetParser.parse(source)
+    assertEqual(assignments.count, 2)
+    assertEqual(assignments[0], TmuxPresetAssignment(scope: .session, option: "status-left", value: ""))
+    assertEqual(assignments[1], TmuxPresetAssignment(scope: .window, option: "window-status-format", value: ""))
+}
+
+func testTmuxPresetParserRejectsUnsupportedFlags() {
+    do {
+        _ = try TmuxPresetParser.parse("set -ag update-environment TERM")
+        assertTrue(false, "Expected unsupported flag error")
+    } catch let error as TmuxPresetParserError {
+        assertEqual(
+            error,
+            .unsupportedFlag(
+                lineNumber: 1,
+                flag: "a".first!,
+                line: "set -ag update-environment TERM"
+            )
+        )
+    } catch {
+        assertTrue(false, "Unexpected error: \(error)")
+    }
+}
+
 // MARK: - Format String Tests
 
 func testFormatStringsContainDelimiter() {
@@ -609,6 +672,12 @@ testIsMoriSession()
 
 // TmuxSession model
 testTmuxSessionMoriDetection()
+
+// TmuxPresetParser
+testTmuxPresetParserParsesSessionOptions()
+testTmuxPresetParserParsesWindowOptionsAndQuotes()
+testTmuxPresetParserAllowsEmptyQuotedValues()
+testTmuxPresetParserRejectsUnsupportedFlags()
 
 // Format strings
 testFormatStringsContainDelimiter()
