@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- Add a user-toggleable Mori tmux defaults preset in Settings → Tools so Mori-managed sessions can start with mouse support enabled and the tmux status bar hidden, while still allowing an opt-out back to the user's own mouse and status-bar behavior from `tmux.conf`
+
 ## [0.4.0] - 2026-04-18
 
 ### 🎨 Design

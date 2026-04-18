@@ -6,15 +6,25 @@ public struct ToolSettings: Codable, Equatable, Sendable {
     public var tmuxPath: String
     public var lazygitPath: String
     public var yaziPath: String
+    public var applyMoriTmuxDefaults: Bool
 
     public init(
         tmuxPath: String = "",
         lazygitPath: String = "",
-        yaziPath: String = ""
+        yaziPath: String = "",
+        applyMoriTmuxDefaults: Bool = true
     ) {
         self.tmuxPath = tmuxPath
         self.lazygitPath = lazygitPath
         self.yaziPath = yaziPath
+        self.applyMoriTmuxDefaults = applyMoriTmuxDefaults
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case tmuxPath
+        case lazygitPath
+        case yaziPath
+        case applyMoriTmuxDefaults
     }
 
     private static let defaultsKey = "toolSettings"
@@ -30,6 +40,22 @@ public struct ToolSettings: Codable, Equatable, Sendable {
     public static func save(_ model: ToolSettings, to defaults: UserDefaults = .standard) {
         guard let data = try? JSONEncoder().encode(model) else { return }
         defaults.set(data, forKey: defaultsKey)
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        tmuxPath = try container.decodeIfPresent(String.self, forKey: .tmuxPath) ?? ""
+        lazygitPath = try container.decodeIfPresent(String.self, forKey: .lazygitPath) ?? ""
+        yaziPath = try container.decodeIfPresent(String.self, forKey: .yaziPath) ?? ""
+        applyMoriTmuxDefaults = try container.decodeIfPresent(Bool.self, forKey: .applyMoriTmuxDefaults) ?? true
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(tmuxPath, forKey: .tmuxPath)
+        try container.encode(lazygitPath, forKey: .lazygitPath)
+        try container.encode(yaziPath, forKey: .yaziPath)
+        try container.encode(applyMoriTmuxDefaults, forKey: .applyMoriTmuxDefaults)
     }
 
     public func configuredPath(for command: String) -> String? {

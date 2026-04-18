@@ -103,6 +103,8 @@ mori pane id                                 # 打印当前面板标识
 
 Mori 使用 Ghostty 的配置系统。在 `~/.config/ghostty/config` 中自定义终端。Mori 仅覆盖少量嵌入相关设置（无窗口装饰、关闭最后窗口不退出）。
 
+对于由 Mori 管理的 tmux 会话，Mori 默认还会应用一组小型 tmux 预设来加快上手：开启鼠标支持、关闭状态栏。如果你更希望保留自己 `tmux.conf` 里的鼠标与状态栏行为，可以在 **设置 → Tools** 中关闭它。
+
 ## 键盘快捷键
 
 完整列表请参阅 [docs/keymaps.zh-Hans.md](docs/keymaps.zh-Hans.md)。常用快捷键：

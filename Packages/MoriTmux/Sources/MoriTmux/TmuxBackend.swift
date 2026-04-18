@@ -247,6 +247,14 @@ public actor TmuxBackend: TmuxControlling {
         }
     }
 
+    public func unsetOption(sessionId: String?, option: String) async throws {
+        if let sessionId {
+            _ = try await runner.run("set-option", "-u", "-t", sessionId, option)
+        } else {
+            _ = try await runner.run("set-option", "-gu", option)
+        }
+    }
+
     /// Read an option's value lines (array options return one line per item).
     public func optionValues(sessionId: String?, option: String) async throws -> [String] {
         var args: [String] = ["show-options", "-v"]
@@ -255,10 +263,13 @@ public actor TmuxBackend: TmuxControlling {
         }
         args.append(option)
         let output = try await runner.run(args)
-        return output
-            .split(separator: "\n", omittingEmptySubsequences: true)
-            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        return Self.parseOptionValues(output)
+    }
+
+    /// Read the global default value lines for an option.
+    public func globalOptionValues(option: String) async throws -> [String] {
+        let output = try await runner.run("show-options", "-gv", option)
+        return Self.parseOptionValues(output)
     }
 
     /// Append an item to a tmux array/string option (`set-option -ag`).
@@ -275,6 +286,14 @@ public actor TmuxBackend: TmuxControlling {
             _ = try await runner.run("set-option", "-gw", option, value)
         } else if let target {
             _ = try await runner.run("set-option", "-w", "-t", target, option, value)
+        }
+    }
+
+    public func unsetWindowOption(global: Bool, target: String?, option: String) async throws {
+        if global {
+            _ = try await runner.run("set-option", "-guw", option)
+        } else if let target {
+            _ = try await runner.run("set-option", "-wu", "-t", target, option)
         }
     }
 
@@ -334,6 +353,13 @@ public actor TmuxBackend: TmuxControlling {
         for client in clients {
             _ = try? await runner.run("refresh-client", "-t", client)
         }
+    }
+
+    private static func parseOptionValues(_ output: String) -> [String] {
+        output
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 }
 

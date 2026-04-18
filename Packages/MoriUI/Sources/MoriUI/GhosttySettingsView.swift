@@ -1376,10 +1376,24 @@ private struct ToolSettingsContent: View {
     @State private var hasUnappliedChanges = false
 
     var body: some View {
-        Text(String.localized("Configure explicit paths for tmux, Lazygit, and Yazi. Leave a field empty to let Mori auto-detect from common install locations and your shell PATH."))
+        Text(String.localized("Configure explicit paths for tmux, Lazygit, and Yazi, and choose whether Mori should apply its tmux onboarding defaults. Leave a path field empty to let Mori auto-detect from common install locations and your shell PATH."))
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+
+        SettingsCard {
+            SettingRow(
+                title: .localized("Apply Mori tmux defaults"),
+                description: .localized("Enable mouse support and hide the tmux status bar for Mori-managed sessions. Turn this off to keep your own mouse and status-bar behavior from tmux.conf instead.")
+            ) {
+                Toggle("", isOn: $model.applyMoriTmuxDefaults)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .onChange(of: model.applyMoriTmuxDefaults) { _, _ in
+                        hasUnappliedChanges = true
+                    }
+            }
+        }
 
         SettingsCard {
             ForEach(Array(Self.tools.enumerated()), id: \.element.command) { index, tool in
@@ -1408,7 +1422,7 @@ private struct ToolSettingsContent: View {
 
                 Spacer()
 
-                Text(String.localized("Tool path changes apply immediately to new launches. Existing tmux clients or shells may still use earlier paths."))
+                Text(String.localized("Tmux preset changes apply immediately to Mori-managed sessions. Tool path changes apply to new launches, while existing tmux clients or shells may still use earlier paths until reopened."))
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             }

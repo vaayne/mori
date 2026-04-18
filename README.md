@@ -103,6 +103,8 @@ See [docs/cli-redesign.md](docs/cli-redesign.md) for the full CLI specification.
 
 Mori uses Ghostty's configuration system. Customize your terminal in `~/.config/ghostty/config`. Mori only overrides a few embedding-specific settings (no window decorations, no quit-on-last-window).
 
+For Mori-managed tmux sessions, Mori also applies a small tmux preset by default to speed up onboarding: mouse support on, status bar off. You can turn that off in **Settings → Tools** if you prefer to keep your own mouse and status-bar behavior from `tmux.conf` instead.
+
 ## Keyboard Shortcuts
 
 See [docs/keymaps.md](docs/keymaps.md) for the full list. Key highlights:

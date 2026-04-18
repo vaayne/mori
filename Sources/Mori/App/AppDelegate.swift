@@ -29,7 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var settingsWindowController: NSWindowController?
     private var configFile: GhosttyConfigFile?
     private var proxyApplyTask: Task<Void, Never>?
-    private var tmuxThemeApplyTask: Task<Void, Never>?
+    private var tmuxConfigurationApplyTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
     private var reconnectTask: Task<Void, Never>?
     private var remoteConnectWizardController: RemoteConnectWizardController?
     private var updateController: UpdateController?
@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var keyBindingStore: KeyBindingStore!
     private var configurableMenuItems: [String: NSMenuItem] = [:]
     private var keyMonitorActionMap: [String: () -> Void] = [:]
-    private let tmuxThemeDebounceNanoseconds: UInt64 = 250_000_000
+    private let tmuxConfigurationDebounceNanoseconds: UInt64 = 250_000_000
     private var companionToolState = CompanionToolPaneState()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -302,9 +302,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             let model = ProxySettingsApplicator.load()
             await ProxySettingsApplicator.apply(model, tmuxBackend: tmuxBackend)
 
-            // Apply theme (including status bar off) to the newly created session
+            // Apply Mori tmux compatibility/defaults/theme to the newly created session
             if let self {
-                self.scheduleTmuxThemeApply(immediate: true, force: true, tmuxBackend: tmuxBackend)
+                self.scheduleTmuxConfigurationApply(
+                    immediate: true,
+                    forceTheme: true,
+                    tmuxBackends: [tmuxBackend]
+                )
             }
         }
 
@@ -354,8 +358,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             // Start coordinated polling (tmux + git status on each 5s tick)
             manager.startPolling()
 
-            // Apply ghostty theme colors to tmux (pane borders, status bar)
-            self.scheduleTmuxThemeApply(immediate: true, tmuxBackend: manager.tmuxBackend)
+            // Apply Mori tmux compatibility/defaults/theme to tmux
+            self.scheduleTmuxConfigurationApply(
+                immediate: true,
+                tmuxBackends: manager.allTmuxBackends()
+            )
 
             // Apply proxy environment variables to tmux
             self.applyProxyToTmux()
@@ -752,12 +759,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 ProxySettingsApplicator.readSystemProxy()
             },
             onToolSettingsChanged: { [weak self] newModel in
+                let previousModel = ToolSettings.load()
                 ToolSettings.save(newModel)
                 Task { @MainActor [weak self] in
                     guard let self,
-                          let manager = self.workspaceManager,
-                          let tmuxPath = try? await manager.tmuxBackend.resolvedBinaryPath() else { return }
-                    self.terminalAreaController?.tmuxBinaryPath = tmuxPath
+                          let manager = self.workspaceManager else { return }
+
+                    if let tmuxPath = try? await manager.tmuxBackend.resolvedBinaryPath() {
+                        self.terminalAreaController?.tmuxBinaryPath = tmuxPath
+                    }
+
+                    guard previousModel.applyMoriTmuxDefaults != newModel.applyMoriTmuxDefaults else {
+                        return
+                    }
+
+                    self.scheduleTmuxConfigurationApply(
+                        immediate: true,
+                        tmuxBackends: manager.allTmuxBackends()
+                    )
                 }
             },
             keyBindings: store.bindings,
@@ -865,21 +884,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         agentDashboardPanel?.updateAppearance(themeInfo: themeInfo)
 
         // Sync to tmux
-        if let tmuxBackend = workspaceManager?.tmuxBackend {
-            scheduleTmuxThemeApply(immediate: false, tmuxBackend: tmuxBackend)
+        if let manager = workspaceManager {
+            scheduleTmuxConfigurationApply(
+                immediate: false,
+                tmuxBackends: manager.allTmuxBackends()
+            )
         }
     }
 
-    private func scheduleTmuxThemeApply(immediate: Bool, force: Bool = false, tmuxBackend: TmuxBackend) {
-        tmuxThemeApplyTask?.cancel()
-        let delayNanoseconds = immediate ? 0 : tmuxThemeDebounceNanoseconds
-        tmuxThemeApplyTask = Task { [weak self] in
-            if delayNanoseconds > 0 {
-                try? await Task.sleep(nanoseconds: delayNanoseconds)
+    private func scheduleTmuxConfigurationApply(
+        immediate: Bool,
+        forceTheme: Bool = false,
+        tmuxBackends: [TmuxBackend]
+    ) {
+        let delayNanoseconds = immediate ? 0 : tmuxConfigurationDebounceNanoseconds
+        for tmuxBackend in tmuxBackends {
+            let backendID = ObjectIdentifier(tmuxBackend)
+            tmuxConfigurationApplyTasks[backendID]?.cancel()
+            tmuxConfigurationApplyTasks[backendID] = Task { [weak self] in
+                if delayNanoseconds > 0 {
+                    try? await Task.sleep(nanoseconds: delayNanoseconds)
+                }
+                guard !Task.isCancelled,
+                      let themeInfo = self?.terminalAreaController?.themeInfo else { return }
+                let toolSettings = ToolSettings.load()
+                await TmuxConfigurationApplicator.apply(
+                    themeInfo: themeInfo,
+                    toolSettings: toolSettings,
+                    tmuxBackend: tmuxBackend,
+                    forceTheme: forceTheme
+                )
             }
-            guard !Task.isCancelled,
-                  let themeInfo = self?.terminalAreaController?.themeInfo else { return }
-            await TmuxThemeApplicator.apply(themeInfo: themeInfo, tmuxBackend: tmuxBackend, force: force)
         }
     }
 
