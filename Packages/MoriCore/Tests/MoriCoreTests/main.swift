@@ -1248,6 +1248,18 @@ func testToolSettingsConfiguredPathExpandsTilde() {
     assertNil(settings.configuredPath(for: "unknown"))
 }
 
+func testToolSettingsDefaultsEnableMoriTmuxPreset() {
+    let settings = ToolSettings()
+    assertTrue(settings.applyMoriTmuxDefaults)
+}
+
+func testToolSettingsDecodesLegacyPayloadWithoutPresetFlag() {
+    let data = "{\"tmuxPath\":\"/opt/homebrew/bin/tmux\",\"lazygitPath\":\"\",\"yaziPath\":\"\"}".data(using: .utf8)!
+    let decoded = try! JSONDecoder().decode(ToolSettings.self, from: data)
+    assertEqual(decoded.tmuxPath, "/opt/homebrew/bin/tmux")
+    assertTrue(decoded.applyMoriTmuxDefaults)
+}
+
 func testBinaryResolverPrefersConfiguredPath() {
     let resolved = BinaryResolver.resolve(
         command: "tmux",
@@ -1444,6 +1456,8 @@ testAgentMessageCodable()
 
 // Tool resolution
 testToolSettingsConfiguredPathExpandsTilde()
+testToolSettingsDefaultsEnableMoriTmuxPreset()
+testToolSettingsDecodesLegacyPayloadWithoutPresetFlag()
 testBinaryResolverPrefersConfiguredPath()
 testBinaryResolverPrefersPATHBeforeFallbackDirectories()
 testBinaryResolverFallsBackToPATH()

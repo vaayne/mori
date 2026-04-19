@@ -404,6 +404,10 @@ final class WorkspaceManager {
         tmuxBackend(for: worktree)
     }
 
+    func allTmuxBackends() -> [TmuxBackend] {
+        [tmuxBackend] + Array(remoteTmuxBackends.values)
+    }
+
     func rawTmuxWindowId(from runtimeWindow: RuntimeWindow) -> String {
         rawWindowId(from: runtimeWindow)
     }

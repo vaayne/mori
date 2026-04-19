@@ -130,11 +130,13 @@
 
 /* Network / Proxy Settings */
 "Network" = "Network";
-"Configure explicit paths for tmux, Lazygit, and Yazi. Leave a field empty to let Mori auto-detect from common install locations and your shell PATH." = "Configure explicit paths for tmux, Lazygit, and Yazi. Leave a field empty to let Mori auto-detect from common install locations and your shell PATH.";
+"Configure explicit paths for tmux, Lazygit, and Yazi, and choose whether Mori should apply its tmux onboarding defaults. Leave a path field empty to let Mori auto-detect from common install locations and your shell PATH." = "Configure explicit paths for tmux, Lazygit, and Yazi, and choose whether Mori should apply its tmux onboarding defaults. Leave a path field empty to let Mori auto-detect from common install locations and your shell PATH.";
+"Apply Mori tmux defaults" = "Apply Mori tmux defaults";
+"Enable mouse support and hide the tmux status bar for Mori-managed sessions. Turn this off to keep your own mouse and status-bar behavior from tmux.conf instead." = "Enable mouse support and hide the tmux status bar for Mori-managed sessions. Turn this off to keep your own mouse and status-bar behavior from tmux.conf instead.";
 "Required for local Mori workspaces. Supports custom installs such as ~/homebrew/bin/tmux." = "Required for local Mori workspaces. Supports custom installs such as ~/homebrew/bin/tmux.";
 "Optional Git companion tool path." = "Optional Git companion tool path.";
 "Optional file manager companion tool path." = "Optional file manager companion tool path.";
-"Tool path changes apply immediately to new launches. Existing tmux clients or shells may still use earlier paths." = "Tool path changes apply immediately to new launches. Existing tmux clients or shells may still use earlier paths.";
+"Tmux preset changes apply immediately to Mori-managed sessions. Tool path changes apply to new launches, while existing tmux clients or shells may still use earlier paths until reopened." = "Tmux preset changes apply immediately to Mori-managed sessions. Tool path changes apply to new launches, while existing tmux clients or shells may still use earlier paths until reopened.";
 "Configure proxy environment variables for all terminal sessions. Both lowercase and uppercase variants (e.g. http_proxy and HTTP_PROXY) are set automatically." = "Configure proxy environment variables for all terminal sessions. Both lowercase and uppercase variants (e.g. http_proxy and HTTP_PROXY) are set automatically.";
 "Proxy Mode" = "Proxy Mode";
 "System proxy" = "System proxy";
