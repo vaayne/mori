@@ -7,17 +7,21 @@
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-04-19
+
 ### ✨ 新功能
 
-- 在设置 → Tools 中新增可切换的 Mori tmux 默认预设，让 Mori 管理的会话默认开启鼠标支持并隐藏 tmux 状态栏，同时也允许用户一键回退到自己 `tmux.conf` 中的鼠标与状态栏行为
+- 在设置 → Tools 中新增可切换的 Mori tmux 默认预设，让 Mori 管理的会话默认开启鼠标支持并隐藏 tmux 状态栏，同时也允许用户一键回退到自己 `tmux.conf` 中的鼠标与状态栏行为 ([#78](https://github.com/vaayne/mori/pull/78))
 
 ### 🐛 问题修复
 
-- 终端字体选择器现在会包含 JetBrains Maple Mono 这类系统字体：当 AppKit 没有将其标记为等宽字体时，改为回退到统一字形宽度检测来识别
-- 安装 Agent Hook 时保留软链接的 agent 配置文件（例如指向 dotfiles 仓库的 `~/.claude/settings.json`）：原子写入现在会先解析软链接目标，避免链接被替换为普通文件 ([#80](https://github.com/vaayne/mori/issues/80))
-- Lazygit / Yazi 等嵌入工具进程退出后，右侧 Git / Files 面板会立即自动关闭，不再残留一个提示 "press any key to close" 且只能通过重启 Mori 才能关闭的空白面板 ([#79](https://github.com/vaayne/mori/issues/79))
+- 终端字体选择器现在会包含 JetBrains Maple Mono 这类系统字体：当 AppKit 没有将其标记为等宽字体时，改为回退到统一字形宽度检测来识别 ([#78](https://github.com/vaayne/mori/pull/78))
+- 安装 Agent Hook 时保留软链接的 agent 配置文件（例如指向 dotfiles 仓库的 `~/.claude/settings.json`）：原子写入现在会先解析软链接目标，避免链接被替换为普通文件 ([#81](https://github.com/vaayne/mori/pull/81))
+- Lazygit / Yazi 等嵌入工具进程退出后，右侧 Git / Files 面板会立即自动关闭，不再残留一个提示 "press any key to close" 且只能通过重启 Mori 才能关闭的空白面板 ([#82](https://github.com/vaayne/mori/pull/82))
 - 将 agent hook 的 tmux 更新明确绑定到触发事件的 `TMUX_PANE`，修复同一会话里一个 Claude / Codex / Pi pane 把兄弟 pane 错误标成 Running 或 Waiting 的问题 ([#83](https://github.com/vaayne/mori/issues/83))
 - 每次启动时自动用 Mori bundle 内的最新资源刷新已启用的 agent hook 文件，让 `~/.config/mori/` 始终跟随当前运行版本，并在升级后自动修复陈旧脚本
+
+**完整变更记录**: [v0.4.0...v0.4.1](https://github.com/vaayne/mori/compare/v0.4.0...v0.4.1)
 
 ## [0.4.0] - 2026-04-18
 
