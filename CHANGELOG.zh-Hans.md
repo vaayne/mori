@@ -15,7 +15,7 @@
 
 - 终端字体选择器现在会包含 JetBrains Maple Mono 这类系统字体：当 AppKit 没有将其标记为等宽字体时，改为回退到统一字形宽度检测来识别
 - 安装 Agent Hook 时保留软链接的 agent 配置文件（例如指向 dotfiles 仓库的 `~/.claude/settings.json`）：原子写入现在会先解析软链接目标，避免链接被替换为普通文件 ([#80](https://github.com/vaayne/mori/issues/80))
-- Lazygit / Yazi 等嵌入工具进程退出后，右侧 Git / Files 面板会自动关闭，不再残留一个无法关闭的空白面板，也不再需要重启 Mori 才能恢复 ([#79](https://github.com/vaayne/mori/issues/79))
+- Lazygit / Yazi 等嵌入工具进程退出后，右侧 Git / Files 面板会立即自动关闭，不再残留一个提示 "press any key to close" 且只能通过重启 Mori 才能关闭的空白面板 ([#79](https://github.com/vaayne/mori/issues/79))
 
 ## [0.4.0] - 2026-04-18
 
