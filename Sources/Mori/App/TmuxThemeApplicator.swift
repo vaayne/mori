@@ -41,7 +41,8 @@ enum TmuxThemeApplicator {
         }
 
         let styles = makeStyles(payload: payload)
-        await applySessionThemes(styles: styles, tmuxBackend: tmuxBackend)
+        let appliedSuccessfully = await applySessionThemes(styles: styles, tmuxBackend: tmuxBackend)
+        guard appliedSuccessfully else { return }
         await cache.markApplied(payload, backendID: backendID)
     }
 
@@ -79,22 +80,37 @@ enum TmuxThemeApplicator {
         return ThemeStyles(sessionOptions: sessionOptions, windowOptions: windowOptions)
     }
 
-    private static func applySessionThemes(styles: ThemeStyles, tmuxBackend: TmuxBackend) async {
+    private static func applySessionThemes(styles: ThemeStyles, tmuxBackend: TmuxBackend) async -> Bool {
         // Apply only to Mori-managed sessions (those matching <project>/<branch> naming).
         // Non-Mori sessions are left untouched so they inherit the user's tmux.conf.
         do {
             let sessions = try await tmuxBackend.scanAll()
+            var hadFailure = false
+
             for session in sessions where session.isMoriSession {
                 for (option, value) in styles.sessionOptions {
-                    try? await tmuxBackend.setOption(sessionId: session.id, option: option, value: value)
+                    do {
+                        try await tmuxBackend.setOption(sessionId: session.id, option: option, value: value)
+                    } catch {
+                        hadFailure = true
+                        print("[TmuxThemeApplicator] Failed to set session option \(option) for \(session.name): \(error)")
+                    }
                 }
 
                 for (option, value) in styles.windowOptions {
-                    try? await tmuxBackend.setWindowOption(global: false, target: session.id, option: option, value: value)
+                    do {
+                        try await tmuxBackend.setWindowOption(global: false, target: session.id, option: option, value: value)
+                    } catch {
+                        hadFailure = true
+                        print("[TmuxThemeApplicator] Failed to set window option \(option) for \(session.name): \(error)")
+                    }
                 }
             }
+
+            return !hadFailure
         } catch {
             print("[TmuxThemeApplicator] Failed to list sessions for per-session theme: \(error)")
+            return false
         }
     }
 
