@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🐛 Bug Fixes
 
 - Include system fonts like JetBrains Maple Mono in the terminal font picker even when AppKit does not flag them as fixed-pitch, by falling back to uniform glyph-width detection
+- Preserve symlinked agent settings files (e.g. `~/.claude/settings.json` linked into a dotfiles repo) when installing hooks; the atomic write now resolves the symlink first so the link is no longer replaced with a regular file ([#80](https://github.com/vaayne/mori/issues/80))
 
 ## [0.4.0] - 2026-04-18
 

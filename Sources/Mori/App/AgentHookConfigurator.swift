@@ -459,7 +459,11 @@ enum AgentHookConfigurator {
         guard let data = try? JSONSerialization.data(
             withJSONObject: object, options: [.prettyPrinted, .sortedKeys]
         ) else { return }
-        try? data.write(to: url, options: .atomic)
+        // `.atomic` uses rename(), which replaces a symlink target with a
+        // regular file instead of following it. Resolve first so users whose
+        // settings.json is a symlink into a dotfiles repo keep the link intact.
+        let resolved = url.resolvingSymlinksInPath()
+        try? data.write(to: resolved, options: .atomic)
     }
 
     /// Parse a TOML string array like `notify = ["/a", "/b"]` into `["/a", "/b"]`.
