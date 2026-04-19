@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add a user-toggleable Mori tmux defaults preset in Settings → Tools so Mori-managed sessions can start with mouse support enabled and the tmux status bar hidden, while still allowing an opt-out back to the user's own mouse and status-bar behavior from `tmux.conf`
 
+### 🐛 Bug Fixes
+
+- Include system fonts like JetBrains Maple Mono in the terminal font picker even when AppKit does not flag them as fixed-pitch, by falling back to uniform glyph-width detection
+
 ## [0.4.0] - 2026-04-18
 
 ### 🎨 Design

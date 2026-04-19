@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreText
 import MoriCore
 
 /// Settings model representing user-facing ghostty config options.
@@ -940,8 +941,25 @@ private struct FontSettingsContent: View {
                   let fontName = first[0] as? String,
                   let font = NSFont(name: fontName, size: 13)
             else { return false }
-            return font.isFixedPitch
+            return font.isFixedPitch || Self.hasUniformGlyphAdvance(font)
         }.sorted()
+    }
+
+    private static func hasUniformGlyphAdvance(_ font: NSFont) -> Bool {
+        let ctFont = font as CTFont
+        let sampleCharacters: [UniChar] = Array(" .0OIl1AaMWmw".utf16)
+        var characters = sampleCharacters
+        var glyphs = Array(repeating: CGGlyph(), count: sampleCharacters.count)
+
+        guard CTFontGetGlyphsForCharacters(ctFont, &characters, &glyphs, sampleCharacters.count) else {
+            return false
+        }
+
+        var advances = Array(repeating: CGSize.zero, count: glyphs.count)
+        CTFontGetAdvancesForGlyphs(ctFont, .horizontal, glyphs, &advances, glyphs.count)
+
+        guard let expectedWidth = advances.first?.width else { return false }
+        return advances.allSatisfy { abs($0.width - expectedWidth) < 0.01 }
     }
 
     private var filteredFonts: [String] {
