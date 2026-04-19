@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Include system fonts like JetBrains Maple Mono in the terminal font picker even when AppKit does not flag them as fixed-pitch, by falling back to uniform glyph-width detection
 - Preserve symlinked agent settings files (e.g. `~/.claude/settings.json` linked into a dotfiles repo) when installing hooks; the atomic write now resolves the symlink first so the link is no longer replaced with a regular file ([#80](https://github.com/vaayne/mori/issues/80))
+- Automatically close the companion Git / Files pane when the embedded Lazygit or Yazi process exits, instead of leaving a blank panel that could not be dismissed without restarting Mori ([#79](https://github.com/vaayne/mori/issues/79))
 
 ## [0.4.0] - 2026-04-18
 

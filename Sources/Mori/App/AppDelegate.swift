@@ -101,6 +101,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         let companionTool = CompanionToolPaneController()
         self.companionToolController = companionTool
+        companionTool.onToolExited = { [weak self] in
+            guard let self else { return }
+            self.closeCompanionTool()
+            self.terminalAreaController?.focusCurrentSurface()
+        }
 
         // Wire ghostty keybinding actions to Mori's tmux-based implementation.
         // Ghostty maps keys to intents (new_tab, close_tab, etc.); Mori provides

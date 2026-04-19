@@ -59,9 +59,18 @@ final class CompanionToolPaneController: NSViewController {
 
     private(set) var activeTool: CompanionTool?
 
+    /// Invoked when the embedded tool's process exits (e.g., user presses `q` in lazygit).
+    /// The owner should close the companion pane in response.
+    var onToolExited: (() -> Void)?
+
     init(terminalHost: TerminalHost? = nil) {
         self.terminalController = TerminalAreaViewController(terminalHost: terminalHost)
         super.init(nibName: nil, bundle: nil)
+        terminalController.onSurfaceExited = { [weak self] in
+            guard let self else { return }
+            self.activeTool = nil
+            self.onToolExited?()
+        }
     }
 
     @available(*, unavailable)

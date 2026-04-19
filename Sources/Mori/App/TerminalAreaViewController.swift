@@ -98,6 +98,11 @@ final class TerminalAreaViewController: NSViewController {
     /// Whether the empty state should show "Reconnect" (dead session) vs "Add Project" (no project).
     var hasSelectedWorktree: Bool = false
 
+    /// Invoked when the current surface exits. When set, the controller forwards
+    /// control to the owner instead of showing the empty state / auto-reconnecting —
+    /// used by ephemeral companion tools (lazygit, yazi) that close on process exit.
+    var onSurfaceExited: (() -> Void)?
+
     // MARK: - Init
 
     init(terminalHost: TerminalHost? = nil) {
@@ -536,6 +541,12 @@ final class TerminalAreaViewController: NSViewController {
         self.currentSurface = nil
         self.currentSessionKey = nil
         removeResidualTerminalSubviews()
+
+        if let onSurfaceExited {
+            onSurfaceExited()
+            return
+        }
+
         isAutoReconnecting = true
         showEmptyState()
 
