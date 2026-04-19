@@ -98,6 +98,11 @@ final class TerminalAreaViewController: NSViewController {
     /// Whether the empty state should show "Reconnect" (dead session) vs "Add Project" (no project).
     var hasSelectedWorktree: Bool = false
 
+    /// Invoked when the current surface exits. When set, the controller forwards
+    /// control to the owner instead of showing the empty state / auto-reconnecting —
+    /// used by ephemeral companion tools (lazygit, yazi) that close on process exit.
+    var onSurfaceExited: (() -> Void)?
+
     // MARK: - Init
 
     init(terminalHost: TerminalHost? = nil) {
@@ -518,16 +523,31 @@ final class TerminalAreaViewController: NSViewController {
     private func handleSurfaceClosed(_ notification: Notification) {
         guard !isHandlingSurfaceExit else { return }
         guard let userInfo = notification.userInfo,
-              let userdata = userInfo["userdata"] as? UInt,
-              let currentSurface else { return }
+              let userdata = userInfo["userdata"] as? UInt else { return }
 
-        let currentUserdata = UInt(bitPattern: Unmanaged.passUnretained(currentSurface).toOpaque())
-        guard userdata == currentUserdata else { return }
+        // Fan-out: this notification is delivered to every TerminalAreaViewController
+        // (e.g., the main terminal + companion pane). Each instance checks its own
+        // currentSurface and cache; exactly one owns the exited surface, others no-op.
+        if let currentSurface {
+            let currentUserdata = UInt(bitPattern: Unmanaged.passUnretained(currentSurface).toOpaque())
+            if userdata == currentUserdata {
+                handleCurrentSurfaceExit()
+                return
+            }
+        }
 
+        // Surface isn't currently attached but may still live in this cache (e.g.,
+        // user switched away from a lazygit companion that then quit in the background).
+        // Evict so the next attach creates a fresh process instead of binding to a
+        // dead surface that ghostty has already torn down.
+        surfaceCache.removeByUserdata(userdata)
+    }
+
+    private func handleCurrentSurfaceExit() {
         isHandlingSurfaceExit = true
         defer { isHandlingSurfaceExit = false }
 
-        currentSurface.removeFromSuperview()
+        currentSurface?.removeFromSuperview()
 
         // Remove dead surface from cache so reconnect creates a fresh process.
         if let sessionKey = currentSessionKey {
@@ -536,6 +556,12 @@ final class TerminalAreaViewController: NSViewController {
         self.currentSurface = nil
         self.currentSessionKey = nil
         removeResidualTerminalSubviews()
+
+        if let onSurfaceExited {
+            onSurfaceExited()
+            return
+        }
+
         isAutoReconnecting = true
         showEmptyState()
 

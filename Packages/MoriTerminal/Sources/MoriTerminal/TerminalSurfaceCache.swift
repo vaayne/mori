@@ -69,6 +69,22 @@ public final class TerminalSurfaceCache {
         terminalHost.destroySurface(entry.surface)
     }
 
+    /// Remove a cached surface whose view pointer matches the given userdata.
+    /// Used when a ghostty surface signals exit: the notification carries the
+    /// view's opaque pointer, which may correspond to a cached surface that
+    /// is not currently attached to any view controller.
+    @discardableResult
+    public func removeByUserdata(_ userdata: UInt) -> Bool {
+        for (key, entry) in entries {
+            let entryUserdata = UInt(bitPattern: Unmanaged.passUnretained(entry.surface).toOpaque())
+            if entryUserdata == userdata {
+                remove(sessionKey: key)
+                return true
+            }
+        }
+        return false
+    }
+
     /// Remove all cached surfaces.
     public func removeAll() {
         for entry in entries.values {

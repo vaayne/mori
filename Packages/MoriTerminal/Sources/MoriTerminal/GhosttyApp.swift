@@ -267,6 +267,29 @@ final class GhosttyApp {
             moriAction = .openConfig
         case GHOSTTY_ACTION_TOGGLE_FULLSCREEN:
             moriAction = .toggleFullscreen
+        case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
+            // Ghostty's embedded API forces wait-after-command=true whenever a
+            // command is passed, so on normal child exit it would print
+            // "Process exited. Press any key to close." and wait. We intercept
+            // the native show_child_exited action here, forward a close signal
+            // via NotificationCenter so Mori tears the surface down immediately,
+            // and return true to suppress ghostty's fallback terminal message.
+            if target.tag == GHOSTTY_TARGET_SURFACE,
+               let surface = target.target.surface,
+               let rawUserdata = ghostty_surface_userdata(surface) {
+                let userdataInt = UInt(bitPattern: rawUserdata)
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(
+                        name: .ghosttySurfaceDidClose,
+                        object: nil,
+                        userInfo: [
+                            "userdata": userdataInt,
+                            "processAlive": false,
+                        ]
+                    )
+                }
+            }
+            return true
         default:
             return false
         }
