@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Include system fonts like JetBrains Maple Mono in the terminal font picker even when AppKit does not flag them as fixed-pitch, by falling back to uniform glyph-width detection
 - Preserve symlinked agent settings files (e.g. `~/.claude/settings.json` linked into a dotfiles repo) when installing hooks; the atomic write now resolves the symlink first so the link is no longer replaced with a regular file ([#80](https://github.com/vaayne/mori/issues/80))
 - Automatically close the companion Git / Files pane when the embedded Lazygit or Yazi process exits — no longer leaves a blank "press any key to close" panel that could only be dismissed by restarting Mori ([#79](https://github.com/vaayne/mori/issues/79))
+- Scope agent hook tmux updates to the exact `TMUX_PANE` that fired the hook, fixing cases where one Claude / Codex / Pi pane could incorrectly stamp sibling panes in the same session as Running or Waiting ([#83](https://github.com/vaayne/mori/issues/83))
+- Refresh already-enabled agent hook files from Mori's bundled resources on every launch, so `~/.config/mori/` stays in sync with the running app version and stale scripts self-heal after upgrades
 
 ## [0.4.0] - 2026-04-18
 

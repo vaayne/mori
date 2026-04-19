@@ -81,7 +81,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         )
         self.workspaceManager = manager
 
-        // Agent hooks are installed on-demand via Settings > Agents
+        // Refresh hook files/extensions for any agents the user already enabled.
+        // This keeps ~/.config/mori/ aligned with the current Mori bundle on launch
+        // without auto-enabling hooks for new agents.
+        AgentHookConfigurator.refreshInstalledHooks()
 
         // Load persisted state
         try? manager.loadAll()

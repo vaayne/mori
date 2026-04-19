@@ -3,6 +3,7 @@
 
 export default function (pi: any) {
   const AGENT_NAME = "pi";
+  const paneTarget = process.env.TMUX_PANE;
 
   async function tmux(...args: string[]) {
     try {
@@ -13,9 +14,10 @@ export default function (pi: any) {
   }
 
   async function setState(state: string) {
-    await tmux("set-option", "-p", "@mori-agent-state", state);
-    await tmux("set-option", "-p", "@mori-agent-name", AGENT_NAME);
-    await tmux("select-pane", "-T", AGENT_NAME);
+    if (!paneTarget) return;
+    await tmux("set-option", "-p", "-t", paneTarget, "@mori-agent-state", state);
+    await tmux("set-option", "-p", "-t", paneTarget, "@mori-agent-name", AGENT_NAME);
+    await tmux("select-pane", "-t", paneTarget, "-T", AGENT_NAME);
   }
 
   pi.on("agent_start", async () => {

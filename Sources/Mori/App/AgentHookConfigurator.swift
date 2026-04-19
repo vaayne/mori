@@ -66,6 +66,24 @@ enum AgentHookConfigurator {
 
     // MARK: - Detection
 
+    /// Refresh any agent hooks/extensions that are currently registered in user config.
+    /// This keeps the files under ~/.config/mori/ aligned with the current Mori bundle
+    /// on every launch, without enabling hooks for agents the user never turned on.
+    static func refreshInstalledHooks() {
+        if isClaudeHookInstalled() {
+            installClaudeHook()
+        }
+        if isCodexHookInstalled() {
+            installCodexHook()
+        }
+        if isDroidHookInstalled() {
+            installDroidHook()
+        }
+        if piSettingsContainsExtension() {
+            installPiExtension()
+        }
+    }
+
     /// Check if Claude Code hooks are installed in ~/.claude/settings.json.
     static func isClaudeHookInstalled() -> Bool {
         let settingsURL = home.appendingPathComponent(".claude/settings.json")

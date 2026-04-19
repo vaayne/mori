@@ -1,6 +1,6 @@
 # Agent Hooks
 
-Mori integrates with coding agents (Claude Code, Codex CLI, Pi) to display their status in tab names and send notifications. Hooks are manually enabled/disabled in **Settings > Agent Hooks** — no auto-install.
+Mori integrates with coding agents (Claude Code, Codex CLI, Pi) to display their status in tab names and send notifications. Hooks are manually enabled/disabled in **Settings > Agent Hooks**. Once enabled, Mori refreshes the installed hook files on every launch so `~/.config/mori/` stays aligned with the current app bundle.
 
 ## How It Works
 
@@ -20,6 +20,7 @@ During Mori's 5-second polling cycle, it reads these options directly from tmux 
    - `UserPromptSubmit` (prompt entered)
    - `Stop` (agent stopped)
    - `Notification` (completion notification)
+4. On future launches, Mori re-copies the hook script from its bundled resources if the installed file is stale or missing.
 
 Run Claude Code in a tmux window. Tab renames to `claude` while working (⚡ badge shown in sidebar), then shows waiting badge (❗) when the turn completes. Click the waiting badge to reply inline.
 
@@ -35,6 +36,8 @@ Run Claude Code in a tmux window. Tab renames to `claude` while working (⚡ bad
 
 **Important:** The `notify` entry must be **top-level** in the TOML file (before any `[section]` headers). Mori enforces this automatically.
 
+On future launches, Mori re-copies the hook script from its bundled resources if the installed file is stale or missing.
+
 Run Codex in a tmux window. Tab renames to `codex` while working (⚡ badge shown in sidebar), then shows waiting badge (❗) when the turn completes.
 
 ### Pi
@@ -49,6 +52,7 @@ Run Codex in a tmux window. Tab renames to `codex` while working (⚡ badge show
      ]
    }
    ```
+4. On future launches, Mori re-copies the extension from its bundled resources if the installed file is stale or missing.
 
 Run Pi in a tmux window. Tab renames to `pi` while working (⚡ badge shown in sidebar), then shows waiting badge (❗) when the turn completes. Click the waiting badge to reply inline.
 
