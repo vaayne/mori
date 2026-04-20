@@ -2,6 +2,7 @@ import AppKit
 import MoriCore
 import MoriGit
 import MoriTerminal
+import MoriUI
 
 // MARK: - Controller
 
@@ -44,6 +45,7 @@ final class WorktreeCreationController: NSWindowController {
     private let baseBranchPopup = NSPopUpButton()
     private let createHintLabel = NSTextField(labelWithString: "")
     private let containerView = NSView()
+    private var chromePalette: MoriChromePalette = .fallback
 
     // MARK: - Layout Constants
 
@@ -112,7 +114,8 @@ final class WorktreeCreationController: NSWindowController {
         projects: [Project],
         selectedProjectId: UUID,
         repoPath: String,
-        themeInfo: GhosttyThemeInfo
+        themeInfo: GhosttyThemeInfo,
+        chromePalette: MoriChromePalette
     ) {
         self.projects = projects
         self.selectedProjectId = selectedProjectId
@@ -121,7 +124,7 @@ final class WorktreeCreationController: NSWindowController {
         branchNameField.stringValue = ""
         dataSource = nil
 
-        applyTheme(themeInfo)
+        applyTheme(themeInfo: themeInfo, chromePalette: chromePalette)
         populateProjectPopup()
         resetBaseBranchPopup()
 
@@ -158,11 +161,17 @@ final class WorktreeCreationController: NSWindowController {
 
     // MARK: - Theme
 
-    private func applyTheme(_ themeInfo: GhosttyThemeInfo) {
+    func updateAppearance(themeInfo: GhosttyThemeInfo, chromePalette: MoriChromePalette) {
+        applyTheme(themeInfo: themeInfo, chromePalette: chromePalette)
+    }
+
+    private func applyTheme(themeInfo: GhosttyThemeInfo, chromePalette: MoriChromePalette) {
         guard let panel = window as? NSPanel else { return }
-        panel.backgroundColor = themeInfo.background
+        self.chromePalette = chromePalette
+        panel.backgroundColor = chromePalette.panelBackground.nsColor
         panel.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
-        containerView.layer?.backgroundColor = themeInfo.background.cgColor
+        containerView.layer?.backgroundColor = chromePalette.panelBackground.nsColor.cgColor
+        toolbarContainer.layer?.backgroundColor = chromePalette.headerBackground.nsColor.cgColor
     }
 
     // MARK: - Setup
@@ -231,6 +240,7 @@ final class WorktreeCreationController: NSWindowController {
 
     private func setupToolbarRow() {
         toolbarContainer.translatesAutoresizingMaskIntoConstraints = false
+        toolbarContainer.wantsLayer = true
         containerView.addSubview(toolbarContainer)
 
         // Project popup

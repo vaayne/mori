@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var worktreeCreationController: WorktreeCreationController?
     private let sidebarPaneOutputCache = PaneOutputCache()
     private var settingsWindowController: NSWindowController?
+    private var settingsChromePaletteStore: MoriChromePaletteStore?
     private var configFile: GhosttyConfigFile?
     private var proxyApplyTask: Task<Void, Never>?
     private var tmuxConfigurationApplyTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
@@ -120,9 +121,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
 
         let themeInfo = terminalArea.themeInfo
+        let chromePalette = MoriChromeThemeBuilder.palette(from: themeInfo)
 
         // Build the window with ghostty theme
-        let windowController = MainWindowController(themeInfo: themeInfo)
+        let windowController = MainWindowController(themeInfo: themeInfo, chromePalette: chromePalette)
         self.mainWindowController = windowController
 
         // Build split view children
@@ -227,11 +229,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             onReorderProjects: { [weak manager] orderedIds in
                 manager?.reorderProjects(orderedIds)
-            }
+            },
+            chromePalette: chromePalette
         )
 
         self.sidebarController = sidebarController
-        sidebarController.updateAppearance(themeInfo: themeInfo)
+        sidebarController.updateAppearance(themeInfo: themeInfo, chromePalette: chromePalette)
 
         let splitVC = RootSplitViewController(
             sidebarController: sidebarController,
@@ -239,6 +242,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             companionController: companionTool
         )
         self.rootSplitVC = splitVC
+        splitVC.updateAppearance(chromePalette: chromePalette)
         companionToolState.width = splitVC.currentCompanionWidth
         splitVC.onCompanionWidthChanged = { [weak self] width in
             self?.companionToolState.width = width
@@ -269,7 +273,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                   let adapter = terminalArea?.terminalHost as? GhosttyAdapter,
                   let window = windowController?.window else { return }
             adapter.syncWorkspaceWindowAppearance(window)
-            self.refreshGhosttyThemeBackgrounds(themeInfo: adapter.themeInfo)
+            let themeInfo = adapter.themeInfo
+            let chromePalette = MoriChromeThemeBuilder.palette(from: themeInfo)
+            self.refreshGhosttyThemeBackgrounds(themeInfo: themeInfo, chromePalette: chromePalette)
         }
 
         windowController.contentViewController = splitVC
@@ -278,7 +284,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
            let window = windowController.window {
             adapter.syncWorkspaceWindowAppearance(window)
         }
-        companionTool.updateAppearance(themeInfo: themeInfo, isKeyWindow: windowController.window?.isKeyWindow ?? true)
+        refreshGhosttyThemeBackgrounds(themeInfo: themeInfo, chromePalette: chromePalette)
+        companionTool.updateAppearance(
+            themeInfo: themeInfo,
+            chromePalette: chromePalette,
+            isKeyWindow: windowController.window?.isKeyWindow ?? true
+        )
         // Restore saved frame after all layout is complete
         windowController.restoreSavedFrame()
         NSApp.activate(ignoringOtherApps: true)
@@ -684,11 +695,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let controller = worktreeCreationController!
 
         let themeInfo = terminalAreaController?.themeInfo ?? .fallback
+        let chromePalette = MoriChromeThemeBuilder.palette(from: themeInfo)
         controller.show(
             projects: state.projects,
             selectedProjectId: projectId,
             repoPath: project.repoRootPath,
-            themeInfo: themeInfo
+            themeInfo: themeInfo,
+            chromePalette: chromePalette
         )
     }
 
@@ -720,6 +733,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let themes = GhosttyConfigFile.availableThemes()
         let ghosttyDefaults = GhosttyConfigFile.defaultKeybinds()
         let themeInfo = terminalAreaController?.themeInfo ?? .fallback
+        let chromePalette = MoriChromeThemeBuilder.palette(from: themeInfo)
+        let chromePaletteStore = MoriChromePaletteStore(palette: chromePalette)
+        self.settingsChromePaletteStore = chromePaletteStore
 
         let store = self.keyBindingStore!
         let settingsView = SettingsWindowContent(
@@ -803,12 +819,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             keyBindingsRefresh: {
                 store.bindings
-            }
+            },
+            chromePaletteStore: chromePaletteStore
         )
 
         let hostingController = NSHostingController(rootView: settingsView)
         hostingController.view.wantsLayer = true
-        hostingController.view.layer?.backgroundColor = themeInfo.background.cgColor
+        hostingController.view.layer?.backgroundColor = chromePalette.panelBackground.nsColor.cgColor
         let window = NSWindow(contentViewController: hostingController)
         window.title = .localized("Settings")
         window.styleMask = [.titled, .closable, .fullSizeContentView]
@@ -817,9 +834,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if let adapter = terminalAreaController?.terminalHost as? GhosttyAdapter {
             adapter.syncThemedWindowAppearance(window)
         } else {
-            window.backgroundColor = themeInfo.background
             window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
         }
+        window.backgroundColor = chromePalette.panelBackground.nsColor
         window.center()
         window.setFrameAutosaveName("MoriSettings")
 
@@ -881,15 +898,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         adapter.reloadConfig()
 
         let themeInfo = adapter.themeInfo
+        let chromePalette = MoriChromeThemeBuilder.palette(from: themeInfo)
         if let window = mainWindowController?.window {
             adapter.syncWorkspaceWindowAppearance(window)
         }
-        refreshGhosttyThemeBackgrounds(themeInfo: themeInfo)
+        refreshGhosttyThemeBackgrounds(themeInfo: themeInfo, chromePalette: chromePalette)
 
-        refreshSettingsWindowAppearance(adapter: adapter, themeInfo: themeInfo)
+        refreshSettingsWindowAppearance(adapter: adapter, themeInfo: themeInfo, chromePalette: chromePalette)
 
         // Update agent dashboard appearance
-        agentDashboardPanel?.updateAppearance(themeInfo: themeInfo)
+        agentDashboardPanel?.updateAppearance(themeInfo: themeInfo, chromePalette: chromePalette)
 
         // Sync to tmux
         if let manager = workspaceManager {
@@ -926,18 +944,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
-    private func refreshGhosttyThemeBackgrounds(themeInfo: GhosttyThemeInfo) {
+    private func refreshGhosttyThemeBackgrounds(themeInfo: GhosttyThemeInfo, chromePalette: MoriChromePalette) {
         let isKeyWindow = mainWindowController?.window?.isKeyWindow ?? true
-        sidebarController?.updateAppearance(themeInfo: themeInfo)
+        mainWindowController?.updateAppearance(themeInfo: themeInfo, chromePalette: chromePalette)
+        rootSplitVC?.updateAppearance(chromePalette: chromePalette)
+        sidebarController?.updateAppearance(themeInfo: themeInfo, chromePalette: chromePalette)
         terminalAreaController?.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
-        companionToolController?.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
+        companionToolController?.updateAppearance(themeInfo: themeInfo, chromePalette: chromePalette, isKeyWindow: isKeyWindow)
+        worktreeCreationController?.updateAppearance(themeInfo: themeInfo, chromePalette: chromePalette)
     }
 
-    private func refreshSettingsWindowAppearance(adapter: GhosttyAdapter, themeInfo: GhosttyThemeInfo) {
+    private func refreshSettingsWindowAppearance(
+        adapter: GhosttyAdapter,
+        themeInfo: GhosttyThemeInfo,
+        chromePalette: MoriChromePalette
+    ) {
         guard let settingsWindow = settingsWindowController?.window else { return }
+        settingsChromePaletteStore?.palette = chromePalette
         adapter.syncThemedWindowAppearance(settingsWindow)
+        settingsWindow.backgroundColor = chromePalette.panelBackground.nsColor
         settingsWindow.contentViewController?.view.wantsLayer = true
-        settingsWindow.contentViewController?.view.layer?.backgroundColor = themeInfo.background.cgColor
+        settingsWindow.contentViewController?.view.layer?.backgroundColor = chromePalette.panelBackground.nsColor.cgColor
     }
 
     // MARK: - Proxy
@@ -1316,10 +1343,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 paneOutputCache: PaneOutputCache()
             )
         }
-        agentDashboardPanel?.toggle()
-        // Sync appearance with Ghostty terminal theme
+        // Sync appearance with Ghostty terminal theme before showing the panel.
         let themeInfo = terminalAreaController?.themeInfo ?? .fallback
-        agentDashboardPanel?.updateAppearance(themeInfo: themeInfo)
+        let chromePalette = MoriChromeThemeBuilder.palette(from: themeInfo)
+        agentDashboardPanel?.updateAppearance(themeInfo: themeInfo, chromePalette: chromePalette)
+        agentDashboardPanel?.toggle()
     }
 
     private func toggleCompanionTool(_ tool: CompanionTool) {
@@ -1805,6 +1833,7 @@ private struct SettingsWindowContent: View {
     var onKeyBindingReset: ((String) -> Void)?
     var onKeyBindingResetAll: (() -> Void)?
     var keyBindingsRefresh: (() -> [KeyBinding])?
+    let chromePaletteStore: MoriChromePaletteStore
 
     init(
         initial: GhosttySettingsModel,
@@ -1825,7 +1854,8 @@ private struct SettingsWindowContent: View {
         onKeyBindingUpdate: ((KeyBinding) -> Void)? = nil,
         onKeyBindingReset: ((String) -> Void)? = nil,
         onKeyBindingResetAll: (() -> Void)? = nil,
-        keyBindingsRefresh: (() -> [KeyBinding])? = nil
+        keyBindingsRefresh: (() -> [KeyBinding])? = nil,
+        chromePaletteStore: MoriChromePaletteStore = MoriChromePaletteStore()
     ) {
         self._model = State(initialValue: initial)
         self._agentHooks = State(initialValue: initialAgentHooks)
@@ -1846,6 +1876,7 @@ private struct SettingsWindowContent: View {
         self.onKeyBindingReset = onKeyBindingReset
         self.onKeyBindingResetAll = onKeyBindingResetAll
         self.keyBindingsRefresh = keyBindingsRefresh
+        self.chromePaletteStore = chromePaletteStore
     }
 
     var body: some View {
@@ -1878,5 +1909,6 @@ private struct SettingsWindowContent: View {
                 if let refresh = keyBindingsRefresh { keyBindings = refresh() }
             }
         )
+        .environmentObject(chromePaletteStore)
     }
 }

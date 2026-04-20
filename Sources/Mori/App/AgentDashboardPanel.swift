@@ -13,6 +13,9 @@ final class AgentDashboardPanel: NSObject, NSWindowDelegate {
     private weak var workspaceManager: WorkspaceManager?
     private let paneOutputCache: PaneOutputCache
     private let tilesModel = MultiPaneDashboardView.Model()
+    private let chromePaletteStore = MoriChromePaletteStore()
+    private var chromePalette: MoriChromePalette = .fallback
+    private var currentAppearance: NSAppearance?
 
     init(workspaceManager: WorkspaceManager, paneOutputCache: PaneOutputCache) {
         self.workspaceManager = workspaceManager
@@ -20,10 +23,15 @@ final class AgentDashboardPanel: NSObject, NSWindowDelegate {
     }
 
     /// Sync panel appearance with the Ghostty terminal theme.
-    func updateAppearance(themeInfo: GhosttyThemeInfo) {
+    func updateAppearance(themeInfo: GhosttyThemeInfo, chromePalette: MoriChromePalette) {
+        self.chromePalette = chromePalette
+        chromePaletteStore.palette = chromePalette
+        let appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        currentAppearance = appearance
         guard let panel else { return }
-        panel.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
-        panel.backgroundColor = themeInfo.background
+        panel.appearance = appearance
+        panel.backgroundColor = chromePalette.panelBackground.nsColor
+        panel.contentView?.layer?.backgroundColor = chromePalette.panelBackground.nsColor.cgColor
     }
 
     var isVisible: Bool {
@@ -71,13 +79,18 @@ final class AgentDashboardPanel: NSObject, NSWindowDelegate {
         panel.delegate = self
         panel.center()
         panel.minSize = NSSize(width: 400, height: 300)
+        panel.isOpaque = true
+        panel.backgroundColor = chromePalette.panelBackground.nsColor
+        panel.appearance = currentAppearance
 
         let view = MultiPaneDashboardView(model: self.tilesModel)
-        let hostingView = NSHostingView(rootView: view)
+        let hostingView = NSHostingView(rootView: view.environmentObject(chromePaletteStore))
         hostingView.translatesAutoresizingMaskIntoConstraints = false
 
         // Use a wrapper view so auto layout anchors the hosting view to fill the panel
         let wrapper = NSView(frame: contentRect)
+        wrapper.wantsLayer = true
+        wrapper.layer?.backgroundColor = chromePalette.panelBackground.nsColor.cgColor
         wrapper.addSubview(hostingView)
         NSLayoutConstraint.activate([
             hostingView.topAnchor.constraint(equalTo: wrapper.topAnchor),

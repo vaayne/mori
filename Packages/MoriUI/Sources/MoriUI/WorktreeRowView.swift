@@ -16,6 +16,7 @@ public struct WorktreeRowView: View {
     let onSelect: () -> Void
     var onRemove: (() -> Void)?
 
+    @EnvironmentObject private var chromePaletteStore: MoriChromePaletteStore
     @State private var isHovered = false
 
     public init(
@@ -71,7 +72,7 @@ public struct WorktreeRowView: View {
                 // 2pt accent bar, inset 6pt top/bottom, rounded on the trailing edge.
                 // Mirrors `.wt.sel::before` in the V1 design.
                 Rectangle()
-                    .fill(MoriTokens.Color.active)
+                    .fill(MoriTokens.Chrome.selectionAccent(chromePaletteStore.palette))
                     .frame(width: 2)
                     .padding(.vertical, 6)
                     .clipShape(RoundedRectangle(cornerRadius: 1))
@@ -88,9 +89,7 @@ public struct WorktreeRowView: View {
     private var iconView: some View {
         ZStack {
             RoundedRectangle(cornerRadius: MoriTokens.Icon.worktreeBoxRadius)
-                .fill(isSelected
-                    ? MoriTokens.Color.active.opacity(MoriTokens.Opacity.light)
-                    : MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+                .fill(MoriTokens.Chrome.iconBackground(selected: isSelected, palette: chromePaletteStore.palette))
                 .frame(width: MoriTokens.Icon.worktreeBox, height: MoriTokens.Icon.worktreeBox)
             Image(systemName: worktreeIcon)
                 .font(.system(size: 13, weight: .medium))
@@ -200,18 +199,10 @@ public struct WorktreeRowView: View {
         if isSelected {
             // Left-anchored gradient fade — accent fog on the left, clear on the right.
             // Gives the selected row real presence without a flat tinted block.
-            let gradient = LinearGradient(
-                gradient: Gradient(colors: [
-                    MoriTokens.Color.active.opacity(MoriTokens.Opacity.light),
-                    Color.clear
-                ]),
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            return AnyShapeStyle(gradient)
+            return AnyShapeStyle(MoriTokens.Chrome.rowSelectionGradient(chromePaletteStore.palette))
         }
         if isHovered {
-            return AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+            return AnyShapeStyle(MoriTokens.Chrome.rowHoverFill(chromePaletteStore.palette))
         }
         return AnyShapeStyle(Color.clear)
     }

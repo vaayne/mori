@@ -251,6 +251,7 @@ public struct GhosttySettingsView: View {
     var onKeyBindingReset: ((String) -> Void)?
     var onKeyBindingResetAll: (() -> Void)?
 
+    @EnvironmentObject private var chromePaletteStore: MoriChromePaletteStore
     @State private var selectedCategory: SettingsCategory = .general
 
     public init(
@@ -296,9 +297,12 @@ public struct GhosttySettingsView: View {
     public var body: some View {
         HStack(spacing: 0) {
             sidebar
-            Divider()
+            Rectangle()
+                .fill(MoriTokens.Chrome.divider(chromePaletteStore.palette))
+                .frame(width: 1)
             contentArea
         }
+        .background(MoriTokens.Chrome.cardBackground(chromePaletteStore.palette))
         .frame(minWidth: 740, idealWidth: 780, minHeight: 540, idealHeight: 600)
     }
 
@@ -336,6 +340,7 @@ public struct GhosttySettingsView: View {
             .padding(.bottom, 8)
         }
         .frame(width: 180)
+        .background(chromePaletteStore.palette.sidebarBackground.color)
     }
 
     private func sidebarRow(_ category: SettingsCategory) -> some View {
@@ -358,7 +363,7 @@ public struct GhosttySettingsView: View {
             .contentShape(Rectangle())
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.accentColor : .clear)
+                    .fill(isSelected ? MoriTokens.Chrome.strongSelectionFill(chromePaletteStore.palette) : .clear)
             )
         }
         .buttonStyle(.plain)
@@ -413,6 +418,7 @@ public struct GhosttySettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(chromePaletteStore.palette.panelBackground.color)
     }
 }
 
@@ -445,6 +451,7 @@ private struct SettingRow<Control: View>: View {
 
 /// A card container for grouping related settings.
 private struct SettingsCard<Content: View>: View {
+    @EnvironmentObject private var chromePaletteStore: MoriChromePaletteStore
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -454,11 +461,11 @@ private struct SettingsCard<Content: View>: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+                .fill(MoriTokens.Chrome.cardBackground(chromePaletteStore.palette))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+                .strokeBorder(MoriTokens.Chrome.divider(chromePaletteStore.palette), lineWidth: 1)
         )
     }
 }

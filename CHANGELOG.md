@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🎨 Design
+
+- Derive Mori’s app chrome from the selected Ghostty theme instead of reusing the raw terminal background everywhere, giving light themes stronger surface hierarchy across the main window, sidebar, settings window, companion pane, worktree creation panel, agent dashboard, and sidebar row states while keeping Ghostty-driven dark/light mode in sync
+
 ## [0.4.1] - 2026-04-19
 
 ### ✨ Features

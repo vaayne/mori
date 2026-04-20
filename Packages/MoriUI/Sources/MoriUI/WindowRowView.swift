@@ -11,6 +11,7 @@ public struct WindowRowView: View {
     let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     let onSendKeys: ((String, String) -> Void)?
 
+    @EnvironmentObject private var chromePaletteStore: MoriChromePaletteStore
     @State private var isHovered = false
     @State private var showPopover = false
     @State private var popoverOutput: String?
@@ -110,7 +111,7 @@ public struct WindowRowView: View {
                             .foregroundStyle(MoriTokens.Color.muted)
                             .padding(.horizontal, MoriTokens.Spacing.sm)
                             .padding(.vertical, MoriTokens.Spacing.xxs)
-                            .background(MoriTokens.Color.muted.opacity(0.04))
+                            .background(MoriTokens.Chrome.shortcutPillFill(chromePaletteStore.palette))
                             .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
                             .accessibilityLabel("Command Option \(shortcutIndex)")
                     }
@@ -153,9 +154,9 @@ public struct WindowRowView: View {
 
     private var rowBackground: some ShapeStyle {
         if isActive {
-            return AnyShapeStyle(MoriTokens.Color.active.opacity(MoriTokens.Opacity.subtle))
+            return AnyShapeStyle(MoriTokens.Chrome.rowSelectionFill(chromePaletteStore.palette))
         } else if isHovered {
-            return AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+            return AnyShapeStyle(MoriTokens.Chrome.rowHoverFill(chromePaletteStore.palette))
         } else {
             return AnyShapeStyle(Color.clear)
         }

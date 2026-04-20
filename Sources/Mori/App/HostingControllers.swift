@@ -11,6 +11,7 @@ import MoriUI
 final class SidebarHostingController: NSHostingController<SidebarContentView> {
 
     private let appState: AppState
+    private let chromePaletteStore: MoriChromePaletteStore
 
     init(
         appState: AppState,
@@ -29,11 +30,14 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil,
         onUpdateProject: ((Project) -> Void)? = nil,
-        onReorderProjects: (([UUID]) -> Void)? = nil
+        onReorderProjects: (([UUID]) -> Void)? = nil,
+        chromePalette: MoriChromePalette = .fallback
     ) {
         self.appState = appState
+        self.chromePaletteStore = MoriChromePaletteStore(palette: chromePalette)
         let rootView = SidebarContentView(
             appState: appState,
+            chromePaletteStore: chromePaletteStore,
             onSelectProject: onSelectProject,
             onSelectWorktree: onSelectWorktree,
             onSelectWindow: onSelectWindow,
@@ -66,9 +70,10 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
     }
 
     /// Sync the hosting controller's view appearance with the ghostty theme.
-    func updateAppearance(themeInfo: GhosttyThemeInfo) {
+    func updateAppearance(themeInfo: GhosttyThemeInfo, chromePalette: MoriChromePalette) {
+        chromePaletteStore.palette = chromePalette
         view.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
-        view.layer?.backgroundColor = themeInfo.effectiveBackground.cgColor
+        view.layer?.backgroundColor = chromePalette.sidebarBackground.nsColor.cgColor
         // Force SwiftUI to re-render with the updated appearance context.
         view.needsDisplay = true
     }
@@ -77,6 +82,7 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
 /// Bindable wrapper that reads AppState observables into SidebarContainerView.
 struct SidebarContentView: View {
     @Bindable var appState: AppState
+    let chromePaletteStore: MoriChromePaletteStore
     let onSelectProject: (UUID) -> Void
     let onSelectWorktree: (UUID) -> Void
     let onSelectWindow: (String) -> Void
@@ -119,5 +125,6 @@ struct SidebarContentView: View {
             onUpdateProject: onUpdateProject,
             onReorderProjects: onReorderProjects
         )
+        .environmentObject(chromePaletteStore)
     }
 }

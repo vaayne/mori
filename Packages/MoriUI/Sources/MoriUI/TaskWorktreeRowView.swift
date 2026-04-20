@@ -11,6 +11,7 @@ public struct TaskWorktreeRowView: View {
     let shortcutHintsVisible: Bool
     let onSelect: () -> Void
 
+    @EnvironmentObject private var chromePaletteStore: MoriChromePaletteStore
     @State private var isHovered = false
 
     public init(
@@ -37,9 +38,7 @@ public struct TaskWorktreeRowView: View {
                 // Icon box
                 ZStack {
                     RoundedRectangle(cornerRadius: MoriTokens.Icon.worktreeBoxRadius)
-                        .fill(isSelected
-                            ? MoriTokens.Color.active.opacity(MoriTokens.Opacity.light)
-                            : MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+                        .fill(MoriTokens.Chrome.iconBackground(selected: isSelected, palette: chromePaletteStore.palette))
                         .frame(width: MoriTokens.Icon.worktreeBox, height: MoriTokens.Icon.worktreeBox)
                     Image(systemName: worktreeIcon)
                         .font(.system(size: 13, weight: .medium))
@@ -141,9 +140,9 @@ public struct TaskWorktreeRowView: View {
 
     private var rowBackground: some ShapeStyle {
         if isSelected {
-            return AnyShapeStyle(MoriTokens.Color.active.opacity(MoriTokens.Opacity.light))
+            return AnyShapeStyle(MoriTokens.Chrome.rowSelectionFill(chromePaletteStore.palette))
         } else if isHovered {
-            return AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+            return AnyShapeStyle(MoriTokens.Chrome.rowHoverFill(chromePaletteStore.palette))
         } else {
             return AnyShapeStyle(Color.clear)
         }
@@ -177,7 +176,7 @@ public struct TaskWorktreeRowView: View {
             }
             .padding(.horizontal, MoriTokens.Spacing.sm)
             .padding(.vertical, MoriTokens.Spacing.xxs)
-            .background(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+            .background(MoriTokens.Chrome.shortcutPillFill(chromePaletteStore.palette))
             .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
         }
     }
