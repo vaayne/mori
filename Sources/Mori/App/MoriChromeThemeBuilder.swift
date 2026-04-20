@@ -93,14 +93,19 @@ enum MoriChromeThemeBuilder {
             fraction: themeInfo.isDark ? 0.08 : 0.14
         )
 
+        let surfaceAlpha = themeInfo.usesTransparentWindowBackground ? themeInfo.backgroundOpacity : 1.0
+
+        func surface(_ color: NSColor) -> MoriChromeColor {
+            MoriChromeColor(nsColor: color.withAlphaComponent(color.alphaComponent * surfaceAlpha))
+        }
+
         return MoriChromePalette(
             isDark: themeInfo.isDark,
-            isTransparent: themeInfo.usesTransparentWindowBackground,
-            windowBackground: MoriChromeColor(nsColor: windowBackground),
-            sidebarBackground: MoriChromeColor(nsColor: sidebarBackground),
-            panelBackground: MoriChromeColor(nsColor: panelBackground),
-            headerBackground: MoriChromeColor(nsColor: headerBackground),
-            cardBackground: MoriChromeColor(nsColor: cardBackground),
+            windowBackground: surface(windowBackground),
+            sidebarBackground: surface(sidebarBackground),
+            panelBackground: surface(panelBackground),
+            headerBackground: surface(headerBackground),
+            cardBackground: surface(cardBackground),
             divider: MoriChromeColor(nsColor: divider),
             hoverFill: MoriChromeColor(nsColor: hoverFill),
             inactiveIconFill: MoriChromeColor(nsColor: inactiveIconFill),

@@ -220,9 +220,9 @@ final class RootSplitViewController: NSViewController {
         updateLayout()
     }
 
-    func updateAppearance(chromePalette: MoriChromePalette, isTransparent: Bool = false) {
+    func updateAppearance(chromePalette: MoriChromePalette) {
         self.chromePalette = chromePalette
-        view.layer?.backgroundColor = isTransparent ? NSColor.clear.cgColor : chromePalette.windowBackground.nsColor.cgColor
+        view.layer?.backgroundColor = chromePalette.windowBackground.nsColor.cgColor
         sidebarDividerView.layer?.backgroundColor = chromePalette.divider.nsColor.cgColor
         companionDividerView.layer?.backgroundColor = chromePalette.divider.nsColor.cgColor
     }

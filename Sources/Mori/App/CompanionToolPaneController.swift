@@ -150,9 +150,8 @@ final class CompanionToolPaneController: NSViewController {
 
     func updateAppearance(themeInfo: GhosttyThemeInfo, chromePalette: MoriChromePalette, isKeyWindow: Bool) {
         view.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
-        let isTransparent = themeInfo.usesTransparentWindowBackground
-        view.layer?.backgroundColor = isTransparent ? NSColor.clear.cgColor : chromePalette.panelBackground.nsColor.cgColor
-        headerView.layer?.backgroundColor = isTransparent ? NSColor.clear.cgColor : chromePalette.headerBackground.nsColor.cgColor
+        view.layer?.backgroundColor = chromePalette.panelBackground.nsColor.cgColor
+        headerView.layer?.backgroundColor = chromePalette.headerBackground.nsColor.cgColor
         dividerView.layer?.backgroundColor = chromePalette.divider.nsColor.cgColor
         titleLabel.textColor = .secondaryLabelColor
         terminalController.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)

@@ -73,9 +73,7 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
     func updateAppearance(themeInfo: GhosttyThemeInfo, chromePalette: MoriChromePalette) {
         chromePaletteStore.palette = chromePalette
         view.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
-        view.layer?.backgroundColor = themeInfo.usesTransparentWindowBackground
-            ? NSColor.clear.cgColor
-            : chromePalette.sidebarBackground.nsColor.cgColor
+        view.layer?.backgroundColor = chromePalette.sidebarBackground.nsColor.cgColor
         view.needsDisplay = true
     }
 }
