@@ -35,6 +35,11 @@ public final class GhosttyAdapter: TerminalHost {
         GhosttyApp.shared.reloadConfig()
     }
 
+    /// Sync Ghostty's light/dark conditional theme branch to the current system appearance.
+    public func setColorScheme(isDark: Bool) {
+        GhosttyApp.shared.setColorScheme(isDark: isDark)
+    }
+
     /// Apply Ghostty-derived window translucency and blur to the main workspace window.
     public func syncWorkspaceWindowAppearance(_ window: NSWindow) {
         applyWindowAppearance(window, allowsTransparency: true)

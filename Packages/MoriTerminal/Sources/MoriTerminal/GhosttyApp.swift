@@ -88,8 +88,8 @@ final class GhosttyApp {
             return
         }
 
-        // Extract theme info before the config is consumed by ghostty_app_new
-        self.themeInfo = GhosttyThemeInfo.from(config: config)
+        // Extract theme info using the active appearance-specific theme branch.
+        self.themeInfo = resolvedThemeInfo(forDarkAppearance: currentSystemAppearanceIsDark)
 
         // Build runtime config in nonisolated context so closures don't
         // inherit @MainActor isolation (they're called from renderer thread).
@@ -132,7 +132,7 @@ final class GhosttyApp {
     // MARK: - Config
 
     /// Build a ghostty config: load user's config first, then apply Mori overrides.
-    func buildConfig() -> ghostty_config_t? {
+    func buildConfig(themeOverride: String? = nil) -> ghostty_config_t? {
         guard let config = ghostty_config_new() else { return nil }
 
         // 1. Load user's ghostty config (standard path)
@@ -145,6 +145,15 @@ final class GhosttyApp {
         let overridePath = GhosttyConfigWriter.write(appSupportDirectory: MoriPaths.appSupportDirectory)
         ghostty_config_load_file(config, overridePath)
 
+        // 3. For Mori chrome theme derivation, optionally force the active
+        // theme branch so paired light/dark themes resolve deterministically.
+        if let themeOverride,
+           !themeOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let temporaryOverridePath = writeTemporaryThemeOverrideFile(themeOverride) {
+            ghostty_config_load_file(config, temporaryOverridePath)
+            try? FileManager.default.removeItem(atPath: temporaryOverridePath)
+        }
+
         ghostty_config_finalize(config)
         return config
     }
@@ -154,9 +163,52 @@ final class GhosttyApp {
     func reloadConfig() {
         guard let app else { return }
         guard let config = buildConfig() else { return }
-        self.themeInfo = GhosttyThemeInfo.from(config: config)
+        self.themeInfo = resolvedThemeInfo(forDarkAppearance: currentSystemAppearanceIsDark)
         ghostty_app_update_config(app, config)
         ghostty_config_free(config)
+    }
+
+    /// Update the running Ghostty color scheme for system light/dark changes
+    /// without rewriting the user's config.
+    func setColorScheme(isDark: Bool) {
+        guard let app else { return }
+        self.themeInfo = resolvedThemeInfo(forDarkAppearance: isDark)
+        applyColorScheme(to: app, isDark: isDark)
+    }
+
+    private var currentSystemAppearanceIsDark: Bool {
+        let bestMatch = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua])
+        return bestMatch == .darkAqua
+    }
+
+    private func resolvedThemeInfo(forDarkAppearance isDark: Bool) -> GhosttyThemeInfo {
+        let themeOverride = GhosttyConfigFile.resolvedThemeValue(forDarkAppearance: isDark)
+        guard let config = buildConfig(themeOverride: themeOverride) else { return .fallback }
+        let info = GhosttyThemeInfo.from(config: config)
+        ghostty_config_free(config)
+        return info
+    }
+
+    private func applyColorScheme(to app: ghostty_app_t, isDark: Bool) {
+        let scheme: ghostty_color_scheme_e = isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT
+        ghostty_app_set_color_scheme(app, scheme)
+    }
+
+    private func writeTemporaryThemeOverrideFile(_ theme: String) -> String? {
+        let sanitized = theme.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !sanitized.isEmpty else { return nil }
+
+        let escaped = sanitized.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        let content = "theme = \"\(escaped)\"\n"
+        let path = (NSTemporaryDirectory() as NSString).appendingPathComponent("mori-ghostty-theme-override-\(UUID().uuidString).conf")
+        do {
+            try content.write(toFile: path, atomically: true, encoding: .utf8)
+            return path
+        } catch {
+            NSLog("[GhosttyApp] failed to write temporary theme override: \(error)")
+            return nil
+        }
     }
 
     // MARK: - Event Loop

@@ -176,6 +176,46 @@ public final class GhosttyConfigFile {
         return "\(key) = \"\(escaped)\""
     }
 
+    /// Resolve the active theme value for a given appearance.
+    /// For paired values like `light:Foo,dark:Bar`, returns the matching side.
+    /// For single values, returns the value as-is.
+    public static func resolvedThemeValue(forDarkAppearance isDark: Bool) -> String? {
+        let config = GhosttyConfigFile()
+        guard let rawThemeValue = config.get("theme")?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawThemeValue.isEmpty else {
+            return nil
+        }
+
+        guard let pair = parseAppearanceAwareThemeValue(rawThemeValue) else {
+            return rawThemeValue
+        }
+
+        let selectedTheme = isDark ? pair.dark : pair.light
+        return selectedTheme.isEmpty ? nil : selectedTheme
+    }
+
+    private static func parseAppearanceAwareThemeValue(_ value: String) -> (light: String, dark: String)? {
+        var lightTheme = ""
+        var darkTheme = ""
+        var foundAppearanceToken = false
+
+        for component in value.split(separator: ",", omittingEmptySubsequences: true) {
+            let token = component.trimmingCharacters(in: .whitespacesAndNewlines)
+            let lowercasedToken = token.lowercased()
+            if lowercasedToken.hasPrefix("light:") {
+                foundAppearanceToken = true
+                lightTheme = String(token.dropFirst("light:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            } else if lowercasedToken.hasPrefix("dark:") {
+                foundAppearanceToken = true
+                darkTheme = String(token.dropFirst("dark:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            } else {
+                return nil
+            }
+        }
+
+        return foundAppearanceToken ? (lightTheme, darkTheme) : nil
+    }
+
     /// List ghostty default keybindings by running `ghostty +list-keybinds`.
     /// Returns array of "key=action" strings.
     public static func defaultKeybinds() -> [String] {
