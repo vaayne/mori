@@ -615,6 +615,8 @@ private struct GeneralSettingsContent: View {
 // MARK: - Theme Settings
 
 private struct ThemeSettingsContent: View {
+    @EnvironmentObject private var chromePaletteStore: MoriChromePaletteStore
+
     private enum BackgroundBlurPreset: String, CaseIterable, Identifiable {
         case disabled
         case standard
@@ -713,7 +715,7 @@ private struct ThemeSettingsContent: View {
             .padding(8)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.primary.opacity(0.04))
+                    .fill(MoriTokens.Chrome.shortcutPillFill(chromePaletteStore.palette))
             )
 
             ScrollView {
@@ -727,7 +729,7 @@ private struct ThemeSettingsContent: View {
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+                    .strokeBorder(MoriTokens.Chrome.divider(chromePaletteStore.palette), lineWidth: 1)
             )
 
             CardDivider()
@@ -817,12 +819,12 @@ private struct ThemeSettingsContent: View {
             if isSelected {
                 Image(systemName: "checkmark")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(MoriTokens.Chrome.selectionAccent(chromePaletteStore.palette))
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(isSelected ? Color.accentColor.opacity(0.1) : .clear)
+        .background(isSelected ? MoriTokens.Chrome.rowSelectionFill(chromePaletteStore.palette) : .clear)
         .contentShape(Rectangle())
         .onTapGesture {
             model.theme = name

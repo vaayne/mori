@@ -24,26 +24,54 @@ enum MoriChromeThemeBuilder {
         let labelBase = themeInfo.isDark ? NSColor.white : NSColor.black
         let accentFallback = NSColor.systemBlue.usingColorSpace(.sRGB) ?? .systemBlue
         let ghosttyAccent = preferredAccent(from: themeInfo) ?? accentFallback
+        let surfaceTint = ghosttyAccent.moriBlended(
+            toward: ghosttyBackground,
+            fraction: themeInfo.isDark ? 0.84 : 0.76
+        )
 
-        let windowBackground = ghosttyBackground.moriBlended(
+        var windowBackground = ghosttyBackground.moriBlended(
             toward: windowBase,
             fraction: themeInfo.isDark ? 0.24 : 0.44
         )
-        let sidebarBackground = windowBackground.moriBlended(
+        windowBackground = windowBackground.moriBlended(
+            toward: surfaceTint,
+            fraction: themeInfo.isDark ? 0.08 : 0.12
+        )
+
+        var sidebarBackground = windowBackground.moriBlended(
             toward: sidebarBase,
             fraction: themeInfo.isDark ? 0.22 : 0.38
         )
-        let panelBackground = windowBackground.moriBlended(
+        sidebarBackground = sidebarBackground.moriBlended(
+            toward: surfaceTint,
+            fraction: themeInfo.isDark ? 0.10 : 0.14
+        )
+
+        var panelBackground = windowBackground.moriBlended(
             toward: panelBase,
             fraction: themeInfo.isDark ? 0.16 : 0.28
         )
-        let headerBackground = panelBackground.moriBlended(
+        panelBackground = panelBackground.moriBlended(
+            toward: surfaceTint,
+            fraction: themeInfo.isDark ? 0.06 : 0.10
+        )
+
+        var headerBackground = panelBackground.moriBlended(
             toward: cardBase,
             fraction: themeInfo.isDark ? 0.12 : 0.20
         )
-        let cardBackground = panelBackground.moriBlended(
+        headerBackground = headerBackground.moriBlended(
+            toward: surfaceTint,
+            fraction: themeInfo.isDark ? 0.08 : 0.12
+        )
+
+        var cardBackground = panelBackground.moriBlended(
             toward: cardBase,
             fraction: themeInfo.isDark ? 0.20 : 0.32
+        )
+        cardBackground = cardBackground.moriBlended(
+            toward: surfaceTint,
+            fraction: themeInfo.isDark ? 0.05 : 0.08
         )
 
         let selectionAccent = adjustedSelectionAccent(

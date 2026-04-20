@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Derive Mori’s app chrome from the selected Ghostty theme instead of reusing the raw terminal background everywhere, giving light themes stronger surface hierarchy across the main window, sidebar, settings window, companion pane, worktree creation panel, agent dashboard, and sidebar row states while keeping Ghostty-driven dark/light mode in sync
 
+### 🐛 Bug Fixes
+
+- Quote Ghostty setting values that contain spaces and collapse duplicate singleton keys when saving from Settings, so changing themes like `Ayu Light` actually updates the running terminal and Mori chrome instead of silently leaving the old theme active
+
 ## [0.4.1] - 2026-04-19
 
 ### ✨ Features

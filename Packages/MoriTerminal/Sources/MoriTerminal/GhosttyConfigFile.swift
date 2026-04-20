@@ -68,17 +68,32 @@ public final class GhosttyConfigFile {
 
     // MARK: - Write
 
-    /// Set a config value. Updates existing key or appends if new.
+    /// Set a config value. Updates the first occurrence, removes later duplicates,
+    /// or appends if the key does not exist.
     public func set(_ key: String, value: String) {
-        // Update first occurrence
+        let rendered = renderKeyValue(key: key, value: value)
+
+        var firstMatchIndex: Int?
         for i in lines.indices {
             if case .keyValue(let k, _, _) = lines[i], k == key {
-                lines[i] = .keyValue(key, value, "\(key) = \(value)")
-                return
+                if firstMatchIndex == nil {
+                    firstMatchIndex = i
+                }
             }
         }
-        // Append new key
-        lines.append(.keyValue(key, value, "\(key) = \(value)"))
+
+        if let firstMatchIndex {
+            lines[firstMatchIndex] = .keyValue(key, value, rendered)
+            lines = lines.enumerated().compactMap { index, line in
+                guard case .keyValue(let existingKey, _, _) = line, existingKey == key else {
+                    return line
+                }
+                return index == firstMatchIndex ? line : nil
+            }
+            return
+        }
+
+        lines.append(.keyValue(key, value, rendered))
     }
 
     /// Remove a key from the config.
@@ -148,8 +163,17 @@ public final class GhosttyConfigFile {
         }
         // Append new entries
         for value in values {
-            lines.append(.keyValue(key, value, "\(key) = \(value)"))
+            lines.append(.keyValue(key, value, renderKeyValue(key: key, value: value)))
         }
+    }
+
+    private func renderKeyValue(key: String, value: String) -> String {
+        let needsQuotes = value.contains { $0.isWhitespace || $0 == "#" || $0 == "\"" }
+        guard needsQuotes else { return "\(key) = \(value)" }
+
+        let escaped = value.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "\(key) = \"\(escaped)\""
     }
 
     /// List ghostty default keybindings by running `ghostty +list-keybinds`.
