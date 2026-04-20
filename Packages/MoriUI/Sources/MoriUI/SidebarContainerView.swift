@@ -110,7 +110,7 @@ public struct SidebarContainerView: View {
             onReorderProjects: onReorderProjects
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(chromePaletteStore.palette.sidebarBackground.color)
+        .background(chromePaletteStore.palette.isTransparent ? Color.clear : chromePaletteStore.palette.sidebarBackground.color)
         .onAppear {
             shortcutHintMonitor.start()
         }

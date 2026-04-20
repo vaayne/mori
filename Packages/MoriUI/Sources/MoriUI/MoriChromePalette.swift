@@ -43,6 +43,7 @@ public struct MoriChromeColor: Sendable, Equatable {
 
 public struct MoriChromePalette: Sendable, Equatable {
     public let isDark: Bool
+    public let isTransparent: Bool
     public let windowBackground: MoriChromeColor
     public let sidebarBackground: MoriChromeColor
     public let panelBackground: MoriChromeColor
@@ -59,6 +60,7 @@ public struct MoriChromePalette: Sendable, Equatable {
 
     public init(
         isDark: Bool,
+        isTransparent: Bool = false,
         windowBackground: MoriChromeColor,
         sidebarBackground: MoriChromeColor,
         panelBackground: MoriChromeColor,
@@ -74,6 +76,7 @@ public struct MoriChromePalette: Sendable, Equatable {
         selectionAccent: MoriChromeColor
     ) {
         self.isDark = isDark
+        self.isTransparent = isTransparent
         self.windowBackground = windowBackground
         self.sidebarBackground = sidebarBackground
         self.panelBackground = panelBackground

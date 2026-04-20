@@ -95,6 +95,7 @@ enum MoriChromeThemeBuilder {
 
         return MoriChromePalette(
             isDark: themeInfo.isDark,
+            isTransparent: themeInfo.usesTransparentWindowBackground,
             windowBackground: MoriChromeColor(nsColor: windowBackground),
             sidebarBackground: MoriChromeColor(nsColor: sidebarBackground),
             panelBackground: MoriChromeColor(nsColor: panelBackground),
