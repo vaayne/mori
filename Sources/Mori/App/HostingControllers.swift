@@ -73,8 +73,9 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
     func updateAppearance(themeInfo: GhosttyThemeInfo, chromePalette: MoriChromePalette) {
         chromePaletteStore.palette = chromePalette
         view.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
-        view.layer?.backgroundColor = chromePalette.sidebarBackground.nsColor.cgColor
-        // Force SwiftUI to re-render with the updated appearance context.
+        view.layer?.backgroundColor = themeInfo.usesTransparentWindowBackground
+            ? NSColor.clear.cgColor
+            : chromePalette.sidebarBackground.nsColor.cgColor
         view.needsDisplay = true
     }
 }

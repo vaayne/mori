@@ -974,7 +974,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func refreshGhosttyThemeBackgrounds(themeInfo: GhosttyThemeInfo, chromePalette: MoriChromePalette) {
         let isKeyWindow = mainWindowController?.window?.isKeyWindow ?? true
         mainWindowController?.updateAppearance(themeInfo: themeInfo, chromePalette: chromePalette)
-        rootSplitVC?.updateAppearance(chromePalette: chromePalette)
+        rootSplitVC?.updateAppearance(chromePalette: chromePalette, isTransparent: themeInfo.usesTransparentWindowBackground)
         sidebarController?.updateAppearance(themeInfo: themeInfo, chromePalette: chromePalette)
         terminalAreaController?.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
         companionToolController?.updateAppearance(themeInfo: themeInfo, chromePalette: chromePalette, isKeyWindow: isKeyWindow)
