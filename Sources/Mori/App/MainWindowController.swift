@@ -113,8 +113,11 @@ final class MainWindowController: NSWindowController {
     }
 
     func updateAppearance(themeInfo: GhosttyThemeInfo, chromePalette: MoriChromePalette) {
-        window?.backgroundColor = chromePalette.windowBackground.nsColor
         window?.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        // Skip background when transparency is active — syncWorkspaceWindowAppearance owns that.
+        if !themeInfo.usesTransparentWindowBackground {
+            window?.backgroundColor = chromePalette.windowBackground.nsColor
+        }
     }
 
     func addUpdateAccessory(viewModel: UpdateViewModel) {
