@@ -101,12 +101,8 @@ public struct GhosttyThemeSelection: Equatable {
 
     public var configValue: String? {
         switch mode {
-        case .light:
-            let theme = Self.normalizedThemeName(lightTheme)
-            return theme.isEmpty ? nil : theme
-        case .dark:
-            let theme = Self.normalizedThemeName(darkTheme)
-            return theme.isEmpty ? nil : theme
+        case .light, .dark:
+            return activeTheme.isEmpty ? nil : activeTheme
         case .auto:
             let light = Self.normalizedThemeName(lightTheme)
             let dark = Self.normalizedThemeName(darkTheme)
@@ -982,14 +978,9 @@ private struct ThemeSettingsContent: View {
     private var selectedThemeSummary: some View {
         Group {
             switch model.theme.mode {
-            case .light:
-                Text(model.theme.lightTheme.isEmpty ? .localized("Default") : model.theme.lightTheme)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .frame(width: 220, alignment: .trailing)
-            case .dark:
-                Text(model.theme.darkTheme.isEmpty ? .localized("Default") : model.theme.darkTheme)
+            case .light, .dark:
+                let name = model.theme.theme(for: activeThemeTarget)
+                Text(name.isEmpty ? .localized("Default") : name)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -1019,7 +1010,10 @@ private struct ThemeSettingsContent: View {
     }
 
     private var activeThemeTarget: GhosttyThemeAssignmentTarget {
-        model.theme.mode == .light ? .light : .dark
+        switch model.theme.mode {
+        case .light: .light
+        case .dark, .auto: .dark
+        }
     }
 
     @ViewBuilder

@@ -141,14 +141,9 @@ enum MoriChromeThemeBuilder {
 }
 
 private extension NSColor {
-    var moriSRGBComponents: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
-        let color = usingColorSpace(.sRGB) ?? self
-        return (color.redComponent, color.greenComponent, color.blueComponent, color.alphaComponent)
-    }
-
     var moriRelativeLuminance: CGFloat {
-        let components = moriSRGBComponents
-        return 0.2126 * components.red + 0.7152 * components.green + 0.0722 * components.blue
+        let color = usingColorSpace(.sRGB) ?? self
+        return 0.2126 * color.redComponent + 0.7152 * color.greenComponent + 0.0722 * color.blueComponent
     }
 
     func moriBlended(toward color: NSColor, fraction: CGFloat) -> NSColor {

@@ -72,28 +72,20 @@ public final class GhosttyConfigFile {
     /// or appends if the key does not exist.
     public func set(_ key: String, value: String) {
         let rendered = renderKeyValue(key: key, value: value)
+        var didUpdate = false
 
-        var firstMatchIndex: Int?
-        for i in lines.indices {
-            if case .keyValue(let k, _, _) = lines[i], k == key {
-                if firstMatchIndex == nil {
-                    firstMatchIndex = i
-                }
+        lines = lines.compactMap { line in
+            guard case .keyValue(let k, _, _) = line, k == key else { return line }
+            if !didUpdate {
+                didUpdate = true
+                return .keyValue(key, value, rendered)
             }
+            return nil
         }
 
-        if let firstMatchIndex {
-            lines[firstMatchIndex] = .keyValue(key, value, rendered)
-            lines = lines.enumerated().compactMap { index, line in
-                guard case .keyValue(let existingKey, _, _) = line, existingKey == key else {
-                    return line
-                }
-                return index == firstMatchIndex ? line : nil
-            }
-            return
+        if !didUpdate {
+            lines.append(.keyValue(key, value, rendered))
         }
-
-        lines.append(.keyValue(key, value, rendered))
     }
 
     /// Remove a key from the config.
