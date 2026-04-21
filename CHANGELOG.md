@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Bug Fixes
 
-- Fix command palette / project switcher filtering while typing by reading the live field-editor text inside the floating panel, so `⌘P` and `⌘⇧P` no longer intermittently collapse to an empty result list ([#84](https://github.com/vaayne/mori/issues/84))
+- Fix command palette / project switcher filtering while typing by reading the live field-editor text inside the floating panel, and route `⌘P` / `⌘⇧P` through the same mode-aware presentation path so both shortcuts now switch or dismiss consistently instead of maintaining separate code paths ([#84](https://github.com/vaayne/mori/issues/84))
 
 ## [0.4.1] - 2026-04-19
 

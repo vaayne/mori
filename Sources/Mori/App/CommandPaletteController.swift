@@ -13,9 +13,10 @@ final class CommandPaletteController: NSWindowController {
 
     // MARK: - State
 
-    private var dataSource: CommandPaletteDataSource?
+    private let dataSource: CommandPaletteDataSource
     private var results: [CommandPaletteItem] = []
     private var selectedIndex: Int = 0
+    private var mode: Mode = .allItems
 
     // MARK: - Views
 
@@ -23,6 +24,34 @@ final class CommandPaletteController: NSWindowController {
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
     private let containerView = NSView()
+
+    // MARK: - Presentation Mode
+
+    enum Mode: Equatable {
+        case allItems
+        case projectsOnly
+
+        var placeholder: String {
+            switch self {
+            case .allItems:
+                return .localized("Search projects, worktrees, windows, actions...")
+            case .projectsOnly:
+                return .localized("Switch project...")
+            }
+        }
+
+        var itemFilter: (@Sendable (CommandPaletteItem) -> Bool)? {
+            switch self {
+            case .allItems:
+                return nil
+            case .projectsOnly:
+                return { item in
+                    if case .project = item { return true }
+                    return false
+                }
+            }
+        }
+    }
 
     // MARK: - Layout Constants
 
@@ -63,9 +92,9 @@ final class CommandPaletteController: NSWindowController {
         panel.hidesOnDeactivate = true
         panel.becomesKeyOnlyIfNeeded = true
 
-        super.init(window: panel)
-
         self.dataSource = CommandPaletteDataSource(appState: appState)
+
+        super.init(window: panel)
         setupUI()
     }
 
@@ -76,30 +105,23 @@ final class CommandPaletteController: NSWindowController {
 
     // MARK: - Public
 
-    /// Toggle palette visibility.
-    /// If the project-only filter is active, switch to full palette instead of dismissing.
-    func toggle() {
-        if let panel = window, panel.isVisible, dataSource?.itemFilter == nil {
+    /// Toggle palette visibility for the requested mode.
+    /// Re-pressing the same shortcut dismisses the panel; switching shortcuts swaps modes in place.
+    func toggle(mode requestedMode: Mode = .allItems) {
+        guard let panel = window else { return }
+
+        if panel.isVisible, mode == requestedMode {
             dismiss()
-        } else {
-            show()
+            return
         }
+
+        show(mode: requestedMode)
     }
 
-    /// Show palette filtered to projects only (Cmd+P).
-    func showProjectsOnly() {
-        dataSource?.itemFilter = { item in
-            if case .project = item { return true }
-            return false
-        }
-        searchField.placeholderString = .localized("Switch project...")
-        presentPalette()
-    }
-
-    func show() {
-        // Clear filter for full palette
-        dataSource?.itemFilter = nil
-        searchField.placeholderString = .localized("Search projects, worktrees, windows, actions...")
+    func show(mode requestedMode: Mode = .allItems) {
+        mode = requestedMode
+        dataSource.itemFilter = requestedMode.itemFilter
+        searchField.placeholderString = requestedMode.placeholder
         presentPalette()
     }
 
@@ -136,7 +158,7 @@ final class CommandPaletteController: NSWindowController {
 
     private func setupSearchField() {
         searchField.translatesAutoresizingMaskIntoConstraints = false
-        searchField.placeholderString = .localized("Search projects, worktrees, windows, actions...")
+        searchField.placeholderString = Mode.allItems.placeholder
         searchField.font = .systemFont(ofSize: Layout.searchFontSize)
         searchField.isBordered = false
         searchField.focusRingType = .none
@@ -222,7 +244,7 @@ final class CommandPaletteController: NSWindowController {
 
     private func updateResults(query: String? = nil) {
         let searchQuery = query ?? currentSearchQuery()
-        results = dataSource?.search(query: searchQuery) ?? []
+        results = dataSource.search(query: searchQuery)
         selectedIndex = results.isEmpty ? -1 : 0
         tableView.reloadData()
 
