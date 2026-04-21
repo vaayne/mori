@@ -220,9 +220,9 @@ final class CommandPaletteController: NSWindowController {
 
     // MARK: - Results
 
-    private func updateResults() {
-        let query = searchField.stringValue
-        results = dataSource?.search(query: query) ?? []
+    private func updateResults(query: String? = nil) {
+        let searchQuery = query ?? currentSearchQuery()
+        results = dataSource?.search(query: searchQuery) ?? []
         selectedIndex = results.isEmpty ? -1 : 0
         tableView.reloadData()
 
@@ -232,6 +232,18 @@ final class CommandPaletteController: NSWindowController {
 
         // Resize panel to fit results
         resizePanel()
+    }
+
+    private func currentSearchQuery(from notification: Notification? = nil) -> String {
+        // While the search field is actively being edited, AppKit keeps the live text in the
+        // shared field editor. Reading it directly avoids stale stringValue reads in the palette panel.
+        if let fieldEditor = notification?.userInfo?["NSFieldEditor"] as? NSTextView {
+            return fieldEditor.string
+        }
+        if let fieldEditor = searchField.currentEditor() {
+            return fieldEditor.string
+        }
+        return searchField.stringValue
     }
 
     private func resizePanel() {
@@ -286,10 +298,13 @@ final class CommandPaletteController: NSWindowController {
 extension CommandPaletteController: NSTextFieldDelegate {
 
     func controlTextDidChange(_ notification: Notification) {
-        updateResults()
+        updateResults(query: currentSearchQuery(from: notification))
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if textView.hasMarkedText() {
+            return false
+        }
         if commandSelector == #selector(NSResponder.moveUp(_:)) {
             moveSelectionUp()
             return true
