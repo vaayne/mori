@@ -13,9 +13,10 @@ final class CommandPaletteController: NSWindowController {
 
     // MARK: - State
 
-    private var dataSource: CommandPaletteDataSource?
+    private let dataSource: CommandPaletteDataSource
     private var results: [CommandPaletteItem] = []
     private var selectedIndex: Int = 0
+    private var mode: Mode = .allItems
 
     // MARK: - Views
 
@@ -23,6 +24,34 @@ final class CommandPaletteController: NSWindowController {
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
     private let containerView = NSView()
+
+    // MARK: - Presentation Mode
+
+    enum Mode: Equatable {
+        case allItems
+        case projectsOnly
+
+        var placeholder: String {
+            switch self {
+            case .allItems:
+                return .localized("Search projects, worktrees, windows, actions...")
+            case .projectsOnly:
+                return .localized("Switch project...")
+            }
+        }
+
+        var itemFilter: (@Sendable (CommandPaletteItem) -> Bool)? {
+            switch self {
+            case .allItems:
+                return nil
+            case .projectsOnly:
+                return { item in
+                    if case .project = item { return true }
+                    return false
+                }
+            }
+        }
+    }
 
     // MARK: - Layout Constants
 
@@ -63,9 +92,9 @@ final class CommandPaletteController: NSWindowController {
         panel.hidesOnDeactivate = true
         panel.becomesKeyOnlyIfNeeded = true
 
-        super.init(window: panel)
-
         self.dataSource = CommandPaletteDataSource(appState: appState)
+
+        super.init(window: panel)
         setupUI()
     }
 
@@ -76,30 +105,23 @@ final class CommandPaletteController: NSWindowController {
 
     // MARK: - Public
 
-    /// Toggle palette visibility.
-    /// If the project-only filter is active, switch to full palette instead of dismissing.
-    func toggle() {
-        if let panel = window, panel.isVisible, dataSource?.itemFilter == nil {
+    /// Toggle palette visibility for the requested mode.
+    /// Re-pressing the same shortcut dismisses the panel; switching shortcuts swaps modes in place.
+    func toggle(mode requestedMode: Mode = .allItems) {
+        guard let panel = window else { return }
+
+        if panel.isVisible, mode == requestedMode {
             dismiss()
-        } else {
-            show()
+            return
         }
+
+        show(mode: requestedMode)
     }
 
-    /// Show palette filtered to projects only (Cmd+P).
-    func showProjectsOnly() {
-        dataSource?.itemFilter = { item in
-            if case .project = item { return true }
-            return false
-        }
-        searchField.placeholderString = .localized("Switch project...")
-        presentPalette()
-    }
-
-    func show() {
-        // Clear filter for full palette
-        dataSource?.itemFilter = nil
-        searchField.placeholderString = .localized("Search projects, worktrees, windows, actions...")
+    func show(mode requestedMode: Mode = .allItems) {
+        mode = requestedMode
+        dataSource.itemFilter = requestedMode.itemFilter
+        searchField.placeholderString = requestedMode.placeholder
         presentPalette()
     }
 
@@ -136,7 +158,7 @@ final class CommandPaletteController: NSWindowController {
 
     private func setupSearchField() {
         searchField.translatesAutoresizingMaskIntoConstraints = false
-        searchField.placeholderString = .localized("Search projects, worktrees, windows, actions...")
+        searchField.placeholderString = Mode.allItems.placeholder
         searchField.font = .systemFont(ofSize: Layout.searchFontSize)
         searchField.isBordered = false
         searchField.focusRingType = .none
@@ -220,9 +242,9 @@ final class CommandPaletteController: NSWindowController {
 
     // MARK: - Results
 
-    private func updateResults() {
-        let query = searchField.stringValue
-        results = dataSource?.search(query: query) ?? []
+    private func updateResults(query: String? = nil) {
+        let searchQuery = query ?? currentSearchQuery()
+        results = dataSource.search(query: searchQuery)
         selectedIndex = results.isEmpty ? -1 : 0
         tableView.reloadData()
 
@@ -232,6 +254,18 @@ final class CommandPaletteController: NSWindowController {
 
         // Resize panel to fit results
         resizePanel()
+    }
+
+    private func currentSearchQuery(from notification: Notification? = nil) -> String {
+        // While the search field is actively being edited, AppKit keeps the live text in the
+        // shared field editor. Reading it directly avoids stale stringValue reads in the palette panel.
+        if let fieldEditor = notification?.userInfo?["NSFieldEditor"] as? NSTextView {
+            return fieldEditor.string
+        }
+        if let fieldEditor = searchField.currentEditor() {
+            return fieldEditor.string
+        }
+        return searchField.stringValue
     }
 
     private func resizePanel() {
@@ -286,10 +320,13 @@ final class CommandPaletteController: NSWindowController {
 extension CommandPaletteController: NSTextFieldDelegate {
 
     func controlTextDidChange(_ notification: Notification) {
-        updateResults()
+        updateResults(query: currentSearchQuery(from: notification))
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if textView.hasMarkedText() {
+            return false
+        }
         if commandSelector == #selector(NSResponder.moveUp(_:)) {
             moveSelectionUp()
             return true

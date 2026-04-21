@@ -177,7 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 self?.showSettingsWindow()
             },
             onOpenCommandPalette: { [weak self] in
-                self?.commandPaletteController?.toggle()
+                self?.commandPaletteController?.toggle(mode: .allItems)
             },
             onRequestPaneOutput: { [weak self, weak manager] paneId, completion in
                 guard let self, let manager else {
@@ -1508,7 +1508,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
 
         keyMonitorActionMap = [
-            "commandPalette.toggle": { [weak palette] in palette?.toggle() },
+            "commandPalette.toggle": { [weak palette] in palette?.toggle(mode: .allItems) },
             "worktrees.create": { [weak self] in self?.showCreateWorktreePanel() },
             "worktrees.cycleNext": { [weak self] in self?.workspaceManager?.cycleWorktree(forward: true) },
             "worktrees.cyclePrevious": { [weak self] in self?.workspaceManager?.cycleWorktree(forward: false) },
@@ -1547,7 +1547,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             "settings.reload": { [weak self] in self?.terminalAreaController?.reloadConfig() },
             "other.openProject": { [weak self] in self?.showAddProjectPanel() },
             "other.agentDashboard": { [weak self] in self?.toggleAgentDashboardAction() },
-            "other.projectSwitcher": { [weak self] in self?.commandPaletteController?.showProjectsOnly() },
+            "other.projectSwitcher": { [weak self] in self?.commandPaletteController?.toggle(mode: .projectsOnly) },
         ]
 
         // Register key monitor that dispatches via the key binding store
