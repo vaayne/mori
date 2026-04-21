@@ -58,10 +58,132 @@ public enum GhosttyBackgroundBlur: Equatable {
     }
 }
 
+public enum GhosttyThemeMode: String, Equatable, CaseIterable {
+    case light
+    case dark
+    case auto
+}
+
+public enum GhosttyThemeAssignmentTarget: String, Equatable, CaseIterable, Identifiable {
+    case light
+    case dark
+
+    public var id: String { rawValue }
+}
+
+public struct GhosttyThemeSelection: Equatable {
+    public var mode: GhosttyThemeMode
+    public var lightTheme: String
+    public var darkTheme: String
+
+    public init(
+        mode: GhosttyThemeMode = .dark,
+        lightTheme: String = "",
+        darkTheme: String = ""
+    ) {
+        self.mode = mode
+        self.lightTheme = Self.normalizedThemeName(lightTheme)
+        self.darkTheme = Self.normalizedThemeName(darkTheme)
+    }
+
+    public init(configValue: String, inferredSingleMode: GhosttyThemeMode = .dark) {
+        let trimmedValue = Self.normalizedThemeName(configValue)
+        if let appearanceAwareThemes = Self.parseAppearanceAwareThemes(from: trimmedValue) {
+            self.mode = .auto
+            self.lightTheme = appearanceAwareThemes.light
+            self.darkTheme = appearanceAwareThemes.dark
+        } else {
+            self.mode = inferredSingleMode == .light ? .light : .dark
+            self.lightTheme = self.mode == .light ? trimmedValue : ""
+            self.darkTheme = self.mode == .dark ? trimmedValue : ""
+        }
+    }
+
+    public var configValue: String? {
+        switch mode {
+        case .light, .dark:
+            return activeTheme.isEmpty ? nil : activeTheme
+        case .auto:
+            let light = Self.normalizedThemeName(lightTheme)
+            let dark = Self.normalizedThemeName(darkTheme)
+            var components: [String] = []
+            if !light.isEmpty {
+                components.append("light:\(light)")
+            }
+            if !dark.isEmpty {
+                components.append("dark:\(dark)")
+            }
+            return components.isEmpty ? nil : components.joined(separator: ",")
+        }
+    }
+
+    public func theme(for target: GhosttyThemeAssignmentTarget) -> String {
+        switch target {
+        case .light:
+            lightTheme
+        case .dark:
+            darkTheme
+        }
+    }
+
+    public mutating func setTheme(_ theme: String, for target: GhosttyThemeAssignmentTarget) {
+        let normalizedTheme = Self.normalizedThemeName(theme)
+        switch target {
+        case .light:
+            lightTheme = normalizedTheme
+        case .dark:
+            darkTheme = normalizedTheme
+        }
+    }
+
+    public func matches(_ candidateTheme: String, for target: GhosttyThemeAssignmentTarget) -> Bool {
+        theme(for: target).caseInsensitiveCompare(Self.normalizedThemeName(candidateTheme)) == .orderedSame
+    }
+
+    public var activeTheme: String {
+        switch mode {
+        case .light:
+            lightTheme
+        case .dark:
+            darkTheme
+        case .auto:
+            ""
+        }
+    }
+
+    private static func parseAppearanceAwareThemes(from value: String) -> (light: String, dark: String)? {
+        guard !value.isEmpty else { return nil }
+
+        var lightTheme = ""
+        var darkTheme = ""
+        var foundAppearanceToken = false
+
+        for component in value.split(separator: ",", omittingEmptySubsequences: true) {
+            let token = component.trimmingCharacters(in: .whitespacesAndNewlines)
+            let lowercasedToken = token.lowercased()
+            if lowercasedToken.hasPrefix("light:") {
+                foundAppearanceToken = true
+                lightTheme = normalizedThemeName(String(token.dropFirst("light:".count)))
+            } else if lowercasedToken.hasPrefix("dark:") {
+                foundAppearanceToken = true
+                darkTheme = normalizedThemeName(String(token.dropFirst("dark:".count)))
+            } else {
+                return nil
+            }
+        }
+
+        return foundAppearanceToken ? (lightTheme, darkTheme) : nil
+    }
+
+    private static func normalizedThemeName(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 public struct GhosttySettingsModel: Equatable {
     public var fontFamily: String
     public var fontSize: Int
-    public var theme: String
+    public var theme: GhosttyThemeSelection
     public var cursorStyle: String
     public var cursorBlink: Bool
     public var backgroundOpacity: Double
@@ -77,7 +199,7 @@ public struct GhosttySettingsModel: Equatable {
     public init(
         fontFamily: String = "",
         fontSize: Int = 13,
-        theme: String = "",
+        theme: GhosttyThemeSelection = GhosttyThemeSelection(),
         cursorStyle: String = "block",
         cursorBlink: Bool = true,
         backgroundOpacity: Double = 1.0,
@@ -251,6 +373,7 @@ public struct GhosttySettingsView: View {
     var onKeyBindingReset: ((String) -> Void)?
     var onKeyBindingResetAll: (() -> Void)?
 
+    @EnvironmentObject private var chromePaletteStore: MoriChromePaletteStore
     @State private var selectedCategory: SettingsCategory = .general
 
     public init(
@@ -296,9 +419,12 @@ public struct GhosttySettingsView: View {
     public var body: some View {
         HStack(spacing: 0) {
             sidebar
-            Divider()
+            Rectangle()
+                .fill(MoriTokens.Chrome.divider(chromePaletteStore.palette))
+                .frame(width: 1)
             contentArea
         }
+        .background(MoriTokens.Chrome.cardBackground(chromePaletteStore.palette))
         .frame(minWidth: 740, idealWidth: 780, minHeight: 540, idealHeight: 600)
     }
 
@@ -336,6 +462,7 @@ public struct GhosttySettingsView: View {
             .padding(.bottom, 8)
         }
         .frame(width: 180)
+        .background(chromePaletteStore.palette.sidebarBackground.color)
     }
 
     private func sidebarRow(_ category: SettingsCategory) -> some View {
@@ -358,7 +485,7 @@ public struct GhosttySettingsView: View {
             .contentShape(Rectangle())
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.accentColor : .clear)
+                    .fill(isSelected ? MoriTokens.Chrome.strongSelectionFill(chromePaletteStore.palette) : .clear)
             )
         }
         .buttonStyle(.plain)
@@ -413,6 +540,7 @@ public struct GhosttySettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(chromePaletteStore.palette.panelBackground.color)
     }
 }
 
@@ -445,6 +573,7 @@ private struct SettingRow<Control: View>: View {
 
 /// A card container for grouping related settings.
 private struct SettingsCard<Content: View>: View {
+    @EnvironmentObject private var chromePaletteStore: MoriChromePaletteStore
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -454,11 +583,11 @@ private struct SettingsCard<Content: View>: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+                .fill(MoriTokens.Chrome.cardBackground(chromePaletteStore.palette))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+                .strokeBorder(MoriTokens.Chrome.divider(chromePaletteStore.palette), lineWidth: 1)
         )
     }
 }
@@ -608,6 +737,8 @@ private struct GeneralSettingsContent: View {
 // MARK: - Theme Settings
 
 private struct ThemeSettingsContent: View {
+    @EnvironmentObject private var chromePaletteStore: MoriChromePaletteStore
+
     private enum BackgroundBlurPreset: String, CaseIterable, Identifiable {
         case disabled
         case standard
@@ -653,6 +784,33 @@ private struct ThemeSettingsContent: View {
         )
     }
 
+    private var themeMode: Binding<GhosttyThemeMode> {
+        Binding(
+            get: { model.theme.mode },
+            set: { newMode in
+                switch newMode {
+                case .light:
+                    if model.theme.lightTheme.isEmpty {
+                        model.theme.lightTheme = model.theme.darkTheme
+                    }
+                case .dark:
+                    if model.theme.darkTheme.isEmpty {
+                        model.theme.darkTheme = model.theme.lightTheme
+                    }
+                case .auto:
+                    if model.theme.lightTheme.isEmpty {
+                        model.theme.lightTheme = model.theme.darkTheme
+                    }
+                    if model.theme.darkTheme.isEmpty {
+                        model.theme.darkTheme = model.theme.lightTheme
+                    }
+                }
+                model.theme.mode = newMode
+                onChanged()
+            }
+        )
+    }
+
     private var blurRadius: Binding<Double> {
         Binding(
             get: { Double(model.backgroundBlur.radiusValue) },
@@ -664,7 +822,6 @@ private struct ThemeSettingsContent: View {
     }
 
     var body: some View {
-        // Preview
         TerminalPreview(
             fontFamily: model.fontFamily,
             fontSize: model.fontSize,
@@ -672,56 +829,70 @@ private struct ThemeSettingsContent: View {
             opacity: model.backgroundOpacity
         )
 
-        // Theme settings card
         SettingsCard {
             SettingRow(
-                title: .localized("Color theme"),
-                description: .localized("Select a color scheme for the terminal.")
+                title: .localized("Theme mode"),
+                description: .localized("Choose a fixed light theme, a fixed dark theme, or switch automatically.")
             ) {
-                Text(model.theme.isEmpty ? .localized("Default") : model.theme)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 160, alignment: .trailing)
+                Picker("", selection: themeMode) {
+                    Text(String.localized("Light")).tag(GhosttyThemeMode.light)
+                    Text(String.localized("Dark")).tag(GhosttyThemeMode.dark)
+                    Text(String.localized("Auto")).tag(GhosttyThemeMode.auto)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(width: 260)
             }
 
             CardDivider()
 
-            // Theme search and list
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.tertiary)
-                    .font(.system(size: 12))
-                TextField("Search themes…", text: $themeSearch)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                if !themeSearch.isEmpty {
-                    Button { themeSearch = "" } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.tertiary)
-                            .font(.system(size: 11))
-                    }
-                    .buttonStyle(.plain)
-                }
+            SettingRow(
+                title: .localized("Color theme"),
+                description: themeDescription
+            ) {
+                selectedThemeSummary
             }
-            .padding(8)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.primary.opacity(0.04))
-            )
 
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(filteredThemes, id: \.self) { name in
-                        themeListRow(name)
+            if model.theme.mode != .auto {
+                CardDivider()
+
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.tertiary)
+                        .font(.system(size: 12))
+                    TextField("Search themes…", text: $themeSearch)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12))
+                    if !themeSearch.isEmpty {
+                        Button { themeSearch = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.tertiary)
+                                .font(.system(size: 11))
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(MoriTokens.Chrome.shortcutPillFill(chromePaletteStore.palette))
+                )
+
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        themeListRow(label: String.localized("Default"), themeName: "")
+                        ForEach(filteredThemes, id: \.self) { name in
+                            themeListRow(label: name, themeName: name)
+                        }
+                    }
+                }
+                .frame(height: 200)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(MoriTokens.Chrome.divider(chromePaletteStore.palette), lineWidth: 1)
+                )
             }
-            .frame(height: 200)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-            )
 
             CardDivider()
 
@@ -793,32 +964,101 @@ private struct ThemeSettingsContent: View {
         }
     }
 
+    private var themeDescription: String {
+        switch model.theme.mode {
+        case .light:
+            return .localized("Pick the theme used when Theme mode is Light.")
+        case .dark:
+            return .localized("Pick the theme used when Theme mode is Dark.")
+        case .auto:
+            return .localized("Auto uses the themes you set in Light and Dark mode.")
+        }
+    }
+
+    private var selectedThemeSummary: some View {
+        Group {
+            switch model.theme.mode {
+            case .light, .dark:
+                let name = model.theme.theme(for: activeThemeTarget)
+                Text(name.isEmpty ? .localized("Default") : name)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(width: 220, alignment: .trailing)
+            case .auto:
+                VStack(alignment: .trailing, spacing: 6) {
+                    appearanceSummaryPill(
+                        systemImage: "sun.max.fill",
+                        title: .localized("Light"),
+                        themeName: model.theme.lightTheme
+                    )
+                    appearanceSummaryPill(
+                        systemImage: "moon.fill",
+                        title: .localized("Dark"),
+                        themeName: model.theme.darkTheme
+                    )
+                }
+                .frame(width: 220, alignment: .trailing)
+            }
+        }
+    }
+
     private var filteredThemes: [String] {
         guard !themeSearch.isEmpty else { return availableThemes }
         let query = themeSearch.lowercased()
         return availableThemes.filter { $0.lowercased().contains(query) }
     }
 
+    private var activeThemeTarget: GhosttyThemeAssignmentTarget {
+        switch model.theme.mode {
+        case .light: .light
+        case .dark, .auto: .dark
+        }
+    }
+
     @ViewBuilder
-    private func themeListRow(_ name: String) -> some View {
-        let isSelected = model.theme.lowercased() == name.lowercased()
+    private func appearanceSummaryPill(systemImage: String, title: String, themeName: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.secondary)
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+            Text(themeName.isEmpty ? .localized("Default") : themeName)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(MoriTokens.Chrome.shortcutPillFill(chromePaletteStore.palette))
+        )
+    }
+
+    @ViewBuilder
+    private func themeListRow(label: String, themeName: String) -> some View {
+        let isActiveSelection = model.theme.matches(themeName, for: activeThemeTarget)
+
         HStack {
-            Text(name)
-                .font(.system(size: 12, design: .monospaced))
+            Text(label)
+                .font(.system(size: 12, design: themeName.isEmpty ? .default : .monospaced))
                 .lineLimit(1)
             Spacer()
-            if isSelected {
+            if isActiveSelection {
                 Image(systemName: "checkmark")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(MoriTokens.Chrome.selectionAccent(chromePaletteStore.palette))
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(isSelected ? Color.accentColor.opacity(0.1) : .clear)
+        .background(isActiveSelection ? MoriTokens.Chrome.rowSelectionFill(chromePaletteStore.palette) : .clear)
         .contentShape(Rectangle())
         .onTapGesture {
-            model.theme = name
+            model.theme.setTheme(themeName, for: activeThemeTarget)
             onChanged()
         }
     }

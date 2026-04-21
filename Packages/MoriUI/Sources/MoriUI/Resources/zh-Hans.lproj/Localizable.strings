@@ -33,6 +33,14 @@
 "Close Window" = "关闭窗口";
 "Codex CLI" = "Codex CLI";
 "Color theme" = "颜色主题";
+"Theme mode" = "主题模式";
+"Choose a fixed light theme, a fixed dark theme, or switch automatically." = "选择固定的浅色主题、固定的深色主题，或自动切换。";
+"Pick the theme used when Theme mode is Light." = "选择 Theme mode 为浅色时使用的主题。";
+"Pick the theme used when Theme mode is Dark." = "选择 Theme mode 为深色时使用的主题。";
+"Auto uses the themes you set in Light and Dark mode." = "自动模式会使用你在浅色和深色模式下分别设置的主题。";
+"Light" = "浅色";
+"Dark" = "深色";
+"Auto" = "自动";
 "Command %lld" = "命令 %lld";
 "Command Palette" = "命令面板";
 "Command Palette (⇧⌘P)" = "命令面板 (⇧⌘P)";

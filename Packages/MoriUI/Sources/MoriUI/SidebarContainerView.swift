@@ -80,6 +80,7 @@ public struct SidebarContainerView: View {
     }
 
     /// Shared Cmd-hold shortcut hint monitor — one instance for the entire sidebar.
+    @EnvironmentObject private var chromePaletteStore: MoriChromePaletteStore
     @StateObject private var shortcutHintMonitor = ShortcutHintModifierMonitor()
 
     public var body: some View {
@@ -109,6 +110,7 @@ public struct SidebarContainerView: View {
             onReorderProjects: onReorderProjects
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(chromePaletteStore.palette.sidebarBackground.color)
         .onAppear {
             shortcutHintMonitor.start()
         }

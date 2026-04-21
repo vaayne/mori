@@ -33,6 +33,14 @@
 "Close Window" = "Close Window";
 "Codex CLI" = "Codex CLI";
 "Color theme" = "Color theme";
+"Theme mode" = "Theme mode";
+"Choose a fixed light theme, a fixed dark theme, or switch automatically." = "Choose a fixed light theme, a fixed dark theme, or switch automatically.";
+"Pick the theme used when Theme mode is Light." = "Pick the theme used when Theme mode is Light.";
+"Pick the theme used when Theme mode is Dark." = "Pick the theme used when Theme mode is Dark.";
+"Auto uses the themes you set in Light and Dark mode." = "Auto uses the themes you set in Light and Dark mode.";
+"Light" = "Light";
+"Dark" = "Dark";
+"Auto" = "Auto";
 "Command %lld" = "Command %lld";
 "Command Palette" = "Command Palette";
 "Command Palette (⇧⌘P)" = "Command Palette (⇧⌘P)";

@@ -64,7 +64,7 @@ final class MainWindowController: NSWindowController {
 
     // MARK: - Init
 
-    init(themeInfo: GhosttyThemeInfo = .fallback) {
+    init(themeInfo: GhosttyThemeInfo = .fallback, chromePalette: MoriChromePalette = .fallback) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -75,7 +75,7 @@ final class MainWindowController: NSWindowController {
         window.title = "Mori"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        window.backgroundColor = themeInfo.effectiveBackground
+        window.backgroundColor = chromePalette.windowBackground.nsColor
         window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
         window.center()
 
@@ -110,6 +110,14 @@ final class MainWindowController: NSWindowController {
 
     func showCreateWorktreePanel() {
         onShowCreateWorktreePanel?()
+    }
+
+    func updateAppearance(themeInfo: GhosttyThemeInfo, chromePalette: MoriChromePalette) {
+        window?.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        // Skip background when transparency is active — syncWorkspaceWindowAppearance owns that.
+        if !themeInfo.usesTransparentWindowBackground {
+            window?.backgroundColor = chromePalette.windowBackground.nsColor
+        }
     }
 
     func addUpdateAccessory(viewModel: UpdateViewModel) {

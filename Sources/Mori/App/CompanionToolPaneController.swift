@@ -1,6 +1,7 @@
 import AppKit
 import MoriCore
 import MoriTerminal
+import MoriUI
 
 @MainActor
 enum CompanionTool: String, CaseIterable {
@@ -147,19 +148,12 @@ final class CompanionToolPaneController: NSViewController {
         return responder.isDescendant(of: view)
     }
 
-    func updateAppearance(themeInfo: GhosttyThemeInfo, isKeyWindow: Bool) {
+    func updateAppearance(themeInfo: GhosttyThemeInfo, chromePalette: MoriChromePalette, isKeyWindow: Bool) {
         view.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
-        view.layer?.backgroundColor = themeInfo.effectiveBackground.cgColor
-        headerView.layer?.backgroundColor = headerBackgroundColor(for: themeInfo).cgColor
-        dividerView.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.45).cgColor
+        view.layer?.backgroundColor = chromePalette.panelBackground.nsColor.cgColor
+        headerView.layer?.backgroundColor = chromePalette.headerBackground.nsColor.cgColor
+        dividerView.layer?.backgroundColor = chromePalette.divider.nsColor.cgColor
         titleLabel.textColor = .secondaryLabelColor
         terminalController.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
-    }
-
-    private func headerBackgroundColor(for themeInfo: GhosttyThemeInfo) -> NSColor {
-        let base = themeInfo.effectiveBackground.usingColorSpace(.deviceRGB) ?? themeInfo.effectiveBackground
-        let blend: CGFloat = themeInfo.isDark ? 0.12 : 0.06
-        let tint = themeInfo.isDark ? NSColor.white : NSColor.black
-        return base.blended(withFraction: blend, of: tint) ?? base
     }
 }

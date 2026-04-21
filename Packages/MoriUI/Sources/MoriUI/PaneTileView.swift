@@ -11,6 +11,8 @@ public struct PaneTileView: View {
     let agentState: AgentState
     let output: String
 
+    @EnvironmentObject private var chromePaletteStore: MoriChromePaletteStore
+
     public init(
         agentName: String,
         windowTitle: String,
@@ -55,9 +57,11 @@ public struct PaneTileView: View {
             }
             .padding(.horizontal, MoriTokens.Spacing.lg)
             .padding(.vertical, MoriTokens.Spacing.sm)
-            .background(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+            .background(chromePaletteStore.palette.headerBackground.color)
 
-            Divider()
+            Rectangle()
+                .fill(MoriTokens.Chrome.divider(chromePaletteStore.palette))
+                .frame(height: 1)
 
             // Output
             ScrollView(.vertical) {
@@ -74,11 +78,11 @@ public struct PaneTileView: View {
                 }
             }
         }
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(MoriTokens.Chrome.cardBackground(chromePaletteStore.palette))
         .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.medium))
         .overlay(
             RoundedRectangle(cornerRadius: MoriTokens.Radius.medium)
-                .stroke(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.medium), lineWidth: 1)
+                .stroke(MoriTokens.Chrome.divider(chromePaletteStore.palette), lineWidth: 1)
         )
     }
 

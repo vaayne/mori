@@ -1,4 +1,5 @@
 import AppKit
+import MoriUI
 
 @MainActor
 final class RootSplitViewController: NSViewController {
@@ -27,6 +28,7 @@ final class RootSplitViewController: NSViewController {
 
     private var sidebarWidth: CGFloat = 280
     private var companionWidth: CGFloat = CompanionToolPaneState.defaultWidth
+    private var chromePalette: MoriChromePalette = .fallback
     private var dragTarget: DividerDragTarget?
     private var collapsed = false
     private var toolPaneState = CompanionToolPaneState()
@@ -51,14 +53,13 @@ final class RootSplitViewController: NSViewController {
         let root = NSView()
         root.wantsLayer = true
         sidebarDividerView.wantsLayer = true
-        sidebarDividerView.layer?.backgroundColor = NSColor.separatorColor.cgColor
         companionDividerView.wantsLayer = true
-        companionDividerView.layer?.backgroundColor = NSColor.separatorColor.cgColor
 
         for subview in [sidebarContainer, sidebarDividerView, contentContainer, companionDividerView, companionContainer] {
             root.addSubview(subview)
         }
         self.view = root
+        updateAppearance(chromePalette: chromePalette)
 
         embed(sidebarController, in: sidebarContainer)
         embed(contentController, in: contentContainer)
@@ -217,6 +218,13 @@ final class RootSplitViewController: NSViewController {
         toolPaneState = state
         companionWidth = max(Self.companionMinWidth, state.width)
         updateLayout()
+    }
+
+    func updateAppearance(chromePalette: MoriChromePalette) {
+        self.chromePalette = chromePalette
+        view.layer?.backgroundColor = chromePalette.windowBackground.nsColor.cgColor
+        sidebarDividerView.layer?.backgroundColor = chromePalette.divider.nsColor.cgColor
+        companionDividerView.layer?.backgroundColor = chromePalette.divider.nsColor.cgColor
     }
 
     func saveSidebarWidth() {

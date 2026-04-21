@@ -119,6 +119,53 @@ public enum MoriTokens {
         public static let medium: Double = 0.2
     }
 
+    // MARK: - Chrome helpers
+
+    public enum Chrome {
+        public static func rowHoverFill(_ palette: MoriChromePalette) -> SwiftUI.Color {
+            palette.hoverFill.color
+        }
+
+        public static func rowSelectionGradient(_ palette: MoriChromePalette) -> LinearGradient {
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    palette.rowSelectionLeading.color,
+                    palette.rowSelectionTrailing.color,
+                ]),
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        }
+
+        public static func rowSelectionFill(_ palette: MoriChromePalette) -> SwiftUI.Color {
+            palette.rowSelectionLeading.color
+        }
+
+        public static func iconBackground(selected: Bool, palette: MoriChromePalette) -> SwiftUI.Color {
+            selected ? palette.rowSelectionLeading.color : palette.inactiveIconFill.color
+        }
+
+        public static func shortcutPillFill(_ palette: MoriChromePalette) -> SwiftUI.Color {
+            palette.shortcutPillFill.color
+        }
+
+        public static func cardBackground(_ palette: MoriChromePalette) -> SwiftUI.Color {
+            palette.cardBackground.color
+        }
+
+        public static func divider(_ palette: MoriChromePalette) -> SwiftUI.Color {
+            palette.divider.color
+        }
+
+        public static func strongSelectionFill(_ palette: MoriChromePalette) -> SwiftUI.Color {
+            palette.strongSelectionFill.color
+        }
+
+        public static func selectionAccent(_ palette: MoriChromePalette) -> SwiftUI.Color {
+            palette.selectionAccent.color
+        }
+    }
+
     // MARK: - Project Avatar Palette
 
     /// Seven warm/cool duotone pairs (background + foreground) for project letter

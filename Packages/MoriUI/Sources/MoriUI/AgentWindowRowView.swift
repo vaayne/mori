@@ -13,6 +13,7 @@ public struct AgentWindowRowView: View {
     let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     let onSendKeys: ((String, String) -> Void)?
 
+    @EnvironmentObject private var chromePaletteStore: MoriChromePaletteStore
     @State private var isHovered = false
     @State private var showPopover = false
     @State private var popoverOutput: String?
@@ -194,9 +195,9 @@ public struct AgentWindowRowView: View {
 
     private var rowBackground: some ShapeStyle {
         if isSelected {
-            return AnyShapeStyle(MoriTokens.Color.active.opacity(MoriTokens.Opacity.subtle))
+            return AnyShapeStyle(MoriTokens.Chrome.rowSelectionFill(chromePaletteStore.palette))
         } else if isHovered {
-            return AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+            return AnyShapeStyle(MoriTokens.Chrome.rowHoverFill(chromePaletteStore.palette))
         } else {
             return AnyShapeStyle(Color.clear)
         }

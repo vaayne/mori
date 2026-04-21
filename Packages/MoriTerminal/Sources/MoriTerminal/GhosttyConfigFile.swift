@@ -68,17 +68,24 @@ public final class GhosttyConfigFile {
 
     // MARK: - Write
 
-    /// Set a config value. Updates existing key or appends if new.
+    /// Set a config value. Updates the first occurrence, removes later duplicates,
+    /// or appends if the key does not exist.
     public func set(_ key: String, value: String) {
-        // Update first occurrence
-        for i in lines.indices {
-            if case .keyValue(let k, _, _) = lines[i], k == key {
-                lines[i] = .keyValue(key, value, "\(key) = \(value)")
-                return
+        let rendered = renderKeyValue(key: key, value: value)
+        var didUpdate = false
+
+        lines = lines.compactMap { line in
+            guard case .keyValue(let k, _, _) = line, k == key else { return line }
+            if !didUpdate {
+                didUpdate = true
+                return .keyValue(key, value, rendered)
             }
+            return nil
         }
-        // Append new key
-        lines.append(.keyValue(key, value, "\(key) = \(value)"))
+
+        if !didUpdate {
+            lines.append(.keyValue(key, value, rendered))
+        }
     }
 
     /// Remove a key from the config.
@@ -148,8 +155,57 @@ public final class GhosttyConfigFile {
         }
         // Append new entries
         for value in values {
-            lines.append(.keyValue(key, value, "\(key) = \(value)"))
+            lines.append(.keyValue(key, value, renderKeyValue(key: key, value: value)))
         }
+    }
+
+    private func renderKeyValue(key: String, value: String) -> String {
+        let needsQuotes = value.contains { $0.isWhitespace || $0 == "#" || $0 == "\"" }
+        guard needsQuotes else { return "\(key) = \(value)" }
+
+        let escaped = value.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "\(key) = \"\(escaped)\""
+    }
+
+    /// Resolve the active theme value for a given appearance.
+    /// For paired values like `light:Foo,dark:Bar`, returns the matching side.
+    /// For single values, returns the value as-is.
+    public static func resolvedThemeValue(forDarkAppearance isDark: Bool) -> String? {
+        let config = GhosttyConfigFile()
+        guard let rawThemeValue = config.get("theme")?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawThemeValue.isEmpty else {
+            return nil
+        }
+
+        guard let pair = parseAppearanceAwareThemeValue(rawThemeValue) else {
+            return rawThemeValue
+        }
+
+        let selectedTheme = isDark ? pair.dark : pair.light
+        return selectedTheme.isEmpty ? nil : selectedTheme
+    }
+
+    private static func parseAppearanceAwareThemeValue(_ value: String) -> (light: String, dark: String)? {
+        var lightTheme = ""
+        var darkTheme = ""
+        var foundAppearanceToken = false
+
+        for component in value.split(separator: ",", omittingEmptySubsequences: true) {
+            let token = component.trimmingCharacters(in: .whitespacesAndNewlines)
+            let lowercasedToken = token.lowercased()
+            if lowercasedToken.hasPrefix("light:") {
+                foundAppearanceToken = true
+                lightTheme = String(token.dropFirst("light:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            } else if lowercasedToken.hasPrefix("dark:") {
+                foundAppearanceToken = true
+                darkTheme = String(token.dropFirst("dark:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            } else {
+                return nil
+            }
+        }
+
+        return foundAppearanceToken ? (lightTheme, darkTheme) : nil
     }
 
     /// List ghostty default keybindings by running `ghostty +list-keybinds`.
