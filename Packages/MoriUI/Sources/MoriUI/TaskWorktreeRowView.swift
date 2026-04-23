@@ -42,19 +42,20 @@ public struct TaskWorktreeRowView: View {
                             : MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
                         .frame(width: MoriTokens.Icon.worktreeBox, height: MoriTokens.Icon.worktreeBox)
                     Image(systemName: worktreeIcon)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(MoriTokens.Font.label)
                         .foregroundStyle(isSelected ? MoriTokens.Color.active : MoriTokens.Color.muted)
                 }
 
                 VStack(alignment: .leading, spacing: MoriTokens.Spacing.xxs) {
                     Text(worktree.name)
                         .font(MoriTokens.Font.rowTitle)
+                        .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.9))
                         .lineLimit(1)
 
                     HStack(spacing: MoriTokens.Spacing.sm) {
                         Text(projectName)
                             .font(MoriTokens.Font.monoBranch)
-                            .foregroundStyle(MoriTokens.Color.muted)
+                            .foregroundStyle(isSelected ? Color.primary.opacity(0.82) : MoriTokens.Color.muted)
                             .lineLimit(1)
 
                         gitStatusBadges
@@ -96,6 +97,19 @@ public struct TaskWorktreeRowView: View {
         }
         .buttonStyle(.plain)
         .background(rowBackground)
+        .overlay {
+            RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
+                .strokeBorder(rowOutlineColor, lineWidth: rowOutlineColor == .clear ? 0 : 1)
+        }
+        .overlay(alignment: .leading) {
+            if isSelected {
+                Rectangle()
+                    .fill(MoriTokens.Color.active)
+                    .frame(width: MoriTokens.Size.selectedIndicatorWidth)
+                    .padding(.vertical, MoriTokens.Size.selectedIndicatorInset)
+                    .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.hairline))
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
         .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
         .onHover { hovering in
@@ -141,12 +155,31 @@ public struct TaskWorktreeRowView: View {
 
     private var rowBackground: some ShapeStyle {
         if isSelected {
-            return AnyShapeStyle(MoriTokens.Color.active.opacity(MoriTokens.Opacity.light))
+            return AnyShapeStyle(
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        MoriTokens.Color.active.opacity(MoriTokens.Opacity.light),
+                        MoriTokens.Color.active.opacity(MoriTokens.Opacity.quiet)
+                    ]),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
         } else if isHovered {
             return AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
         } else {
             return AnyShapeStyle(Color.clear)
         }
+    }
+
+    private var rowOutlineColor: Color {
+        if isSelected {
+            return MoriTokens.Color.active.opacity(0.25)
+        }
+        if isHovered {
+            return Color.primary.opacity(MoriTokens.Opacity.quiet)
+        }
+        return .clear
     }
 
     // MARK: - Relative Time

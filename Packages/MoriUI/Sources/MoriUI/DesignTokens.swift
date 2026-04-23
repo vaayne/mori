@@ -47,6 +47,10 @@ public enum MoriTokens {
         public static let small: CGFloat = 7
         /// 10pt — cards, panels
         public static let medium: CGFloat = 10
+        /// 5pt — project identity tile
+        public static let projectTile: CGFloat = 5
+        /// 1pt — slim selected-row indicator
+        public static let hairline: CGFloat = 1
     }
 
     // MARK: - Icon Sizes
@@ -71,12 +75,26 @@ public enum MoriTokens {
         public static let avatar: CGFloat = 36
         /// 16pt — avatar icon font size
         public static let avatarFont: CGFloat = 16
+        /// 18pt — compact project identity tile
+        public static let projectTile: CGFloat = 18
         /// 13pt — font picker preview size
         public static let fontPreview: CGFloat = 13
         /// 10pt — theme swatch circle
         public static let swatch: CGFloat = 10
         /// 20pt — theme preview bar height
         public static let previewBar: CGFloat = 20
+        /// 16pt — accessory/menu slot width in sidebar rows
+        public static let sidebarAccessory: CGFloat = 16
+        /// 10pt — compact chevrons in project headers
+        public static let sidebarChevron: CGFloat = 10
+        /// 2pt — selected-row indicator width
+        public static let selectedIndicatorWidth: CGFloat = 2
+        /// 6pt — selected-row indicator top/bottom inset
+        public static let selectedIndicatorInset: CGFloat = 6
+        /// 24pt — tree connector x offset
+        public static let treeConnectorX: CGFloat = 24
+        /// 10pt — tree connector branch length
+        public static let treeConnectorBranch: CGFloat = 10
     }
 
     // MARK: - Typography
@@ -106,17 +124,42 @@ public enum MoriTokens {
         public static let monoShortcut = SwiftUI.Font.system(size: 10, design: .monospaced)
         /// Ahead/behind arrow
         public static let arrowIcon = SwiftUI.Font.system(size: 8)
+        /// Project identity tile letter
+        public static let projectTile = SwiftUI.Font.system(size: 10, weight: .semibold, design: .monospaced)
+        /// Compact sidebar accessory icon
+        public static let sidebarAccessory = SwiftUI.Font.system(size: 11, weight: .medium)
+        /// Sidebar chevron/icon markers
+        public static let sidebarChevron = SwiftUI.Font.system(size: 10, weight: .semibold)
+        /// Active worktree card leading icon
+        public static let sidebarStatus = SwiftUI.Font.system(size: 12, weight: .semibold)
+        /// Summary strip label
+        public static let sidebarSummary = SwiftUI.Font.system(size: 11.5)
     }
 
     // MARK: - Opacity
 
     public enum Opacity {
+        /// 0.04 — quiet background for low-priority pills
+        public static let quiet: Double = 0.04
         /// 0.08 — subtle highlight (e.g., active window row)
         public static let subtle: Double = 0.08
         /// 0.12 — light highlight (e.g., selected worktree row)
         public static let light: Double = 0.12
         /// 0.2 — medium highlight (e.g., unselected avatar circle)
         public static let medium: Double = 0.2
+    }
+
+    // MARK: - Sidebar
+
+    public enum Sidebar {
+        /// 14pt — project header top inset
+        public static let projectHeaderTop: CGFloat = 14
+        /// 1.2 — tracking used by sidebar section headers
+        public static let sectionTracking: CGFloat = 1.2
+        /// 3pt — summary strip status dot shadow radius
+        public static let summaryShadow: CGFloat = 3
+        /// 0.10 — tree connector line opacity
+        public static let connectorOpacity: Double = 0.10
     }
 
     // MARK: - Project Avatar Palette
