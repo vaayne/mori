@@ -98,15 +98,15 @@ public struct AgentWindowRowView: View {
                         Text(window.detectedAgent ?? window.title)
                             .font(MoriTokens.Font.windowTitle)
                             .lineLimit(1)
-                            .foregroundStyle(isSelected ? Color.primary : MoriTokens.Color.muted)
+                            .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.78))
 
                         stateBadge
                     }
 
                     Text("\(projectName)/\(worktreeName)/\(window.title)")
-                        .font(MoriTokens.Font.caption)
+                        .font(MoriTokens.Font.monoSmall)
                         .lineLimit(1)
-                        .foregroundStyle(MoriTokens.Color.muted)
+                        .foregroundStyle(MoriTokens.Color.inactive)
                 }
 
                 Spacer()
@@ -131,21 +131,30 @@ public struct AgentWindowRowView: View {
                     .help(String.localized("Reply"))
                 }
             }
-            .padding(.vertical, MoriTokens.Spacing.md)
+            .padding(.vertical, MoriTokens.Spacing.sm)
             .padding(.horizontal, MoriTokens.Spacing.lg)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .background(rowBackground)
-        .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
+        .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.projectTile))
+        .overlay {
+            RoundedRectangle(cornerRadius: MoriTokens.Radius.projectTile)
+                .strokeBorder(rowOutlineColor, lineWidth: rowOutlineColor == .clear ? 0 : 1)
+        }
         .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
     }
 
     @ViewBuilder
     private var agentIcon: some View {
-        Image(systemName: agentIconName)
-            .font(MoriTokens.Font.label)
-            .foregroundStyle(agentIconColor)
+        RoundedRectangle(cornerRadius: MoriTokens.Radius.badge)
+            .fill(agentIconColor.opacity(MoriTokens.Opacity.quiet))
+            .frame(width: MoriTokens.Size.projectTile, height: MoriTokens.Size.projectTile)
+            .overlay {
+                Image(systemName: agentIconName)
+                    .font(MoriTokens.Font.label)
+                    .foregroundStyle(agentIconColor)
+            }
     }
 
     private var agentIconName: String {
@@ -173,20 +182,36 @@ public struct AgentWindowRowView: View {
         switch window.agentState {
         case .running:
             Text(String.localized("Running"))
-                .font(MoriTokens.Font.caption)
+                .font(MoriTokens.Font.badgeText)
                 .foregroundStyle(MoriTokens.Color.success)
+                .padding(.horizontal, MoriTokens.Spacing.sm)
+                .padding(.vertical, MoriTokens.Spacing.xxs)
+                .background(MoriTokens.Color.success.opacity(MoriTokens.Opacity.quiet))
+                .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
         case .waitingForInput:
             Text(String.localized("Waiting"))
-                .font(MoriTokens.Font.caption)
+                .font(MoriTokens.Font.badgeText)
                 .foregroundStyle(MoriTokens.Color.attention)
+                .padding(.horizontal, MoriTokens.Spacing.sm)
+                .padding(.vertical, MoriTokens.Spacing.xxs)
+                .background(MoriTokens.Color.attention.opacity(MoriTokens.Opacity.quiet))
+                .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
         case .error:
             Text(String.localized("Error"))
-                .font(MoriTokens.Font.caption)
+                .font(MoriTokens.Font.badgeText)
                 .foregroundStyle(MoriTokens.Color.error)
+                .padding(.horizontal, MoriTokens.Spacing.sm)
+                .padding(.vertical, MoriTokens.Spacing.xxs)
+                .background(MoriTokens.Color.error.opacity(MoriTokens.Opacity.quiet))
+                .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
         case .completed:
             Text(String.localized("Done"))
-                .font(MoriTokens.Font.caption)
+                .font(MoriTokens.Font.badgeText)
                 .foregroundStyle(MoriTokens.Color.success)
+                .padding(.horizontal, MoriTokens.Spacing.sm)
+                .padding(.vertical, MoriTokens.Spacing.xxs)
+                .background(MoriTokens.Color.success.opacity(MoriTokens.Opacity.quiet))
+                .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
         case .none:
             EmptyView()
         }
@@ -194,12 +219,22 @@ public struct AgentWindowRowView: View {
 
     private var rowBackground: some ShapeStyle {
         if isSelected {
-            return AnyShapeStyle(MoriTokens.Color.active.opacity(MoriTokens.Opacity.subtle))
+            return AnyShapeStyle(MoriTokens.Color.active.opacity(MoriTokens.Opacity.quiet))
         } else if isHovered {
-            return AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+            return AnyShapeStyle(Color.primary.opacity(MoriTokens.Opacity.quiet))
         } else {
             return AnyShapeStyle(Color.clear)
         }
+    }
+
+    private var rowOutlineColor: Color {
+        if isSelected {
+            return MoriTokens.Color.active.opacity(0.18)
+        }
+        if isHovered {
+            return Color.primary.opacity(MoriTokens.Opacity.quiet)
+        }
+        return .clear
     }
 
     @ViewBuilder

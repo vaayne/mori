@@ -93,7 +93,7 @@ public struct WindowRowView: View {
                 Text(window.title.isEmpty ? .localized("Window \(window.tmuxWindowIndex)") : window.title)
                     .font(MoriTokens.Font.windowTitle)
                     .lineLimit(1)
-                    .foregroundStyle(isActive ? Color.primary : MoriTokens.Color.muted)
+                    .foregroundStyle(isActive ? Color.primary : Color.primary.opacity(0.72))
 
                 Spacer()
 
@@ -116,23 +116,27 @@ public struct WindowRowView: View {
                     }
                 }
             }
-            .padding(.vertical, MoriTokens.Spacing.md)
+            .padding(.vertical, MoriTokens.Spacing.sm)
             .padding(.horizontal, MoriTokens.Spacing.lg)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .background(rowBackground)
-        .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
+        .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.projectTile))
+        .overlay {
+            RoundedRectangle(cornerRadius: MoriTokens.Radius.projectTile)
+                .strokeBorder(rowOutlineColor, lineWidth: rowOutlineColor == .clear ? 0 : 1)
+        }
         .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
     }
 
     /// Color of the dot indicator based on window type/state.
     private var windowDotColor: Color {
         if isActive { return MoriTokens.Color.active }
-        if window.detectedAgent != nil || window.agentState != .none { return .purple }
+        if window.detectedAgent != nil || window.agentState != .none { return MoriTokens.Color.info }
         switch window.tag {
         case .server: return MoriTokens.Color.success
-        case .agent: return .purple
+        case .agent: return MoriTokens.Color.info
         default: return MoriTokens.Color.inactive
         }
     }
@@ -153,12 +157,22 @@ public struct WindowRowView: View {
 
     private var rowBackground: some ShapeStyle {
         if isActive {
-            return AnyShapeStyle(MoriTokens.Color.active.opacity(MoriTokens.Opacity.subtle))
+            return AnyShapeStyle(MoriTokens.Color.active.opacity(MoriTokens.Opacity.quiet))
         } else if isHovered {
-            return AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+            return AnyShapeStyle(Color.primary.opacity(MoriTokens.Opacity.quiet))
         } else {
             return AnyShapeStyle(Color.clear)
         }
+    }
+
+    private var rowOutlineColor: Color {
+        if isActive {
+            return MoriTokens.Color.active.opacity(0.18)
+        }
+        if isHovered {
+            return Color.primary.opacity(MoriTokens.Opacity.quiet)
+        }
+        return .clear
     }
 
     @ViewBuilder

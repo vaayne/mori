@@ -41,6 +41,7 @@ public struct WorktreeRowView: View {
                     HStack(spacing: MoriTokens.Spacing.sm) {
                         Text(worktree.name)
                             .font(MoriTokens.Font.rowTitle)
+                            .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.9))
                             .lineLimit(1)
 
                         if isSelected {
@@ -66,6 +67,10 @@ public struct WorktreeRowView: View {
         }
         .buttonStyle(.plain)
         .background(rowBackground)
+        .overlay {
+            RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
+                .strokeBorder(rowOutlineColor, lineWidth: rowOutlineColor == .clear ? 0 : 1)
+        }
         .overlay(alignment: .leading) {
             if isSelected {
                 // 2pt accent bar, inset 6pt top/bottom, rounded on the trailing edge.
@@ -103,7 +108,7 @@ public struct WorktreeRowView: View {
             if let agentName, worktree.agentState != .none {
                 Text(agentName)
                     .font(MoriTokens.Font.caption)
-                    .foregroundStyle(MoriTokens.Color.muted)
+                    .foregroundStyle(MoriTokens.Color.active.opacity(0.9))
                     .lineLimit(1)
             }
         }
@@ -114,7 +119,7 @@ public struct WorktreeRowView: View {
             if let branchText = branchText {
                 Text(branchText)
                     .font(MoriTokens.Font.monoBranch)
-                    .foregroundStyle(MoriTokens.Color.muted)
+                    .foregroundStyle(isSelected ? Color.primary.opacity(0.82) : MoriTokens.Color.muted)
                     .lineLimit(1)
             }
 
@@ -145,11 +150,11 @@ public struct WorktreeRowView: View {
     private var primaryBadge: some View {
         if let style = primaryBadgeStyle {
             Text(style.title)
-                .font(MoriTokens.Font.caption)
+                .font(MoriTokens.Font.badgeText)
                 .foregroundStyle(style.color)
                 .padding(.horizontal, MoriTokens.Spacing.sm)
                 .padding(.vertical, MoriTokens.Spacing.xxs)
-                .background(style.color.opacity(MoriTokens.Opacity.subtle))
+                .background(style.color.opacity(isSelected ? MoriTokens.Opacity.light : MoriTokens.Opacity.subtle))
                 .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
                 .accessibilityLabel(style.accessibilityLabel)
         }
@@ -203,7 +208,7 @@ public struct WorktreeRowView: View {
             let gradient = LinearGradient(
                 gradient: Gradient(colors: [
                     MoriTokens.Color.active.opacity(MoriTokens.Opacity.light),
-                    Color.clear
+                    MoriTokens.Color.active.opacity(MoriTokens.Opacity.quiet)
                 ]),
                 startPoint: .leading,
                 endPoint: .trailing
@@ -214,6 +219,16 @@ public struct WorktreeRowView: View {
             return AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
         }
         return AnyShapeStyle(Color.clear)
+    }
+
+    private var rowOutlineColor: Color {
+        if isSelected {
+            return MoriTokens.Color.active.opacity(0.25)
+        }
+        if isHovered {
+            return Color.primary.opacity(MoriTokens.Opacity.quiet)
+        }
+        return .clear
     }
 
     // MARK: - Derived Content
