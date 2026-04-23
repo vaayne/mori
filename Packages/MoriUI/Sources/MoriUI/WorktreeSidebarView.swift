@@ -1,7 +1,7 @@
 import SwiftUI
 import MoriCore
 
-/// Unified sidebar: all projects as flat sections, worktrees as two-line rows,
+/// Unified sidebar: grouped project sections, worktrees as two-line rows,
 /// windows indented below, and action footer at the bottom.
 public struct WorktreeSidebarView: View {
     private let projects: [Project]
@@ -159,7 +159,7 @@ public struct WorktreeSidebarView: View {
     public var body: some View {
         VStack(spacing: 0) {
             ScrollView(.vertical) {
-                LazyVStack(alignment: .leading, spacing: 0) {
+                LazyVStack(alignment: .leading, spacing: MoriTokens.Spacing.md) {
                     summaryStrip
                     activeWorktreeSection
                     projectsSectionHeader
@@ -168,21 +168,17 @@ public struct WorktreeSidebarView: View {
                     let firstUnpinnedIndex = sorted.firstIndex(where: { !$0.isFavorite })
 
                     ForEach(Array(sorted.enumerated()), id: \.element.id) { index, project in
-                        if index > 0 {
-                            if index == firstUnpinnedIndex {
-                                // Separator between pinned and unpinned groups
-                                Divider()
-                                    .padding(.horizontal, MoriTokens.Spacing.xl)
-                                    .padding(.vertical, MoriTokens.Spacing.xs)
-                            } else {
-                                Divider()
-                                    .padding(.horizontal, MoriTokens.Spacing.xl)
-                            }
+                        if let firstUnpinnedIndex, index == firstUnpinnedIndex, index > 0 {
+                            Divider()
+                                .padding(.horizontal, MoriTokens.Spacing.xl)
+                                .padding(.vertical, MoriTokens.Spacing.sm)
                         }
                         projectSection(project)
                     }
                 }
                 .padding(.top, MoriTokens.Spacing.lg)
+                .padding(.horizontal, MoriTokens.Spacing.sm)
+                .padding(.bottom, MoriTokens.Spacing.sm)
             }
 
             Spacer(minLength: 0)
@@ -220,61 +216,134 @@ public struct WorktreeSidebarView: View {
 
     @ViewBuilder
     private func projectSection(_ project: Project) -> some View {
-        // Section header: chevron + letter avatar + name + hover-reveal + count
-        HStack(spacing: MoriTokens.Spacing.md) {
-            Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down")
-                .font(MoriTokens.Font.sidebarChevron)
-                .foregroundStyle(MoriTokens.Color.inactive)
-                .frame(width: MoriTokens.Size.sidebarChevron)
+        let projectWorktrees = worktrees.filter { $0.projectId == project.id && $0.status != .unavailable }
+        let isSelectedProject = project.id == selectedProjectId
+        let palette = MoriTokens.ProjectPalette.pair(for: project.id)
 
-            ProjectLetterTile(project: project)
-
-            Text(project.name)
-                .font(MoriTokens.Font.projectTitle)
-                .foregroundStyle(Color.primary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-
-            if project.isFavorite {
-                Image(systemName: "pin.fill")
-                    .font(.system(size: 9, weight: .semibold))
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: MoriTokens.Spacing.md) {
+                Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down")
+                    .font(MoriTokens.Font.sidebarChevron)
                     .foregroundStyle(MoriTokens.Color.inactive)
+                    .frame(width: MoriTokens.Size.sidebarChevron)
+
+                ProjectLetterTile(project: project)
+
+                Text(project.name)
+                    .font(MoriTokens.Font.projectTitle)
+                    .foregroundStyle(Color.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                if project.isFavorite {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(MoriTokens.Color.inactive)
+                }
+
+                Spacer(minLength: 0)
+
+                Text("\(projectWorktrees.count)")
+                    .font(MoriTokens.Font.badgeCount)
+                    .foregroundStyle(isSelectedProject ? palette.foreground : MoriTokens.Color.inactive)
+                    .padding(.horizontal, MoriTokens.Spacing.sm)
+                    .padding(.vertical, MoriTokens.Spacing.xxs)
+                    .background(
+                        RoundedRectangle(cornerRadius: MoriTokens.Radius.badge)
+                            .fill(
+                                isSelectedProject
+                                    ? palette.background.opacity(0.32)
+                                    : Color.primary.opacity(MoriTokens.Opacity.quiet)
+                            )
+                    )
+
+                if hoveredProjectId == project.id {
+                    HStack(spacing: MoriTokens.Spacing.sm) {
+                        Menu {
+                            projectActions(project)
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(MoriTokens.Font.sidebarAccessory)
+                                .foregroundStyle(MoriTokens.Color.muted)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .frame(width: MoriTokens.Size.sidebarAccessory)
+                        .help("More Actions")
+                    }
+                    .transition(.opacity)
+                }
+            }
+            .padding(.horizontal, MoriTokens.Spacing.lg)
+            .padding(.top, MoriTokens.Sidebar.projectHeaderTop)
+            .padding(.bottom, MoriTokens.Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
+                    .fill(
+                        isSelectedProject
+                            ? palette.background.opacity(0.24)
+                            : palette.background.opacity(0.14)
+                    )
+            )
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onToggleCollapse?(project.id)
+                onSelectProject?(project.id)
             }
 
-            Spacer()
+            if !project.isCollapsed {
+                Rectangle()
+                    .fill(
+                        isSelectedProject
+                            ? palette.foreground.opacity(0.24)
+                            : Color.primary.opacity(MoriTokens.Opacity.subtle)
+                    )
+                    .frame(height: 1)
+                    .padding(.horizontal, MoriTokens.Spacing.lg)
+                    .padding(.top, MoriTokens.Spacing.sm)
 
-            let projectWorktreeCount = worktrees.filter { $0.projectId == project.id && $0.status != .unavailable }.count
-            Text("\(projectWorktreeCount)")
-                .font(MoriTokens.Font.caption)
-                .foregroundStyle(MoriTokens.Color.inactive)
-
-            if hoveredProjectId == project.id {
-                HStack(spacing: MoriTokens.Spacing.sm) {
-                    Menu {
-                        projectActions(project)
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(MoriTokens.Font.sidebarAccessory)
+                VStack(alignment: .leading, spacing: MoriTokens.Spacing.xs) {
+                    if projectWorktrees.isEmpty, project.id == selectedProjectId {
+                        Text("No worktrees")
+                            .font(MoriTokens.Font.caption)
                             .foregroundStyle(MoriTokens.Color.muted)
+                            .padding(.horizontal, MoriTokens.Spacing.xl)
+                            .padding(.vertical, MoriTokens.Spacing.sm)
                     }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .frame(width: MoriTokens.Size.sidebarAccessory)
-                    .help("More Actions")
+
+                    ForEach(projectWorktrees) { worktree in
+                        worktreeRow(worktree)
+                    }
                 }
-                .transition(.opacity)
+                .padding(.top, MoriTokens.Spacing.sm)
+                .padding(.bottom, MoriTokens.Spacing.sm)
             }
         }
-        .padding(.horizontal, MoriTokens.Spacing.xl)
-        .padding(.top, MoriTokens.Sidebar.projectHeaderTop)
-        .padding(.bottom, MoriTokens.Spacing.sm)
-        .contentShape(Rectangle())
+        .padding(.horizontal, MoriTokens.Spacing.sm)
+        .padding(.vertical, MoriTokens.Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: MoriTokens.Radius.medium)
+                .fill(
+                    isSelectedProject
+                        ? Color.primary.opacity(0.065)
+                        : Color.primary.opacity(MoriTokens.Opacity.quiet)
+                )
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: MoriTokens.Radius.medium)
+                .strokeBorder(
+                    isSelectedProject
+                        ? MoriTokens.Color.active.opacity(0.35)
+                        : Color.primary.opacity(MoriTokens.Opacity.subtle),
+                    lineWidth: 1
+                )
+        }
         .overlay(alignment: .top) {
             if dropTargetProjectId == project.id && draggingProjectId != project.id {
                 Rectangle()
                     .fill(MoriTokens.Color.active)
                     .frame(height: 2)
-                    .padding(.horizontal, MoriTokens.Spacing.xl)
+                    .padding(.horizontal, MoriTokens.Spacing.lg)
             }
         }
         .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
@@ -293,7 +362,6 @@ public struct WorktreeSidebarView: View {
                 dropTargetProjectId = nil
                 return false
             }
-            // Match the dropped project's pin state to the target group
             if var draggedProject = projects.first(where: { $0.id == draggedId }),
                draggedProject.isFavorite != project.isFavorite {
                 draggedProject.isFavorite = project.isFavorite
@@ -314,10 +382,6 @@ public struct WorktreeSidebarView: View {
         } isTargeted: { targeted in
             dropTargetProjectId = targeted ? project.id : nil
         }
-        .onTapGesture {
-            onToggleCollapse?(project.id)
-            onSelectProject?(project.id)
-        }
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 hoveredProjectId = hovering ? project.id : nil
@@ -325,23 +389,6 @@ public struct WorktreeSidebarView: View {
         }
         .contextMenu {
             projectActions(project)
-        }
-
-        if !project.isCollapsed {
-            // Worktrees for this project
-            let projectWorktrees = worktrees.filter { $0.projectId == project.id && $0.status != .unavailable }
-
-            if projectWorktrees.isEmpty, project.id == selectedProjectId {
-                Text("No worktrees")
-                    .font(MoriTokens.Font.caption)
-                    .foregroundStyle(MoriTokens.Color.muted)
-                    .padding(.horizontal, MoriTokens.Spacing.xl)
-                    .padding(.vertical, MoriTokens.Spacing.sm)
-            }
-
-            ForEach(projectWorktrees) { worktree in
-                worktreeRow(worktree)
-            }
         }
     }
 
