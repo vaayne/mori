@@ -7,14 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-04-23
+
 ### 🎨 Design
 
 - Refresh the Mori app icon with a darker, more native macOS mark: a graphite terminal vessel with carved prompt glyphs and a bright seedling, replacing the older stump-style Dock icon
-- Rework the sidebar hierarchy around grouped project sections, quieter global activity, and stronger selected-worktree emphasis so projects, worktrees, and nested windows are easier to distinguish at a glance
+- Rework the sidebar hierarchy around grouped project sections, quieter global activity, and stronger selected-worktree emphasis so projects, worktrees, and nested windows are easier to distinguish at a glance ([#87](https://github.com/vaayne/mori/pull/87))
 
 ### 🐛 Bug Fixes
 
-- Fix command palette / project switcher filtering while typing by reading the live field-editor text inside the floating panel, and route `⌘P` / `⌘⇧P` through the same mode-aware presentation path so both shortcuts now switch or dismiss consistently instead of maintaining separate code paths ([#84](https://github.com/vaayne/mori/issues/84))
+- Fix command palette / project switcher filtering while typing by reading the live field-editor text inside the floating panel, and route `⌘P` / `⌘⇧P` through the same mode-aware presentation path so both shortcuts now switch or dismiss consistently instead of maintaining separate code paths ([#86](https://github.com/vaayne/mori/pull/86))
+
+### ♻️ Refactoring
+
+- Restructure the `mori-agent-bridge` skill into modular references for easier maintenance and clearer agent-to-agent messaging contract surfaces
+
+**Full Changelog**: [v0.4.1...v0.4.2](https://github.com/vaayne/mori/compare/v0.4.1...v0.4.2)
 
 ## [0.4.1] - 2026-04-19
 
@@ -400,7 +408,11 @@ Initial release of Mori — a macOS native workspace terminal organized around P
 
 **Full Changelog**: [v0.1.0](https://github.com/vaayne/mori/commits/v0.1.0)
 
-[Unreleased]: https://github.com/vaayne/mori/compare/v0.3.7...HEAD
+[Unreleased]: https://github.com/vaayne/mori/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/vaayne/mori/compare/v0.4.1...v0.4.2
+[0.4.1]: https://github.com/vaayne/mori/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/vaayne/mori/compare/v0.3.8...v0.4.0
+[0.3.8]: https://github.com/vaayne/mori/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/vaayne/mori/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/vaayne/mori/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/vaayne/mori/compare/v0.3.4...v0.3.5

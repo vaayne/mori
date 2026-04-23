@@ -7,14 +7,22 @@
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-04-23
+
 ### 🎨 界面优化
 
 - 更新 Mori 应用图标为更贴近原生 macOS 的深色新标记：石墨质感的终端容器、刻入式提示符图形与明亮幼苗，替换此前偏树桩风格的 Dock 图标
-- 重构侧边栏层级：为项目加入清晰的分组区块、弱化全局活动区的视觉权重，并强化当前工作树的焦点状态，让项目、工作树与嵌套窗口能更快区分
+- 重构侧边栏层级：为项目加入清晰的分组区块、弱化全局活动区的视觉权重，并强化当前工作树的焦点状态，让项目、工作树与嵌套窗口能更快区分 ([#87](https://github.com/vaayne/mori/pull/87))
 
 ### 🐛 问题修复
 
-- 修复命令面板 / 项目切换器在输入时读取不到浮动面板内的实时搜索文本；同时将 `⌘P` / `⌘⇧P` 统一走同一套带模式的展示逻辑，让两个快捷键在切换与关闭时行为保持一致，不再维护两条分叉代码路径 ([#84](https://github.com/vaayne/mori/issues/84))
+- 修复命令面板 / 项目切换器在输入时读取不到浮动面板内的实时搜索文本；同时将 `⌘P` / `⌘⇧P` 统一走同一套带模式的展示逻辑，让两个快捷键在切换与关闭时行为保持一致，不再维护两条分叉代码路径 ([#86](https://github.com/vaayne/mori/pull/86))
+
+### ♻️ 重构
+
+- 将 `mori-agent-bridge` skill 重构为模块化引用结构，便于维护并明确代理间消息协议的契约边界
+
+**完整变更记录**: [v0.4.1...v0.4.2](https://github.com/vaayne/mori/compare/v0.4.1...v0.4.2)
 
 ## [0.4.1] - 2026-04-19
 
@@ -401,7 +409,11 @@ Mori 首次发布 —— 一款原生 macOS 工作区终端，围绕项目、工
 
 **完整变更记录**: [v0.1.0](https://github.com/vaayne/mori/commits/v0.1.0)
 
-[Unreleased]: https://github.com/vaayne/mori/compare/v0.3.7...HEAD
+[Unreleased]: https://github.com/vaayne/mori/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/vaayne/mori/compare/v0.4.1...v0.4.2
+[0.4.1]: https://github.com/vaayne/mori/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/vaayne/mori/compare/v0.3.8...v0.4.0
+[0.3.8]: https://github.com/vaayne/mori/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/vaayne/mori/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/vaayne/mori/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/vaayne/mori/compare/v0.3.4...v0.3.5
