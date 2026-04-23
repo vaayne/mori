@@ -110,7 +110,7 @@ public struct WindowRowView: View {
                             .foregroundStyle(MoriTokens.Color.muted)
                             .padding(.horizontal, MoriTokens.Spacing.sm)
                             .padding(.vertical, MoriTokens.Spacing.xxs)
-                            .background(MoriTokens.Color.muted.opacity(0.04))
+                            .background(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.quiet))
                             .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
                             .accessibilityLabel("Command Option \(shortcutIndex)")
                     }

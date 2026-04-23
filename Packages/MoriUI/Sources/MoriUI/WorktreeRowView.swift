@@ -72,9 +72,9 @@ public struct WorktreeRowView: View {
                 // Mirrors `.wt.sel::before` in the V1 design.
                 Rectangle()
                     .fill(MoriTokens.Color.active)
-                    .frame(width: 2)
-                    .padding(.vertical, 6)
-                    .clipShape(RoundedRectangle(cornerRadius: 1))
+                    .frame(width: MoriTokens.Size.selectedIndicatorWidth)
+                    .padding(.vertical, MoriTokens.Size.selectedIndicatorInset)
+                    .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.hairline))
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
@@ -93,7 +93,7 @@ public struct WorktreeRowView: View {
                     : MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
                 .frame(width: MoriTokens.Icon.worktreeBox, height: MoriTokens.Icon.worktreeBox)
             Image(systemName: worktreeIcon)
-                .font(.system(size: 13, weight: .medium))
+                .font(MoriTokens.Font.label)
                 .foregroundStyle(isSelected ? MoriTokens.Color.active : MoriTokens.Color.muted)
         }
     }
@@ -187,12 +187,12 @@ public struct WorktreeRowView: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 11, weight: .medium))
+                .font(MoriTokens.Font.sidebarAccessory)
                 .foregroundStyle(MoriTokens.Color.muted)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
-        .frame(width: 16)
+        .frame(width: MoriTokens.Size.sidebarAccessory)
         .help(String.localized("More Actions"))
     }
 

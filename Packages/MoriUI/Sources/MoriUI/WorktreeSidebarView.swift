@@ -223,9 +223,9 @@ public struct WorktreeSidebarView: View {
         // Section header: chevron + letter avatar + name + hover-reveal + count
         HStack(spacing: MoriTokens.Spacing.md) {
             Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down")
-                .font(.system(size: 10, weight: .semibold))
+                .font(MoriTokens.Font.sidebarChevron)
                 .foregroundStyle(MoriTokens.Color.inactive)
-                .frame(width: 10)
+                .frame(width: MoriTokens.Size.sidebarChevron)
 
             ProjectLetterTile(project: project)
 
@@ -254,19 +254,19 @@ public struct WorktreeSidebarView: View {
                         projectActions(project)
                     } label: {
                         Image(systemName: "ellipsis")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(MoriTokens.Font.sidebarAccessory)
                             .foregroundStyle(MoriTokens.Color.muted)
                     }
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
-                    .frame(width: 16)
+                    .frame(width: MoriTokens.Size.sidebarAccessory)
                     .help("More Actions")
                 }
                 .transition(.opacity)
             }
         }
         .padding(.horizontal, MoriTokens.Spacing.xl)
-        .padding(.top, 14)
+        .padding(.top, MoriTokens.Sidebar.projectHeaderTop)
         .padding(.bottom, MoriTokens.Spacing.sm)
         .contentShape(Rectangle())
         .overlay(alignment: .top) {
@@ -596,10 +596,10 @@ public struct WorktreeSidebarView: View {
             Circle()
                 .fill(isActive ? tint : MoriTokens.Color.inactive.opacity(MoriTokens.Opacity.medium))
                 .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
-                .shadow(color: isActive ? tint.opacity(0.55) : .clear, radius: 3)
+                .shadow(color: isActive ? tint.opacity(0.55) : .clear, radius: MoriTokens.Sidebar.summaryShadow)
 
             Text(text)
-                .font(.system(size: 11.5))
+                .font(MoriTokens.Font.sidebarSummary)
                 .foregroundStyle(isActive ? Color.primary : MoriTokens.Color.muted)
                 .lineLimit(1)
         }
@@ -632,8 +632,8 @@ public struct WorktreeSidebarView: View {
     ) -> some View {
         HStack {
             Text(title)
-                .font(.system(size: 11, weight: .bold))
-                .tracking(1.2)
+                .font(MoriTokens.Font.sectionTitle)
+                .tracking(MoriTokens.Sidebar.sectionTracking)
                 .foregroundStyle(MoriTokens.Color.muted)
 
             Spacer()
@@ -653,9 +653,9 @@ private func activeWorktreeCard(_ item: ActiveWorktreeItem) -> some View {
         } label: {
             HStack(alignment: .center, spacing: MoriTokens.Spacing.lg) {
                 Image(systemName: style.icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MoriTokens.Font.sidebarStatus)
                     .foregroundStyle(style.color)
-                    .frame(width: 16)
+                    .frame(width: MoriTokens.Size.sidebarAccessory)
 
                 VStack(alignment: .leading, spacing: MoriTokens.Spacing.xxs) {
                     HStack(spacing: MoriTokens.Spacing.sm) {
@@ -757,12 +757,12 @@ struct TreeConnectorGroup<Data: RandomAccessCollection, Row: View>: View where D
     }
 
     /// Horizontal offset to align with center of 28pt icon box (row padding + half box).
-    private let lineX: CGFloat = 24
+    private let lineX = MoriTokens.Size.treeConnectorX
 
     /// Length of horizontal branch from vertical line to content.
-    private let branchLength: CGFloat = 10
+    private let branchLength = MoriTokens.Size.treeConnectorBranch
 
-    private let lineColor = Color.primary.opacity(0.10)
+    private let lineColor = Color.primary.opacity(MoriTokens.Sidebar.connectorOpacity)
 
     var body: some View {
         let items = Array(data)

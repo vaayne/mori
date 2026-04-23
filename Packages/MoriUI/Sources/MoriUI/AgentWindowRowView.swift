@@ -124,7 +124,7 @@ public struct AgentWindowRowView: View {
                         }
                     } label: {
                         Image(systemName: "text.bubble")
-                            .font(.system(size: 11))
+                            .font(MoriTokens.Font.sidebarAccessory)
                             .foregroundStyle(MoriTokens.Color.attention)
                     }
                     .buttonStyle(.plain)

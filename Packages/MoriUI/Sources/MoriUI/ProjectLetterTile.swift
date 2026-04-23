@@ -1,7 +1,7 @@
 import SwiftUI
 import MoriCore
 
-/// Small 18×18 rounded-square letter tile used in sidebar project headers.
+/// Small rounded-square letter tile used in sidebar project headers.
 /// Uses a deterministic duotone pair per project id so scanning becomes a
 /// colour-match rather than a text-read.
 struct ProjectLetterTile: View {
@@ -10,13 +10,13 @@ struct ProjectLetterTile: View {
     var body: some View {
         let pair = MoriTokens.ProjectPalette.pair(for: project.id)
         ZStack {
-            RoundedRectangle(cornerRadius: 5)
+            RoundedRectangle(cornerRadius: MoriTokens.Radius.projectTile)
                 .fill(pair.background)
             Text(letter)
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .font(MoriTokens.Font.projectTile)
                 .foregroundStyle(pair.foreground)
         }
-        .frame(width: 18, height: 18)
+        .frame(width: MoriTokens.Size.projectTile, height: MoriTokens.Size.projectTile)
         .accessibilityHidden(true)
     }
 
