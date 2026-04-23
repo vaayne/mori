@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🎨 Design
 
 - Refresh the Mori app icon with a darker, more native macOS mark: a graphite terminal vessel with carved prompt glyphs and a bright seedling, replacing the older stump-style Dock icon
+- Rework the sidebar hierarchy around grouped project sections, quieter global activity, and stronger selected-worktree emphasis so projects, worktrees, and nested windows are easier to distinguish at a glance
 
 ### 🐛 Bug Fixes
 
