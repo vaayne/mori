@@ -631,11 +631,11 @@ public struct WorktreeSidebarView: View {
             Spacer(minLength: 0)
 
             Text("\(availableWorktreeCount) \(String.localized("trees"))")
-                .font(MoriTokens.Font.monoShortcut)
+                .font(MoriTokens.Font.monoSmall)
                 .foregroundStyle(MoriTokens.Color.inactive)
         }
         .padding(.horizontal, MoriTokens.Spacing.xl)
-        .padding(.bottom, MoriTokens.Spacing.md)
+        .padding(.bottom, MoriTokens.Spacing.sm)
     }
 
     private func summaryIndicator(text: String, tint: Color, isActive: Bool) -> some View {
@@ -643,11 +643,10 @@ public struct WorktreeSidebarView: View {
             Circle()
                 .fill(isActive ? tint : MoriTokens.Color.inactive.opacity(MoriTokens.Opacity.medium))
                 .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
-                .shadow(color: isActive ? tint.opacity(0.55) : .clear, radius: MoriTokens.Sidebar.summaryShadow)
 
             Text(text)
-                .font(MoriTokens.Font.sidebarSummary)
-                .foregroundStyle(isActive ? Color.primary : MoriTokens.Color.muted)
+                .font(MoriTokens.Font.monoSmall)
+                .foregroundStyle(isActive ? Color.primary.opacity(0.85) : MoriTokens.Color.inactive)
                 .lineLimit(1)
         }
     }
@@ -670,6 +669,11 @@ public struct WorktreeSidebarView: View {
                 .padding(.horizontal, MoriTokens.Spacing.sm)
                 .padding(.bottom, MoriTokens.Spacing.sm)
             }
+            .padding(.top, MoriTokens.Spacing.xs)
+            .background(
+                RoundedRectangle(cornerRadius: MoriTokens.Radius.medium)
+                    .fill(Color.primary.opacity(MoriTokens.Opacity.quiet))
+            )
         }
     }
 
@@ -708,22 +712,27 @@ private func activeWorktreeCard(_ item: ActiveWorktreeItem) -> some View {
                     HStack(spacing: MoriTokens.Spacing.sm) {
                         Text(item.worktree.name)
                             .font(MoriTokens.Font.rowTitle)
+                            .foregroundStyle(Color.primary.opacity(0.88))
                             .lineLimit(1)
                         Text(style.title)
-                            .font(MoriTokens.Font.caption)
+                            .font(MoriTokens.Font.badgeText)
                             .foregroundStyle(style.color)
+                            .padding(.horizontal, MoriTokens.Spacing.sm)
+                            .padding(.vertical, MoriTokens.Spacing.xxs)
+                            .background(style.color.opacity(MoriTokens.Opacity.quiet))
+                            .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
                     }
 
                     Text(activeWorktreeSubtitle(for: item))
-                        .font(MoriTokens.Font.caption)
-                        .foregroundStyle(MoriTokens.Color.muted)
+                        .font(MoriTokens.Font.monoSmall)
+                        .foregroundStyle(MoriTokens.Color.inactive)
                         .lineLimit(1)
                 }
 
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, MoriTokens.Spacing.lg)
-            .padding(.vertical, MoriTokens.Spacing.md)
+            .padding(.vertical, MoriTokens.Spacing.sm)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -752,21 +761,21 @@ private func activeWorktreeCard(_ item: ActiveWorktreeItem) -> some View {
                 icon: "bolt.fill",
                 color: MoriTokens.Color.success,
                 title: String.localized("Running"),
-                background: AnyShapeStyle(MoriTokens.Color.success.opacity(MoriTokens.Opacity.subtle))
+                background: AnyShapeStyle(MoriTokens.Color.success.opacity(MoriTokens.Opacity.quiet))
             )
         case .completed:
             return ActiveWorktreeStyle(
                 icon: "checkmark.circle.fill",
                 color: MoriTokens.Color.success,
                 title: String.localized("Completed"),
-                background: AnyShapeStyle(MoriTokens.Color.success.opacity(MoriTokens.Opacity.subtle))
+                background: AnyShapeStyle(MoriTokens.Color.success.opacity(MoriTokens.Opacity.quiet))
             )
         case .none:
             return ActiveWorktreeStyle(
                 icon: "circle.fill",
                 color: MoriTokens.Color.muted,
                 title: String.localized("Idle"),
-                background: AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+                background: AnyShapeStyle(Color.primary.opacity(MoriTokens.Opacity.quiet))
             )
         }
     }
