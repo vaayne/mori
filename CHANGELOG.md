@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🎨 Design
+
+- Refresh the Mori app icon with a darker, more native macOS mark: a graphite terminal vessel with carved prompt glyphs and a bright seedling, replacing the older stump-style Dock icon
+
 ### 🐛 Bug Fixes
 
 - Fix command palette / project switcher filtering while typing by reading the live field-editor text inside the floating panel, and route `⌘P` / `⌘⇧P` through the same mode-aware presentation path so both shortcuts now switch or dismiss consistently instead of maintaining separate code paths ([#84](https://github.com/vaayne/mori/issues/84))
