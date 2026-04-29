@@ -10,6 +10,7 @@ public struct SidebarContainerView: View {
     private let selectedProjectId: UUID?
     private let worktrees: [Worktree]
     private let windows: [RuntimeWindow]
+    private let panes: [RuntimePane]
     private let selectedWorktreeId: UUID?
     private let selectedWindowId: String?
 
@@ -34,6 +35,7 @@ public struct SidebarContainerView: View {
         selectedProjectId: UUID? = nil,
         worktrees: [Worktree],
         windows: [RuntimeWindow],
+        panes: [RuntimePane] = [],
         selectedWorktreeId: UUID?,
         selectedWindowId: String?,
         onSelectProject: ((UUID) -> Void)? = nil,
@@ -55,6 +57,7 @@ public struct SidebarContainerView: View {
         self.selectedProjectId = selectedProjectId
         self.worktrees = worktrees
         self.windows = windows
+        self.panes = panes
         self.selectedWorktreeId = selectedWorktreeId
         self.selectedWindowId = selectedWindowId
         self.onSelectProject = onSelectProject
@@ -82,6 +85,7 @@ public struct SidebarContainerView: View {
             selectedProjectId: selectedProjectId,
             worktrees: worktrees,
             windows: windows,
+            panes: panes,
             selectedWorktreeId: selectedWorktreeId,
             selectedWindowId: selectedWindowId,
             shortcutHintsVisible: shortcutHintMonitor.areHintsVisible,

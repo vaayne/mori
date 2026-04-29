@@ -94,6 +94,7 @@ struct SidebarContentView: View {
             selectedProjectId: appState.uiState.selectedProjectId,
             worktrees: appState.worktrees,
             windows: appState.runtimeWindows,
+            panes: appState.runtimePanes,
             selectedWorktreeId: appState.uiState.selectedWorktreeId,
             selectedWindowId: appState.uiState.selectedWindowId,
             onSelectProject: onSelectProject,

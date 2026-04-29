@@ -9,6 +9,8 @@ public struct RuntimePane: Identifiable, Codable, Equatable, Sendable {
     public var tty: String?
     public var isActive: Bool
     public var isZoomed: Bool
+    public var agentState: AgentState
+    public var detectedAgent: String?
 
     public init(
         tmuxPaneId: String,
@@ -17,7 +19,9 @@ public struct RuntimePane: Identifiable, Codable, Equatable, Sendable {
         cwd: String? = nil,
         tty: String? = nil,
         isActive: Bool = false,
-        isZoomed: Bool = false
+        isZoomed: Bool = false,
+        agentState: AgentState = .none,
+        detectedAgent: String? = nil
     ) {
         self.tmuxPaneId = tmuxPaneId
         self.tmuxWindowId = tmuxWindowId
@@ -26,5 +30,7 @@ public struct RuntimePane: Identifiable, Codable, Equatable, Sendable {
         self.tty = tty
         self.isActive = isActive
         self.isZoomed = isZoomed
+        self.agentState = agentState
+        self.detectedAgent = detectedAgent
     }
 }

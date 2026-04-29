@@ -183,17 +183,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                     completion(cached)
                     return
                 }
-                // Find the RuntimeWindow and its worktree to capture output
+                // Find the owning window/worktree and capture the requested pane.
                 let state = manager.appState
-                guard let runtimeWindow = state.runtimeWindows.first(where: {
-                    $0.activePaneId == paneId || $0.tmuxWindowId == paneId
-                }),
-                let worktree = state.worktrees.first(where: { $0.id == runtimeWindow.worktreeId }) else {
+                let resolved: (RuntimeWindow, String)?
+                if let runtimePane = state.runtimePanes.first(where: { $0.tmuxPaneId == paneId }),
+                   let runtimeWindow = state.runtimeWindows.first(where: { $0.tmuxWindowId == runtimePane.tmuxWindowId }) {
+                    resolved = (runtimeWindow, paneId)
+                } else if let runtimeWindow = state.runtimeWindows.first(where: { $0.tmuxWindowId == paneId }) {
+                    let targetPaneId = runtimeWindow.activePaneId ?? manager.rawTmuxWindowId(from: runtimeWindow)
+                    resolved = (runtimeWindow, targetPaneId)
+                } else {
+                    resolved = nil
+                }
+                guard let (runtimeWindow, targetPaneId) = resolved,
+                      let worktree = state.worktrees.first(where: { $0.id == runtimeWindow.worktreeId }) else {
                     completion(nil)
                     return
                 }
                 let tmux = manager.tmuxBackendForWorktree(worktree)
-                let targetPaneId = runtimeWindow.activePaneId ?? manager.rawTmuxWindowId(from: runtimeWindow)
                 Task {
                     let output = try? await tmux.capturePaneOutput(paneId: targetPaneId, lineCount: 8)
                     if let output {
@@ -205,13 +212,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             onSendKeys: { [weak manager] paneId, text in
                 guard let manager else { return }
                 let state = manager.appState
-                guard let runtimeWindow = state.runtimeWindows.first(where: {
-                    $0.activePaneId == paneId || $0.tmuxWindowId == paneId
-                }),
-                let worktree = state.worktrees.first(where: { $0.id == runtimeWindow.worktreeId }),
-                let sessionName = worktree.tmuxSessionName else { return }
+                let resolved: (RuntimeWindow, String)?
+                if let runtimePane = state.runtimePanes.first(where: { $0.tmuxPaneId == paneId }),
+                   let runtimeWindow = state.runtimeWindows.first(where: { $0.tmuxWindowId == runtimePane.tmuxWindowId }) {
+                    resolved = (runtimeWindow, paneId)
+                } else if let runtimeWindow = state.runtimeWindows.first(where: { $0.tmuxWindowId == paneId }) {
+                    let targetPaneId = runtimeWindow.activePaneId ?? manager.rawTmuxWindowId(from: runtimeWindow)
+                    resolved = (runtimeWindow, targetPaneId)
+                } else {
+                    resolved = nil
+                }
+                guard let (runtimeWindow, targetPaneId) = resolved,
+                      let worktree = state.worktrees.first(where: { $0.id == runtimeWindow.worktreeId }),
+                      let sessionName = worktree.tmuxSessionName else { return }
                 let tmux = manager.tmuxBackendForWorktree(worktree)
-                let targetPaneId = runtimeWindow.activePaneId ?? manager.rawTmuxWindowId(from: runtimeWindow)
                 Task {
                     try? await tmux.sendKeys(sessionId: sessionName, paneId: targetPaneId, keys: text)
                 }

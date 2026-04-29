@@ -1481,6 +1481,7 @@ final class WorkspaceManager {
         )
 
         var runtimeWindows: [RuntimeWindow] = []
+        var runtimePanes: [RuntimePane] = []
         var seenWindowIDs = Set<String>()
 
         for worktree in appState.worktrees {
@@ -1511,16 +1512,31 @@ final class WorkspaceManager {
                     worktreeId: worktree.id,
                     tmuxWindowIndex: tmuxWindow.windowIndex,
                     title: tmuxWindow.name,
+                    activePaneId: tmuxWindow.panes.first(where: \.isActive)?.paneId,
                     paneCount: tmuxWindow.panes.count,
                     hasUnreadOutput: isUnread,
                     badge: badge,
                     tag: tag
                 )
                 runtimeWindows.append(rw)
+
+                runtimePanes.append(contentsOf: tmuxWindow.panes.map { pane in
+                    RuntimePane(
+                        tmuxPaneId: pane.paneId,
+                        tmuxWindowId: namespacedId,
+                        title: pane.title,
+                        cwd: pane.currentPath,
+                        tty: pane.tty,
+                        isActive: pane.isActive,
+                        agentState: mapHookState(pane.agentState ?? ""),
+                        detectedAgent: pane.agentName
+                    )
+                })
             }
         }
 
         appState.runtimeWindows = runtimeWindows
+        appState.runtimePanes = runtimePanes
     }
 
     // MARK: - Agent State Detection

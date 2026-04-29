@@ -9,6 +9,10 @@ public struct AgentWindowRowView: View {
     let isSelected: Bool
     let shortcutIndex: Int?
     let shortcutHintsVisible: Bool
+    let paneId: String?
+    let agentName: String?
+    let agentState: AgentState?
+    let subtitle: String?
     let onSelect: () -> Void
     let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     let onSendKeys: ((String, String) -> Void)?
@@ -27,6 +31,10 @@ public struct AgentWindowRowView: View {
         isSelected: Bool,
         shortcutIndex: Int? = nil,
         shortcutHintsVisible: Bool = false,
+        paneId: String? = nil,
+        agentName: String? = nil,
+        agentState: AgentState? = nil,
+        subtitle: String? = nil,
         onSelect: @escaping () -> Void,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil
@@ -37,6 +45,10 @@ public struct AgentWindowRowView: View {
         self.isSelected = isSelected
         self.shortcutIndex = shortcutIndex
         self.shortcutHintsVisible = shortcutHintsVisible
+        self.paneId = paneId
+        self.agentName = agentName
+        self.agentState = agentState
+        self.subtitle = subtitle
         self.onSelect = onSelect
         self.onRequestPaneOutput = onRequestPaneOutput
         self.onSendKeys = onSendKeys
@@ -56,8 +68,7 @@ public struct AgentWindowRowView: View {
                     guard !Task.isCancelled else { return }
                     isLoadingOutput = true
                     showPopover = true
-                    let paneId = window.activePaneId ?? window.tmuxWindowId
-                    onRequestPaneOutput?(paneId) { output in
+                    onRequestPaneOutput?(effectivePaneId) { output in
                         self.popoverOutput = output
                         self.isLoadingOutput = false
                         if output == nil {
@@ -95,7 +106,7 @@ public struct AgentWindowRowView: View {
 
                 VStack(alignment: .leading, spacing: MoriTokens.Spacing.xxs) {
                     HStack(spacing: MoriTokens.Spacing.sm) {
-                        Text(window.detectedAgent ?? window.title)
+                        Text(effectiveAgentName)
                             .font(MoriTokens.Font.windowTitle)
                             .lineLimit(1)
                             .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.78))
@@ -103,7 +114,7 @@ public struct AgentWindowRowView: View {
                         stateBadge
                     }
 
-                    Text("\(projectName)/\(worktreeName)/\(window.title)")
+                    Text(subtitle ?? "\(projectName)/\(worktreeName)/\(window.title)")
                         .font(MoriTokens.Font.monoSmall)
                         .lineLimit(1)
                         .foregroundStyle(MoriTokens.Color.inactive)
@@ -117,7 +128,7 @@ public struct AgentWindowRowView: View {
                         .accessibilityLabel("Command Option \(shortcutIndex)")
                 }
 
-                if window.badge == .waiting, onSendKeys != nil {
+                if effectiveAgentState == .waitingForInput, onSendKeys != nil {
                     Button {
                         withAnimation(.easeInOut(duration: 0.15)) {
                             showReplyField.toggle()
@@ -158,7 +169,7 @@ public struct AgentWindowRowView: View {
     }
 
     private var agentIconName: String {
-        switch window.agentState {
+        switch effectiveAgentState {
         case .running: return "bolt.fill"
         case .waitingForInput: return "exclamationmark.bubble.fill"
         case .error: return "xmark.circle.fill"
@@ -168,7 +179,7 @@ public struct AgentWindowRowView: View {
     }
 
     private var agentIconColor: Color {
-        switch window.agentState {
+        switch effectiveAgentState {
         case .running: return MoriTokens.Color.success
         case .waitingForInput: return MoriTokens.Color.attention
         case .error: return MoriTokens.Color.error
@@ -179,7 +190,7 @@ public struct AgentWindowRowView: View {
 
     @ViewBuilder
     private var stateBadge: some View {
-        switch window.agentState {
+        switch effectiveAgentState {
         case .running:
             Text(String.localized("Running"))
                 .font(MoriTokens.Font.badgeText)
@@ -242,12 +253,23 @@ public struct AgentWindowRowView: View {
         if showReplyField {
             QuickReplyField(
                 onSend: { text in
-                    let paneId = window.activePaneId ?? window.tmuxWindowId
-                    onSendKeys?(paneId, text + "\n")
+                    onSendKeys?(effectivePaneId, text + "\n")
                 },
                 onDismiss: { showReplyField = false }
             )
             .padding(EdgeInsets(top: 0, leading: MoriTokens.Spacing.lg, bottom: MoriTokens.Spacing.xs, trailing: MoriTokens.Spacing.lg))
         }
+    }
+
+    private var effectivePaneId: String {
+        paneId ?? window.activePaneId ?? window.tmuxWindowId
+    }
+
+    private var effectiveAgentName: String {
+        agentName ?? window.detectedAgent ?? window.title
+    }
+
+    private var effectiveAgentState: AgentState {
+        agentState ?? window.agentState
     }
 }

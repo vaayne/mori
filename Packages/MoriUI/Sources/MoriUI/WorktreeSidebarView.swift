@@ -8,6 +8,7 @@ public struct WorktreeSidebarView: View {
     private let selectedProjectId: UUID?
     private let worktrees: [Worktree]
     private let windows: [RuntimeWindow]
+    private let panes: [RuntimePane]
     private let selectedWorktreeId: UUID?
     private let selectedWindowId: String?
     private let onSelectProject: ((UUID) -> Void)?
@@ -31,6 +32,7 @@ public struct WorktreeSidebarView: View {
         selectedProjectId: UUID? = nil,
         worktrees: [Worktree],
         windows: [RuntimeWindow],
+        panes: [RuntimePane] = [],
         selectedWorktreeId: UUID?,
         selectedWindowId: String?,
         shortcutHintsVisible: Bool = false,
@@ -53,6 +55,7 @@ public struct WorktreeSidebarView: View {
         self.selectedProjectId = selectedProjectId
         self.worktrees = worktrees
         self.windows = windows
+        self.panes = panes
         self.selectedWorktreeId = selectedWorktreeId
         self.selectedWindowId = selectedWindowId
         self.onSelectProject = onSelectProject
@@ -72,56 +75,63 @@ public struct WorktreeSidebarView: View {
         self.shortcutHintsVisible = shortcutHintsVisible
     }
 
-    private struct ActiveWorktreeItem: Identifiable {
+    private struct ActiveAgentPaneItem: Identifiable {
+        let pane: RuntimePane
+        let window: RuntimeWindow
         let worktree: Worktree
         let projectName: String
-        let agentName: String?
 
-        var id: UUID { worktree.id }
+        var id: String { pane.tmuxPaneId }
     }
 
-    private struct ActiveWorktreeStyle {
-        let icon: String
-        let color: Color
-        let title: String
-        let background: AnyShapeStyle
-    }
-
-    /// Count of agent windows needing attention across all worktrees.
+    /// Count of agent panes needing attention across all worktrees.
     private var attentionCount: Int {
-        windows.filter { $0.agentState == .waitingForInput || $0.agentState == .error }.count
+        activeAgentPaneItems.filter {
+            $0.pane.agentState == .waitingForInput || $0.pane.agentState == .error
+        }.count
     }
 
     private var runningCount: Int {
-        windows.filter { $0.agentState == .running }.count
+        activeAgentPaneItems.filter { $0.pane.agentState == .running }.count
     }
 
     private var projectNamesById: [UUID: String] {
         Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0.name) })
     }
 
-    private var activeWorktreeItems: [ActiveWorktreeItem] {
-        worktrees
-            .filter { $0.status != .unavailable && $0.agentState != .none }
-            .compactMap { worktree in
-                guard let projectName = projectNamesById[worktree.projectId] else { return nil }
-                let agentName = windows.first(where: {
-                    $0.worktreeId == worktree.id && ($0.detectedAgent != nil || $0.agentState != .none)
-                })?.detectedAgent
-                return ActiveWorktreeItem(
+    private var activeAgentPaneItems: [ActiveAgentPaneItem] {
+        panes
+            .filter { $0.detectedAgent != nil || $0.agentState != .none }
+            .compactMap { pane in
+                guard let window = windows.first(where: { $0.tmuxWindowId == pane.tmuxWindowId }),
+                      let worktree = worktrees.first(where: { $0.id == window.worktreeId }),
+                      worktree.status != .unavailable,
+                      let projectName = projectNamesById[worktree.projectId] else {
+                    return nil
+                }
+                return ActiveAgentPaneItem(
+                    pane: pane,
+                    window: window,
                     worktree: worktree,
-                    projectName: projectName,
-                    agentName: agentName
+                    projectName: projectName
                 )
             }
             .sorted { lhs, rhs in
-                let leftPriority = activeWorktreePriority(lhs.worktree.agentState)
-                let rightPriority = activeWorktreePriority(rhs.worktree.agentState)
+                let leftPriority = activeWorktreePriority(lhs.pane.agentState)
+                let rightPriority = activeWorktreePriority(rhs.pane.agentState)
                 if leftPriority != rightPriority {
                     return leftPriority < rightPriority
                 }
-
-                return (lhs.worktree.lastActiveAt ?? .distantPast) > (rhs.worktree.lastActiveAt ?? .distantPast)
+                if lhs.worktree.id != rhs.worktree.id {
+                    return (lhs.worktree.lastActiveAt ?? .distantPast) > (rhs.worktree.lastActiveAt ?? .distantPast)
+                }
+                if lhs.window.tmuxWindowIndex != rhs.window.tmuxWindowIndex {
+                    return lhs.window.tmuxWindowIndex < rhs.window.tmuxWindowIndex
+                }
+                if lhs.pane.isActive != rhs.pane.isActive {
+                    return lhs.pane.isActive && !rhs.pane.isActive
+                }
+                return lhs.pane.tmuxPaneId < rhs.pane.tmuxPaneId
             }
     }
 
@@ -668,17 +678,17 @@ public struct WorktreeSidebarView: View {
 
     @ViewBuilder
     private var activeWorktreeSection: some View {
-        if !activeWorktreeItems.isEmpty {
+        if !activeAgentPaneItems.isEmpty {
             VStack(alignment: .leading, spacing: MoriTokens.Spacing.sm) {
                 sectionHeader(title: String.localized("Agents")) {
-                    Text("\(activeWorktreeItems.count)")
+                    Text("\(activeAgentPaneItems.count)")
                         .font(MoriTokens.Font.caption)
                         .foregroundStyle(MoriTokens.Color.inactive)
                 }
 
                 VStack(spacing: MoriTokens.Spacing.sm) {
-                    ForEach(activeWorktreeItems) { item in
-                        activeWorktreeCard(item)
+                    ForEach(activeAgentPaneItems) { item in
+                        activeAgentRow(item)
                     }
                 }
                 .padding(.horizontal, MoriTokens.Spacing.sm)
@@ -710,94 +720,29 @@ public struct WorktreeSidebarView: View {
         .padding(.bottom, MoriTokens.Spacing.sm)
     }
 
-private func activeWorktreeCard(_ item: ActiveWorktreeItem) -> some View {
-        let style = activeWorktreeStyle(item.worktree.agentState)
-
-        return Button {
-            onSelectProject?(item.worktree.projectId)
-            onSelectWorktree(item.worktree.id)
-        } label: {
-            HStack(alignment: .center, spacing: MoriTokens.Spacing.lg) {
-                Image(systemName: style.icon)
-                    .font(MoriTokens.Font.sidebarStatus)
-                    .foregroundStyle(style.color)
-                    .frame(width: MoriTokens.Size.sidebarAccessory)
-
-                VStack(alignment: .leading, spacing: MoriTokens.Spacing.xxs) {
-                    HStack(spacing: MoriTokens.Spacing.sm) {
-                        Text(item.worktree.name)
-                            .font(MoriTokens.Font.rowTitle)
-                            .foregroundStyle(Color.primary.opacity(0.88))
-                            .lineLimit(1)
-                        Text(style.title)
-                            .font(MoriTokens.Font.badgeText)
-                            .foregroundStyle(style.color)
-                            .padding(.horizontal, MoriTokens.Spacing.sm)
-                            .padding(.vertical, MoriTokens.Spacing.xxs)
-                            .background(style.color.opacity(MoriTokens.Opacity.quiet))
-                            .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
-                    }
-
-                    Text(activeWorktreeSubtitle(for: item))
-                        .font(MoriTokens.Font.monoSmall)
-                        .foregroundStyle(MoriTokens.Color.inactive)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, MoriTokens.Spacing.lg)
-            .padding(.vertical, MoriTokens.Spacing.sm)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .background(style.background)
-        .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
+    private func activeAgentRow(_ item: ActiveAgentPaneItem) -> some View {
+        AgentWindowRowView(
+            window: item.window,
+            projectName: item.projectName,
+            worktreeName: item.worktree.name,
+            isSelected: selectedWindowId == item.window.tmuxWindowId && item.pane.isActive,
+            paneId: item.pane.tmuxPaneId,
+            agentName: item.pane.detectedAgent,
+            agentState: item.pane.agentState,
+            subtitle: activeAgentSubtitle(for: item),
+            onSelect: {
+                onSelectProject?(item.worktree.projectId)
+                onSelectWorktree(item.worktree.id)
+                onSelectWindow(item.window.tmuxWindowId)
+            },
+            onRequestPaneOutput: onRequestPaneOutput,
+            onSendKeys: onSendKeys
+        )
     }
 
-    private func activeWorktreeStyle(_ state: AgentState) -> ActiveWorktreeStyle {
-        switch state {
-        case .waitingForInput:
-            return ActiveWorktreeStyle(
-                icon: "exclamationmark.bubble.fill",
-                color: MoriTokens.Color.attention,
-                title: String.localized("Waiting"),
-                background: AnyShapeStyle(MoriTokens.Color.attention.opacity(MoriTokens.Opacity.subtle))
-            )
-        case .error:
-            return ActiveWorktreeStyle(
-                icon: "xmark.circle.fill",
-                color: MoriTokens.Color.error,
-                title: String.localized("Error"),
-                background: AnyShapeStyle(MoriTokens.Color.error.opacity(MoriTokens.Opacity.subtle))
-            )
-        case .running:
-            return ActiveWorktreeStyle(
-                icon: "bolt.fill",
-                color: MoriTokens.Color.success,
-                title: String.localized("Running"),
-                background: AnyShapeStyle(MoriTokens.Color.success.opacity(MoriTokens.Opacity.quiet))
-            )
-        case .completed:
-            return ActiveWorktreeStyle(
-                icon: "checkmark.circle.fill",
-                color: MoriTokens.Color.success,
-                title: String.localized("Completed"),
-                background: AnyShapeStyle(MoriTokens.Color.success.opacity(MoriTokens.Opacity.quiet))
-            )
-        case .none:
-            return ActiveWorktreeStyle(
-                icon: "circle.fill",
-                color: MoriTokens.Color.muted,
-                title: String.localized("Idle"),
-                background: AnyShapeStyle(Color.primary.opacity(MoriTokens.Opacity.quiet))
-            )
-        }
-    }
-
-    private func activeWorktreeSubtitle(for item: ActiveWorktreeItem) -> String {
-        let agentText = item.agentName ?? String.localized("Agent")
-        return "\(item.projectName) · \(agentText)"
+    private func activeAgentSubtitle(for item: ActiveAgentPaneItem) -> String {
+        let paneLabel = item.pane.title?.isEmpty == false ? item.pane.title! : item.pane.tmuxPaneId
+        return "\(item.projectName)/\(item.worktree.name)/\(item.window.title)/\(paneLabel)"
     }
 
 }
