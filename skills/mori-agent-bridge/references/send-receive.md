@@ -5,17 +5,17 @@
 | Goal | Use |
 |---|---|
 | Read a pane's output | `mori pane read --pane %<id>` |
-| Send to mori's native agent channel (mori-aware attribution) | `mori pane message --window <name>` |
+| Send to mori's native agent channel (mori-aware attribution) | `mori pane message --window "$MORI_WINDOW"` |
 | Send to a specific pane reliably (active or not) | `tmux send-keys -t %<id>` |
 
-`mori pane message` uses mori's built-in routing and is fine when precise pane targeting isn't needed. Use `tmux send-keys` when you need to reach a specific pane ID or when window names can't be trusted.
+`mori pane message` uses mori's built-in routing and is fine when precise pane targeting isn't needed. Use `--window "$MORI_WINDOW"` inside a Mori pane; it is a stable tmux window ID. Use `tmux send-keys` when you need to reach a specific pane ID.
 
 ## Routing table
 
 | Operation | Command | `--pane` works? | Reaches non-active panes? |
 |---|---|---|---|
 | Read output | `mori pane read --pane %<id>` | ✅ yes | ✅ yes |
-| Send to active agent in window | `mori pane message --window <name>` | ❌ no flag | window's active agent only |
+| Send to active agent in window | `mori pane message --window "$MORI_WINDOW"` | ❌ no flag | window's active agent only |
 | Send raw keys (mori) | `mori pane send --pane %<id>` | accepted but unreliable | ❌ drops silently (observed) |
 | Send raw keys (tmux) | `tmux send-keys -t %<id>` | ✅ yes | ✅ yes |
 
@@ -53,7 +53,7 @@ Use it to add sender identity so the receiver knows who sent the message and whe
 
 **When to use native `mori pane message` instead:**
 - You want mori-native attribution and don't need precise pane targeting
-- The target is the window's active agent and window names are stable
+- The target is the window's active agent; pass a stable tmux window ID like `$MORI_WINDOW`
 
 **When to use the envelope + tmux:**
 - You need to target a specific pane ID regardless of active state
@@ -121,8 +121,8 @@ tmux send-keys -t %60 'it'"'"'s done' Enter
 
 **Dollar signs and backticks** — use single quotes to prevent shell expansion:
 ```bash
-tmux send-keys -t %60 'echo $MORI_PANE_ID' Enter  # good — literal string
-tmux send-keys -t %60 "echo $MORI_PANE_ID" Enter  # bad — expanded by YOUR shell first
+tmux send-keys -t %60 'echo ${MORI_PANE:-$MORI_PANE_ID}' Enter  # good — literal string
+tmux send-keys -t %60 "echo $MORI_PANE" Enter  # bad — expanded by YOUR shell first
 ```
 
 **Multiline messages** — split into sequential sends:

@@ -4,20 +4,27 @@
 
 Use when you need a new agent for review, subtask, or pair work.
 
-### 1. Discover the target window
+### 1. Pick the target window
+
+Inside a Mori pane, use the stable tmux window ID from env:
 
 ```bash
-# Inside a mori pane — MORI_PROJECT and MORI_WORKTREE are already set
+printf 'current window: %s\n' "$MORI_WINDOW"
+```
+
+If you need a different window, discover it first:
+
+```bash
 mori pane list --json | jq --arg p "$MORI_PROJECT" --arg w "$MORI_WORKTREE" \
   '.[] | select(.projectName==$p and .worktreeName==$w)'
 ```
 
-Note the `windowName`. This is the **only step** where window name is needed — `pane new` requires it as a bootstrap input. After splitting, switch to `tmuxPaneId` exclusively.
+Prefer `MORI_WINDOW` / tmux window IDs (`@...`) over `windowName`; names churn when agents update terminal titles. After splitting, switch to `tmuxPaneId` exclusively.
 
 ### 2. Split a new pane
 
 ```bash
-mori pane new --project myapp --worktree main --window <window-name> --split v --name helper --json
+mori pane new --project "$MORI_PROJECT" --worktree "$MORI_WORKTREE" --window "$MORI_WINDOW" --split v --name helper --json
 # → {"paneId": "%60", "window": "..."}
 ```
 

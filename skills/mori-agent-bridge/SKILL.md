@@ -20,10 +20,13 @@ Three operations:
 
 ## Golden rule
 
-> Always resolve `tmuxPaneId` first. Never address by window name alone — window names churn.
+> Use stable tmux IDs. Inside a Mori pane, prefer `$MORI_PANE` for self and `$MORI_WINDOW` for `mori --window`; otherwise resolve `tmuxPaneId` first. Never address by window name alone — window names churn.
 
 ```bash
-# Discover peers in the current tab (MORI_PROJECT/MORI_WORKTREE are set by mori automatically)
+# Current pane identity (set automatically in Mori-created panes)
+printf 'session=%s window=%s pane=%s\n' "$MORI_SESSION" "$MORI_WINDOW" "$MORI_PANE"
+
+# Discover peers in the current worktree (MORI_PROJECT/MORI_WORKTREE are set by Mori)
 mori pane list --json | jq --arg p "$MORI_PROJECT" --arg w "$MORI_WORKTREE" \
   '.[] | select(.projectName==$p and .worktreeName==$w)'
 

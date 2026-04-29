@@ -54,7 +54,7 @@ tmux send-keys -t %60 'pi' Enter
 sleep 3
 
 # 2. Ask the helper to announce itself
-tmux send-keys -t %60 'Run this shell command and tell me the output: echo MYID:$MORI_PANE_ID' Enter
+tmux send-keys -t %60 'Run this shell command and tell me the output: echo MYID:${MORI_PANE:-$MORI_PANE_ID}' Enter
 sleep 5
 
 # 3. Read the announcement
@@ -70,7 +70,8 @@ In a multi-agent session, maintain a simple registry as shell variables or a JSO
 
 ```bash
 # Shell variable registry
-ORCHESTRATOR_PANE="%31"
+ORCHESTRATOR_PANE="${MORI_PANE:-$MORI_PANE_ID}"
+ORCHESTRATOR_WINDOW="${MORI_WINDOW:-$MORI_WINDOW_ID}"
 WORKER_PI_PANE="%60"
 WORKER_CODEX_PANE="%62"
 

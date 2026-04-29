@@ -6,13 +6,16 @@
 
 **Cause:** Ghostty renames the tab whenever any pane in it updates its terminal title. This happens on every agent launch or version banner.
 
-**Fix:** Look up the current window name by stable pane ID, or skip window names entirely:
+**Fix:** Use the stable tmux window ID from `MORI_WINDOW` when inside a Mori pane, look up the current window by stable pane ID, or skip window names entirely:
 
 ```bash
-# Look up current window name
+# Current window ID (best for Mori CLI --window)
+printf '%s\n' "$MORI_WINDOW"
+
+# Look up current window metadata
 mori pane list --json | jq '.[] | select(.tmuxPaneId=="%56")'
 
-# Better: skip window names, use tmux directly
+# Better for raw sending: skip window names, use tmux directly
 tmux send-keys -t %56 'your text' Enter
 ```
 
