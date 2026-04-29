@@ -673,14 +673,14 @@ struct PaneSend: ParsableCommand {
         let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
         let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
         let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
-        // Only inherit MORI_PANE_ID when the window is also from the env (not overridden).
-        // An explicit --window means we're targeting a different window, so MORI_PANE_ID
+        // Only inherit MORI_PANE when the window is also from the env (not overridden).
+        // An explicit --window means we're targeting a different window, so MORI_PANE
         // (which belongs to the current window) must not carry over.
         let paneId: String?
         if pane != nil {
             paneId = pane
         } else if window == nil {
-            paneId = resolveOptional(nil, envKeys: ["MORI_PANE_ID", "MORI_PANE"])
+            paneId = resolveOptional(nil, envKey: "MORI_PANE")
         } else {
             paneId = nil
         }
@@ -724,7 +724,7 @@ struct PaneRead: ParsableCommand {
         let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
         let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
         let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
-        let paneId = resolveOptional(pane, envKeys: ["MORI_PANE_ID", "MORI_PANE"])
+        let paneId = resolveOptional(pane, envKey: "MORI_PANE")
         let data = try sendIPCRequest(.paneRead(project: proj, worktree: wt, window: win, pane: paneId, lines: lines))
         guard let data, let text = String(data: data, encoding: .utf8) else { return }
         if output.json {
@@ -762,7 +762,7 @@ struct PaneRename: ParsableCommand {
     @Option(name: .long, help: ArgumentHelp(.localized("Window name")))
     var window: String?
 
-    @Option(name: .long, help: ArgumentHelp(.localized("Pane ID (e.g. %3); defaults to MORI_PANE_ID")))
+    @Option(name: .long, help: ArgumentHelp(.localized("Pane ID (e.g. %3); defaults to MORI_PANE")))
     var pane: String?
 
     @OptionGroup var output: OutputOptions
@@ -771,7 +771,7 @@ struct PaneRename: ParsableCommand {
         let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
         let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
         let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
-        let paneId = try resolveRequired(pane, envKeys: ["MORI_PANE_ID", "MORI_PANE"], label: "pane")
+        let paneId = try resolveRequired(pane, envKey: "MORI_PANE", label: "pane")
         let data = try sendIPCRequest(.paneRename(project: proj, worktree: wt, window: win, pane: paneId, newName: newName))
         printSuccess(data, json: output.json, label: String(format: .localized("Renamed pane %@ → '%@'"), paneId, newName))
     }
@@ -806,7 +806,7 @@ struct PaneClose: ParsableCommand {
         let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
         let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
         let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
-        let paneId = resolveOptional(pane, envKeys: ["MORI_PANE_ID", "MORI_PANE"])
+        let paneId = resolveOptional(pane, envKey: "MORI_PANE")
         let data = try sendIPCRequest(.paneClose(project: proj, worktree: wt, window: win, pane: paneId))
         printSuccess(data, json: output.json, label: String(format: .localized("Closed pane %@"), paneId ?? .localized("active")))
     }
@@ -818,7 +818,7 @@ struct PaneMessage: ParsableCommand {
         abstract: .localized("Send a message to a pane with sender metadata"),
         discussion: """
         \(String.localized("Sends a message to another pane for inter-agent communication."))
-        \(String.localized("Sender identity is read from MORI_PROJECT, MORI_WORKTREE, MORI_WINDOW, MORI_PANE_ID environment variables (set automatically in Mori terminals)."))
+        \(String.localized("Sender identity is read from MORI_PROJECT, MORI_WORKTREE, MORI_WINDOW, MORI_PANE environment variables (set automatically in Mori terminals)."))
 
         \(String.localized("Examples:"))
           mori pane message "build completed"
@@ -848,7 +848,7 @@ struct PaneMessage: ParsableCommand {
         let senderProject = ProcessInfo.processInfo.environment["MORI_PROJECT"]
         let senderWorktree = ProcessInfo.processInfo.environment["MORI_WORKTREE"]
         let senderWindow = ProcessInfo.processInfo.environment["MORI_WINDOW"]
-        let senderPaneId = ProcessInfo.processInfo.environment["MORI_PANE_ID"] ?? ProcessInfo.processInfo.environment["MORI_PANE"]
+        let senderPaneId = ProcessInfo.processInfo.environment["MORI_PANE"]
 
         let data = try sendIPCRequest(.paneMessage(
             project: proj, worktree: wt, window: win, text: text,
@@ -875,7 +875,7 @@ struct PaneId: ParsableCommand {
         let project = ProcessInfo.processInfo.environment["MORI_PROJECT"] ?? "unknown"
         let worktree = ProcessInfo.processInfo.environment["MORI_WORKTREE"] ?? "unknown"
         let window = ProcessInfo.processInfo.environment["MORI_WINDOW"] ?? "unknown"
-        let paneId = ProcessInfo.processInfo.environment["MORI_PANE_ID"] ?? ProcessInfo.processInfo.environment["MORI_PANE"] ?? "unknown"
+        let paneId = ProcessInfo.processInfo.environment["MORI_PANE"] ?? "unknown"
         print("\(project)/\(worktree)/\(window) pane:\(paneId)")
     }
 }

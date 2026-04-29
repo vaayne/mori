@@ -375,8 +375,6 @@ public actor TmuxBackend: TmuxControlling {
             "  MORI_PANE=\"$(tmux display-message -p -t \"$TMUX_PANE\" \"#{pane_id}\" 2>/dev/null || printf '')\"",
             "fi",
             "export MORI_SESSION MORI_WINDOW MORI_PANE",
-            "export MORI_WINDOW_ID=\"$MORI_WINDOW\"",
-            "export MORI_PANE_ID=\"${MORI_PANE:-${TMUX_PANE:-}}\"",
         ]
         for (key, value) in environment.sorted(by: { $0.key < $1.key }) where isValidEnvironmentName(key) {
             lines.append("export \(key)=\(shellQuote(value))")

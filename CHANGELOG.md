@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🐛 Bug Fixes
+
+- Remove duplicate tmux identity aliases; `MORI_WINDOW` and `MORI_PANE` are now the only window/pane ID environment variables.
+
 ## [0.4.3] - 2026-04-29
 
 ### ✨ Features

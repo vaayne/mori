@@ -62,7 +62,7 @@ Pane                  pane                 tmux pane ID, e.g. %3
 
 **Attachment** — the terminal surface runs `tmux attach-session -t <session-name>`. An LRU cache (max 3) keeps recently-used Ghostty surfaces alive to avoid recreate latency on worktree switch.
 
-**Environment variables** — Mori injects `MORI_PROJECT`, `MORI_WORKTREE`, `MORI_SESSION`, `MORI_SESSION_NAME`, `MORI_WINDOW`, `MORI_WINDOW_ID`, `MORI_PANE`, and `MORI_PANE_ID` into every pane's environment so CLI tools and agents can resolve their own address without arguments.
+**Environment variables** — Mori injects `MORI_PROJECT`, `MORI_WORKTREE`, `MORI_SESSION`, `MORI_SESSION_NAME`, `MORI_WINDOW`, and `MORI_PANE` into every pane's environment so CLI tools and agents can resolve their own address without arguments.
 
 ## Terminal Rendering
 

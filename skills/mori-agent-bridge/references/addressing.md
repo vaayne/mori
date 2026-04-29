@@ -18,8 +18,8 @@ Inside a Mori-managed pane, these are set automatically:
 | `MORI_WORKTREE` | Worktree name | `main` | Scope CLI queries |
 | `MORI_SESSION` | tmux session ID | `$1` | tmux-native session addressing |
 | `MORI_SESSION_NAME` | tmux session name | `mori/main` | Human-readable session label |
-| `MORI_WINDOW` / `MORI_WINDOW_ID` | tmux window ID | `@3` | Stable `--window` value for Mori CLI |
-| `MORI_PANE` / `MORI_PANE_ID` | tmux pane ID | `%42` | Stable `--pane` value and `tmux -t` target |
+| `MORI_WINDOW` | tmux window ID | `@3` | Stable `--window` value for Mori CLI |
+| `MORI_PANE` | tmux pane ID | `%42` | Stable `--pane` value and `tmux -t` target |
 
 Use the env vars first; list panes only when discovering peers:
 
@@ -60,14 +60,11 @@ printf 'session=%s window=%s pane=%s\n' "$MORI_SESSION" "$MORI_WINDOW" "$MORI_PA
 # Mori native command
 mori pane id
 
-# Backward-compatible alias
-printf '%s\n' "$MORI_PANE_ID"
-
 # Fallback: discover from list by title
 mori pane list --json | jq -r '.[] | select(.paneTitle=="pi-test") | .tmuxPaneId'
 ```
 
-Prefer `$MORI_PANE` / `$MORI_PANE_ID` for self-addressing. The orchestrator captures this ID so all future sends target by `tmuxPaneId`, not window name.
+Prefer `$MORI_PANE` for self-addressing. The orchestrator captures this ID so all future sends target by `tmuxPaneId`, not window name.
 
 ## Handshake pattern
 
@@ -75,7 +72,7 @@ After spawning a helper, have it announce itself back:
 
 ```bash
 # Orchestrator sends to helper (after launch):
-tmux send-keys -t %60 'echo "READY:${MORI_PANE:-$MORI_PANE_ID}"' Enter
+tmux send-keys -t %60 'echo "READY:$MORI_PANE"' Enter
 
 # Orchestrator reads the announcement:
 tmux capture-pane -t %60 -p | grep "READY:"

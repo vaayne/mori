@@ -29,7 +29,7 @@ environment variable that Mori sets in every managed pane.
 --project  →  MORI_PROJECT  →  required (error if missing)
 --worktree →  MORI_WORKTREE →  required (error if missing)
 --window   →  MORI_WINDOW   →  required (error if missing)
---pane     →  MORI_PANE_ID  →  optional (nil = active pane)
+--pane     →  MORI_PANE     →  optional (nil = active pane)
 ```
 
 Inside a Mori terminal, most commands reduce to their bare form:
@@ -57,9 +57,7 @@ Mori injects these into every managed pane:
 | `MORI_SESSION` | tmux session ID | `$1` |
 | `MORI_SESSION_NAME` | tmux session name | `myapp/main` |
 | `MORI_WINDOW` | tmux window ID | `@3` |
-| `MORI_WINDOW_ID` | Alias for `MORI_WINDOW` | `@3` |
 | `MORI_PANE` | tmux pane ID | `%42` |
-| `MORI_PANE_ID` | Alias for `MORI_PANE` | `%42` |
 
 ---
 
@@ -189,7 +187,7 @@ mori pane send --window logs "q"         # different window (pane auto-cleared)
 mori pane send --pane %5 "C-c"          # specific pane by ID
 ```
 
-> **Note:** When `--window` is overridden, `MORI_PANE_ID` is not inherited —
+> **Note:** When `--window` is overridden, `MORI_PANE` is not inherited —
 > the command targets the active pane of the specified window.
 
 ### `mori pane read`
@@ -212,7 +210,7 @@ mori pane read --pane %4 --lines 100
 Set a pane's title.
 
 ```bash
-mori pane rename agent                   # uses MORI_PANE_ID
+mori pane rename agent                   # uses MORI_PANE
 mori pane rename agent --pane %3
 ```
 

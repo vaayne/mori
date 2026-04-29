@@ -22,7 +22,7 @@
 "New window name" = "New window name";
 "New pane title" = "New pane title";
 "Pane ID (e.g. %3); defaults to active pane" = "Pane ID (e.g. %3); defaults to active pane";
-"Pane ID (e.g. %3); defaults to MORI_PANE_ID" = "Pane ID (e.g. %3); defaults to MORI_PANE_ID";
+"Pane ID (e.g. %3); defaults to MORI_PANE" = "Pane ID (e.g. %3); defaults to MORI_PANE";
 "Examples:" = "Examples:";
 
 /* Project commands */
@@ -71,7 +71,7 @@
 "Close a pane" = "Close a pane";
 "Send a message to a pane with sender metadata" = "Send a message to a pane with sender metadata";
 "Sends a message to another pane for inter-agent communication." = "Sends a message to another pane for inter-agent communication.";
-"Sender identity is read from MORI_PROJECT, MORI_WORKTREE, MORI_WINDOW, MORI_PANE_ID environment variables (set automatically in Mori terminals)." = "Sender identity is read from MORI_PROJECT, MORI_WORKTREE, MORI_WINDOW, MORI_PANE_ID environment variables (set automatically in Mori terminals).";
+"Sender identity is read from MORI_PROJECT, MORI_WORKTREE, MORI_WINDOW, MORI_PANE environment variables (set automatically in Mori terminals)." = "Sender identity is read from MORI_PROJECT, MORI_WORKTREE, MORI_WINDOW, MORI_PANE environment variables (set automatically in Mori terminals).";
 "Target project name" = "Target project name";
 "Target worktree name" = "Target worktree name";
 "Target window name" = "Target window name";

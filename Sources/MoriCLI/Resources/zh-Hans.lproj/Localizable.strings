@@ -22,7 +22,7 @@
 "New window name" = "新窗口名称";
 "New pane title" = "新面板标题";
 "Pane ID (e.g. %3); defaults to active pane" = "面板 ID（如 %3）；默认使用活动面板";
-"Pane ID (e.g. %3); defaults to MORI_PANE_ID" = "面板 ID（如 %3）；默认使用 MORI_PANE_ID";
+"Pane ID (e.g. %3); defaults to MORI_PANE" = "面板 ID（如 %3）；默认使用 MORI_PANE";
 "Examples:" = "示例：";
 
 /* Project commands */
@@ -71,7 +71,7 @@
 "Close a pane" = "关闭面板";
 "Send a message to a pane with sender metadata" = "向面板发送带发送者元数据的消息";
 "Sends a message to another pane for inter-agent communication." = "向另一个面板发送消息，用于 Agent 间通信。";
-"Sender identity is read from MORI_PROJECT, MORI_WORKTREE, MORI_WINDOW, MORI_PANE_ID environment variables (set automatically in Mori terminals)." = "发送者身份从 MORI_PROJECT、MORI_WORKTREE、MORI_WINDOW、MORI_PANE_ID 环境变量读取（在 Mori 终端中自动设置）。";
+"Sender identity is read from MORI_PROJECT, MORI_WORKTREE, MORI_WINDOW, MORI_PANE environment variables (set automatically in Mori terminals)." = "发送者身份从 MORI_PROJECT、MORI_WORKTREE、MORI_WINDOW、MORI_PANE 环境变量读取（在 Mori 终端中自动设置）。";
 "Target project name" = "目标项目名称";
 "Target worktree name" = "目标工作树名称";
 "Target window name" = "目标窗口名称";

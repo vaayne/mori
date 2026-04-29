@@ -121,7 +121,7 @@ tmux send-keys -t %60 'it'"'"'s done' Enter
 
 **Dollar signs and backticks** — use single quotes to prevent shell expansion:
 ```bash
-tmux send-keys -t %60 'echo ${MORI_PANE:-$MORI_PANE_ID}' Enter  # good — literal string
+tmux send-keys -t %60 'echo $MORI_PANE' Enter  # good — literal string
 tmux send-keys -t %60 "echo $MORI_PANE" Enter  # bad — expanded by YOUR shell first
 ```
 
