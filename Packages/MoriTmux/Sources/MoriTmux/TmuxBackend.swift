@@ -156,6 +156,12 @@ public actor TmuxBackend: TmuxControlling {
         )
     }
 
+    public func selectPane(sessionId: String, paneId: String) async throws {
+        _ = try await runner.run(
+            "select-pane", "-t", paneId
+        )
+    }
+
     public func killSession(id: String) async throws {
         _ = try await runner.run(
             "kill-session", "-t", id

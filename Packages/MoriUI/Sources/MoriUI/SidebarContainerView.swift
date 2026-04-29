@@ -18,6 +18,7 @@ public struct SidebarContainerView: View {
     private let onSelectProject: ((UUID) -> Void)?
     private let onSelectWorktree: (UUID) -> Void
     private let onSelectWindow: (String) -> Void
+    private let onSelectPane: ((String) -> Void)?
     private let onShowCreatePanel: (() -> Void)?
     private let onRemoveWorktree: ((UUID) -> Void)?
     private let onRemoveProject: ((UUID) -> Void)?
@@ -41,6 +42,7 @@ public struct SidebarContainerView: View {
         onSelectProject: ((UUID) -> Void)? = nil,
         onSelectWorktree: @escaping (UUID) -> Void,
         onSelectWindow: @escaping (String) -> Void,
+        onSelectPane: ((String) -> Void)? = nil,
         onShowCreatePanel: (() -> Void)? = nil,
         onRemoveWorktree: ((UUID) -> Void)? = nil,
         onRemoveProject: ((UUID) -> Void)? = nil,
@@ -63,6 +65,7 @@ public struct SidebarContainerView: View {
         self.onSelectProject = onSelectProject
         self.onSelectWorktree = onSelectWorktree
         self.onSelectWindow = onSelectWindow
+        self.onSelectPane = onSelectPane
         self.onShowCreatePanel = onShowCreatePanel
         self.onRemoveWorktree = onRemoveWorktree
         self.onRemoveProject = onRemoveProject
@@ -92,6 +95,7 @@ public struct SidebarContainerView: View {
             onSelectProject: onSelectProject,
             onSelectWorktree: onSelectWorktree,
             onSelectWindow: onSelectWindow,
+            onSelectPane: onSelectPane,
             onShowCreatePanel: onShowCreatePanel,
             onRemoveWorktree: onRemoveWorktree,
             onRemoveProject: onRemoveProject,

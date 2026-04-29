@@ -143,6 +143,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 self?.updateWindowTitle()
                 self?.syncVisibleCompanionToolToSelection()
             },
+            onSelectPane: { [weak manager, weak self] paneId in
+                manager?.selectPane(paneId)
+                self?.updateWindowTitle()
+                self?.syncVisibleCompanionToolToSelection()
+            },
             onShowCreatePanel: { [weak self] in
                 self?.showCreateWorktreePanel()
             },

@@ -14,6 +14,9 @@
 ### 🐛 问题修复
 
 - 修复侧边栏 `Agents` 区块会把同一个 tmux window 里的多个 agent pane 合并成一条的问题；现在每个已接入 hook 的 agent pane 都会单独显示为一行。
+- 修复从侧边栏 `Agents` 区块点击 agent 行时只能切到 window、不能聚焦到对应 tmux pane 的问题；现在会直接聚焦到准确的 pane。
+- 保持侧边栏 `Agents` 区块中的 tmux pane 原始顺序，不再按状态或最近活动自动重排 agent pane。
+- 补上缺失的 tmux `select-pane` 后端调用，修复侧边栏 agent 行点击后表面切换了但实际没有聚焦到对应 pane、仍停留在 window 级别的问题。
 
 ## [0.4.4] - 2026-04-29
 

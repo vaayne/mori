@@ -550,6 +550,42 @@ final class WorkspaceManager {
         saveUIState()
     }
 
+    func selectPane(_ paneId: String) {
+        guard let pane = appState.runtimePanes.first(where: { $0.tmuxPaneId == paneId }),
+              let window = appState.runtimeWindows.first(where: { $0.tmuxWindowId == pane.tmuxWindowId }),
+              let worktree = appState.worktrees.first(where: { $0.id == window.worktreeId }),
+              let sessionName = worktree.tmuxSessionName else {
+            return
+        }
+
+        appState.uiState.selectedWindowId = window.tmuxWindowId
+        if appState.uiState.selectedWorktreeId != worktree.id {
+            appState.uiState.selectedWorktreeId = worktree.id
+        }
+        if appState.uiState.selectedProjectId != worktree.projectId {
+            appState.uiState.selectedProjectId = worktree.projectId
+        }
+
+        for i in appState.runtimePanes.indices where appState.runtimePanes[i].tmuxWindowId == window.tmuxWindowId {
+            appState.runtimePanes[i].isActive = appState.runtimePanes[i].tmuxPaneId == paneId
+        }
+        if let windowIndex = appState.runtimeWindows.firstIndex(where: { $0.tmuxWindowId == window.tmuxWindowId }) {
+            appState.runtimeWindows[windowIndex].activePaneId = paneId
+        }
+
+        let tmux = tmuxBackend(for: worktree)
+        let rawWindowId = rawWindowId(from: window)
+        Task {
+            try? await tmux.selectWindow(sessionId: sessionName, windowId: rawWindowId)
+            try? await tmux.selectPane(sessionId: sessionName, paneId: paneId)
+        }
+
+        onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
+        clearUnread(windowId: rawWindowId, worktree: worktree)
+        fireHook(event: .onWindowFocus, worktreeId: worktree.id, windowName: window.title)
+        saveUIState()
+    }
+
     /// Clear unread output state for a window and recompute aggregates.
     private func clearUnread(windowId: String, worktree: Worktree) {
         let sessions = sessionsForEndpoint(of: worktree)

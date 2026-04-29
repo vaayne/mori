@@ -14,6 +14,7 @@ public struct WorktreeSidebarView: View {
     private let onSelectProject: ((UUID) -> Void)?
     private let onSelectWorktree: (UUID) -> Void
     private let onSelectWindow: (String) -> Void
+    private let onSelectPane: ((String) -> Void)?
     private let onShowCreatePanel: (() -> Void)?
     private let onRemoveWorktree: ((UUID) -> Void)?
     private let onRemoveProject: ((UUID) -> Void)?
@@ -39,6 +40,7 @@ public struct WorktreeSidebarView: View {
         onSelectProject: ((UUID) -> Void)? = nil,
         onSelectWorktree: @escaping (UUID) -> Void,
         onSelectWindow: @escaping (String) -> Void,
+        onSelectPane: ((String) -> Void)? = nil,
         onShowCreatePanel: (() -> Void)? = nil,
         onRemoveWorktree: ((UUID) -> Void)? = nil,
         onRemoveProject: ((UUID) -> Void)? = nil,
@@ -61,6 +63,7 @@ public struct WorktreeSidebarView: View {
         self.onSelectProject = onSelectProject
         self.onSelectWorktree = onSelectWorktree
         self.onSelectWindow = onSelectWindow
+        self.onSelectPane = onSelectPane
         self.onShowCreatePanel = onShowCreatePanel
         self.onRemoveWorktree = onRemoveWorktree
         self.onRemoveProject = onRemoveProject
@@ -115,23 +118,6 @@ public struct WorktreeSidebarView: View {
                     worktree: worktree,
                     projectName: projectName
                 )
-            }
-            .sorted { lhs, rhs in
-                let leftPriority = activeWorktreePriority(lhs.pane.agentState)
-                let rightPriority = activeWorktreePriority(rhs.pane.agentState)
-                if leftPriority != rightPriority {
-                    return leftPriority < rightPriority
-                }
-                if lhs.worktree.id != rhs.worktree.id {
-                    return (lhs.worktree.lastActiveAt ?? .distantPast) > (rhs.worktree.lastActiveAt ?? .distantPast)
-                }
-                if lhs.window.tmuxWindowIndex != rhs.window.tmuxWindowIndex {
-                    return lhs.window.tmuxWindowIndex < rhs.window.tmuxWindowIndex
-                }
-                if lhs.pane.isActive != rhs.pane.isActive {
-                    return lhs.pane.isActive && !rhs.pane.isActive
-                }
-                return lhs.pane.tmuxPaneId < rhs.pane.tmuxPaneId
             }
     }
 
@@ -733,7 +719,11 @@ public struct WorktreeSidebarView: View {
             onSelect: {
                 onSelectProject?(item.worktree.projectId)
                 onSelectWorktree(item.worktree.id)
-                onSelectWindow(item.window.tmuxWindowId)
+                if let onSelectPane {
+                    onSelectPane(item.pane.tmuxPaneId)
+                } else {
+                    onSelectWindow(item.window.tmuxWindowId)
+                }
             },
             onRequestPaneOutput: onRequestPaneOutput,
             onSendKeys: onSendKeys
