@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- Add a sidebar Projects header control to hide or show the full project list, making it easier to focus on the Now section.
+
 ## [0.4.2] - 2026-04-23
 
 ### 🎨 Design

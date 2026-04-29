@@ -136,6 +136,10 @@ public struct WorktreeSidebarView: View {
         projects.filter { $0.isFavorite } + projects.filter { !$0.isFavorite }
     }
 
+    private var projectsCollapseToggleTitle: String {
+        isProjectsSectionCollapsed ? String.localized("Expand Projects") : String.localized("Collapse Projects")
+    }
+
     /// Global 1-based index for each window across all projects and worktrees.
     /// Iterates projects in display order so indices match ⌘1-9 quick jump.
     private var globalWindowIndices: [String: Int] {
@@ -164,16 +168,18 @@ public struct WorktreeSidebarView: View {
                     activeWorktreeSection
                     projectsSectionHeader
 
-                    let sorted = sortedProjects
-                    let firstUnpinnedIndex = sorted.firstIndex(where: { !$0.isFavorite })
+                    if !isProjectsSectionCollapsed {
+                        let sorted = sortedProjects
+                        let firstUnpinnedIndex = sorted.firstIndex(where: { !$0.isFavorite })
 
-                    ForEach(Array(sorted.enumerated()), id: \.element.id) { index, project in
-                        if let firstUnpinnedIndex, index == firstUnpinnedIndex, index > 0 {
-                            Divider()
-                                .padding(.horizontal, MoriTokens.Spacing.xl)
-                                .padding(.vertical, MoriTokens.Spacing.sm)
+                        ForEach(Array(sorted.enumerated()), id: \.element.id) { index, project in
+                            if let firstUnpinnedIndex, index == firstUnpinnedIndex, index > 0 {
+                                Divider()
+                                    .padding(.horizontal, MoriTokens.Spacing.xl)
+                                    .padding(.vertical, MoriTokens.Spacing.sm)
+                            }
+                            projectSection(project)
                         }
-                        projectSection(project)
                     }
                 }
                 .padding(.top, MoriTokens.Spacing.lg)
@@ -213,6 +219,7 @@ public struct WorktreeSidebarView: View {
     @State private var renameText: String = ""
     @State private var draggingProjectId: UUID?
     @State private var dropTargetProjectId: UUID?
+    @State private var isProjectsSectionCollapsed = false
 
     @ViewBuilder
     private func projectSection(_ project: Project) -> some View {
@@ -515,14 +522,31 @@ public struct WorktreeSidebarView: View {
     @ViewBuilder
     private var projectsSectionHeader: some View {
         sectionHeader(title: String.localized("Projects")) {
-            if let onAddProject {
-                Button(action: onAddProject) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(MoriTokens.Color.muted)
+            HStack(spacing: MoriTokens.Spacing.md) {
+                if !projects.isEmpty {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.16)) {
+                            isProjectsSectionCollapsed.toggle()
+                        }
+                    } label: {
+                        Image(systemName: isProjectsSectionCollapsed ? "chevron.down" : "chevron.up")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(MoriTokens.Color.muted)
+                    }
+                    .buttonStyle(.plain)
+                    .help(projectsCollapseToggleTitle)
+                    .accessibilityLabel(projectsCollapseToggleTitle)
                 }
-                .buttonStyle(.plain)
-                .help(String.localized("Add Project"))
+
+                if let onAddProject {
+                    Button(action: onAddProject) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(MoriTokens.Color.muted)
+                    }
+                    .buttonStyle(.plain)
+                    .help(String.localized("Add Project"))
+                }
             }
         }
         .padding(.top, MoriTokens.Spacing.lg)

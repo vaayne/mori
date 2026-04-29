@@ -29,6 +29,7 @@
 "Choose the display language for Mori." = "选择 Mori 的显示语言。";
 "Claude Code" = "Claude Code";
 "Clipboard" = "剪贴板";
+"Collapse Projects" = "折叠项目列表";
 "Close Tab" = "关闭标签页";
 "Close Window" = "关闭窗口";
 "Codex CLI" = "Codex CLI";
@@ -48,6 +49,7 @@
 "Adds hooks to ~/.factory/settings.json for prompt submit, tool use, stop, and notification events." = "向 ~/.factory/settings.json 添加钩子，用于提示提交、工具使用、停止和通知事件。";
 "Equalize Panes" = "均分面板";
 "Error" = "错误";
+"Expand Projects" = "展开项目列表";
 "Filter fonts…" = "筛选字体…";
 "Filter keybindings…" = "筛选键绑定…";
 "Font family" = "字体族";

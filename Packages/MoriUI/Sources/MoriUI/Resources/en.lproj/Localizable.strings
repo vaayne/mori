@@ -29,6 +29,7 @@
 "Choose the display language for Mori." = "Choose the display language for Mori.";
 "Claude Code" = "Claude Code";
 "Clipboard" = "Clipboard";
+"Collapse Projects" = "Collapse Projects";
 "Close Tab" = "Close Tab";
 "Close Window" = "Close Window";
 "Codex CLI" = "Codex CLI";
@@ -48,6 +49,7 @@
 "Adds hooks to ~/.factory/settings.json for prompt submit, tool use, stop, and notification events." = "Adds hooks to ~/.factory/settings.json for prompt submit, tool use, stop, and notification events.";
 "Equalize Panes" = "Equalize Panes";
 "Error" = "Error";
+"Expand Projects" = "Expand Projects";
 "Filter fonts…" = "Filter fonts…";
 "Filter keybindings…" = "Filter keybindings…";
 "Font family" = "Font family";
