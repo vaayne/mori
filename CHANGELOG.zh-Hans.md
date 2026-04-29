@@ -17,6 +17,7 @@
 - 修复从侧边栏 `Agents` 区块点击 agent 行时只能切到 window、不能聚焦到对应 tmux pane 的问题；现在会直接聚焦到准确的 pane。
 - 保持侧边栏 `Agents` 区块中的 tmux pane 原始顺序，不再按状态或最近活动自动重排 agent pane。
 - 补上缺失的 tmux `select-pane` 后端调用，修复侧边栏 agent 行点击后表面切换了但实际没有聚焦到对应 pane、仍停留在 window 级别的问题。
+- 重新设计侧边栏 `Projects` 区块的折叠控件：用带项目数量的显式显示 / 隐藏按钮替换原先含义不清的独立 chevron，让折叠状态更容易理解。
 
 ## [0.4.4] - 2026-04-29
 

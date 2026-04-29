@@ -61,6 +61,7 @@
 "Ghostty Defaults" = "Ghostty Defaults";
 "Go to Tab N" = "Go to Tab N";
 "Hide while typing" = "Hide while typing";
+"Hide List" = "Hide List";
 "Keybindings" = "Keybindings";
 "Keyboard" = "Keyboard";
 "Language" = "Language";
@@ -106,6 +107,7 @@
 "Settings" = "Settings";
 "Settings (⌘,)" = "Settings (⌘,)";
 "Size in points for terminal text." = "Size in points for terminal text.";
+"Show List" = "Show List";
 "Split Down" = "Split Down";
 "Split Right" = "Split Right";
 "Terminal Preview" = "Terminal Preview";

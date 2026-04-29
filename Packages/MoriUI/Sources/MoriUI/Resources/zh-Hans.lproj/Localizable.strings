@@ -61,6 +61,7 @@
 "Ghostty Defaults" = "Ghostty 默认";
 "Go to Tab N" = "跳转到第 N 个标签页";
 "Hide while typing" = "输入时隐藏";
+"Hide List" = "隐藏列表";
 "Keybindings" = "键绑定";
 "Keyboard" = "键盘";
 "Language" = "语言";
@@ -106,6 +107,7 @@
 "Settings" = "设置";
 "Settings (⌘,)" = "设置 (⌘,)";
 "Size in points for terminal text." = "终端文本的字号（磅值）。";
+"Show List" = "显示列表";
 "Split Down" = "向下拆分";
 "Split Right" = "向右拆分";
 "Terminal Preview" = "终端预览";

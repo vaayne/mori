@@ -130,6 +130,10 @@ public struct WorktreeSidebarView: View {
         isProjectsSectionCollapsed ? String.localized("Expand Projects") : String.localized("Collapse Projects")
     }
 
+    private var projectsCollapseButtonLabel: String {
+        isProjectsSectionCollapsed ? String.localized("Show List") : String.localized("Hide List")
+    }
+
     /// Global 1-based index for each window across all projects and worktrees.
     /// Iterates projects in display order so indices match ⌘1-9 quick jump.
     private var globalWindowIndices: [String: Int] {
@@ -508,7 +512,26 @@ public struct WorktreeSidebarView: View {
 
     @ViewBuilder
     private var projectsSectionHeader: some View {
-        sectionHeader(title: String.localized("Projects")) {
+        sectionHeader {
+            HStack(spacing: MoriTokens.Spacing.sm) {
+                Text(String.localized("Projects"))
+                    .font(MoriTokens.Font.sectionTitle)
+                    .tracking(MoriTokens.Sidebar.sectionTracking)
+                    .foregroundStyle(MoriTokens.Color.muted)
+
+                if !projects.isEmpty {
+                    Text("\(projects.count)")
+                        .font(MoriTokens.Font.badgeCount)
+                        .foregroundStyle(MoriTokens.Color.muted)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(Color.primary.opacity(MoriTokens.Opacity.quiet))
+                        )
+                }
+            }
+        } accessory: {
             HStack(spacing: MoriTokens.Spacing.md) {
                 if !projects.isEmpty {
                     Button {
@@ -516,9 +539,19 @@ public struct WorktreeSidebarView: View {
                             isProjectsSectionCollapsed.toggle()
                         }
                     } label: {
-                        Image(systemName: isProjectsSectionCollapsed ? "chevron.down" : "chevron.up")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(MoriTokens.Color.muted)
+                        HStack(spacing: MoriTokens.Spacing.sm) {
+                            Text(projectsCollapseButtonLabel)
+                                .font(.system(size: 11, weight: .semibold))
+                            Image(systemName: isProjectsSectionCollapsed ? "chevron.right" : "chevron.down")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        .foregroundStyle(MoriTokens.Color.muted)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color.primary.opacity(0.06))
+                        )
                     }
                     .buttonStyle(.plain)
                     .help(projectsCollapseToggleTitle)
@@ -666,7 +699,12 @@ public struct WorktreeSidebarView: View {
     private var activeWorktreeSection: some View {
         if !activeAgentPaneItems.isEmpty {
             VStack(alignment: .leading, spacing: MoriTokens.Spacing.sm) {
-                sectionHeader(title: String.localized("Agents")) {
+                sectionHeader {
+                    Text(String.localized("Agents"))
+                        .font(MoriTokens.Font.sectionTitle)
+                        .tracking(MoriTokens.Sidebar.sectionTracking)
+                        .foregroundStyle(MoriTokens.Color.muted)
+                } accessory: {
                     Text("\(activeAgentPaneItems.count)")
                         .font(MoriTokens.Font.caption)
                         .foregroundStyle(MoriTokens.Color.inactive)
@@ -688,15 +726,12 @@ public struct WorktreeSidebarView: View {
         }
     }
 
-    private func sectionHeader<Accessory: View>(
-        title: String,
+    private func sectionHeader<Title: View, Accessory: View>(
+        @ViewBuilder title: () -> Title,
         @ViewBuilder accessory: () -> Accessory
     ) -> some View {
         HStack {
-            Text(title)
-                .font(MoriTokens.Font.sectionTitle)
-                .tracking(MoriTokens.Sidebar.sectionTracking)
-                .foregroundStyle(MoriTokens.Color.muted)
+            title()
 
             Spacer()
 

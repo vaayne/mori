@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Focus the exact tmux pane when selecting an agent row from the sidebar `Agents` section, instead of only switching at the window level.
 - Preserve tmux pane order in the sidebar `Agents` section instead of auto-sorting agent panes by state or recency.
 - Fix sidebar agent-row pane focus by implementing the missing tmux `select-pane` backend call; selecting an agent pane now targets the correct tmux pane instead of silently staying at window level.
+- Redesign the sidebar `Projects` section toggle into an explicit show/hide chip with a project count, replacing the ambiguous lone chevron and making the collapsed state easier to understand.
 
 ## [0.4.4] - 2026-04-29
 
