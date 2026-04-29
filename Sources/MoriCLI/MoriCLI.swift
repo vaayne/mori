@@ -103,6 +103,21 @@ func resolveOptional(_ flag: String?, envKey: String) -> String? {
     flag ?? ProcessInfo.processInfo.environment[envKey]
 }
 
+func resolveOptional(_ flag: String?, envKeys: [String]) -> String? {
+    if let flag { return flag }
+    for envKey in envKeys {
+        if let value = ProcessInfo.processInfo.environment[envKey], !value.isEmpty {
+            return value
+        }
+    }
+    return nil
+}
+
+func resolveRequired(_ flag: String?, envKeys: [String], label: String) throws -> String {
+    if let value = resolveOptional(flag, envKeys: envKeys) { return value }
+    throw CLIError.missingAddress(label: label, envKey: envKeys.joined(separator: "/"))
+}
+
 // MARK: - IPC Helpers
 
 private func writeStderr(_ message: String) {
@@ -665,7 +680,7 @@ struct PaneSend: ParsableCommand {
         if pane != nil {
             paneId = pane
         } else if window == nil {
-            paneId = resolveOptional(nil, envKey: "MORI_PANE_ID")
+            paneId = resolveOptional(nil, envKeys: ["MORI_PANE_ID", "MORI_PANE"])
         } else {
             paneId = nil
         }
@@ -709,7 +724,7 @@ struct PaneRead: ParsableCommand {
         let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
         let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
         let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
-        let paneId = resolveOptional(pane, envKey: "MORI_PANE_ID")
+        let paneId = resolveOptional(pane, envKeys: ["MORI_PANE_ID", "MORI_PANE"])
         let data = try sendIPCRequest(.paneRead(project: proj, worktree: wt, window: win, pane: paneId, lines: lines))
         guard let data, let text = String(data: data, encoding: .utf8) else { return }
         if output.json {
@@ -756,7 +771,7 @@ struct PaneRename: ParsableCommand {
         let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
         let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
         let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
-        let paneId = try resolveRequired(pane, envKey: "MORI_PANE_ID", label: "pane")
+        let paneId = try resolveRequired(pane, envKeys: ["MORI_PANE_ID", "MORI_PANE"], label: "pane")
         let data = try sendIPCRequest(.paneRename(project: proj, worktree: wt, window: win, pane: paneId, newName: newName))
         printSuccess(data, json: output.json, label: String(format: .localized("Renamed pane %@ → '%@'"), paneId, newName))
     }
@@ -791,7 +806,7 @@ struct PaneClose: ParsableCommand {
         let proj = try resolveRequired(project, envKey: "MORI_PROJECT", label: "project")
         let wt = try resolveRequired(worktree, envKey: "MORI_WORKTREE", label: "worktree")
         let win = try resolveRequired(window, envKey: "MORI_WINDOW", label: "window")
-        let paneId = resolveOptional(pane, envKey: "MORI_PANE_ID")
+        let paneId = resolveOptional(pane, envKeys: ["MORI_PANE_ID", "MORI_PANE"])
         let data = try sendIPCRequest(.paneClose(project: proj, worktree: wt, window: win, pane: paneId))
         printSuccess(data, json: output.json, label: String(format: .localized("Closed pane %@"), paneId ?? .localized("active")))
     }
@@ -833,7 +848,7 @@ struct PaneMessage: ParsableCommand {
         let senderProject = ProcessInfo.processInfo.environment["MORI_PROJECT"]
         let senderWorktree = ProcessInfo.processInfo.environment["MORI_WORKTREE"]
         let senderWindow = ProcessInfo.processInfo.environment["MORI_WINDOW"]
-        let senderPaneId = ProcessInfo.processInfo.environment["MORI_PANE_ID"]
+        let senderPaneId = ProcessInfo.processInfo.environment["MORI_PANE_ID"] ?? ProcessInfo.processInfo.environment["MORI_PANE"]
 
         let data = try sendIPCRequest(.paneMessage(
             project: proj, worktree: wt, window: win, text: text,
@@ -860,7 +875,7 @@ struct PaneId: ParsableCommand {
         let project = ProcessInfo.processInfo.environment["MORI_PROJECT"] ?? "unknown"
         let worktree = ProcessInfo.processInfo.environment["MORI_WORKTREE"] ?? "unknown"
         let window = ProcessInfo.processInfo.environment["MORI_WINDOW"] ?? "unknown"
-        let paneId = ProcessInfo.processInfo.environment["MORI_PANE_ID"] ?? "unknown"
+        let paneId = ProcessInfo.processInfo.environment["MORI_PANE_ID"] ?? ProcessInfo.processInfo.environment["MORI_PANE"] ?? "unknown"
         print("\(project)/\(worktree)/\(window) pane:\(paneId)")
     }
 }

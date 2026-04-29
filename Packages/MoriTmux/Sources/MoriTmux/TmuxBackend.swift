@@ -129,11 +129,14 @@ public actor TmuxBackend: TmuxControlling {
         return Int(output.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
     }
 
-    public func createSession(name: String, cwd: String) async throws -> TmuxSession {
-        // Create a detached session with the given name and start directory
+    public func createSession(name: String, cwd: String, environment: [String: String] = [:]) async throws -> TmuxSession {
+        // Create a detached session with the given name and start directory.
+        // The bootstrap command exports pane-specific Mori/tmux IDs before
+        // handing control to the user's login shell.
         let output = try await runner.run(
             "new-session", "-d", "-s", name, "-c", cwd,
-            "-P", "-F", TmuxParser.sessionFormat
+            "-P", "-F", TmuxParser.sessionFormat,
+            Self.moriPaneBootstrapCommand(environment: environment)
         )
 
         let sessions = TmuxParser.parseSessions(output)
@@ -171,7 +174,7 @@ public actor TmuxBackend: TmuxControlling {
         )
     }
 
-    public func createWindow(sessionId: String, name: String?, cwd: String?) async throws -> TmuxWindow {
+    public func createWindow(sessionId: String, name: String?, cwd: String?, environment: [String: String] = [:]) async throws -> TmuxWindow {
         var args: [String] = ["new-window", "-t", sessionId, "-P", "-F", TmuxParser.windowFormat]
         if let name {
             args.append(contentsOf: ["-n", name])
@@ -179,6 +182,7 @@ public actor TmuxBackend: TmuxControlling {
         if let cwd {
             args.append(contentsOf: ["-c", cwd])
         }
+        args.append(Self.moriPaneBootstrapCommand(environment: environment))
         let output = try await runner.run(args)
         let windows = TmuxParser.parseWindows(output)
         guard let window = windows.first else {
@@ -197,7 +201,7 @@ public actor TmuxBackend: TmuxControlling {
         )
     }
 
-    public func splitPane(sessionId: String, paneId: String, horizontal: Bool, cwd: String?) async throws -> TmuxPane {
+    public func splitPane(sessionId: String, paneId: String, horizontal: Bool, cwd: String?, environment: [String: String] = [:]) async throws -> TmuxPane {
         // Pane IDs like %0 are globally unique in tmux and can be used directly.
         // Fall back to session name to split the active pane in the active window.
         let target = paneId.isEmpty ? sessionId : paneId
@@ -210,6 +214,7 @@ public actor TmuxBackend: TmuxControlling {
         if let cwd {
             args.append(contentsOf: ["-c", cwd])
         }
+        args.append(Self.moriPaneBootstrapCommand(environment: environment))
         let output = try await runner.run(args)
         let panes = TmuxParser.parsePanes(output)
         guard let pane = panes.first else {
@@ -360,6 +365,36 @@ public actor TmuxBackend: TmuxControlling {
             .split(separator: "\n", omittingEmptySubsequences: true)
             .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    private static func moriPaneBootstrapCommand(environment: [String: String]) -> String {
+        var lines = [
+            "if [ -n \"${TMUX_PANE:-}\" ] && command -v tmux >/dev/null 2>&1; then",
+            "  MORI_SESSION=\"$(tmux display-message -p -t \"$TMUX_PANE\" \"#{session_id}\" 2>/dev/null || printf '')\"",
+            "  MORI_WINDOW=\"$(tmux display-message -p -t \"$TMUX_PANE\" \"#{window_id}\" 2>/dev/null || printf '')\"",
+            "  MORI_PANE=\"$(tmux display-message -p -t \"$TMUX_PANE\" \"#{pane_id}\" 2>/dev/null || printf '')\"",
+            "fi",
+            "export MORI_SESSION MORI_WINDOW MORI_PANE",
+            "export MORI_WINDOW_ID=\"$MORI_WINDOW\"",
+            "export MORI_PANE_ID=\"${MORI_PANE:-${TMUX_PANE:-}}\"",
+        ]
+        for (key, value) in environment.sorted(by: { $0.key < $1.key }) where isValidEnvironmentName(key) {
+            lines.append("export \(key)=\(shellQuote(value))")
+        }
+        lines.append("exec \"${SHELL:-/bin/sh}\" -l")
+        return "exec sh -lc \(shellQuote(lines.joined(separator: "\n")))"
+    }
+
+    private static func isValidEnvironmentName(_ name: String) -> Bool {
+        guard let first = name.unicodeScalars.first,
+              first == "_" || CharacterSet.letters.contains(first) else { return false }
+        return name.unicodeScalars.allSatisfy {
+            $0 == "_" || CharacterSet.alphanumerics.contains($0)
+        }
+    }
+
+    private static func shellQuote(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }
 

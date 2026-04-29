@@ -54,8 +54,12 @@ Mori injects these into every managed pane:
 |----------|-------------|---------|
 | `MORI_PROJECT` | Project name | `myapp` |
 | `MORI_WORKTREE` | Worktree name | `main` |
-| `MORI_WINDOW` | Window (tab) name | `shell` |
-| `MORI_PANE_ID` | tmux pane ID | `%42` |
+| `MORI_SESSION` | tmux session ID | `$1` |
+| `MORI_SESSION_NAME` | tmux session name | `myapp/main` |
+| `MORI_WINDOW` | tmux window ID | `@3` |
+| `MORI_WINDOW_ID` | Alias for `MORI_WINDOW` | `@3` |
+| `MORI_PANE` | tmux pane ID | `%42` |
+| `MORI_PANE_ID` | Alias for `MORI_PANE` | `%42` |
 
 ---
 

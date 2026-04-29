@@ -416,6 +416,19 @@ final class WorkspaceManager {
         sessionsForEndpoint(of: worktree)
     }
 
+    func moriPaneEnvironment(for worktree: Worktree) -> [String: String] {
+        var environment = [
+            "MORI_WORKTREE": worktree.name,
+        ]
+        if let project = projectForWorktree(worktree) {
+            environment["MORI_PROJECT"] = project.name
+        }
+        if let sessionName = worktree.tmuxSessionName {
+            environment["MORI_SESSION_NAME"] = sessionName
+        }
+        return environment
+    }
+
     private func endpointKey(for worktree: Worktree) -> String {
         location(for: worktree).endpointKey
     }
@@ -632,7 +645,15 @@ final class WorkspaceManager {
 
         // Create tmux session
         Task {
-            _ = try? await tmux.createSession(name: sessionName, cwd: path)
+            _ = try? await tmux.createSession(
+                name: sessionName,
+                cwd: path,
+                environment: [
+                    "MORI_PROJECT": project.name,
+                    "MORI_WORKTREE": worktree.name,
+                    "MORI_SESSION_NAME": sessionName,
+                ]
+            )
             await onSessionCreated?(tmux)
             await tmux.refreshNow()
         }
@@ -942,7 +963,11 @@ final class WorkspaceManager {
 
         // Step 3: Create tmux session (partial failure tolerant)
         do {
-            _ = try await tmux.createSession(name: sessionName, cwd: worktreePath)
+            _ = try await tmux.createSession(
+                name: sessionName,
+                cwd: worktreePath,
+                environment: moriPaneEnvironment(for: worktree)
+            )
             await onSessionCreated?(tmux)
         } catch {
             // tmux failure is non-fatal — session will be created on next select
@@ -1241,7 +1266,11 @@ final class WorkspaceManager {
 
         if !sessionNames.contains(sessionName) {
             do {
-                _ = try await tmux.createSession(name: sessionName, cwd: worktree.path)
+                _ = try await tmux.createSession(
+                    name: sessionName,
+                    cwd: worktree.path,
+                    environment: moriPaneEnvironment(for: worktree)
+                )
                 await onSessionCreated?(tmux)
                 return true
             } catch {
@@ -1264,7 +1293,12 @@ final class WorkspaceManager {
         }
         if windowCount == 0 {
             do {
-                _ = try await tmux.createWindow(sessionId: sessionName, name: nil, cwd: worktree.path)
+                _ = try await tmux.createWindow(
+                    sessionId: sessionName,
+                    name: nil,
+                    cwd: worktree.path,
+                    environment: moriPaneEnvironment(for: worktree)
+                )
             } catch {
                 if showErrors {
                     showTmuxOperationError(title: .localized("Terminal Error"), error: error, worktree: worktree)
@@ -1790,7 +1824,12 @@ final class WorkspaceManager {
         do {
             let sessionReady = await ensureTmuxSession(for: worktree, showErrors: true)
             guard sessionReady else { return }
-            _ = try await tmux.createWindow(sessionId: sessionName, name: nil, cwd: worktree.path)
+            _ = try await tmux.createWindow(
+                sessionId: sessionName,
+                name: nil,
+                cwd: worktree.path,
+                environment: moriPaneEnvironment(for: worktree)
+            )
             await refreshRuntimeState()
             // Re-attach terminal to the (possibly recreated) session
             onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
@@ -1821,7 +1860,8 @@ final class WorkspaceManager {
                 sessionId: sessionName,
                 paneId: "",
                 horizontal: horizontal,
-                cwd: worktree.path
+                cwd: worktree.path,
+                environment: moriPaneEnvironment(for: worktree)
             )
             await refreshRuntimeState()
         } catch {
@@ -1958,7 +1998,8 @@ final class WorkspaceManager {
             let newWindow = try await tmux.createWindow(
                 sessionId: sessionName,
                 name: windowName,
-                cwd: worktree.path
+                cwd: worktree.path,
+                environment: moriPaneEnvironment(for: worktree)
             )
             try await tmux.sendKeys(
                 sessionId: sessionName,
@@ -2062,7 +2103,12 @@ final class WorkspaceManager {
         do {
             let sessionReady = await ensureTmuxSession(for: worktree, showErrors: true)
             guard sessionReady else { return }
-            let window = try await tmux.createWindow(sessionId: sessionName, name: command, cwd: cwd)
+            let window = try await tmux.createWindow(
+                sessionId: sessionName,
+                name: command,
+                cwd: cwd,
+                environment: moriPaneEnvironment(for: worktree)
+            )
             try await tmux.sendKeys(sessionId: sessionName, paneId: window.windowId, keys: launchCommand)
             await refreshRuntimeState()
             onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
@@ -2230,7 +2276,11 @@ final class WorkspaceManager {
             guard !sessionAlive else { continue }
 
             let tmux = tmuxBackend(for: worktree)
-            let recreated = (try? await tmux.createSession(name: sessionName, cwd: worktree.path)) != nil
+            let recreated = (try? await tmux.createSession(
+                name: sessionName,
+                cwd: worktree.path,
+                environment: moriPaneEnvironment(for: worktree)
+            )) != nil
             guard recreated else { continue }
 
             recoveredAny = true

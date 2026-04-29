@@ -11,7 +11,7 @@ public protocol TmuxControlling: Sendable {
     func scanAll() async throws -> [TmuxSession]
 
     /// Create a new tmux session with the given name and working directory.
-    func createSession(name: String, cwd: String) async throws -> TmuxSession
+    func createSession(name: String, cwd: String, environment: [String: String]) async throws -> TmuxSession
 
     /// Select (activate) a window within a session.
     func selectWindow(sessionId: String, windowId: String) async throws
@@ -31,10 +31,10 @@ public protocol TmuxControlling: Sendable {
     func selectPane(sessionId: String, paneId: String) async throws
 
     /// Create a new window in a session.
-    func createWindow(sessionId: String, name: String?, cwd: String?) async throws -> TmuxWindow
+    func createWindow(sessionId: String, name: String?, cwd: String?, environment: [String: String]) async throws -> TmuxWindow
 
     /// Split a pane horizontally or vertically.
-    func splitPane(sessionId: String, paneId: String, horizontal: Bool, cwd: String?) async throws -> TmuxPane
+    func splitPane(sessionId: String, paneId: String, horizontal: Bool, cwd: String?, environment: [String: String]) async throws -> TmuxPane
 
     /// Rename a window.
     func renameWindow(sessionId: String, windowId: String, newName: String) async throws
@@ -102,11 +102,23 @@ public extension TmuxControlling {
         throw TmuxError.notYetImplemented("selectPane")
     }
 
+    func createSession(name: String, cwd: String) async throws -> TmuxSession {
+        try await createSession(name: name, cwd: cwd, environment: [:])
+    }
+
     func createWindow(sessionId: String, name: String?, cwd: String?) async throws -> TmuxWindow {
-        throw TmuxError.notYetImplemented("createWindow")
+        try await createWindow(sessionId: sessionId, name: name, cwd: cwd, environment: [:])
     }
 
     func splitPane(sessionId: String, paneId: String, horizontal: Bool, cwd: String?) async throws -> TmuxPane {
+        try await splitPane(sessionId: sessionId, paneId: paneId, horizontal: horizontal, cwd: cwd, environment: [:])
+    }
+
+    func createWindow(sessionId: String, name: String?, cwd: String?, environment: [String: String]) async throws -> TmuxWindow {
+        throw TmuxError.notYetImplemented("createWindow")
+    }
+
+    func splitPane(sessionId: String, paneId: String, horizontal: Bool, cwd: String?, environment: [String: String]) async throws -> TmuxPane {
         throw TmuxError.notYetImplemented("splitPane")
     }
 

@@ -206,7 +206,12 @@ final class IPCHandler {
 
         let tmux = manager.tmuxBackendForWorktree(worktree)
         do {
-            let window = try await tmux.createWindow(sessionId: sessionName, name: windowName, cwd: worktree.path)
+            let window = try await tmux.createWindow(
+                sessionId: sessionName,
+                name: windowName,
+                cwd: worktree.path,
+                environment: manager.moriPaneEnvironment(for: worktree)
+            )
             await manager.refreshRuntimeState()
             let entry = WindowEntry(name: window.name, windowId: window.windowId, paneCount: window.panes.count)
             let data = try JSONEncoder().encode(entry)
@@ -342,7 +347,13 @@ final class IPCHandler {
         let tmux = manager.tmuxBackendForWorktree(worktree)
 
         do {
-            let pane = try await tmux.splitPane(sessionId: sessionName, paneId: activePaneId, horizontal: horizontal, cwd: worktree.path)
+            let pane = try await tmux.splitPane(
+                sessionId: sessionName,
+                paneId: activePaneId,
+                horizontal: horizontal,
+                cwd: worktree.path,
+                environment: manager.moriPaneEnvironment(for: worktree)
+            )
             if let name {
                 try? await tmux.renamePane(paneId: pane.paneId, newName: name)
             }
@@ -534,7 +545,11 @@ final class IPCHandler {
         guard let (project, worktree) = resolveWorktree(manager: manager, projectName: projectName, worktreeName: worktreeName) else { return nil }
 
         guard let runtimeWindow = manager.appState.runtimeWindows.first(where: {
-            $0.worktreeId == worktree.id && $0.title.caseInsensitiveCompare(windowName) == .orderedSame
+            guard $0.worktreeId == worktree.id else { return false }
+            let rawWindowId = manager.rawTmuxWindowId(from: $0)
+            return $0.title.caseInsensitiveCompare(windowName) == .orderedSame
+                || rawWindowId == windowName
+                || $0.tmuxWindowId == windowName
         }) else { return nil }
 
         return (project, worktree, runtimeWindow)
