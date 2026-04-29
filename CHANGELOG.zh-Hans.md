@@ -7,9 +7,13 @@
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-04-29
+
 ### 🐛 问题修复
 
 - 移除重复的 tmux 身份别名；`MORI_WINDOW` 和 `MORI_PANE` 现在是唯一的窗口 / 面板 ID 环境变量。
+
+**完整变更记录**: [v0.4.3...v0.4.4](https://github.com/vaayne/mori/compare/v0.4.3...v0.4.4)
 
 ## [0.4.3] - 2026-04-29
 
