@@ -7,10 +7,14 @@
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-04-29
+
 ### ✨ 新功能
 
 - 在侧边栏 Projects 标题区新增隐藏 / 显示完整项目列表的按钮，方便只关注 Now 区域信息。
 - 在 Mori 创建的 pane 中导出 tmux 身份环境变量（`MORI_SESSION`、`MORI_WINDOW`、`MORI_PANE` 及别名），让 `mori` CLI 可以直接定位当前 session/window/pane。
+
+**完整变更记录**: [v0.4.2...v0.4.3](https://github.com/vaayne/mori/compare/v0.4.2...v0.4.3)
 
 ## [0.4.2] - 2026-04-23
 

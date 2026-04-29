@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-04-29
+
 ### ✨ Features
 
 - Add a sidebar Projects header control to hide or show the full project list, making it easier to focus on the Now section.
 - Export tmux identity variables (`MORI_SESSION`, `MORI_WINDOW`, `MORI_PANE` plus aliases) in Mori-created panes so `mori` CLI commands can resolve the current session/window/pane directly.
+
+**Full Changelog**: [v0.4.2...v0.4.3](https://github.com/vaayne/mori/compare/v0.4.2...v0.4.3)
 
 ## [0.4.2] - 2026-04-23
 
