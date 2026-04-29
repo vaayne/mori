@@ -173,12 +173,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             onAddProject: { [weak self] in
                 self?.showAddProjectPanel()
             },
-            onOpenSettings: { [weak self] in
-                self?.showSettingsWindow()
-            },
-            onOpenCommandPalette: { [weak self] in
-                self?.commandPaletteController?.toggle(mode: .allItems)
-            },
             onRequestPaneOutput: { [weak self, weak manager] paneId, completion in
                 guard let self, let manager else {
                     completion(nil)
@@ -261,6 +255,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             self?.splitDownMenuAction()
         }
 
+        windowController.onOpenProject = { [weak self] in
+            self?.showAddProjectPanel()
+        }
+        windowController.onOpenCommandPalette = { [weak self] in
+            self?.commandPaletteController?.toggle(mode: .allItems)
+        }
+        windowController.onToggleAgentDashboard = { [weak self] in
+            self?.toggleAgentDashboardAction()
+        }
+        windowController.onOpenSettings = { [weak self] in
+            self?.showSettingsWindow()
+        }
         windowController.onShowCreateWorktreePanel = { [weak self] in
             self?.showCreateWorktreePanel()
         }

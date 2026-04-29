@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🎨 Design
+
+- Rename the sidebar's `Now` section to `Agents`, remove the footer action bar, move project / search / Agent Dashboard controls beside the sidebar toggle, and keep Settings anchored at the far right of the main window toolbar.
+
 ## [0.4.4] - 2026-04-29
 
 ### 🐛 Bug Fixes

@@ -71,6 +71,7 @@
 "Split the current pane downward (⇧⌘D)" = "向下拆分当前窗格 (⇧⌘D)";
 "Open Lazygit" = "打开 Lazygit";
 "Open Project" = "打开项目";
+"Open Project (⇧⌘O)" = "打开项目 (⇧⌘O)";
 "Open Project..." = "打开项目...";
 "Off" = "关闭";
 "Open Yazi" = "打开 Yazi";
@@ -88,6 +89,10 @@
 "Refresh" = "刷新";
 "Reload Settings" = "重新加载设置";
 "Standard Blur" = "标准模糊";
+"Command Palette" = "命令面板";
+"Command Palette (⇧⌘P)" = "命令面板 (⇧⌘P)";
+"Agent Dashboard" = "代理仪表板";
+"Agent Dashboard (⇧⌘A)" = "代理仪表板 (⇧⌘A)";
 "Custom Blur Radius" = "自定义模糊半径";
 "Glass Regular" = "常规玻璃";
 "Glass Clear" = "通透玻璃";
@@ -104,6 +109,7 @@
 "Select a worktree or add a project to get started" = "选择一个工作树或添加一个项目以开始";
 "Session ended" = "会话已结束";
 "Settings" = "设置";
+"Settings (⌘,)" = "设置 (⌘,)";
 "Settings..." = "设置...";
 "Show All" = "全部显示";
 "Show or hide the sidebar (⌘B)" = "显示或隐藏侧栏 (⌘B)";

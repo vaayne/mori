@@ -12,6 +12,10 @@ final class MainWindowController: NSWindowController {
     private enum ToolbarID {
         static let main = NSToolbar.Identifier("MoriMainToolbar")
         static let toggleSidebar = NSToolbarItem.Identifier("toggleSidebar")
+        static let openProject = NSToolbarItem.Identifier("openProject")
+        static let commandPalette = NSToolbarItem.Identifier("commandPalette")
+        static let agentDashboard = NSToolbarItem.Identifier("agentDashboard")
+        static let settings = NSToolbarItem.Identifier("settings")
         static let files = NSToolbarItem.Identifier("openFiles")
         static let git = NSToolbarItem.Identifier("openGit")
         static let splitRight = NSToolbarItem.Identifier("splitRight")
@@ -31,6 +35,18 @@ final class MainWindowController: NSWindowController {
         ToolbarItemDef(id: ToolbarID.toggleSidebar, label: .localized("Toggle Sidebar"),
                        toolTip: .localized("Show or hide the sidebar (⌘B)"),
                        symbol: "sidebar.left", hint: "⌘B", callback: \.onToggleSidebar),
+        ToolbarItemDef(id: ToolbarID.openProject, label: .localized("Open Project"),
+                       toolTip: .localized("Open Project (⇧⌘O)"),
+                       symbol: "plus.rectangle.on.folder", hint: "⇧⌘O", callback: \.onOpenProject),
+        ToolbarItemDef(id: ToolbarID.commandPalette, label: .localized("Command Palette"),
+                       toolTip: .localized("Command Palette (⇧⌘P)"),
+                       symbol: "text.magnifyingglass", hint: "⇧⌘P", callback: \.onOpenCommandPalette),
+        ToolbarItemDef(id: ToolbarID.agentDashboard, label: .localized("Agent Dashboard"),
+                       toolTip: .localized("Agent Dashboard (⇧⌘A)"),
+                       symbol: "square.grid.2x2", hint: "⇧⌘A", callback: \.onToggleAgentDashboard),
+        ToolbarItemDef(id: ToolbarID.settings, label: .localized("Settings"),
+                       toolTip: .localized("Settings (⌘,)"),
+                       symbol: "gearshape", hint: "⌘,", callback: \.onOpenSettings),
         ToolbarItemDef(id: ToolbarID.files, label: .localized("Files"),
                        toolTip: .localized("Open Files Companion Pane (⌘E)"),
                        symbol: "folder", hint: "⌘E", callback: \.onToggleFiles),
@@ -46,6 +62,10 @@ final class MainWindowController: NSWindowController {
     ]
 
     var onToggleSidebar: (() -> Void)?
+    var onOpenProject: (() -> Void)?
+    var onOpenCommandPalette: (() -> Void)?
+    var onToggleAgentDashboard: (() -> Void)?
+    var onOpenSettings: (() -> Void)?
     var onToggleFiles: (() -> Void)?
     var onToggleGit: (() -> Void)?
     var onSplitRight: (() -> Void)?
@@ -270,11 +290,15 @@ extension MainWindowController: NSToolbarDelegate {
 
     private static let defaultItemIds: [NSToolbarItem.Identifier] = [
         ToolbarID.toggleSidebar,
+        ToolbarID.openProject,
+        ToolbarID.commandPalette,
+        ToolbarID.agentDashboard,
         .flexibleSpace,
         ToolbarID.files,
         ToolbarID.git,
         ToolbarID.splitRight,
         ToolbarID.splitDown,
+        ToolbarID.settings,
     ]
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {

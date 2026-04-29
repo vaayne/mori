@@ -71,6 +71,7 @@
 "Split the current pane downward (⇧⌘D)" = "Split the current pane downward (⇧⌘D)";
 "Open Lazygit" = "Open Lazygit";
 "Open Project" = "Open Project";
+"Open Project (⇧⌘O)" = "Open Project (⇧⌘O)";
 "Open Project…" = "Open Project…";
 "Off" = "Off";
 "Open Yazi" = "Open Yazi";
@@ -88,6 +89,10 @@
 "Refresh" = "Refresh";
 "Reload Settings" = "Reload Settings";
 "Standard Blur" = "Standard Blur";
+"Command Palette" = "Command Palette";
+"Command Palette (⇧⌘P)" = "Command Palette (⇧⌘P)";
+"Agent Dashboard" = "Agent Dashboard";
+"Agent Dashboard (⇧⌘A)" = "Agent Dashboard (⇧⌘A)";
 "Custom Blur Radius" = "Custom Blur Radius";
 "Glass Regular" = "Glass Regular";
 "Glass Clear" = "Glass Clear";
@@ -104,6 +109,7 @@
 "Select a worktree or add a project to get started" = "Select a worktree or add a project to get started";
 "Session ended" = "Session ended";
 "Settings" = "Settings";
+"Settings (⌘,)" = "Settings (⌘,)";
 "Settings…" = "Settings…";
 "Show All" = "Show All";
 "Show or hide the sidebar (⌘B)" = "Show or hide the sidebar (⌘B)";

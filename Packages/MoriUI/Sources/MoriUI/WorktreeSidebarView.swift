@@ -2,7 +2,7 @@ import SwiftUI
 import MoriCore
 
 /// Unified sidebar: grouped project sections, worktrees as two-line rows,
-/// windows indented below, and action footer at the bottom.
+/// and windows indented below.
 public struct WorktreeSidebarView: View {
     private let projects: [Project]
     private let selectedProjectId: UUID?
@@ -20,8 +20,6 @@ public struct WorktreeSidebarView: View {
     private let onCloseWindow: ((String) -> Void)?
     private let onToggleCollapse: ((UUID) -> Void)?
     private let onAddProject: (() -> Void)?
-    private let onOpenSettings: (() -> Void)?
-    private let onOpenCommandPalette: (() -> Void)?
     private let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     private let onSendKeys: ((String, String) -> Void)?
     private let onUpdateProject: ((Project) -> Void)?
@@ -46,8 +44,6 @@ public struct WorktreeSidebarView: View {
         onCloseWindow: ((String) -> Void)? = nil,
         onToggleCollapse: ((UUID) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
-        onOpenSettings: (() -> Void)? = nil,
-        onOpenCommandPalette: (() -> Void)? = nil,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil,
         onUpdateProject: ((Project) -> Void)? = nil,
@@ -69,8 +65,6 @@ public struct WorktreeSidebarView: View {
         self.onCloseWindow = onCloseWindow
         self.onToggleCollapse = onToggleCollapse
         self.onAddProject = onAddProject
-        self.onOpenSettings = onOpenSettings
-        self.onOpenCommandPalette = onOpenCommandPalette
         self.onRequestPaneOutput = onRequestPaneOutput
         self.onSendKeys = onSendKeys
         self.onUpdateProject = onUpdateProject
@@ -187,9 +181,6 @@ public struct WorktreeSidebarView: View {
                 .padding(.bottom, MoriTokens.Spacing.sm)
             }
 
-            Spacer(minLength: 0)
-
-            sidebarFooter
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .alert("Rename Project", isPresented: Binding(
@@ -679,7 +670,7 @@ public struct WorktreeSidebarView: View {
     private var activeWorktreeSection: some View {
         if !activeWorktreeItems.isEmpty {
             VStack(alignment: .leading, spacing: MoriTokens.Spacing.sm) {
-                sectionHeader(title: String.localized("Now")) {
+                sectionHeader(title: String.localized("Agents")) {
                     Text("\(activeWorktreeItems.count)")
                         .font(MoriTokens.Font.caption)
                         .foregroundStyle(MoriTokens.Color.inactive)
@@ -809,18 +800,6 @@ private func activeWorktreeCard(_ item: ActiveWorktreeItem) -> some View {
         return "\(item.projectName) · \(agentText)"
     }
 
-
-    // MARK: - Footer
-
-    private var sidebarFooter: some View {
-        SidebarFooterView(
-            shortcutHintsVisible: shortcutHintsVisible,
-            onAddProject: onAddProject,
-            onOpenCommandPalette: onOpenCommandPalette,
-            onOpenSettings: onOpenSettings,
-            horizontalDividerPadding: MoriTokens.Spacing.xl
-        )
-    }
 }
 
 // MARK: - Tree Connector
