@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-04-29
+
 ### 🎨 Design
 
 - Rename the sidebar's `Now` section to `Agents`, remove the footer action bar, move project / search / Agent Dashboard controls beside the sidebar toggle, and keep Settings anchored at the far right of the main window toolbar.
@@ -18,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Preserve tmux pane order in the sidebar `Agents` section instead of auto-sorting agent panes by state or recency.
 - Fix sidebar agent-row pane focus by implementing the missing tmux `select-pane` backend call; selecting an agent pane now targets the correct tmux pane instead of silently staying at window level.
 - Redesign the sidebar `Projects` section toggle into an explicit show/hide chip with a project count, replacing the ambiguous lone chevron and making the collapsed state easier to understand.
+
+**Full Changelog**: [v0.4.4...v0.4.5](https://github.com/vaayne/mori/compare/v0.4.4...v0.4.5)
 
 ## [0.4.4] - 2026-04-29
 
