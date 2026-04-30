@@ -8,9 +8,25 @@
 
 Mori is a macOS terminal built for developers who work across multiple git branches at the same time. Instead of juggling anonymous tabs or losing tmux state between context switches, Mori gives each branch its own persistent environment — and keeps them all one click away in a sidebar.
 
+## Screenshots
+
+| Light | Dark | Lazygit | Yazi | Settings |
+|---|---|---|---|---|
+| ![](docs/screenshots/light-mode.jpeg) | ![](docs/screenshots/dark-mode.jpeg) | ![](docs/screenshots/lazygit.png) | ![](docs/screenshots/yazi.jpeg) | ![](docs/screenshots/settings.jpeg) |
+
+## Features
+
+- **One sidebar, every branch** — your projects and worktrees are always one click away; no anonymous tabs to lose track of
+- **Sessions that outlive the app** — close Mori, reopen it tomorrow; tmux keeps every process running exactly where you left it
+- **True branch isolation** — each worktree gets its own directory and tmux session; run `main` and `feat/auth` side-by-side without interference
+- **Local + SSH** — connect local repos or remote servers; the native Mac UI works either way
+- **GPU-rendered terminal** — Ghostty's libghostty engine with Metal acceleration
+- **CLI + agent-ready** — `mori` CLI exposes everything over a Unix socket; built for scripting and AI agent workflows
+- **MoriRemote** — iPhone/iPad companion for SSH/tmux access when away from your Mac
+
 ## The mental model
 
-Mori maps your development hierarchy directly onto tmux:
+Mori maps your development hierarchy onto tmux. Each git worktree becomes a tmux session; each session holds windows (tabs) and panes (splits). Close the app, come back tomorrow — everything is still running.
 
 ```
 Project  (git repo)
@@ -22,22 +38,12 @@ Project  (git repo)
         └── Pane
 ```
 
-- **Project** — a git repository. Mori tracks it by its root path and a short name.
-- **Worktree** — a `git worktree` checkout of a branch. Each gets its own directory and its own tmux session (`<project-shortname>/<branch-slug>`). Close the app, come back tomorrow — the session is still there.
-- **Window** — a tmux window inside the worktree's session. Equivalent to a tab.
+- **Project** — a git repository tracked by root path and short name.
+- **Worktree** — a `git worktree` checkout; gets its own directory and tmux session (`<project>/<branch>`).
+- **Window** — a tmux window inside the session. Equivalent to a tab.
 - **Pane** — a tmux pane inside a window. Equivalent to a split.
 
-The sidebar shows your projects and their worktrees. Clicking a worktree attaches the terminal to that session. Switching between worktrees is instant — you never lose what was running.
-
-## Features
-
-- **Project-first navigation** — switch between repos and branches via sidebar, not anonymous tabs
-- **Persistent sessions** — close the app, reopen later; tmux keeps everything running
-- **Git worktree aware** — multiple branches of the same repo run side-by-side with full isolation
-- **Local + SSH** — add local folders or remote repos; the UI stays on your Mac
-- **CLI (`mori`)** — control the app from the terminal; built for agent workflows
-- **MoriRemote** — iPhone/iPad companion app for SSH/tmux access away from your Mac
-- **GPU-rendered terminal** — libghostty (Ghostty's engine) with Metal acceleration
+The sidebar lists your projects and worktrees. Click one to attach. Switching is instant — you never lose what was running.
 
 ## Install
 
@@ -48,7 +54,8 @@ brew install --cask mori
 
 Or download from [GitHub Releases](https://github.com/vaayne/mori/releases). MoriRemote for iOS is on [TestFlight](https://testflight.apple.com/join/k2GFJPC2).
 
-## Build
+<details>
+<summary>Build from source</summary>
 
 Requires macOS 14+, tmux, [mise](https://mise.jdx.dev/), Zig 0.15.2, and Xcode.
 
@@ -57,47 +64,20 @@ mise run build    # Debug build (bootstraps libghostty automatically)
 mise run dev      # Build + run
 mise run test     # Run all tests
 ```
+</details>
 
 ## CLI
 
-The `mori` CLI communicates with the running app over a Unix socket. It auto-launches Mori if not running. All commands accept `--json` for machine-readable output.
-
-Address flags (`--project`, `--worktree`, `--window`, `--pane`) default to the `MORI_*` environment variables that Mori sets in every terminal pane — so inside a Mori session you can omit them entirely.
+The `mori` CLI communicates with the running app over a Unix socket, auto-launching Mori if needed. Address flags default to `MORI_*` environment variables set in every pane — inside a session you can omit them entirely.
 
 ```bash
-# Projects
-mori project list
-mori project open .                          # register current directory
-
-# Worktrees
-mori worktree list --project myapp
-mori worktree new feat/auth --project myapp  # creates git worktree + tmux session
-mori worktree delete --project myapp --worktree feat/auth
-
-# Windows (tabs within a worktree session)
-mori window list --project myapp --worktree main
-mori window new  --name logs                 # context-aware inside Mori terminal
-mori window rename logs --window shell
-mori window close --window logs
-
-# Panes (splits within a window)
-mori pane list                               # lists panes in current window
-mori pane new --split h                      # horizontal split
-mori pane send "npm test Enter"              # send keys to active pane
-mori pane read --lines 100                   # capture pane output
-mori pane rename agent --pane %3
-mori pane close --pane %3
-
-# Navigation
-mori focus --project myapp --worktree feat/auth
-mori focus --window logs                     # focus a window (context-aware)
-
-# Agent communication
-mori pane message "build done" --window orchestrator
-mori pane id                                 # print current pane identity
+mori project open .                          # register current directory as a project
+mori worktree new feat/auth --project myapp  # create git worktree + tmux session
+mori pane read --lines 100                   # capture pane output (great for agents)
+mori focus --project myapp --worktree feat/auth  # switch to a worktree instantly
 ```
 
-See [docs/cli-redesign.md](docs/cli-redesign.md) for the full CLI specification.
+All commands accept `--json` for machine-readable output. See [docs/cli-redesign.md](docs/cli-redesign.md) for the full reference.
 
 ## Terminal Configuration
 
