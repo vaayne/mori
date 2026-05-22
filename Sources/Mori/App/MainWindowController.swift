@@ -18,6 +18,7 @@ final class MainWindowController: NSWindowController {
         static let settings = NSToolbarItem.Identifier("settings")
         static let files = NSToolbarItem.Identifier("openFiles")
         static let git = NSToolbarItem.Identifier("openGit")
+        static let pullRequest = NSToolbarItem.Identifier("openPullRequest")
         static let splitRight = NSToolbarItem.Identifier("splitRight")
         static let splitDown = NSToolbarItem.Identifier("splitDown")
     }
@@ -53,6 +54,9 @@ final class MainWindowController: NSWindowController {
         ToolbarItemDef(id: ToolbarID.git, label: .localized("Git"),
                        toolTip: .localized("Open Git Companion Pane (⌘G)"),
                        symbol: "point.topleft.down.curvedto.point.bottomright.up", hint: "⌘G", callback: \.onToggleGit),
+        ToolbarItemDef(id: ToolbarID.pullRequest, label: .localized("PR"),
+                       toolTip: .localized("Open Pull Request Companion Pane"),
+                       symbol: "arrow.triangle.pull", hint: "", callback: \.onTogglePullRequest),
         ToolbarItemDef(id: ToolbarID.splitRight, label: .localized("Split Right"),
                        toolTip: .localized("Split the current pane to the right (⌘D)"),
                        symbol: "rectangle.split.2x1", hint: "⌘D", callback: \.onSplitRight),
@@ -68,6 +72,7 @@ final class MainWindowController: NSWindowController {
     var onOpenSettings: (() -> Void)?
     var onToggleFiles: (() -> Void)?
     var onToggleGit: (() -> Void)?
+    var onTogglePullRequest: (() -> Void)?
     var onSplitRight: (() -> Void)?
     var onSplitDown: (() -> Void)?
     var onShowCreateWorktreePanel: (() -> Void)?
@@ -217,7 +222,8 @@ final class MainWindowController: NSWindowController {
         themeFrame.layoutSubtreeIfNeeded()
 
         for def in Self.toolbarItemDefs {
-            guard let anchor = toolbarButtonViews[def.id], anchor.window != nil else { continue }
+            guard !def.hint.isEmpty,
+                  let anchor = toolbarButtonViews[def.id], anchor.window != nil else { continue }
 
             let anchorRect = anchor.convert(anchor.bounds, to: themeFrame)
             let pill = NSHostingView(rootView: ShortcutHintPill(def.hint))
@@ -296,6 +302,7 @@ extension MainWindowController: NSToolbarDelegate {
         .flexibleSpace,
         ToolbarID.files,
         ToolbarID.git,
+        ToolbarID.pullRequest,
         ToolbarID.splitRight,
         ToolbarID.splitDown,
         ToolbarID.settings,

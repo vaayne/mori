@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### ✨ 新功能
+
+- 新增 PR 工具面板：通过 `gh pr view` 查找当前本地 worktree 已存在的 GitHub Pull Request，并在 DiffsHub WebView 中打开。
+
 ## [0.4.5] - 2026-04-29
 
 ### 🎨 界面优化

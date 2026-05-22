@@ -72,12 +72,15 @@
 "Open Lazygit" = "打开 Lazygit";
 "Open Project" = "打开项目";
 "Open Project (⇧⌘O)" = "打开项目 (⇧⌘O)";
+"Open Pull Request Companion Pane" = "打开 Pull Request 工具面板";
 "Open Project..." = "打开项目...";
 "Off" = "关闭";
 "Open Yazi" = "打开 Yazi";
 "Paste" = "粘贴";
 "Path:" = "路径:";
 "Please select a project first." = "请先选择一个项目。";
+"PR" = "PR";
+"Pull Request" = "Pull Request";
 "Previous Pane" = "上一个窗格";
 "Previous Tab" = "上一个标签页";
 "Project" = "项目";

@@ -6,13 +6,20 @@ import MoriTerminal
 enum CompanionTool: String, CaseIterable {
     case yazi
     case lazygit
+    case pullRequest
 
-    var command: String { rawValue }
+    var command: String {
+        switch self {
+        case .yazi, .lazygit: rawValue
+        case .pullRequest: ""
+        }
+    }
 
     var title: String {
         switch self {
         case .yazi: .localized("Files")
         case .lazygit: .localized("Git")
+        case .pullRequest: .localized("Pull Request")
         }
     }
 }
@@ -127,6 +134,7 @@ final class CompanionToolPaneController: NSViewController {
     }
 
     func show(tool: CompanionTool, context: CompanionToolLaunchContext, focus: Bool = true) {
+        guard tool != .pullRequest else { return }
         activeTool = tool
         titleLabel.stringValue = tool.title
         let identity = "tool|\(tool.rawValue)|\(context.location.endpointKey)|\(context.workspaceID)"

@@ -2080,9 +2080,52 @@ final class WorkspaceManager {
         )
     }
 
+    func fetchCurrentPullRequestURL() async -> URL? {
+        guard let worktree = selectedWorktree else { return nil }
+        return await fetchPullRequestURL(for: worktree)
+    }
+
+    func fetchPullRequestURL(for worktree: Worktree) async -> URL? {
+        guard case .local = location(for: worktree) else { return nil }
+        guard let githubURL = await runPullRequestURLCommand(in: worktree.path) else { return nil }
+        return diffshubURL(from: githubURL)
+    }
+
     /// Whether a worktree is currently selected (used to decide empty-state UI).
     var hasSelectedWorktree: Bool {
         selectedWorktree != nil
+    }
+
+    private func runPullRequestURLCommand(in worktreePath: String) async -> URL? {
+        await Task.detached(priority: .utility) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            process.arguments = ["-lc", "cd \(SSHCommandSupport.shellEscape(worktreePath)) && gh pr view --json url --jq .url"]
+
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = Pipe()
+
+            do {
+                try process.run()
+                process.waitUntilExit()
+            } catch {
+                return nil
+            }
+
+            guard process.terminationStatus == 0 else { return nil }
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let output = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return URL(string: output)
+        }.value
+    }
+
+    private func diffshubURL(from githubURL: URL) -> URL? {
+        guard githubURL.host == "github.com" else { return githubURL }
+        var components = URLComponents(url: githubURL, resolvingAgainstBaseURL: false)
+        components?.host = "diffshub.com"
+        return components?.url
     }
 
     /// Recreate the tmux session for the current worktree and re-attach the terminal.

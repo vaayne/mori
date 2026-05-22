@@ -72,12 +72,15 @@
 "Open Lazygit" = "Open Lazygit";
 "Open Project" = "Open Project";
 "Open Project (⇧⌘O)" = "Open Project (⇧⌘O)";
+"Open Pull Request Companion Pane" = "Open Pull Request Companion Pane";
 "Open Project…" = "Open Project…";
 "Off" = "Off";
 "Open Yazi" = "Open Yazi";
 "Paste" = "Paste";
 "Path:" = "Path:";
 "Please select a project first." = "Please select a project first.";
+"PR" = "PR";
+"Pull Request" = "Pull Request";
 "Previous Pane" = "Previous Pane";
 "Previous Tab" = "Previous Tab";
 "Project" = "Project";

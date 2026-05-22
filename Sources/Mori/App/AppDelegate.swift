@@ -18,6 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var appState: AppState?
     private var terminalAreaController: TerminalAreaViewController?
     private var companionToolController: CompanionToolPaneController?
+    private var companionContainer: CompanionContainerController?
+    private var pullRequestViewController: PullRequestWebViewController?
     private var commandPaletteController: CommandPaletteController?
     private var rootSplitVC: RootSplitViewController?
     private var keyMonitor: Any?
@@ -109,6 +111,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             self.closeCompanionTool()
             self.terminalAreaController?.focusCurrentSurface()
         }
+        let pullRequestVC = PullRequestWebViewController()
+        self.pullRequestViewController = pullRequestVC
+        let companionContainer = CompanionContainerController(terminalPane: companionTool, pullRequestPane: pullRequestVC)
+        self.companionContainer = companionContainer
 
         // Wire ghostty keybinding actions to Mori's tmux-based implementation.
         // Ghostty maps keys to intents (new_tab, close_tab, etc.); Mori provides
@@ -249,7 +255,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let splitVC = RootSplitViewController(
             sidebarController: sidebarController,
             contentController: terminalArea,
-            companionController: companionTool
+            companionController: companionContainer
         )
         self.rootSplitVC = splitVC
         companionToolState.width = splitVC.currentCompanionWidth
@@ -266,6 +272,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         windowController.onToggleGit = { [weak self] in
             self?.toggleCompanionTool(.lazygit)
+        }
+        windowController.onTogglePullRequest = { [weak self] in
+            self?.togglePullRequest()
         }
         windowController.onSplitRight = { [weak self] in
             self?.splitRightMenuAction()
@@ -303,7 +312,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
            let window = windowController.window {
             adapter.syncWorkspaceWindowAppearance(window)
         }
-        companionTool.updateAppearance(themeInfo: themeInfo, isKeyWindow: windowController.window?.isKeyWindow ?? true)
+        companionContainer.updateAppearance(themeInfo: themeInfo, isKeyWindow: windowController.window?.isKeyWindow ?? true)
         // Restore saved frame after all layout is complete
         windowController.restoreSavedFrame()
         NSApp.activate(ignoringOtherApps: true)
@@ -955,7 +964,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let isKeyWindow = mainWindowController?.window?.isKeyWindow ?? true
         sidebarController?.updateAppearance(themeInfo: themeInfo)
         terminalAreaController?.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
-        companionToolController?.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
+        companionContainer?.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
     }
 
     private func refreshSettingsWindowAppearance(adapter: GhosttyAdapter, themeInfo: GhosttyThemeInfo) {
@@ -1373,6 +1382,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     private func showCompanionTool(_ tool: CompanionTool, context: CompanionToolLaunchContext, focus: Bool = true) {
+        companionContainer?.show(tool: tool)
         companionToolState.activeTool = tool
         companionToolState.presentation = .docked
         companionToolController?.show(tool: tool, context: context, focus: focus)
@@ -1383,6 +1393,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         guard companionToolState.isVisible,
               let tool = companionToolState.activeTool,
               let manager = workspaceManager else {
+            return
+        }
+
+        if tool == .pullRequest {
+            guard manager.hasSelectedWorktree else {
+                closeCompanionTool()
+                return
+            }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if let url = await manager.fetchCurrentPullRequestURL() {
+                    self.pullRequestViewController?.loadPullRequest(url)
+                } else {
+                    NSSound.beep()
+                    self.closeCompanionTool()
+                }
+            }
             return
         }
 
@@ -1400,6 +1427,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     @objc private func openYaziMenuAction() {
         toggleCompanionTool(.yazi)
+    }
+
+    private func togglePullRequest() {
+        let prVisible = companionToolState.activeTool == .pullRequest && companionToolState.isVisible
+        if prVisible {
+            closeCompanionTool()
+            terminalAreaController?.focusCurrentSurface()
+            return
+        }
+        guard let manager = workspaceManager, manager.hasSelectedWorktree else {
+            NSSound.beep()
+            return
+        }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard let url = await manager.fetchCurrentPullRequestURL() else {
+                NSSound.beep()
+                return
+            }
+            self.companionContainer?.show(tool: .pullRequest)
+            self.companionToolState.activeTool = .pullRequest
+            self.companionToolState.presentation = .docked
+            self.rootSplitVC?.updateCompanionPane(state: self.companionToolState)
+            self.pullRequestViewController?.loadPullRequest(url)
+        }
     }
 
     @objc private func splitRightMenuAction() {

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- Add a PR companion web view that opens the selected local worktree's existing GitHub pull request in DiffsHub via `gh pr view`.
+
 ## [0.4.5] - 2026-04-29
 
 ### 🎨 Design
