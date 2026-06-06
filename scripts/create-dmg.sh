@@ -25,14 +25,32 @@ echo "📦 Creating DMG: $DMG_NAME"
 cp -R "$APP_BUNDLE" "$STAGING_DIR/"
 ln -s /Applications "$STAGING_DIR/Applications"
 
-# Create DMG
-hdiutil create \
-    -volname "$VOL_NAME" \
-    -srcfolder "$STAGING_DIR" \
-    -ov \
-    -format UDZO \
-    -imagekey zlib-level=9 \
-    "$DMG_NAME"
+# Detach any stale volume left mounted from a previous run (a common cause
+# of "hdiutil: create failed - Resource busy").
+for dev in $(hdiutil info | awk -v vol="/Volumes/$VOL_NAME" '$0 ~ vol {print $1}'); do
+    hdiutil detach "$dev" -force || true
+done
+
+# Create DMG. hdiutil intermittently fails with "Resource busy" on CI when
+# Spotlight or notarization tooling still holds the source bundle, so retry.
+for attempt in 1 2 3; do
+    if hdiutil create \
+        -volname "$VOL_NAME" \
+        -srcfolder "$STAGING_DIR" \
+        -ov \
+        -format UDZO \
+        -imagekey zlib-level=9 \
+        "$DMG_NAME"; then
+        break
+    fi
+    if [[ "$attempt" == 3 ]]; then
+        echo "❌ hdiutil create failed after $attempt attempts"
+        rm -rf "$STAGING_DIR"
+        exit 1
+    fi
+    echo "⚠️  hdiutil create failed (attempt $attempt), retrying in 5s…"
+    sleep 5
+done
 
 # Clean up staging
 rm -rf "$STAGING_DIR"
