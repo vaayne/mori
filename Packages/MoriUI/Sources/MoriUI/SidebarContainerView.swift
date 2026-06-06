@@ -30,6 +30,7 @@ public struct SidebarContainerView: View {
     private let onSendKeys: ((String, String) -> Void)?
     private let onUpdateProject: ((Project) -> Void)?
     private let onReorderProjects: (([UUID]) -> Void)?
+    private let isSidebarCollapsed: Bool
 
     public init(
         projects: [Project] = [],
@@ -53,7 +54,8 @@ public struct SidebarContainerView: View {
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil,
         onUpdateProject: ((Project) -> Void)? = nil,
-        onReorderProjects: (([UUID]) -> Void)? = nil
+        onReorderProjects: (([UUID]) -> Void)? = nil,
+        isSidebarCollapsed: Bool = false
     ) {
         self.projects = projects
         self.selectedProjectId = selectedProjectId
@@ -77,6 +79,7 @@ public struct SidebarContainerView: View {
         self.onSendKeys = onSendKeys
         self.onUpdateProject = onUpdateProject
         self.onReorderProjects = onReorderProjects
+        self.isSidebarCollapsed = isSidebarCollapsed
     }
 
     /// Shared Cmd-hold shortcut hint monitor — one instance for the entire sidebar.
@@ -106,7 +109,8 @@ public struct SidebarContainerView: View {
             onRequestPaneOutput: onRequestPaneOutput,
             onSendKeys: onSendKeys,
             onUpdateProject: onUpdateProject,
-            onReorderProjects: onReorderProjects
+            onReorderProjects: onReorderProjects,
+            isSidebarCollapsed: isSidebarCollapsed
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {

@@ -34,22 +34,18 @@ public struct WorktreeRowView: View {
 
     public var body: some View {
         Button(action: onSelect) {
-            HStack(alignment: .center, spacing: MoriTokens.Spacing.lg) {
-                iconView
+            HStack(alignment: .center, spacing: MoriTokens.Spacing.md) {
+                Circle()
+                    .fill(statusDotColor)
+                    .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
 
-                VStack(alignment: .leading, spacing: MoriTokens.Spacing.xxs) {
-                    HStack(spacing: MoriTokens.Spacing.sm) {
-                        Text(worktree.name)
-                            .font(MoriTokens.Font.rowTitle)
-                            .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.9))
-                            .lineLimit(1)
+                Text(worktree.name)
+                    .font(MoriTokens.Font.rowTitle)
+                    .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.9))
+                    .lineLimit(1)
 
-                        if isSelected {
-                            selectedAgentLabel
-                        }
-                    }
-
-                    subtitleLine
+                if isSelected {
+                    selectedAgentLabel
                 }
 
                 Spacer(minLength: 0)
@@ -61,7 +57,7 @@ public struct WorktreeRowView: View {
                         .transition(.opacity)
                 }
             }
-            .padding(.vertical, 9)
+            .padding(.vertical, 6)
             .padding(.horizontal, MoriTokens.Spacing.lg)
             .contentShape(Rectangle())
         }
@@ -88,6 +84,13 @@ public struct WorktreeRowView: View {
                 isHovered = hovering
             }
         }
+    }
+
+    private var statusDotColor: Color {
+        if worktree.agentState == .waitingForInput { return MoriTokens.Color.attention }
+        if worktree.agentState == .running { return MoriTokens.Color.success }
+        if worktree.status == .active { return MoriTokens.Color.success }
+        return MoriTokens.Color.inactive
     }
 
     private var iconView: some View {
