@@ -13,6 +13,7 @@ final class RootSplitViewController: NSViewController {
     private(set) var companionController: NSViewController
 
     private static let sidebarWidthKey = "MoriSidebarWidth"
+    private static let sidebarCollapsedWidth: CGFloat = 52
     private static let companionWidthKey = "MoriCompanionToolPaneWidth"
     private static let sidebarMinWidth: CGFloat = 180
     private static let sidebarMaxWidth: CGFloat = 400
@@ -32,6 +33,7 @@ final class RootSplitViewController: NSViewController {
     private var toolPaneState = CompanionToolPaneState()
 
     var onCompanionWidthChanged: ((CGFloat) -> Void)?
+    var onSidebarCollapsedChanged: ((Bool) -> Void)?
 
     init(
         sidebarController: NSViewController,
@@ -91,8 +93,8 @@ final class RootSplitViewController: NSViewController {
 
     private func updateLayout() {
         let bounds = view.bounds
-        let sidebarWidth = collapsed ? 0 : self.sidebarWidth
-        let sidebarDividerWidth: CGFloat = collapsed ? 0 : 1
+        let sidebarWidth = collapsed ? Self.sidebarCollapsedWidth : self.sidebarWidth
+        let sidebarDividerWidth: CGFloat = 1
         let availableWidth = bounds.width - sidebarWidth - sidebarDividerWidth
         let companionVisible = toolPaneState.isVisible
         let companionDividerWidth: CGFloat = companionVisible ? 1 : 0
@@ -116,8 +118,8 @@ final class RootSplitViewController: NSViewController {
             height: bounds.height
         )
 
-        sidebarContainer.isHidden = collapsed
-        sidebarDividerView.isHidden = collapsed
+        sidebarContainer.isHidden = false
+        sidebarDividerView.isHidden = false
         contentContainer.isHidden = false
         companionContainer.isHidden = !companionVisible
         companionDividerView.isHidden = !companionVisible
@@ -209,6 +211,7 @@ final class RootSplitViewController: NSViewController {
             ctx.duration = 0.2
             ctx.allowsImplicitAnimation = true
             collapsed.toggle()
+            onSidebarCollapsedChanged?(collapsed)
             updateLayout()
         }
     }
@@ -238,11 +241,11 @@ final class RootSplitViewController: NSViewController {
     }
 
     private var sidebarVisibleWidth: CGFloat {
-        collapsed ? 0 : sidebarWidth
+        collapsed ? Self.sidebarCollapsedWidth : sidebarWidth
     }
 
     private var sidebarDividerVisibleWidth: CGFloat {
-        collapsed ? 0 : 1
+        1
     }
 
     private func embed(_ vc: NSViewController, in container: NSView) {

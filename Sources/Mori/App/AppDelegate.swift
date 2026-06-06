@@ -246,6 +246,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         self.sidebarController = sidebarController
         sidebarController.updateAppearance(themeInfo: themeInfo)
 
+        terminalArea.configureTabs(
+            appState: state,
+            onSelectWindow: { [weak manager, weak self] windowId in
+                manager?.selectWindow(windowId)
+                self?.updateWindowTitle()
+                self?.syncVisibleCompanionToolToSelection()
+            },
+            onCloseWindow: { [weak manager] windowId in
+                guard let manager else { return }
+                Task { @MainActor in
+                    await manager.closeWindow(windowId: windowId)
+                }
+            },
+            onCreateWindow: { [weak manager] in
+                guard let manager else { return }
+                Task { @MainActor in
+                    await manager.createNewWindow()
+                }
+            }
+        )
+
         let splitVC = RootSplitViewController(
             sidebarController: sidebarController,
             contentController: terminalArea,
@@ -255,6 +276,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         companionToolState.width = splitVC.currentCompanionWidth
         splitVC.onCompanionWidthChanged = { [weak self] width in
             self?.companionToolState.width = width
+        }
+        splitVC.onSidebarCollapsedChanged = { [weak sidebarController] isCollapsed in
+            sidebarController?.setSidebarCollapsed(isCollapsed)
         }
         splitVC.updateCompanionPane(state: companionToolState)
 

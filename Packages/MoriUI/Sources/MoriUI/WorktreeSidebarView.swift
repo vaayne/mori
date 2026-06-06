@@ -27,6 +27,7 @@ public struct WorktreeSidebarView: View {
     private let onUpdateProject: ((Project) -> Void)?
     private let onReorderProjects: (([UUID]) -> Void)?
     private let shortcutHintsVisible: Bool
+    private let isSidebarCollapsed: Bool
 
     public init(
         projects: [Project] = [],
@@ -51,7 +52,8 @@ public struct WorktreeSidebarView: View {
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil,
         onUpdateProject: ((Project) -> Void)? = nil,
-        onReorderProjects: (([UUID]) -> Void)? = nil
+        onReorderProjects: (([UUID]) -> Void)? = nil,
+        isSidebarCollapsed: Bool = false
     ) {
         self.projects = projects
         self.selectedProjectId = selectedProjectId
@@ -76,6 +78,7 @@ public struct WorktreeSidebarView: View {
         self.onUpdateProject = onUpdateProject
         self.onReorderProjects = onReorderProjects
         self.shortcutHintsVisible = shortcutHintsVisible
+        self.isSidebarCollapsed = isSidebarCollapsed
     }
 
     private struct ActiveAgentPaneItem: Identifiable {
@@ -155,11 +158,17 @@ public struct WorktreeSidebarView: View {
     }
 
     public var body: some View {
+        if isSidebarCollapsed {
+            collapsedBody
+        } else {
+            expandedBody
+        }
+    }
+
+    private var expandedBody: some View {
         VStack(spacing: 0) {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: MoriTokens.Spacing.md) {
-                    summaryStrip
-                    activeWorktreeSection
                     projectsSectionHeader
 
                     if !isProjectsSectionCollapsed {
@@ -201,6 +210,23 @@ public struct WorktreeSidebarView: View {
                 renamingProjectId = nil
             }
         }
+    }
+
+    private var collapsedBody: some View {
+        VStack(spacing: MoriTokens.Spacing.md) {
+            ScrollView(.vertical) {
+                LazyVStack(spacing: MoriTokens.Spacing.lg) {
+                    ForEach(sortedProjects) { project in
+                        collapsedProjectButton(project)
+                    }
+                }
+                .padding(.top, MoriTokens.Spacing.lg)
+                .padding(.bottom, MoriTokens.Spacing.sm)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Project Section
@@ -390,92 +416,73 @@ public struct WorktreeSidebarView: View {
         }
     }
 
+    private func collapsedProjectButton(_ project: Project) -> some View {
+        let isSelectedProject = project.id == selectedProjectId
+
+        return Button {
+            onSelectProject?(project.id)
+        } label: {
+            ProjectLetterTile(project: project)
+                .padding(MoriTokens.Spacing.xs)
+                .background(
+                    RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
+                        .fill(isSelectedProject ? MoriTokens.Color.active.opacity(0.16) : Color.clear)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
+                        .strokeBorder(
+                            isSelectedProject ? MoriTokens.Color.active.opacity(0.28) : Color.clear,
+                            lineWidth: 1
+                        )
+                }
+        }
+        .buttonStyle(.plain)
+        .help(project.name)
+        .accessibilityLabel(project.name)
+    }
+
     // MARK: - Worktree Row
 
     @ViewBuilder
     private func worktreeRow(_ worktree: Worktree) -> some View {
         let isSelected = worktree.id == selectedWorktreeId
         let worktreeWindows = allWindows(for: worktree)
-        let detailWindows = visibleDetailWindows(for: worktree)
         let agentName = worktreeWindows.first(where: {
             $0.detectedAgent != nil || $0.agentState != .none
         })?.detectedAgent
 
-        VStack(alignment: .leading, spacing: 0) {
-            WorktreeRowView(
-                worktree: worktree,
-                agentName: agentName,
-                isSelected: isSelected,
-                onSelect: { onSelectWorktree(worktree.id) },
-                onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } }
-            )
-            .contextMenu {
-                let editors = EditorLauncher.installed
-                if !editors.isEmpty {
-                    ForEach(editors) { editor in
-                        Button {
-                            editor.open(path: worktree.path)
-                        } label: {
-                            Label("Open in \(editor.name)", systemImage: editor.icon)
-                        }
-                    }
-                    Divider()
-                }
-
-                Button {
-                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: worktree.path)
-                } label: {
-                    Label("Reveal in Finder", systemImage: "folder")
-                }
-
-                if !worktree.isMainWorktree, let onRemove = onRemoveWorktree {
-                    Divider()
-                    Button(role: .destructive) {
-                        onRemove(worktree.id)
+        WorktreeRowView(
+            worktree: worktree,
+            agentName: agentName,
+            isSelected: isSelected,
+            onSelect: { onSelectWorktree(worktree.id) },
+            onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } }
+        )
+        .contextMenu {
+            let editors = EditorLauncher.installed
+            if !editors.isEmpty {
+                ForEach(editors) { editor in
+                    Button {
+                        editor.open(path: worktree.path)
                     } label: {
-                        Label("Remove Worktree…", systemImage: "trash")
+                        Label("Open in \(editor.name)", systemImage: editor.icon)
                     }
                 }
+                Divider()
             }
 
-            // Show only the most relevant window details for the selected worktree.
-            if isSelected, !detailWindows.isEmpty {
-                TreeConnectorGroup(data: detailWindows) { window in
-                    let globalIdx = globalWindowIndices[window.tmuxWindowId]
-                    Group {
-                        if window.detectedAgent != nil || window.agentState != .none {
-                            AgentWindowRowView(
-                                window: window,
-                                projectName: projects.first(where: { $0.id == worktree.projectId })?.name ?? "",
-                                worktreeName: worktree.name,
-                                isSelected: isSelected && window.tmuxWindowId == selectedWindowId,
-                                shortcutIndex: globalIdx,
-                                shortcutHintsVisible: shortcutHintsVisible,
-                                onSelect: { onSelectWindow(window.tmuxWindowId) },
-                                onRequestPaneOutput: onRequestPaneOutput,
-                                onSendKeys: onSendKeys
-                            )
-                        } else {
-                            WindowRowView(
-                                window: window,
-                                isActive: isSelected && window.tmuxWindowId == selectedWindowId,
-                                shortcutIndex: globalIdx,
-                                shortcutHintsVisible: shortcutHintsVisible,
-                                onSelect: { onSelectWindow(window.tmuxWindowId) },
-                                onRequestPaneOutput: onRequestPaneOutput,
-                                onSendKeys: onSendKeys
-                            )
-                        }
-                    }
-                    .contextMenu {
-                        if let onCloseWindow {
-                            Button(role: .destructive) {
-                                onCloseWindow(window.tmuxWindowId)
-                            } label: {
-                                Label("Close Tab", systemImage: "xmark")
-                            }
-                        }
-                    }
+            Button {
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: worktree.path)
+            } label: {
+                Label("Reveal in Finder", systemImage: "folder")
+            }
+
+            if !worktree.isMainWorktree, let onRemove = onRemoveWorktree {
+                Divider()
+                Button(role: .destructive) {
+                    onRemove(worktree.id)
+                } label: {
+                    Label("Remove Worktree…", systemImage: "trash")
                 }
             }
         }
