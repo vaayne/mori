@@ -13,10 +13,10 @@ final class RootSplitViewController: NSViewController {
     private(set) var companionController: NSViewController
 
     private static let sidebarWidthKey = "MoriSidebarWidth"
-    private static let sidebarCollapsedWidth: CGFloat = 52
+    private static let sidebarCollapsedWidth: CGFloat = 56
     private static let companionWidthKey = "MoriCompanionToolPaneWidth"
-    private static let sidebarMinWidth: CGFloat = 180
-    private static let sidebarMaxWidth: CGFloat = 400
+    private static let sidebarMinWidth: CGFloat = 220
+    private static let sidebarMaxWidth: CGFloat = 260
     private static let companionMinWidth: CGFloat = 320
     private static let dividerHitWidth: CGFloat = 8
 
@@ -26,7 +26,7 @@ final class RootSplitViewController: NSViewController {
     private let companionDividerView = NSView()
     private let companionContainer = NSView()
 
-    private var sidebarWidth: CGFloat = 280
+    private var sidebarWidth: CGFloat = 236
     private var companionWidth: CGFloat = CompanionToolPaneState.defaultWidth
     private var dragTarget: DividerDragTarget?
     private var collapsed = false

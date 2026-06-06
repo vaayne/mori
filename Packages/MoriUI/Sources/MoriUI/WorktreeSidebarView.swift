@@ -298,9 +298,8 @@ public struct WorktreeSidebarView: View {
                     .transition(.opacity)
                 }
             }
-            .padding(.horizontal, MoriTokens.Spacing.lg)
-            .padding(.top, MoriTokens.Sidebar.projectHeaderTop)
-            .padding(.bottom, MoriTokens.Spacing.md)
+            .padding(.horizontal, MoriTokens.Spacing.md)
+            .padding(.vertical, 7)
             .background(
                 RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
                     .fill(
@@ -323,10 +322,10 @@ public struct WorktreeSidebarView: View {
                             : Color.primary.opacity(MoriTokens.Opacity.subtle)
                     )
                     .frame(height: 1)
-                    .padding(.horizontal, MoriTokens.Spacing.lg)
-                    .padding(.top, MoriTokens.Spacing.sm)
+                    .padding(.horizontal, MoriTokens.Spacing.md)
+                    .padding(.top, MoriTokens.Spacing.xs)
 
-                VStack(alignment: .leading, spacing: MoriTokens.Spacing.xs) {
+                VStack(alignment: .leading, spacing: 3) {
                     if projectWorktrees.isEmpty, project.id == selectedProjectId {
                         Text("No worktrees")
                             .font(MoriTokens.Font.caption)
@@ -339,26 +338,26 @@ public struct WorktreeSidebarView: View {
                         worktreeRow(worktree)
                     }
                 }
-                .padding(.top, MoriTokens.Spacing.sm)
-                .padding(.bottom, MoriTokens.Spacing.sm)
+                .padding(.top, MoriTokens.Spacing.xs)
+                .padding(.bottom, MoriTokens.Spacing.xs)
             }
         }
-        .padding(.horizontal, MoriTokens.Spacing.sm)
-        .padding(.vertical, MoriTokens.Spacing.sm)
+        .padding(.horizontal, MoriTokens.Spacing.xs)
+        .padding(.vertical, MoriTokens.Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: MoriTokens.Radius.medium)
                 .fill(
                     isSelectedProject
-                        ? Color.primary.opacity(0.065)
-                        : Color.primary.opacity(MoriTokens.Opacity.quiet)
+                        ? Color.primary.opacity(0.04)
+                        : Color.clear
                 )
         )
         .overlay {
             RoundedRectangle(cornerRadius: MoriTokens.Radius.medium)
                 .strokeBorder(
                     isSelectedProject
-                        ? MoriTokens.Color.active.opacity(0.35)
-                        : Color.primary.opacity(MoriTokens.Opacity.subtle),
+                        ? MoriTokens.Color.active.opacity(0.22)
+                        : Color.primary.opacity(0.04),
                     lineWidth: 1
                 )
         }
