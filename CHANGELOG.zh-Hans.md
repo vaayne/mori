@@ -7,6 +7,18 @@
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-06-06
+
+### 🎨 界面优化
+
+- 优化侧边栏和终端标签页布局：更紧凑的侧边栏密度、更清晰的标签页分隔 ([#89](https://github.com/vaayne/mori/pull/89))
+
+### 📝 文档更新
+
+- 重构 README：添加亮/暗/lazygit/yazi/设置截图，将 Features 移至 Mental Model 上方，折叠 Build 区块，CLI 示例精简为四个关键命令。
+
+**完整变更记录**: [v0.4.5...v0.4.6](https://github.com/vaayne/mori/compare/v0.4.5...v0.4.6)
+
 ## [0.4.5] - 2026-04-29
 
 ### 🎨 界面优化

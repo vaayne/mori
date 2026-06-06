@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mori Sidebar + Terminal Tabs Mock-up</title>
+  <style>
+    :root {
+      --desktop: #111316;
+      --window: #181b20;
+      --titlebar: #292c33;
+      --titlebar-2: #24272e;
+      --sidebar: #252930;
+      --sidebar-2: #20242a;
+      --content: #121418;
+      --terminal: #07090b;
+      --terminal-top: #15181d;
+      --text: #eef2f7;
+      --muted: #9aa3af;
+      --faint: #67707d;
+      --line: rgba(255,255,255,.075);
+      --line-strong: rgba(255,255,255,.12);
+      --blue: #6f91b6;
+      --blue-soft: rgba(111,145,182,.34);
+      --green: #63d28a;
+      --yellow: #d7a759;
+      --purple: #7a6898;
+      --sage: #6f835f;
+      --radius-window: 18px;
+      --radius: 11px;
+      --sidebar-expanded: 238px;
+      --sidebar-collapsed: 52px;
+      --titlebar-h: 52px;
+      --tabbar-h: 34px;
+      --mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      min-height: 100%;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 18% 14%, rgba(92, 112, 132, .18), transparent 34%),
+        radial-gradient(circle at 82% 78%, rgba(79, 70, 58, .13), transparent 36%),
+        linear-gradient(135deg, #202124 0%, #141519 52%, #090a0c 100%);
+      color: var(--text);
+      font-family: var(--sans);
+      letter-spacing: 0;
+    }
+
+    .stage {
+      width: min(1450px, calc(100vw - 32px));
+      aspect-ratio: 1.58;
+      min-height: 760px;
+      max-height: calc(100vh - 48px);
+      display: grid;
+      place-items: stretch;
+    }
+
+    .window {
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: var(--titlebar-h) 1fr;
+      border-radius: var(--radius-window);
+      background: linear-gradient(140deg, #292d34, #191c21 42%, #15171b);
+      border: 1px solid rgba(255,255,255,.16);
+      box-shadow: 0 24px 70px rgba(0,0,0,.46), 0 1px 0 rgba(255,255,255,.14) inset;
+    }
+
+    .titlebar {
+      position: relative;
+      display: grid;
+      grid-template-columns: 186px 1fr 186px;
+      align-items: center;
+      height: var(--titlebar-h);
+      background: linear-gradient(180deg, var(--titlebar), var(--titlebar-2));
+      border-bottom: 1px solid rgba(0,0,0,.62);
+      user-select: none;
+    }
+
+    .traffic {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-left: 28px;
+    }
+
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .red { background: #ff5f57; }
+    .yellow { background: #febc2e; }
+    .green { background: #28c840; }
+
+    .title {
+      justify-self: center;
+      font-size: 13px;
+      font-weight: 650;
+      color: rgba(242,245,250,.84);
+    }
+
+    .chrome-button {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: 0;
+      border-radius: 8px;
+      color: #b6beca;
+      background: rgba(255,255,255,.045);
+      box-shadow: 0 1px 0 rgba(255,255,255,.05) inset;
+      cursor: default;
+    }
+
+    .chrome-button:hover { background: rgba(255,255,255,.075); color: #e4e8ee; }
+
+    .app {
+      display: grid;
+      grid-template-columns: var(--sidebar-expanded) 1fr;
+      min-height: 0;
+      background: var(--content);
+      transition: grid-template-columns 180ms cubic-bezier(.2, .8, .2, 1);
+    }
+
+    .window.is-collapsed .app {
+      grid-template-columns: var(--sidebar-collapsed) 1fr;
+    }
+
+    .sidebar {
+      position: relative;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 18px 14px 14px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.025), transparent 32%),
+        linear-gradient(180deg, var(--sidebar), var(--sidebar-2));
+      border-right: 1px solid rgba(0,0,0,.74);
+      box-shadow: 1px 0 0 rgba(255,255,255,.06);
+      overflow: hidden;
+    }
+
+    .sidebar-head {
+      display: grid;
+      grid-template-columns: 30px 1fr 26px;
+      align-items: center;
+      gap: 12px;
+      min-height: 30px;
+    }
+
+    .sidebar-title {
+      font-size: 15px;
+      font-weight: 680;
+      color: #f4f6fa;
+      white-space: nowrap;
+      opacity: 1;
+      transition: opacity 120ms ease;
+    }
+
+    .add-button {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      color: #b7bfcb;
+      background: rgba(255,255,255,.05);
+      box-shadow: 0 1px 0 rgba(255,255,255,.04) inset;
+    }
+
+    .sidebar-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .project {
+      border-radius: var(--radius);
+      background: rgba(255,255,255,.034);
+      border: 1px solid rgba(255,255,255,.055);
+      box-shadow: 0 10px 24px rgba(0,0,0,.1);
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .project.active {
+      background: rgba(255,255,255,.052);
+      border-color: rgba(255,255,255,.085);
+    }
+
+    .project-row,
+    .worktree-row {
+      display: grid;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .project-row {
+      grid-template-columns: 30px 1fr;
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .tile {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 9px;
+      font-size: 13px;
+      font-weight: 760;
+      color: #eef7ff;
+      box-shadow: 0 1px 0 rgba(255,255,255,.18) inset, 0 8px 18px rgba(0,0,0,.18);
+    }
+
+    .tile.m { background: #54718c; }
+    .tile.c { background: var(--purple); }
+    .tile.s { background: var(--sage); }
+
+    .project-copy,
+    .worktree-label {
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      transition: opacity 130ms ease, transform 160ms ease;
+    }
+
+    .project-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 13px;
+      font-weight: 650;
+      color: #f5f7fb;
+      line-height: 1.25;
+    }
+
+    .project-meta {
+      margin-top: 3px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 11.5px;
+      color: #a4adb9;
+    }
+
+    .worktrees {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 0 12px 12px;
+    }
+
+    .worktree-row {
+      grid-template-columns: 14px 1fr auto;
+      gap: 8px;
+      height: 32px;
+      padding: 0 10px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      color: #d9dee6;
+    }
+
+    .worktree-row.active {
+      color: #fbfdff;
+      background: var(--blue-soft);
+      border: 1px solid rgba(142,176,212,.2);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      justify-self: center;
+    }
+
+    .status-dot.good { background: var(--green); }
+    .status-dot.warn { background: var(--yellow); }
+    .status-dot.idle { background: #7f8793; }
+
+    .worktree-count {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      color: #c8d6e4;
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+    }
+
+    .main {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: var(--tabbar-h) minmax(0, 1fr) 26px;
+      gap: 0;
+      padding: 14px 24px 10px 22px;
+      background: linear-gradient(140deg, #101215, var(--terminal));
+    }
+
+    .tabbar {
+      position: relative;
+      height: var(--tabbar-h);
+      display: flex;
+      align-items: flex-end;
+      overflow: hidden;
+      padding-left: 2px;
+      background: transparent;
+    }
+
+    .tab {
+      position: relative;
+      height: 32px;
+      min-width: 158px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 16px;
+      color: #bfc6d0;
+      font-size: 13px;
+      font-weight: 560;
+      border-top-left-radius: 10px;
+      border-top-right-radius: 10px;
+      background: rgba(37,41,48,.72);
+      transform: translateY(1px);
+    }
+
+    .tab.active {
+      z-index: 2;
+      color: #fbfdff;
+      background: #343943;
+      border: 1px solid rgba(255,255,255,.13);
+      border-bottom: 0;
+      box-shadow: 0 10px 24px rgba(0,0,0,.18), 0 1px 0 rgba(255,255,255,.08) inset;
+    }
+
+    .tab .close {
+      margin-left: auto;
+      width: 14px;
+      height: 14px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: #abb3bf;
+      background: rgba(0,0,0,.22);
+      font-size: 13px;
+      line-height: 1;
+    }
+
+    .new-tab {
+      width: 26px;
+      height: 24px;
+      margin: 0 8px 5px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 7px;
+      color: #aeb6c2;
+      background: rgba(255,255,255,.045);
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .terminal-body {
+      min-height: 0;
+      height: 100%;
+      padding: 32px 36px;
+      overflow: hidden;
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 2.58;
+      color: #8f98a5;
+    }
+
+    .prompt { color: #dee4ec; }
+    .host { color: var(--green); }
+    .cwd { color: #76808c; }
+    .rule {
+      width: min(742px, 68%);
+      height: 1px;
+      margin: 14px 0 24px;
+      background: #252b33;
+    }
+    .cursor {
+      display: inline-block;
+      width: 9px;
+      height: 18px;
+      margin-left: 8px;
+      vertical-align: -3px;
+      border-radius: 2px;
+      background: #c9d1dc;
+      animation: blink 1.1s steps(1) infinite;
+    }
+
+    .statusbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      border-top: 1px solid rgba(255,255,255,.055);
+      color: #7c8490;
+      font-size: 11px;
+    }
+
+    .window.is-collapsed .sidebar {
+      padding-inline: 10px;
+      align-items: center;
+    }
+
+    .window.is-collapsed .sidebar-head {
+      grid-template-columns: 30px;
+      justify-content: center;
+      gap: 0;
+    }
+
+    .window.is-collapsed .sidebar-title,
+    .window.is-collapsed .add-button,
+    .window.is-collapsed .project-copy,
+    .window.is-collapsed .worktrees,
+    .window.is-collapsed .worktree-count {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(-8px);
+      position: absolute;
+    }
+
+    .window.is-collapsed .project {
+      width: 32px;
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .window.is-collapsed .project-row {
+      display: flex;
+      padding: 0;
+      width: 32px;
+      height: 36px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .window.is-collapsed .project.active {
+      background: rgba(111,145,182,.18);
+      border-color: rgba(142,176,212,.2);
+    }
+
+    .window.is-collapsed .tile {
+      width: 28px;
+      height: 28px;
+      font-size: 12px;
+      border-radius: 8px;
+    }
+
+    .window.is-collapsed .sidebar-list {
+      align-items: center;
+      gap: 12px;
+    }
+
+    @keyframes blink { 50% { opacity: .24; } }
+
+    @media (max-width: 980px) {
+      .stage { width: 100vw; height: 100vh; max-height: none; min-height: 0; }
+      .window { border-radius: 0; }
+      .main { padding: 14px; }
+      .tab { min-width: 132px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <section class="window" id="mockWindow" aria-label="Mori terminal-first layout mock-up">
+      <header class="titlebar">
+        <div class="traffic" aria-hidden="true">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+        </div>
+        <div class="title">Mori</div>
+        <div></div>
+      </header>
+
+      <div class="app">
+        <aside class="sidebar" aria-label="Projects">
+          <div class="sidebar-head">
+            <button class="chrome-button" id="collapseButton" aria-label="Toggle sidebar" title="Toggle sidebar">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M3 4.5h10M3 8h10M3 11.5h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <div class="sidebar-title">Projects</div>
+            <div class="add-button" title="Add project">+</div>
+          </div>
+
+          <div class="sidebar-list">
+            <section class="project active" title="Mori">
+              <div class="project-row">
+                <div class="tile m">M</div>
+                <div class="project-copy">
+                  <div class="project-name">Mori</div>
+                  <div class="project-meta">3 worktrees</div>
+                </div>
+              </div>
+              <div class="worktrees">
+                <div class="worktree-row active">
+                  <span class="status-dot good"></span>
+                  <span class="worktree-label">main</span>
+                  <span class="worktree-count">2</span>
+                </div>
+                <div class="worktree-row">
+                  <span class="status-dot warn"></span>
+                  <span class="worktree-label">feature/sidebar-tabs</span>
+                  <span></span>
+                </div>
+                <div class="worktree-row">
+                  <span class="status-dot idle"></span>
+                  <span class="worktree-label">release/0.4</span>
+                  <span></span>
+                </div>
+              </div>
+            </section>
+
+            <section class="project" title="cherry">
+              <div class="project-row">
+                <div class="tile c">C</div>
+                <div class="project-copy">
+                  <div class="project-name">cherry</div>
+                  <div class="project-meta">1 worktree</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="project" title="stella">
+              <div class="project-row">
+                <div class="tile s">S</div>
+                <div class="project-copy">
+                  <div class="project-name">stella</div>
+                  <div class="project-meta">5 worktrees</div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="sidebar-footer">
+            <button class="chrome-button" aria-label="More" title="More">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M3 5h10M3 8h7M3 11h5" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+        </aside>
+
+        <section class="main" aria-label="Terminal workspace">
+          <nav class="tabbar" aria-label="Terminal tabs">
+            <div class="tab active"><span class="status-dot good"></span><span>main: shell</span><span class="close">×</span></div>
+            <div class="tab"><span>agent: codex</span></div>
+            <div class="tab"><span>tests</span></div>
+            <div class="new-tab">+</div>
+          </nav>
+
+          <div class="terminal-body" aria-label="Terminal">
+            <div><span class="host">vaayne@mori</span> <span class="cwd">~/workspace/mori</span></div>
+            <div class="prompt">$ mise run build</div>
+            <div>Building Mori...</div>
+            <div>One sidebar. Expanded shows project names; collapsed keeps project icons.</div>
+            <div>Terminal owns the window. Tabs switch tmux windows.</div>
+            <div class="rule"></div>
+            <div class="prompt">$ mori pane list --worktree main</div>
+            <div>main: shell                 active</div>
+            <div>agent: codex                running</div>
+            <div>tests                       idle</div>
+            <div class="prompt">$<span class="cursor"></span></div>
+          </div>
+
+          <footer class="statusbar">
+            <span>main / Mori</span>
+            <span>local tmux</span>
+          </footer>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const mockWindow = document.getElementById("mockWindow");
+    const collapseButton = document.getElementById("collapseButton");
+    collapseButton.addEventListener("click", () => {
+      mockWindow.classList.toggle("is-collapsed");
+    });
+  </script>
+</body>
+</html>

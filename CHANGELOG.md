@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-06-06
+
+### 🎨 Design
+
+- Refine sidebar and terminal tabs layout — tighter sidebar density, cleaner tab separation ([#89](https://github.com/vaayne/mori/pull/89))
+
+### 📝 Documentation
+
+- Restructure README with light/dark/lazygit/yazi/settings screenshots, move Features above Mental Model, collapse Build section, and trim CLI examples to four key commands.
+
+**Full Changelog**: [v0.4.5...v0.4.6](https://github.com/vaayne/mori/compare/v0.4.5...v0.4.6)
+
 ## [0.4.5] - 2026-04-29
 
 ### 🎨 Design

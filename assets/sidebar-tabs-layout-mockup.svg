@@ -1,0 +1,167 @@
+<svg width="1600" height="1040" viewBox="0 0 1600 1040" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="desktop" x1="160" y1="0" x2="1440" y2="1040" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#202124"/>
+      <stop offset="0.52" stop-color="#141519"/>
+      <stop offset="1" stop-color="#090A0C"/>
+    </linearGradient>
+    <linearGradient id="window" x1="170" y1="70" x2="1400" y2="956" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2A2D33"/>
+      <stop offset="0.42" stop-color="#1D2025"/>
+      <stop offset="1" stop-color="#15171B"/>
+    </linearGradient>
+    <linearGradient id="titlebar" x1="98" y1="72" x2="1502" y2="124" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2D3037"/>
+      <stop offset="1" stop-color="#23262C"/>
+    </linearGradient>
+    <linearGradient id="sidebar" x1="98" y1="124" x2="336" y2="960" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#272A30"/>
+      <stop offset="1" stop-color="#1F2228"/>
+    </linearGradient>
+    <linearGradient id="terminal" x1="366" y1="178" x2="1476" y2="930" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#101215"/>
+      <stop offset="1" stop-color="#08090B"/>
+    </linearGradient>
+    <filter id="shadow" x="44" y="34" width="1512" height="994" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="18"/>
+      <feGaussianBlur stdDeviation="30"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.42 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>
+    </filter>
+    <filter id="softInset" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="0.5" flood-color="#FFFFFF" flood-opacity="0.09"/>
+      <feDropShadow dx="0" dy="8" stdDeviation="18" flood-color="#000000" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="windowClip">
+      <rect x="98" y="72" width="1404" height="888" rx="18"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1600" height="1040" fill="url(#desktop)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="98" y="72" width="1404" height="888" rx="18" fill="url(#window)" stroke="#4A4E57" stroke-opacity="0.55"/>
+    <g clip-path="url(#windowClip)">
+      <rect x="98" y="72" width="1404" height="52" fill="url(#titlebar)"/>
+      <rect x="98" y="123" width="1404" height="1" fill="#0E0F11" opacity="0.78"/>
+
+      <circle cx="126" cy="98" r="6.2" fill="#FF5F57"/>
+      <circle cx="148" cy="98" r="6.2" fill="#FEBC2E"/>
+      <circle cx="170" cy="98" r="6.2" fill="#28C840"/>
+
+      <rect x="210" y="84" width="28" height="28" rx="8" fill="#FFFFFF" fill-opacity="0.045"/>
+      <path d="M219 92.5H230M219 98.5H230M219 104.5H230" stroke="#C7CDD6" stroke-width="1.35" stroke-linecap="round"/>
+      <text x="800" y="103" text-anchor="middle" fill="#EEF1F6" fill-opacity="0.84" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13" font-weight="600">Mori</text>
+      <rect x="1388" y="84" width="28" height="28" rx="8" fill="#FFFFFF" fill-opacity="0.04"/>
+      <path d="M1402 91.5V105.5M1395 98.5H1409" stroke="#AEB6C2" stroke-width="1.35" stroke-linecap="round"/>
+
+      <rect x="98" y="124" width="238" height="836" fill="url(#sidebar)"/>
+      <line x1="336" y1="124" x2="336" y2="960" stroke="#0E0F11" opacity="0.86"/>
+      <line x1="337" y1="124" x2="337" y2="960" stroke="#3B4049" opacity="0.44"/>
+
+      <rect x="112" y="142" width="30" height="30" rx="8" fill="#FFFFFF" fill-opacity="0.045"/>
+      <path d="M121 150.5H133M121 156.5H133M121 162.5H133" stroke="#ADB5C0" stroke-width="1.35" stroke-linecap="round"/>
+      <text x="154" y="162" fill="#F2F4F8" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="15" font-weight="650">Projects</text>
+      <rect x="296" y="143" width="26" height="26" rx="8" fill="#FFFFFF" fill-opacity="0.05"/>
+      <path d="M309 150V162M303 156H315" stroke="#B8C0CA" stroke-width="1.35" stroke-linecap="round"/>
+
+      <g filter="url(#softInset)">
+        <rect x="112" y="184" width="210" height="60" rx="11" fill="#FFFFFF" fill-opacity="0.052" stroke="#FFFFFF" stroke-opacity="0.065"/>
+        <rect x="124" y="198" width="28" height="28" rx="8" fill="#54718C"/>
+        <text x="138" y="218" text-anchor="middle" fill="#EAF6FF" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13" font-weight="760">M</text>
+        <text x="164" y="210" fill="#F5F7FB" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13" font-weight="640">Mori</text>
+        <text x="164" y="229" fill="#A9B0BA" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="11.5">3 worktrees</text>
+      </g>
+
+      <g>
+        <rect x="124" y="260" width="184" height="32" rx="8" fill="#5E7FA2" fill-opacity="0.42" stroke="#8EB0D4" stroke-opacity="0.2"/>
+        <circle cx="138" cy="276" r="3.7" fill="#63D28A"/>
+        <text x="150" y="280" fill="#F7FAFE" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12.5" font-weight="610">main</text>
+        <text x="292" y="280" text-anchor="end" fill="#C8D6E4" font-family="SF Mono,Menlo,monospace" font-size="9.5">2</text>
+      </g>
+      <g opacity="0.94">
+        <rect x="124" y="298" width="184" height="32" rx="8" fill="#FFFFFF" fill-opacity="0.022"/>
+        <circle cx="138" cy="314" r="3.7" fill="#D7A759"/>
+        <text x="150" y="318" fill="#DCE1E8" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12.5" font-weight="530">feature/sidebar-tabs</text>
+      </g>
+      <g opacity="0.86">
+        <rect x="124" y="336" width="184" height="32" rx="8" fill="#FFFFFF" fill-opacity="0.016"/>
+        <circle cx="138" cy="352" r="3.7" fill="#7F8793"/>
+        <text x="150" y="356" fill="#C8CED8" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12.5" font-weight="530">release/0.4</text>
+      </g>
+
+      <g opacity="0.96">
+        <rect x="112" y="404" width="210" height="54" rx="11" fill="#FFFFFF" fill-opacity="0.032" stroke="#FFFFFF" stroke-opacity="0.04"/>
+        <rect x="124" y="417" width="28" height="28" rx="8" fill="#695D86"/>
+        <text x="138" y="437" text-anchor="middle" fill="#EFE9FF" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13" font-weight="760">C</text>
+        <text x="164" y="429" fill="#E9ECF2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13" font-weight="620">cherry</text>
+        <text x="164" y="447" fill="#9EA6B2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="11.5">1 worktree</text>
+      </g>
+      <g opacity="0.96">
+        <rect x="112" y="472" width="210" height="54" rx="11" fill="#FFFFFF" fill-opacity="0.032" stroke="#FFFFFF" stroke-opacity="0.04"/>
+        <rect x="124" y="485" width="28" height="28" rx="8" fill="#657B58"/>
+        <text x="138" y="505" text-anchor="middle" fill="#EDF9E5" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13" font-weight="760">S</text>
+        <text x="164" y="497" fill="#E9ECF2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13" font-weight="620">stella</text>
+        <text x="164" y="515" fill="#9EA6B2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="11.5">5 worktrees</text>
+      </g>
+
+      <g opacity="0.72">
+        <rect x="112" y="880" width="30" height="30" rx="8" fill="#FFFFFF" fill-opacity="0.03"/>
+        <path d="M121 889H133M121 895H133M121 901H129" stroke="#88919E" stroke-width="1.35" stroke-linecap="round"/>
+      </g>
+
+      <rect x="337" y="124" width="1165" height="836" fill="#131519"/>
+      <rect x="360" y="146" width="1118" height="42" rx="11" fill="#202329" stroke="#343943" stroke-opacity="0.78"/>
+
+      <g filter="url(#softInset)">
+        <path d="M370 188V164C370 157.4 375.4 152 382 152H538C544.6 152 550 157.4 550 164V188H370Z" fill="#343943"/>
+        <path d="M370 188V164C370 157.4 375.4 152 382 152H538C544.6 152 550 157.4 550 164V188" stroke="#565D69" stroke-opacity="0.72"/>
+        <circle cx="390" cy="170" r="4.4" fill="#63D28A"/>
+        <text x="403" y="175" fill="#FAFBFD" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13" font-weight="640">main: shell</text>
+        <circle cx="530" cy="170" r="6.5" fill="#1E2228"/>
+        <path d="M527.7 167.7L532.3 172.3M532.3 167.7L527.7 172.3" stroke="#B9C0CA" stroke-width="1.1" stroke-linecap="round"/>
+      </g>
+      <g opacity="0.9">
+        <path d="M551 188H566C574 188 578 182 578 174V164C578 157.4 583.4 152 590 152H720C726.6 152 732 157.4 732 164V188H551Z" fill="#262A31"/>
+        <text x="602" y="175" fill="#BFC6D0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13" font-weight="520">agent: codex</text>
+      </g>
+      <g opacity="0.8">
+        <path d="M733 188H748C756 188 760 182 760 174V164C760 157.4 765.4 152 772 152H872C878.6 152 884 157.4 884 164V188H733Z" fill="#252930"/>
+        <text x="785" y="175" fill="#AEB6C2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13" font-weight="520">tests</text>
+      </g>
+      <rect x="896" y="157" width="26" height="26" rx="8" fill="#FFFFFF" fill-opacity="0.045"/>
+      <path d="M909 163.5V176.5M902.5 170H915.5" stroke="#AEB6C2" stroke-width="1.25" stroke-linecap="round"/>
+
+      <rect x="360" y="198" width="1118" height="726" rx="14" fill="url(#terminal)" stroke="#2E333B"/>
+      <rect x="360" y="198" width="1118" height="24" rx="14" fill="#171A1E"/>
+      <rect x="360" y="210" width="1118" height="12" fill="#171A1E"/>
+      <circle cx="380" cy="211" r="2.8" fill="#343A43"/>
+      <circle cx="392" cy="211" r="2.8" fill="#343A43"/>
+      <circle cx="404" cy="211" r="2.8" fill="#343A43"/>
+
+      <g font-family="SF Mono,Menlo,Monaco,monospace" font-size="14">
+        <text x="396" y="260" fill="#63D28A">vaayne@mori</text>
+        <text x="502" y="260" fill="#76808C">~/workspace/mori</text>
+        <text x="396" y="296" fill="#DEE4EC">$ mise run build</text>
+        <text x="396" y="332" fill="#8F98A5">Building Mori...</text>
+        <text x="396" y="368" fill="#8F98A5">One sidebar. Expanded shows names; collapsed keeps these same icons.</text>
+        <text x="396" y="404" fill="#8F98A5">Terminal owns the window. Tabs switch tmux windows.</text>
+        <rect x="396" y="434" width="742" height="1" fill="#252B33"/>
+        <text x="396" y="480" fill="#DEE4EC">$ mori pane list --worktree main</text>
+        <text x="396" y="516" fill="#7F8895">main: shell                 active</text>
+        <text x="396" y="552" fill="#7F8895">agent: codex                running</text>
+        <text x="396" y="588" fill="#7F8895">tests                       idle</text>
+        <text x="396" y="660" fill="#DEE4EC">$</text>
+        <rect x="414" y="646" width="9" height="18" rx="2" fill="#C9D1DC" opacity="0.82"/>
+      </g>
+
+      <rect x="360" y="936" width="1118" height="1" fill="#333843" opacity="0.62"/>
+      <text x="380" y="952" fill="#7C8490" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="11">main / Mori</text>
+      <text x="1400" y="952" text-anchor="end" fill="#7C8490" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="11">local tmux</text>
+    </g>
+  </g>
+</svg>
