@@ -169,6 +169,8 @@ public struct WorktreeSidebarView: View {
         VStack(spacing: 0) {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: MoriTokens.Spacing.md) {
+                    summaryStrip
+                    activeWorktreeSection
                     projectsSectionHeader
 
                     if !isProjectsSectionCollapsed {
