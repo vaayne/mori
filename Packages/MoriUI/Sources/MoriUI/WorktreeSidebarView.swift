@@ -215,20 +215,79 @@ public struct WorktreeSidebarView: View {
     }
 
     private var collapsedBody: some View {
-        VStack(spacing: MoriTokens.Spacing.md) {
-            ScrollView(.vertical) {
-                LazyVStack(spacing: MoriTokens.Spacing.lg) {
-                    ForEach(sortedProjects) { project in
-                        collapsedProjectButton(project)
+        ScrollView(.vertical) {
+            LazyVStack(spacing: 0) {
+                ForEach(Array(sortedProjects.enumerated()), id: \.element.id) { index, project in
+                    if index > 0 {
+                        Rectangle()
+                            .fill(Color.primary.opacity(MoriTokens.Opacity.subtle))
+                            .frame(height: 1)
+                            .padding(.horizontal, MoriTokens.Spacing.lg)
+                            .padding(.vertical, MoriTokens.Spacing.md)
                     }
+                    collapsedProjectGroup(project)
                 }
-                .padding(.top, MoriTokens.Spacing.lg)
-                .padding(.bottom, MoriTokens.Spacing.sm)
             }
-
-            Spacer(minLength: 0)
+            .padding(.top, MoriTokens.Spacing.lg)
+            .padding(.bottom, MoriTokens.Spacing.sm)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func collapsedProjectGroup(_ project: Project) -> some View {
+        let projectWorktrees = worktrees.filter { $0.projectId == project.id && $0.status != .unavailable }
+
+        return VStack(spacing: MoriTokens.Spacing.sm) {
+            ProjectLetterTile(project: project)
+                .help(project.name)
+                .accessibilityLabel(project.name)
+
+            ForEach(projectWorktrees) { worktree in
+                collapsedWorktreeButton(worktree, projectId: project.id)
+            }
+        }
+    }
+
+    @State private var hoveredCollapsedWorktreeId: UUID?
+
+    private func collapsedWorktreeButton(_ worktree: Worktree, projectId: UUID) -> some View {
+        let isSelected = worktree.id == selectedWorktreeId
+        let isHovered = hoveredCollapsedWorktreeId == worktree.id
+        let ringColor = collapsedWorktreeRingColor(worktree)
+        let letter = String(worktree.name.prefix(1)).uppercased()
+
+        return Button {
+            onSelectProject?(projectId)
+            onSelectWorktree(worktree.id)
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(isSelected
+                        ? MoriTokens.Color.active.opacity(MoriTokens.Opacity.light)
+                        : isHovered ? Color.primary.opacity(MoriTokens.Opacity.subtle) : Color.clear)
+                Circle()
+                    .strokeBorder(ringColor, lineWidth: isSelected ? 2 : 1.5)
+                Text(letter)
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.7))
+            }
+            .frame(width: 26, height: 26)
+        }
+        .buttonStyle(.plain)
+        .onHover { over in
+            withAnimation(.easeInOut(duration: 0.12)) {
+                hoveredCollapsedWorktreeId = over ? worktree.id : nil
+            }
+        }
+        .help(worktree.name)
+        .accessibilityLabel(worktree.name)
+    }
+
+    private func collapsedWorktreeRingColor(_ worktree: Worktree) -> Color {
+        if worktree.agentState == .waitingForInput { return MoriTokens.Color.attention }
+        if worktree.agentState == .running { return MoriTokens.Color.success }
+        if worktree.status == .active { return MoriTokens.Color.success.opacity(0.5) }
+        return MoriTokens.Color.inactive.opacity(0.35)
     }
 
     // MARK: - Project Section
