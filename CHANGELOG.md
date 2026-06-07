@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-06-07
+
+### ✨ Features
+
+- Show worktree dots in collapsed sidebar — flat list of all worktrees grouped by project with agent status ring colors, replacing the previous project-only icon view.
+
+### 🐛 Bug Fixes
+
+- Restore agent summary strip and agents section in sidebar that were removed during the layout refine in v0.4.6.
+
+**Full Changelog**: [v0.4.6...v0.4.7](https://github.com/vaayne/mori/compare/v0.4.6...v0.4.7)
+
 ## [0.4.6] - 2026-06-06
 
 ### 🎨 Design
