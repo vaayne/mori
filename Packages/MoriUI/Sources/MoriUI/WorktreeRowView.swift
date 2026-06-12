@@ -99,7 +99,9 @@ public struct WorktreeRowView: View {
         if worktree.agentState == .error { return MoriTokens.Color.error }
         if worktree.agentState == .waitingForInput { return MoriTokens.Color.attention }
         if worktree.agentState == .running { return MoriTokens.Color.success }
-        if worktree.status == .active { return MoriTokens.Color.success }
+        // Live session with no agent: solid muted dot ("warm"), so semantic
+        // colors stay reserved for agent activity.
+        if worktree.status == .active { return MoriTokens.Color.inactive }
         return .clear
     }
 
@@ -134,13 +136,6 @@ public struct WorktreeRowView: View {
                     .font(MoriTokens.Font.monoBranch)
                     .foregroundStyle(isSelected ? Color.primary.opacity(0.82) : MoriTokens.Color.muted)
                     .lineLimit(1)
-            }
-
-            if worktree.status == .active {
-                Circle()
-                    .fill(MoriTokens.Color.success)
-                    .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
-                    .accessibilityLabel(String.localized("Active"))
             }
 
             if let timeText = relativeTimeText {
