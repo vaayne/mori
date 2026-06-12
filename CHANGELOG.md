@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🎨 Design
+
+- Redesign the Mori sidebar as an attention inbox with Needs You and Running agent sections, filter pills, unified status dots, idle project clustering, and a single-tile collapsed rail.
+
 ## [0.4.7] - 2026-06-07
 
 ### ✨ Features

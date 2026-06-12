@@ -6,17 +6,20 @@ import MoriCore
 /// colour-match rather than a text-read.
 struct ProjectLetterTile: View {
     let project: Project
+    var size: CGFloat = MoriTokens.Size.projectTile
+    var cornerRadius: CGFloat = MoriTokens.Radius.projectTile
+    var fontSize: CGFloat = 10
 
     var body: some View {
         let pair = MoriTokens.ProjectPalette.pair(for: project.id)
         ZStack {
-            RoundedRectangle(cornerRadius: MoriTokens.Radius.projectTile)
+            RoundedRectangle(cornerRadius: cornerRadius)
                 .fill(pair.background)
             Text(letter)
-                .font(MoriTokens.Font.projectTile)
+                .font(.system(size: fontSize, weight: .semibold, design: .monospaced))
                 .foregroundStyle(pair.foreground)
         }
-        .frame(width: MoriTokens.Size.projectTile, height: MoriTokens.Size.projectTile)
+        .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
 

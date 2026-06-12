@@ -39,18 +39,19 @@ public struct WorktreeRowView: View {
                     .fill(statusDotColor)
                     .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
 
-                Text(worktree.name)
-                    .font(MoriTokens.Font.rowTitle)
-                    .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.9))
+                Text(branchDisplayText)
+                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular, design: .monospaced))
+                    .foregroundStyle(isSelected ? Color.primary : MoriTokens.Color.muted)
                     .lineLimit(1)
-
-                if isSelected {
-                    selectedAgentLabel
-                }
 
                 Spacer(minLength: 0)
 
-                primaryBadge
+                if let timeText = relativeTimeText {
+                    Text(timeText)
+                        .font(MoriTokens.Font.monoSmall)
+                        .foregroundStyle(MoriTokens.Color.inactive)
+                        .lineLimit(1)
+                }
 
                 if isHovered {
                     overflowMenu
@@ -66,6 +67,14 @@ public struct WorktreeRowView: View {
         .overlay {
             RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
                 .strokeBorder(rowOutlineColor, lineWidth: rowOutlineColor == .clear ? 0 : 1)
+        }
+        .overlay(alignment: .leading) {
+            if worktree.agentState == .none && worktree.status != .active {
+                Circle()
+                    .strokeBorder(MoriTokens.Color.inactive.opacity(0.55), lineWidth: 1.5)
+                    .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
+                    .padding(.leading, MoriTokens.Spacing.lg)
+            }
         }
         .overlay(alignment: .leading) {
             if isSelected {
@@ -87,10 +96,13 @@ public struct WorktreeRowView: View {
     }
 
     private var statusDotColor: Color {
+        if worktree.agentState == .error { return MoriTokens.Color.error }
         if worktree.agentState == .waitingForInput { return MoriTokens.Color.attention }
         if worktree.agentState == .running { return MoriTokens.Color.success }
-        if worktree.status == .active { return MoriTokens.Color.success }
-        return MoriTokens.Color.inactive
+        // Live session with no agent: solid muted dot ("warm"), so semantic
+        // colors stay reserved for agent activity.
+        if worktree.status == .active { return MoriTokens.Color.inactive }
+        return .clear
     }
 
     private var iconView: some View {
@@ -124,13 +136,6 @@ public struct WorktreeRowView: View {
                     .font(MoriTokens.Font.monoBranch)
                     .foregroundStyle(isSelected ? Color.primary.opacity(0.82) : MoriTokens.Color.muted)
                     .lineLimit(1)
-            }
-
-            if worktree.status == .active {
-                Circle()
-                    .fill(MoriTokens.Color.success)
-                    .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
-                    .accessibilityLabel(String.localized("Active"))
             }
 
             if let timeText = relativeTimeText {
@@ -251,11 +256,15 @@ public struct WorktreeRowView: View {
     private var relativeTimeText: String? {
         guard let date = worktree.lastActiveAt else { return nil }
         let seconds = Int(-date.timeIntervalSinceNow)
-        if seconds < 60 { return String.localized("just now") }
-        if seconds < 3600 { return String.localized("\(seconds / 60)m ago") }
-        if seconds < 86400 { return String.localized("\(seconds / 3600)h ago") }
-        if seconds < 604_800 { return String.localized("\(seconds / 86400)d ago") }
+        if seconds < 60 { return String.localized("now") }
+        if seconds < 3600 { return "\(seconds / 60)m" }
+        if seconds < 86400 { return "\(seconds / 3600)h" }
+        if seconds < 604_800 { return "\(seconds / 86400)d" }
         return nil
+    }
+
+    private var branchDisplayText: String {
+        worktree.branch ?? worktree.name
     }
 
     private var gitSummaryText: String? {
