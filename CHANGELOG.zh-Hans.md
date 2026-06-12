@@ -7,9 +7,13 @@
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-06-12
+
 ### 🎨 界面优化
 
 - 将 Mori 侧边栏重设计为注意力收件箱：新增 Needs You 与 Running agent 区块、筛选胶囊、统一状态圆点、空闲项目收纳，以及单 tile 折叠 rail。
+
+**完整变更记录**: [v0.4.7...v0.4.8](https://github.com/vaayne/mori/compare/v0.4.7...v0.4.8)
 
 ## [0.4.7] - 2026-06-07
 
