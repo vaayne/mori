@@ -277,3 +277,12 @@
 "No agents running" = "No agents running";
 "Pin Project" = "Pin Project";
 "Unpin Project" = "Unpin Project";
+
+/* Sidebar attention inbox */
+"Needs You" = "Needs You";
+"All" = "All";
+"%lld idle projects" = "%lld idle projects";
+"reply sent — resuming…" = "reply sent — resuming…";
+"sent" = "sent";
+"Waiting for input" = "Waiting for input";
+"now" = "now";

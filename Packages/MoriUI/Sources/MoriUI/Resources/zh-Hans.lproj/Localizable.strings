@@ -277,3 +277,12 @@
 "No agents running" = "没有运行中的代理";
 "Pin Project" = "置顶项目";
 "Unpin Project" = "取消置顶";
+
+/* Sidebar attention inbox */
+"Needs You" = "需要你处理";
+"All" = "全部";
+"%lld idle projects" = "%lld 个空闲项目";
+"reply sent — resuming…" = "回复已发送 — 正在继续…";
+"sent" = "已发送";
+"Waiting for input" = "等待输入";
+"now" = "现在";
