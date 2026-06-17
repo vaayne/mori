@@ -107,23 +107,5 @@ enum TmuxCommand: Sendable {
     case showSessionPicker
     case switchSession(String)
     case detach
-
-    func shellCommand(session: String? = nil) -> String {
-        switch self {
-        case .selectWindow(let idx): return "tmux select-window -t :\(idx)"
-        case .newWindow:             return "tmux new-window"
-        case .nextWindow:            return "tmux next-window"
-        case .prevWindow:            return "tmux previous-window"
-        case .splitRight:            return "tmux split-window -h"
-        case .splitDown:             return "tmux split-window -v"
-        case .nextPane:              return "tmux select-pane -t :.+"
-        case .prevPane:              return "tmux select-pane -t :.-"
-        case .toggleZoom:            return "tmux resize-pane -Z"
-        case .closePane:             return "tmux kill-pane"
-        case .showSessionPicker:     return "tmux switch-client -n"
-        case .switchSession(let n):  return "tmux switch-client -t '\(n)'"
-        case .detach:                return "tmux detach-client"
-        }
-    }
 }
 #endif

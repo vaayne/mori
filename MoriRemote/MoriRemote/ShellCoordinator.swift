@@ -272,27 +272,54 @@ final class ShellCoordinator {
     private var tmuxPollTask: Task<Void, Never>?
 
     func handleTmuxCommand(_ command: TmuxCommand) {
-        guard state == .shell, shellChannel != nil else {
-            log.debug("Ignoring tmux command while shell is inactive")
+        // Route through the exec channel (like the sidebar actions) rather than
+        // typing the command as text into the shell channel. The shell channel
+        // only reaches tmux when it's sitting at a bare prompt; in practice the
+        // pane is almost always running an agent/program, which would swallow
+        // the keystrokes. Exec talks to the tmux server directly, targeting our
+        // own client's session, so it works regardless of the foreground app.
+        guard let args = tmuxArgs(for: command) else {
+            log.debug("Ignoring tmux command: no current session/client context")
             return
         }
+        runTmuxCommand(tmuxCmd(args))
+    }
 
-        let generation = connectionGeneration
+    /// Translate a `TmuxCommand` into exec-safe tmux args targeting our client's
+    /// current session. Relative window/pane navigation resolves against the
+    /// session's active window/pane (`<session>:.+` etc.), so no `$TMUX` context
+    /// is required. Returns nil when the needed session/client tty is unknown.
+    private func tmuxArgs(for command: TmuxCommand) -> String? {
+        let session = iosCurrentSession
+        func s(_ build: (String) -> String) -> String? { session.map(build) }
 
-        // Send tmux CLI commands through the shell channel (not exec).
-        // The shell is running INSIDE tmux, so $TMUX is set and commands
-        // correctly target the current session/window/pane.
-        // Ctrl-U clears any partial input, then we run the command.
-        let cmd = command.shellCommand()
-        log.info("Tmux command via shell: \(cmd)")
-        let sequence = "\u{15}\(cmd)\n"
-        sendInput(Data(sequence.utf8))
-
-        // Refresh tmux state after a short delay.
-        Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            guard let self, await self.isCurrentConnection(generation) else { return }
-            await self.pollTmuxState(generation: generation)
+        switch command {
+        case .selectWindow(let idx):
+            return s { "select-window -t '\($0):\(idx)'" }
+        case .newWindow:
+            return s { "new-window -t '\($0)'" } ?? "new-window"
+        case .nextWindow:
+            return s { "next-window -t '\($0)'" }
+        case .prevWindow:
+            return s { "previous-window -t '\($0)'" }
+        case .splitRight:
+            return s { "split-window -h -t '\($0)'" }
+        case .splitDown:
+            return s { "split-window -v -t '\($0)'" }
+        case .nextPane:
+            return s { "select-pane -t '\($0):.+'" }
+        case .prevPane:
+            return s { "select-pane -t '\($0):.-'" }
+        case .toggleZoom:
+            return s { "resize-pane -Z -t '\($0)'" }
+        case .closePane:
+            return s { "kill-pane -t '\($0)'" }
+        case .showSessionPicker:
+            return "switch-client \(clientFlag)-n"
+        case .switchSession(let name):
+            return "switch-client \(clientFlag)-t '\(name)'"
+        case .detach:
+            return iosClientTTY.map { "detach-client -t '\($0)'" } ?? "detach-client"
         }
     }
 
