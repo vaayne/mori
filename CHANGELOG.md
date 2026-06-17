@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🎨 Design
+
+- **iOS (MoriRemote)**: Replaced the app icon with the Mori brand mark (dark-green potted sprout with a `>_` prompt), matching the macOS app. The previous AI-generated stump illustration with baked-in "Mori" text turned to mush at home-screen sizes; the new icon is full-bleed and opaque so iOS applies its own corner mask.
+
 ### ✨ Features
 
 - **iOS (MoriRemote)**: Reworked the keyboard accessory bar by role and frequency — low-frequency app chrome (switch host, customize keys, detach) folds into one leading "•••" overflow menu; the high-frequency context actions (sessions switcher, tmux) stay pinned; the rest of the bar is typing keys with keyboard-dismiss pinned at the end. Removes the back/gear buttons that sat next to `ctrl`/`esc` and were easy to fat-finger.

@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1f3324"/>
+      <stop offset="52%" stop-color="#122017"/>
+      <stop offset="100%" stop-color="#09100b"/>
+    </linearGradient>
+    <radialGradient id="ambient" cx="0.5" cy="0.22" r="0.72">
+      <stop offset="0%" stop-color="#a4ff67" stop-opacity="0.34"/>
+      <stop offset="45%" stop-color="#53b547" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#53b547" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="woodFront" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c48942"/>
+      <stop offset="100%" stop-color="#7b4d22"/>
+    </linearGradient>
+    <linearGradient id="woodTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#edbc7b"/>
+      <stop offset="100%" stop-color="#b6793c"/>
+    </linearGradient>
+    <linearGradient id="leafLeft" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0%" stop-color="#bfff69"/>
+      <stop offset="100%" stop-color="#33a53e"/>
+    </linearGradient>
+    <linearGradient id="leafRight" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0%" stop-color="#98f157"/>
+      <stop offset="100%" stop-color="#237d38"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity="0.30"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#ambient)"/>
+
+  <g filter="url(#shadow)">
+    <ellipse cx="256" cy="388" rx="124" ry="28" fill="#050705" opacity="0.34"/>
+
+    <path d="M176 252 C162 260, 152 288, 152 326 C152 375, 168 408, 190 408 H322 C344 408, 360 375, 360 326 C360 288, 350 260, 336 252 Z"
+      fill="url(#woodFront)"/>
+
+    <path d="M197 284 Q256 296 315 284" stroke="#7d4d23" stroke-width="5" opacity="0.20" fill="none" stroke-linecap="round"/>
+    <path d="M192 331 Q256 342 320 331" stroke="#6a411d" stroke-width="4" opacity="0.16" fill="none" stroke-linecap="round"/>
+
+    <ellipse cx="256" cy="244" rx="108" ry="44" fill="url(#woodTop)"/>
+    <ellipse cx="256" cy="244" rx="72" ry="27" fill="#422916"/>
+    <ellipse cx="256" cy="244" rx="56" ry="21" fill="#151a16"/>
+    <ellipse cx="256" cy="244" rx="84" ry="33" fill="none" stroke="#8b5b30" stroke-width="4" opacity="0.28"/>
+
+    <path d="M256 245 C257 215, 251 181, 254 151 C257 126, 270 111, 271 90" stroke="#61ca4e" stroke-width="12" fill="none" stroke-linecap="round"/>
+
+    <path d="M250 176 C229 151, 189 146, 164 167 C173 191, 218 201, 249 185 Z" fill="url(#leafLeft)"/>
+    <path d="M263 159 C283 134, 322 129, 347 147 C338 171, 295 180, 264 168 Z" fill="url(#leafRight)"/>
+    <path d="M266 98 C258 88, 251 79, 249 73 C252 67, 262 70, 268 79 C272 86, 272 93, 266 98 Z" fill="#aefd63"/>
+
+    <g stroke="#f5f8f2" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M213 322 L245 345 L213 368"/>
+      <path d="M273 366 H311"/>
+    </g>
+  </g>
+</svg>
