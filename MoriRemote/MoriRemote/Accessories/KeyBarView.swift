@@ -119,17 +119,16 @@ final class KeyBarView: UIView {
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
         keyButtons = []
 
-        let back = makeBackButton()
-        stackView.addArrangedSubview(back)
-        keyButtons.append(back)
+        // Leading cluster: low-frequency app chrome folds into one overflow
+        // menu; the two high-frequency context actions (sessions, tmux) stay
+        // pinned so they're always one tap away.
+        let menu = makeMenuButton()
+        stackView.addArrangedSubview(menu)
+        keyButtons.append(menu)
 
         let sidebar = makeSidebarButton()
         stackView.addArrangedSubview(sidebar)
         keyButtons.append(sidebar)
-
-        let divBack = makeDivider()
-        stackView.addArrangedSubview(divBack)
-        keyButtons.append(divBack)
 
         let tmux = makeTmuxMenuButton()
         stackView.addArrangedSubview(tmux)
@@ -160,10 +159,6 @@ final class KeyBarView: UIView {
         let keyboardButton = makeKeyboardDismissButton()
         stackView.addArrangedSubview(keyboardButton)
         keyButtons.append(keyboardButton)
-
-        let gear = makeGearButton()
-        stackView.addArrangedSubview(gear)
-        keyButtons.append(gear)
     }
 
     private func makeDivider() -> UIView {
@@ -267,32 +262,54 @@ final class KeyBarView: UIView {
         objc_getAssociatedObject(button, &KeyBarView.actionKey) as? KeyAction
     }
 
-    private func makeBackButton() -> UIButton {
+    /// Overflow menu for low-frequency app chrome (switch host, customize keys,
+    /// detach) — kept out of the typing row so it can't be fat-fingered while
+    /// reaching for `ctrl`/`esc`.
+    private func makeMenuButton() -> UIButton {
         let button = KeyBarButton()
         configurePanScrolling(button)
-        let config = UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
-        button.setImage(UIImage(systemName: "chevron.backward", withConfiguration: config), for: .normal)
+        let config = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
+        button.setImage(UIImage(systemName: "ellipsis.circle", withConfiguration: config), for: .normal)
         button.tintColor = textDim
         button.backgroundColor = keySpecialBg
         button.layer.cornerRadius = 7
         button.layer.borderWidth = 1
         button.layer.borderColor = keyBorder.cgColor
         button.clipsToBounds = true
-        button.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         button.translatesAutoresizingMaskIntoConstraints = false
+        button.showsMenuAsPrimaryAction = true
+        button.menu = makeChromeMenu()
         NSLayoutConstraint.activate([
             button.heightAnchor.constraint(equalToConstant: 30),
-            button.widthAnchor.constraint(equalToConstant: 30),
+            button.widthAnchor.constraint(equalToConstant: 34),
         ])
         return button
     }
 
-    @objc private func backTapped() {
-        UIDevice.current.playInputClick()
-        dismissKeyboardForDeferredUITransition()
-        DispatchQueue.main.async { [weak self] in
-            self?.onBackTapped?()
+    private func makeChromeMenu() -> UIMenu {
+        let switchHost = UIAction(
+            title: String(localized: "Switch Host"),
+            image: UIImage(systemName: "arrow.left.arrow.right")
+        ) { [weak self] _ in
+            self?.dismissKeyboardForDeferredUITransition()
+            DispatchQueue.main.async { self?.onBackTapped?() }
         }
+        let customize = UIAction(
+            title: String(localized: "Customize Keys"),
+            image: UIImage(systemName: "slider.horizontal.3")
+        ) { [weak self] _ in
+            self?.dismissKeyboardForDeferredUITransition()
+            DispatchQueue.main.async { self?.onCustomizeTapped?() }
+        }
+        let detach = UIAction(
+            title: String(localized: "Detach"),
+            image: UIImage(systemName: "rectangle.portrait.and.arrow.right"),
+            attributes: .destructive
+        ) { [weak self] _ in
+            self?.dismissKeyboardForDeferredUITransition()
+            DispatchQueue.main.async { self?.onTmuxAction?(.detach) }
+        }
+        return UIMenu(children: [switchHost, customize, detach])
     }
 
     private func makeSidebarButton() -> UIButton {
@@ -374,33 +391,6 @@ final class KeyBarView: UIView {
     @objc private func keyboardDismissTapped() {
         UIDevice.current.playInputClick()
         terminalView?.resignFirstResponder()
-    }
-
-    private func makeGearButton() -> UIButton {
-        let button = KeyBarButton()
-        configurePanScrolling(button)
-        let config = UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
-        button.setImage(UIImage(systemName: "slider.horizontal.3", withConfiguration: config), for: .normal)
-        button.tintColor = textDim
-        button.backgroundColor = keySpecialBg
-        button.layer.cornerRadius = 7
-        button.layer.borderWidth = 1
-        button.layer.borderColor = keyBorder.cgColor
-        button.clipsToBounds = true
-        button.addTarget(self, action: #selector(gearTapped), for: .touchUpInside)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            button.heightAnchor.constraint(equalToConstant: 30),
-            button.widthAnchor.constraint(equalToConstant: 30),
-        ])
-        return button
-    }
-
-    @objc private func gearTapped() {
-        dismissKeyboardForDeferredUITransition()
-        DispatchQueue.main.async { [weak self] in
-            self?.onCustomizeTapped?()
-        }
     }
 
     private func dismissKeyboardForDeferredUITransition() {
