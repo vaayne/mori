@@ -180,56 +180,71 @@ private struct ServerRow: View {
     @State private var showDeleteConfirm = false
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: Theme.rowRadius)
-                        .fill(isSelected ? Theme.accentSoft : Theme.mutedSurface)
-                        .frame(width: 36, height: 36)
+        HStack(spacing: 0) {
+            Button(action: onTap) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: Theme.rowRadius)
+                            .fill(isSelected ? Theme.accentSoft : Theme.mutedSurface)
+                            .frame(width: 36, height: 36)
+
+                        if isConnecting {
+                            ProgressView()
+                                .tint(Theme.accent)
+                                .scaleEffect(0.9)
+                        } else {
+                            Image(systemName: "terminal")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(isSelected ? Theme.accent : Theme.textSecondary)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(server.displayName)
+                            .font(Theme.rowTitleFont)
+                            .foregroundStyle(Theme.textPrimary)
+                            .lineLimit(1)
+
+                        Text(server.subtitle)
+                            .font(Theme.monoCaptionFont)
+                            .foregroundStyle(Theme.textSecondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 8)
 
                     if isConnecting {
-                        ProgressView()
-                            .tint(Theme.accent)
-                            .scaleEffect(0.9)
-                    } else {
-                        Image(systemName: "terminal")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(isSelected ? Theme.accent : Theme.textSecondary)
+                        Text(String(localized: "Connecting…"))
+                            .font(Theme.shortcutFont)
+                            .foregroundStyle(Theme.accent)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 5))
                     }
                 }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(server.displayName)
-                        .font(Theme.rowTitleFont)
-                        .foregroundStyle(Theme.textPrimary)
-                        .lineLimit(1)
-
-                    Text(server.subtitle)
-                        .font(Theme.monoCaptionFont)
-                        .foregroundStyle(Theme.textSecondary)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 8)
-
-                if isConnecting {
-                    Text(String(localized: "Connecting…"))
-                        .font(Theme.shortcutFont)
-                        .foregroundStyle(Theme.accent)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 4)
-                        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 5))
-                } else {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Theme.textTertiary)
-                }
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .rowSurfaceStyle(selected: isSelected)
+            .buttonStyle(.plain)
+
+            Menu {
+                Button { onEdit() } label: {
+                    Label(String(localized: "Edit"), systemImage: "pencil")
+                }
+                Button(role: .destructive) { showDeleteConfirm = true } label: {
+                    Label(String(localized: "Delete"), systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .rowSurfaceStyle(selected: isSelected)
         .contextMenu {
             Button { onEdit() } label: {
                 Label(String(localized: "Edit"), systemImage: "pencil")

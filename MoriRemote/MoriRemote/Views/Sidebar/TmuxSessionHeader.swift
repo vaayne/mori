@@ -5,6 +5,8 @@ import SwiftUI
 struct TmuxSessionHeader: View {
     let session: TmuxSession
     let isActive: Bool
+    /// Branch slug to display when the session follows `<project>/<branch>`.
+    var branchLabel: String? = nil
     let onSwitch: () -> Void
     let onRename: () -> Void
     let onKill: () -> Void
@@ -15,7 +17,7 @@ struct TmuxSessionHeader: View {
                 .fill(isActive ? Theme.accent : Theme.textTertiary)
                 .frame(width: 6, height: 6)
 
-            Text(session.name)
+            Text(branchLabel ?? session.name)
                 .moriSectionHeaderStyle()
                 .foregroundStyle(isActive ? Theme.textSecondary : Theme.textTertiary)
 

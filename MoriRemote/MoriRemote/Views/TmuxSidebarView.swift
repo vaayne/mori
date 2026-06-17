@@ -38,15 +38,15 @@ struct TmuxSidebarView: View {
                         onDismiss: { onDismiss?() }
                     )
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(String(localized: "Session"))
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(String(localized: "Projects"))
                             .moriSectionHeaderStyle()
                             .padding(.horizontal, 16)
 
                         if coordinator.tmuxSessions.isEmpty {
                             emptyState
                         } else {
-                            sessionList
+                            projectList
                         }
                     }
                 }
@@ -75,62 +75,127 @@ struct TmuxSidebarView: View {
         }
     }
 
-    private var sessionList: some View {
-        LazyVStack(spacing: 10) {
-            ForEach(coordinator.tmuxSessions) { session in
-                let isActive = session.name == coordinator.tmuxActiveSession?.name
-                let isActiveSession = session.name == coordinator.tmuxActiveSession?.name
+    /// Sessions grouped by mori project short name (the `<project>/<branch>`
+    /// convention), preserving first-seen order.
+    private var projectGroups: [(project: String, sessions: [TmuxSession])] {
+        var order: [String] = []
+        var map: [String: [TmuxSession]] = [:]
+        for session in coordinator.tmuxSessions {
+            let project = Self.projectName(for: session.name)
+            if map[project] == nil { order.append(project) }
+            map[project, default: []].append(session)
+        }
+        return order.map { ($0, map[$0] ?? []) }
+    }
 
-                VStack(spacing: 6) {
-                    TmuxSessionHeader(
-                        session: session,
-                        isActive: isActive,
-                        onSwitch: {
-                            coordinator.switchTmuxSession(session.name)
+    private var projectList: some View {
+        LazyVStack(alignment: .leading, spacing: 18) {
+            ForEach(projectGroups, id: \.project) { group in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.textTertiary)
+                        Text(group.project)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                    .padding(.horizontal, 14)
+
+                    ForEach(group.sessions) { session in
+                        sessionCard(session)
+                    }
+                }
+            }
+        }
+    }
+
+    private func sessionCard(_ session: TmuxSession) -> some View {
+        let isActiveSession = session.name == coordinator.tmuxActiveSession?.name
+
+        return VStack(spacing: 6) {
+            TmuxSessionHeader(
+                session: session,
+                isActive: isActiveSession,
+                branchLabel: Self.branchLabel(for: session.name),
+                onSwitch: {
+                    coordinator.switchTmuxSession(session.name)
+                    dismissIfNeeded()
+                },
+                onRename: {
+                    renameTarget = session
+                    renameText = session.name
+                },
+                onKill: {
+                    coordinator.closeTmuxSession(session.name)
+                }
+            )
+
+            VStack(spacing: 4) {
+                ForEach(session.windows) { window in
+                    TmuxWindowRow(
+                        window: window,
+                        isActiveSession: isActiveSession,
+                        onSelect: {
+                            coordinator.selectTmuxWindow(
+                                session: session.name,
+                                windowIndex: window.index
+                            )
                             dismissIfNeeded()
                         },
-                        onRename: {
-                            renameTarget = session
-                            renameText = session.name
+                        onNewAfter: {
+                            coordinator.newTmuxWindowAfter(
+                                session: session.name,
+                                windowIndex: window.index
+                            )
                         },
-                        onKill: {
-                            coordinator.closeTmuxSession(session.name)
+                        onClose: {
+                            coordinator.closeTmuxWindow(
+                                session: session.name,
+                                windowIndex: window.index
+                            )
                         }
                     )
 
-                    VStack(spacing: 4) {
-                        ForEach(session.windows) { window in
-                            TmuxWindowRow(
-                                window: window,
-                                isActiveSession: isActiveSession,
-                                onSelect: {
-                                    coordinator.selectTmuxWindow(
-                                        session: session.name,
-                                        windowIndex: window.index
-                                    )
-                                    dismissIfNeeded()
-                                },
-                                onNewAfter: {
-                                    coordinator.newTmuxWindowAfter(
-                                        session: session.name,
-                                        windowIndex: window.index
-                                    )
-                                },
-                                onClose: {
-                                    coordinator.closeTmuxWindow(
-                                        session: session.name,
-                                        windowIndex: window.index
-                                    )
-                                }
-                            )
+                    if window.panes.count > 1 {
+                        VStack(spacing: 2) {
+                            ForEach(window.panes) { pane in
+                                TmuxPaneRow(
+                                    pane: pane,
+                                    isHighlighted: isActiveSession && window.isActive && pane.isActive,
+                                    onSelect: {
+                                        coordinator.selectTmuxPane(
+                                            session: session.name,
+                                            windowIndex: window.index,
+                                            paneId: pane.paneId
+                                        )
+                                        dismissIfNeeded()
+                                    }
+                                )
+                            }
                         }
+                        .padding(.leading, 30)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 8)
                 }
-                .cardStyle(padding: 0)
             }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
         }
+        .cardStyle(padding: 0)
+    }
+
+    /// Project short name from a `<project>/<branch>` session name, else the
+    /// whole name when it doesn't follow the convention.
+    static func projectName(for sessionName: String) -> String {
+        guard let slash = sessionName.firstIndex(of: "/") else { return sessionName }
+        return String(sessionName[..<slash])
+    }
+
+    /// Branch slug from a `<project>/<branch>` session name, else nil.
+    static func branchLabel(for sessionName: String) -> String? {
+        guard let slash = sessionName.firstIndex(of: "/") else { return nil }
+        let branch = sessionName[sessionName.index(after: slash)...]
+        return branch.isEmpty ? nil : String(branch)
     }
 
     private var emptyState: some View {

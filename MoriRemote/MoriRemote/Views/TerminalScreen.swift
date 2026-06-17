@@ -10,7 +10,6 @@ struct TerminalScreen: View {
     let onDisconnect: () -> Void
     let onSwitchHost: () -> Void
 
-    @State private var showSidebar = false
     @State private var showRegularSidebar = true
 
     var body: some View {
@@ -56,24 +55,22 @@ struct TerminalScreen: View {
                 newState,
                 activeServerID: coordinator.activeServer?.id
             )
-
-            if newState != .shell {
-                showSidebar = false
-            }
         }
         .onChange(of: horizontalSizeClass) { _, newSizeClass in
             if newSizeClass == .regular {
-                showSidebar = false
+                sessionHost.showSidebar = false
             }
         }
     }
 
     private var compactWorkspace: some View {
-        SidebarContainer(isOpen: $showSidebar) {
-            sidebarContent(presentation: .overlay, onDismiss: { showSidebar = false })
-        } content: {
-            terminalContent(showsCompactChrome: true)
-        }
+        terminalContent(showsCompactChrome: true)
+            .sheet(isPresented: sidebarBinding) {
+                sidebarContent(presentation: .overlay, onDismiss: { sessionHost.showSidebar = false })
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(Theme.sidebarBg)
+            }
     }
 
     private var regularWorkspace: some View {
@@ -130,6 +127,13 @@ struct TerminalScreen: View {
         Binding(
             get: { sessionHost.showTmuxCommands },
             set: { sessionHost.showTmuxCommands = $0 }
+        )
+    }
+
+    private var sidebarBinding: Binding<Bool> {
+        Binding(
+            get: { sessionHost.showSidebar },
+            set: { sessionHost.showSidebar = $0 }
         )
     }
 

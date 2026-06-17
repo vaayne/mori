@@ -12,12 +12,32 @@ struct TmuxSession: Equatable, Sendable, Identifiable {
     var id: String { name }
 }
 
+struct TmuxPane: Equatable, Sendable, Identifiable {
+    let paneId: String          // tmux global id, e.g. "%5"
+    let isActive: Bool
+    let command: String         // pane_current_command, e.g. "claude", "zsh"
+    let title: String
+    let path: String
+    let agentState: String?     // @mori-agent-state, e.g. "working", "done"
+    let agentName: String?      // @mori-agent-name, e.g. "claude", "codex"
+
+    var id: String { paneId }
+
+    /// Best label for the pane row: agent name, command, or pane id.
+    var displayLabel: String {
+        if let agentName, !agentName.isEmpty { return agentName }
+        if !command.isEmpty { return command }
+        return paneId
+    }
+}
+
 struct TmuxWindow: Equatable, Sendable, Identifiable {
     let index: Int
     let name: String
     let isActive: Bool
     let sessionName: String
     let path: String
+    var panes: [TmuxPane] = []
 
     var id: String { "\(sessionName):\(index)" }
 
@@ -31,12 +51,13 @@ struct TmuxWindow: Equatable, Sendable, Identifiable {
         return "…/" + parts.suffix(2).joined(separator: "/")
     }
 
-    init(index: Int, name: String, isActive: Bool, sessionName: String = "", path: String = "") {
+    init(index: Int, name: String, isActive: Bool, sessionName: String = "", path: String = "", panes: [TmuxPane] = []) {
         self.index = index
         self.name = name
         self.isActive = isActive
         self.sessionName = sessionName
         self.path = path
+        self.panes = panes
     }
 }
 

@@ -60,9 +60,14 @@ final class ShellCoordinator {
     var tmuxWindows: [TmuxWindow] = []
     var isTmuxActive: Bool { tmuxActiveSession != nil }
 
-    /// Whether the shell is currently inside a tmux session (attached).
-    /// True when the active session reports as attached.
-    var isTmuxAttached: Bool { tmuxActiveSession?.isAttached == true }
+    /// The tty of the tmux client backing THIS iOS shell channel (e.g. "/dev/pts/3").
+    /// Resolved after attach; used to target switch-client at our own client so
+    /// switching never disturbs a desktop client attached to the same server.
+    private var iosClientTTY: String?
+
+    /// The session our own client currently views. Seeded from the resolved client,
+    /// then updated on every switch we issue (the iOS client only moves via us).
+    private var iosCurrentSession: String?
 
     var isShellActive: Bool { state == .shell }
 
@@ -175,6 +180,7 @@ final class ShellCoordinator {
 
             state = .shell
             renderer.activateKeyboard()
+            attachDefaultSession()
             startTmuxPolling(generation: generation)
         } catch {
             guard isCurrentConnection(generation) else { return }
@@ -290,18 +296,56 @@ final class ShellCoordinator {
         }
     }
 
+    /// Attach this shell channel to the server's default tmux session, creating it
+    /// if needed. Only attaches when the shell is not already inside tmux, so a
+    /// user whose login shell auto-attaches keeps their existing session.
+    private func attachDefaultSession() {
+        guard let session = activeServer?.defaultSession.trimmingCharacters(in: .whitespacesAndNewlines),
+              !session.isEmpty else { return }
+        iosCurrentSession = session
+        let cmd = "[ -z \"$TMUX\" ] && exec tmux new-session -A -s '\(session)'"
+        let sequence = "\u{15}\(cmd)\n"
+        sendInput(Data(sequence.utf8))
+    }
+
+    /// Resolve the tty of the tmux client backing this shell channel, so that
+    /// switch-client can target our own client by `-c <tty>`.
+    private func resolveClientTTY(generation: UInt64) async {
+        guard isCurrentConnection(generation), let sshManager, await sshManager.isConnected else { return }
+        let target = activeServer?.defaultSession.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        do {
+            let raw = try await sshManager.runCommandNoPTY(
+                tmuxCmd("list-clients -F '#{client_tty}\(fs)#{client_session}' 2>/dev/null")
+            )
+            guard isCurrentConnection(generation) else { return }
+            let clients = raw.split(separator: "\n").compactMap { line -> (tty: String, session: String)? in
+                let p = line.components(separatedBy: fs)
+                guard p.count >= 2, !p[0].isEmpty else { return nil }
+                return (p[0], p[1])
+            }
+            guard !clients.isEmpty else { return }
+            // Prefer the client attached to our default session; else the sole client.
+            let match = clients.first(where: { $0.session == target }) ?? (clients.count == 1 ? clients.first : nil)
+            if let match {
+                iosClientTTY = match.tty
+                iosCurrentSession = match.session
+                log.info("Resolved iOS tmux client tty: \(match.tty) (session \(match.session))")
+            }
+        } catch {
+            log.debug("resolveClientTTY failed: \(error)")
+        }
+    }
+
     func startTmuxPolling(generation: UInt64) {
         tmuxPollTask?.cancel()
         tmuxPollTask = Task { [weak self] in
             guard let self else { return }
             guard await self.isCurrentConnection(generation) else { return }
 
-            // Detect tmux path first
-            await self.detectTmuxPath(generation: generation)
-            guard await self.isCurrentConnection(generation) else { return }
-
-            // Initial poll after shell starts
+            // Give the attach a moment to settle, then resolve our client tty.
             try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard !Task.isCancelled, await self.isCurrentConnection(generation) else { return }
+            await self.resolveClientTTY(generation: generation)
             guard !Task.isCancelled, await self.isCurrentConnection(generation) else { return }
             await self.pollTmuxState(generation: generation)
 
@@ -314,46 +358,30 @@ final class ShellCoordinator {
         }
     }
 
-    /// Resolved full path to tmux binary (exec channels don't have user's PATH).
-    private var tmuxPath: String = "tmux"
 
-    private func detectTmuxPath(generation: UInt64) async {
-        guard isCurrentConnection(generation), let sshManager, await sshManager.isConnected else { return }
-        // Try common paths — exec channels don't source .zshrc/.bashrc
-        let candidates = [
-            "/opt/homebrew/bin/tmux",
-            "/usr/local/bin/tmux",
-            "/usr/bin/tmux",
-            "/bin/tmux",
-        ]
+    /// Build a tmux invocation with common bin locations on PATH. Exec channels
+    /// don't source the login profile, so Homebrew's tmux is off PATH — prepend
+    /// the usual locations so a bare `tmux` resolves on any standard install.
+    /// This avoids depending on a separately-detected path, which login-shell
+    /// banner noise can corrupt.
+    private func tmuxCmd(_ args: String) -> String {
+        "PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH\" tmux \(args)"
+    }
+
+    /// Field separator for tmux `-F` queries. tmux sanitizes non-printable and
+    /// non-ASCII bytes in format output to `_` (both a raw tab and `§` came back
+    /// as `_`), so use a printable-ASCII token that survives verbatim and is
+    /// vanishingly unlikely to appear in a session/window name, path, or title.
+    private let fs = "~|~"
+
+    /// Run a tmux query via NoPTY exec, falling back to PTY exec on failure.
+    private func tmuxQuery(_ command: String) async throws -> String {
+        guard let sshManager else { throw ShellError.notConnected }
         do {
-            // Use login shell to find the real path
-            let result = try await sshManager.runCommandNoPTY(
-                "bash -lc 'which tmux' 2>/dev/null || zsh -lc 'which tmux' 2>/dev/null"
-            )
-            let path = result.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !path.isEmpty && !path.contains("not found") {
-                tmuxPath = path
-                log.info("Detected tmux path: \(path)")
-                return
-            }
+            return try await sshManager.runCommandNoPTY(command)
         } catch {
-            log.debug("tmux path detection via shell failed: \(error)")
+            return try await sshManager.runCommand(command)
         }
-        // Fallback: check common paths directly
-        for candidate in candidates {
-            do {
-                let result = try await sshManager.runCommandNoPTY(
-                    "test -x \(candidate) && echo \(candidate)"
-                )
-                if !result.isEmpty {
-                    tmuxPath = candidate
-                    log.info("Detected tmux path (fallback): \(candidate)")
-                    return
-                }
-            } catch { continue }
-        }
-        log.info("Could not detect tmux path, using default: tmux")
     }
 
     private func pollTmuxState(generation: UInt64? = nil) async {
@@ -366,189 +394,171 @@ final class ShellCoordinator {
             return
         }
 
-        do {
-            // List sessions: "session_name:window_count:attached"
-            // Try NoPTY first, fall back to PTY if it fails
-            let sessionsRaw: String
-            do {
-                sessionsRaw = try await sshManager.runCommandNoPTY(
-                    "\(tmuxPath) list-sessions -F '#{session_name}:#{session_windows}:#{session_attached}' 2>/dev/null"
-                )
-            } catch {
-                log.debug("NoPTY poll failed, trying with PTY: \(error)")
-                sessionsRaw = try await sshManager.runCommand(
-                    "\(tmuxPath) list-sessions -F '#{session_name}:#{session_windows}:#{session_attached}' 2>/dev/null"
-                )
-            }
-            if let generation, !isCurrentConnection(generation) {
-                return
-            }
-
-            log.info("tmux sessions raw: '\(sessionsRaw)'")
-            guard !sessionsRaw.isEmpty else {
-                accessoryBar?.updateTmux(session: nil, windows: [])
-                self.tmuxSessions = []
-                self.tmuxActiveSession = nil
-                self.tmuxWindows = []
-                return
-            }
-
-            let sessions = sessionsRaw.split(separator: "\n").compactMap { line -> TmuxSession? in
-                let parts = line.split(separator: ":", maxSplits: 2)
-                guard parts.count >= 3 else { return nil }
-                return TmuxSession(
-                    name: String(parts[0]),
-                    windowCount: Int(parts[1]) ?? 0,
-                    isAttached: parts[2] == "1"
-                )
-            }
-
-            // Find the attached session (or first)
-            let activeSession = sessions.first(where: { $0.isAttached }) ?? sessions.first
-
-            guard let activeSession else {
-                accessoryBar?.updateTmux(session: nil, windows: [])
-                self.tmuxSessions = []
-                self.tmuxActiveSession = nil
-                self.tmuxWindows = []
-                return
-            }
-
-            // Fetch windows for all sessions (for sidebar)
-            var enrichedSessions: [TmuxSession] = []
-            var activeWindows: [TmuxWindow] = []
-
-            for session in sessions {
-                let windowsRaw: String
-                do {
-                    windowsRaw = try await sshManager.runCommandNoPTY(
-                        "\(tmuxPath) list-windows -t '\(session.name)' -F '#{window_index}:#{window_name}:#{window_active}:#{pane_current_path}' 2>/dev/null"
-                    )
-                } catch {
-                    windowsRaw = try await sshManager.runCommand(
-                        "\(tmuxPath) list-windows -t '\(session.name)' -F '#{window_index}:#{window_name}:#{window_active}:#{pane_current_path}' 2>/dev/null"
-                    )
-                }
-
-                if let generation, !isCurrentConnection(generation) {
-                    return
-                }
-
-                let windows = windowsRaw.split(separator: "\n").compactMap { line -> TmuxWindow? in
-                    let parts = line.split(separator: ":", maxSplits: 3)
-                    guard parts.count >= 3 else { return nil }
-                    return TmuxWindow(
-                        index: Int(parts[0]) ?? 0,
-                        name: String(parts[1]),
-                        isActive: parts[2] == "1",
-                        sessionName: session.name,
-                        path: parts.count >= 4 ? String(parts[3]) : ""
-                    )
-                }
-
-                var s = session
-                s.windows = windows
-                enrichedSessions.append(s)
-
-                if session.name == activeSession.name {
-                    activeWindows = windows
-                }
-            }
-
-            if let generation, !isCurrentConnection(generation) {
-                return
-            }
-
-            accessoryBar?.updateTmux(session: activeSession, windows: activeWindows)
-            self.tmuxSessions = enrichedSessions
-            self.tmuxActiveSession = activeSession
-            self.tmuxWindows = activeWindows
-        } catch {
-            // tmux not running — hide the bar
-            log.info("tmux poll error: \(error)")
+        func clearState() {
             accessoryBar?.updateTmux(session: nil, windows: [])
             self.tmuxSessions = []
             self.tmuxActiveSession = nil
             self.tmuxWindows = []
         }
+
+        do {
+            // Three bulk queries (fs-delimited): sessions, all windows, all panes.
+            let sessionsRaw = try await tmuxQuery(
+                tmuxCmd("list-sessions -F '#{session_name}\(fs)#{session_windows}\(fs)#{session_attached}' 2>/dev/null")
+            )
+            if let generation, !isCurrentConnection(generation) { return }
+            guard !sessionsRaw.isEmpty else { clearState(); return }
+
+            // Windows/panes are best-effort: a failure here must not wipe the
+            // session list, so fall back to empty instead of throwing out.
+            let windowsRaw = (try? await tmuxQuery(
+                tmuxCmd("list-windows -a -F '#{session_name}\(fs)#{window_index}\(fs)#{window_name}\(fs)#{window_active}\(fs)#{pane_current_path}' 2>/dev/null")
+            )) ?? ""
+            if let generation, !isCurrentConnection(generation) { return }
+
+            let panesRaw = (try? await tmuxQuery(
+                tmuxCmd("list-panes -a -F '#{session_name}\(fs)#{window_index}\(fs)#{pane_id}\(fs)#{pane_active}\(fs)#{pane_current_command}\(fs)#{pane_title}\(fs)#{pane_current_path}\(fs)#{@mori-agent-state}\(fs)#{@mori-agent-name}' 2>/dev/null")
+            )) ?? ""
+            if let generation, !isCurrentConnection(generation) { return }
+
+            // Panes grouped by "session\twindowIndex".
+            var panesByWindow: [String: [TmuxPane]] = [:]
+            for line in panesRaw.split(separator: "\n") {
+                let p = line.components(separatedBy: fs)
+                guard p.count >= 4 else { continue }
+                let key = "\(p[0])\t\(p[1])"
+                let pane = TmuxPane(
+                    paneId: p[2],
+                    isActive: p[3] == "1",
+                    command: p.count > 4 ? p[4] : "",
+                    title: p.count > 5 ? p[5] : "",
+                    path: p.count > 6 ? p[6] : "",
+                    agentState: p.count > 7 && !p[7].isEmpty ? p[7] : nil,
+                    agentName: p.count > 8 && !p[8].isEmpty ? p[8] : nil
+                )
+                panesByWindow[key, default: []].append(pane)
+            }
+
+            // Windows grouped by session name, panes attached.
+            var windowsBySession: [String: [TmuxWindow]] = [:]
+            for line in windowsRaw.split(separator: "\n") {
+                let p = line.components(separatedBy: fs)
+                guard p.count >= 4 else { continue }
+                let sessionName = p[0]
+                let index = Int(p[1]) ?? 0
+                let window = TmuxWindow(
+                    index: index,
+                    name: p[2],
+                    isActive: p[3] == "1",
+                    sessionName: sessionName,
+                    path: p.count > 4 ? p[4] : "",
+                    panes: panesByWindow["\(sessionName)\t\(index)"] ?? []
+                )
+                windowsBySession[sessionName, default: []].append(window)
+            }
+
+            let sessions = sessionsRaw.split(separator: "\n").compactMap { line -> TmuxSession? in
+                let p = line.components(separatedBy: fs)
+                guard p.count >= 3 else { return nil }
+                let name = p[0]
+                return TmuxSession(
+                    name: name,
+                    windowCount: Int(p[1]) ?? 0,
+                    isAttached: p[2] == "1",
+                    windows: (windowsBySession[name] ?? []).sorted { $0.index < $1.index }
+                )
+            }
+
+            // The session our own client views (by tty), else first attached, else first.
+            let activeSession = resolveActiveSession(among: sessions)
+            guard let activeSession else { clearState(); return }
+            if let generation, !isCurrentConnection(generation) { return }
+
+            accessoryBar?.updateTmux(session: activeSession, windows: activeSession.windows)
+            self.tmuxSessions = sessions
+            self.tmuxActiveSession = activeSession
+            self.tmuxWindows = activeSession.windows
+        } catch {
+            // tmux not running — hide the bar
+            log.info("tmux poll error: \(error)")
+            clearState()
+        }
+    }
+
+    /// Pick the session this iOS client is viewing: our tracked current session
+    /// when it still exists, otherwise the first attached/first session.
+    private func resolveActiveSession(among sessions: [TmuxSession]) -> TmuxSession? {
+        if let current = iosCurrentSession,
+           let match = sessions.first(where: { $0.name == current }) {
+            return match
+        }
+        return sessions.first(where: { $0.isAttached }) ?? sessions.first
+    }
+
+    /// `-c '<tty>' ` targeting our own client, or empty when the tty is unknown.
+    private var clientFlag: String {
+        iosClientTTY.map { "-c '\($0)' " } ?? ""
     }
 
     /// Switch to a specific tmux window by index in the given session.
+    /// `switch-client -t 'session:index'` moves our client to that session AND
+    /// selects the window in one step; the attached client repaints to it.
     func selectTmuxWindow(session: String, windowIndex: Int) {
-        if isTmuxAttached {
-            runTmuxCommand("\(tmuxPath) switch-client -t '\(session):\(windowIndex)'")
-        } else {
-            attachTmuxSession(session, selectWindow: windowIndex)
-        }
+        iosCurrentSession = session
+        runTmuxCommand(tmuxCmd("switch-client \(clientFlag)-t '\(session):\(windowIndex)'"))
     }
 
     /// Switch to a different tmux session.
     func switchTmuxSession(_ sessionName: String) {
-        if isTmuxAttached {
-            runTmuxCommand("\(tmuxPath) switch-client -t '\(sessionName)'")
-        } else {
-            attachTmuxSession(sessionName)
-        }
+        iosCurrentSession = sessionName
+        runTmuxCommand(tmuxCmd("switch-client \(clientFlag)-t '\(sessionName)'"))
+    }
+
+    /// Switch to a specific pane: move our client to the owning window, then
+    /// select the pane (pane ids like `%5` are unique across the server).
+    func selectTmuxPane(session: String, windowIndex: Int, paneId: String) {
+        iosCurrentSession = session
+        runTmuxCommand(tmuxCmd("switch-client \(clientFlag)-t '\(session):\(windowIndex)' \\; select-pane -t '\(paneId)'"))
     }
 
     /// Close (kill) a tmux window.
     func closeTmuxWindow(session: String, windowIndex: Int) {
-        runTmuxCommand("\(tmuxPath) kill-window -t '\(session):\(windowIndex)'")
+        runTmuxCommand(tmuxCmd("kill-window -t '\(session):\(windowIndex)'"))
     }
 
     /// Create a new tmux window in the active session.
     func newTmuxWindow() {
-        runTmuxCommand("\(tmuxPath) new-window")
+        if let session = iosCurrentSession {
+            runTmuxCommand(tmuxCmd("new-window -t '\(session)'"))
+        } else {
+            runTmuxCommand(tmuxCmd("new-window"))
+        }
     }
 
     /// Create a new tmux session.
     func newTmuxSession() {
-        runTmuxCommand("\(tmuxPath) new-session -d")
+        runTmuxCommand(tmuxCmd("new-session -d"))
     }
 
     /// Kill (close) a tmux session.
     func closeTmuxSession(_ sessionName: String) {
-        runTmuxCommand("\(tmuxPath) kill-session -t '\(sessionName)'")
+        runTmuxCommand(tmuxCmd("kill-session -t '\(sessionName)'"))
     }
 
     /// Rename a tmux session.
     func renameTmuxSession(_ oldName: String, to newName: String) {
-        runTmuxCommand("\(tmuxPath) rename-session -t '\(oldName)' '\(newName)'")
+        runTmuxCommand(tmuxCmd("rename-session -t '\(oldName)' '\(newName)'"))
     }
 
     /// Create a new tmux window after a specific window index.
     func newTmuxWindowAfter(session: String, windowIndex: Int) {
-        runTmuxCommand("\(tmuxPath) new-window -a -t '\(session):\(windowIndex)'")
+        runTmuxCommand(tmuxCmd("new-window -a -t '\(session):\(windowIndex)'"))
     }
 
     /// Force a tmux state refresh.
     func refreshTmuxState() {
         let generation = connectionGeneration
         Task { [weak self] in
-            guard let self, await self.isCurrentConnection(generation) else { return }
-            await self.pollTmuxState(generation: generation)
-        }
-    }
-
-    /// Attach to a tmux session via the shell channel.
-    /// Used when not currently inside tmux (switch-client won't work).
-    private func attachTmuxSession(_ sessionName: String, selectWindow: Int? = nil) {
-        guard state == .shell, shellChannel != nil else {
-            log.debug("Ignoring tmux attach while shell is inactive")
-            return
-        }
-
-        let generation = connectionGeneration
-        var cmd = "tmux attach-session -t '\(sessionName)'"
-        if let win = selectWindow {
-            // Select the target window first, then attach
-            cmd = "tmux select-window -t '\(sessionName):\(win)' \\; attach-session -t '\(sessionName)'"
-        }
-        log.info("Tmux attach via shell: \(cmd)")
-        let sequence = "\u{15}\(cmd)\n"
-        sendInput(Data(sequence.utf8))
-        Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
             guard let self, await self.isCurrentConnection(generation) else { return }
             await self.pollTmuxState(generation: generation)
         }
@@ -631,7 +641,8 @@ final class ShellCoordinator {
         tmuxSessions = []
         tmuxActiveSession = nil
         tmuxWindows = []
-        tmuxPath = "tmux"
+        iosClientTTY = nil
+        iosCurrentSession = nil
     }
 
     private func beginConnectionGeneration() -> UInt64 {

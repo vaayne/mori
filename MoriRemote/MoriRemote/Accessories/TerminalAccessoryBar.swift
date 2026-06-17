@@ -19,6 +19,9 @@ final class TerminalAccessoryBar: UIInputView, UIInputViewAudioFeedback {
     /// Called when the user taps the back button.
     var onBackTapped: (() -> Void)?
 
+    /// Called when the user taps the sidebar button.
+    var onSidebarTapped: (() -> Void)?
+
     /// Called when the user taps the tmux menu button.
     var onTmuxMenuTapped: (() -> Void)?
 
@@ -51,6 +54,9 @@ final class TerminalAccessoryBar: UIInputView, UIInputViewAudioFeedback {
 
         keyBar.onBackTapped = { [weak self] in
             self?.onBackTapped?()
+        }
+        keyBar.onSidebarTapped = { [weak self] in
+            self?.onSidebarTapped?()
         }
         keyBar.onCustomizeTapped = { [weak self] in
             self?.onCustomizeTapped?()

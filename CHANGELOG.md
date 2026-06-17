@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- **iOS (MoriRemote)**: The sidebar now mirrors the desktop hierarchy — projects group their tmux sessions (branches), and each window lists its panes (with agent-state badges) so you can switch project, tab, and pane from one place.
+
+### 🐛 Bug Fixes
+
+- **iOS (MoriRemote)**: The sidebar now actually lists tmux sessions. Queries used a tab field separator, which tmux sanitizes to `_` in `-F` output — so every row collapsed into one field and parsing produced zero sessions ("No tmux sessions"). Switched to a printable-ASCII separator that survives tmux output verbatim, and routed all tmux commands through a single `PATH`-prefixed wrapper so a bare `tmux` resolves on the exec channel (dropping the fragile login-shell path detection).
+- **iOS (MoriRemote)**: Switching tmux session/window now works reliably. The shell channel explicitly attaches to the server's default session and is targeted by `switch-client -c <tty>`, instead of firing `switch-client` from a detached exec channel that hit the wrong (or no) client.
+- **iOS (MoriRemote)**: Added a visible "⋯" menu on each server row for Edit/Delete — previously editing was only reachable via a hidden long-press.
+- **iOS (MoriRemote)**: Added a sidebar button to the keyboard accessory bar on iPhone, so the project/tab/pane switcher is reachable without knowing the left-edge swipe (and without spending a row of terminal space on a top overlay).
+
 ## [0.4.8] - 2026-06-12
 
 ### 🎨 Design

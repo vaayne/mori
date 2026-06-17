@@ -8,6 +8,7 @@ final class KeyBarView: UIView {
 
     weak var terminalView: SwiftTerm.TerminalView?
     var onBackTapped: (() -> Void)?
+    var onSidebarTapped: (() -> Void)?
     var onCustomizeTapped: (() -> Void)?
     var onTmuxMenuTapped: (() -> Void)?
     var onTmuxAction: ((TmuxCommand) -> Void)?
@@ -121,6 +122,10 @@ final class KeyBarView: UIView {
         let back = makeBackButton()
         stackView.addArrangedSubview(back)
         keyButtons.append(back)
+
+        let sidebar = makeSidebarButton()
+        stackView.addArrangedSubview(sidebar)
+        keyButtons.append(sidebar)
 
         let divBack = makeDivider()
         stackView.addArrangedSubview(divBack)
@@ -287,6 +292,34 @@ final class KeyBarView: UIView {
         dismissKeyboardForDeferredUITransition()
         DispatchQueue.main.async { [weak self] in
             self?.onBackTapped?()
+        }
+    }
+
+    private func makeSidebarButton() -> UIButton {
+        let button = KeyBarButton()
+        configurePanScrolling(button)
+        let config = UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
+        button.setImage(UIImage(systemName: "sidebar.left", withConfiguration: config), for: .normal)
+        button.tintColor = textDim
+        button.backgroundColor = keySpecialBg
+        button.layer.cornerRadius = 7
+        button.layer.borderWidth = 1
+        button.layer.borderColor = keyBorder.cgColor
+        button.clipsToBounds = true
+        button.addTarget(self, action: #selector(sidebarTapped), for: .touchUpInside)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            button.heightAnchor.constraint(equalToConstant: 30),
+            button.widthAnchor.constraint(equalToConstant: 30),
+        ])
+        return button
+    }
+
+    @objc private func sidebarTapped() {
+        UIDevice.current.playInputClick()
+        dismissKeyboardForDeferredUITransition()
+        DispatchQueue.main.async { [weak self] in
+            self?.onSidebarTapped?()
         }
     }
 
