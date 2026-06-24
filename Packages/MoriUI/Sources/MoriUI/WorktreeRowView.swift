@@ -226,32 +226,7 @@ public struct WorktreeRowView: View {
 
     private var overflowMenu: some View {
         Menu {
-            let editors = EditorLauncher.installed
-            if !editors.isEmpty {
-                ForEach(editors) { editor in
-                    Button {
-                        editor.open(path: worktree.path)
-                    } label: {
-                        Label("Open in \(editor.name)", systemImage: editor.icon)
-                    }
-                }
-                Divider()
-            }
-
-            Button {
-                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: worktree.path)
-            } label: {
-                Label("Reveal in Finder", systemImage: "folder")
-            }
-
-            if !worktree.isMainWorktree, let onRemove {
-                Divider()
-                Button(role: .destructive) {
-                    onRemove()
-                } label: {
-                    Label("Remove Worktree…", systemImage: "trash")
-                }
-            }
+            WorktreeContextActions(worktree: worktree, pullRequest: pullRequest, onRemove: onRemove)
         } label: {
             Image(systemName: "ellipsis")
                 .font(MoriTokens.Font.sidebarAccessory)

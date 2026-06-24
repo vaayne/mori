@@ -200,7 +200,7 @@ public struct WorktreeSidebarView: View {
             .padding(.leading, 14)
             .padding(.horizontal, MoriTokens.Spacing.sm)
             .overlay(alignment: .leading) { Rectangle().fill(Color.primary.opacity(MoriTokens.Opacity.subtle)).frame(width: 1).padding(.leading, 18) }
-            .contextMenu { worktreeActions(worktree) }
+            .contextMenu { WorktreeContextActions(worktree: worktree, pullRequest: pullRequests[worktree.id], onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } }) }
     }
 
     private func toggleExpand(_ id: UUID) { if expandedWorktrees.contains(id) { expandedWorktrees.remove(id) } else { expandedWorktrees.insert(id) } }
@@ -272,15 +272,6 @@ public struct WorktreeSidebarView: View {
         if let onImportWorktrees, project.gitCommonDir != project.repoRootPath { Button { onImportWorktrees(project.id) } label: { Label("Import Existing Worktrees", systemImage: "square.and.arrow.down") } }
         if case .ssh = (project.location ?? .local), let onEditRemoteProject { Button { onEditRemoteProject(project.id) } label: { Label("Update Remote Credentials…", systemImage: "key") } }
         if let onRemoveProject { Divider(); Button(role: .destructive) { onRemoveProject(project.id) } label: { Label("Remove Project…", systemImage: "trash") } }
-    }
-    @ViewBuilder private func worktreeActions(_ worktree: Worktree) -> some View { let editors = EditorLauncher.installed; if !editors.isEmpty { ForEach(editors) { editor in Button { editor.open(path: worktree.path) } label: { Label("Open in \(editor.name)", systemImage: editor.icon) } }; Divider() }; Button { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: worktree.path) } label: { Label("Reveal in Finder", systemImage: "folder") }; if let pr = pullRequests[worktree.id], let github = URL(string: pr.url) { Divider(); Button { NSWorkspace.shared.open(github) } label: { Label("Open PR on GitHub", systemImage: "arrow.up.forward.app") }; if let diffshub = diffsHubURL(from: pr.url) { Button { NSWorkspace.shared.open(diffshub) } label: { Label("Open PR on DiffsHub", systemImage: "arrow.up.forward.square") } } }; if !worktree.isMainWorktree, let onRemoveWorktree { Divider(); Button(role: .destructive) { onRemoveWorktree(worktree.id) } label: { Label("Remove Worktree…", systemImage: "trash") } } }
-
-    /// DiffsHub mirrors a GitHub PR at the same path on a different host — swap only
-    /// the host so any github.com URL maps cleanly, and bail if it isn't one.
-    private func diffsHubURL(from githubURL: String) -> URL? {
-        guard var components = URLComponents(string: githubURL), components.host == "github.com" else { return nil }
-        components.host = "diffshub.com"
-        return components.url
     }
 }
 

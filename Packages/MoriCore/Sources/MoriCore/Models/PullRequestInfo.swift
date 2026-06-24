@@ -51,6 +51,15 @@ public struct PullRequestInfo: Equatable, Sendable {
         self.reviewDecision = reviewDecision
     }
 
+    /// The same PR viewed on DiffsHub, which mirrors github.com PRs at an identical
+    /// path on its own host. Nil when `url` isn't a github.com URL (e.g. GHE), so
+    /// callers can hide the option rather than build a broken link.
+    public var diffsHubURL: URL? {
+        guard var components = URLComponents(string: url), components.host == "github.com" else { return nil }
+        components.host = "diffshub.com"
+        return components.url
+    }
+
     /// Parse the JSON object emitted by
     /// `gh pr view <branch> --json number,title,url,state,isDraft,reviewDecision,statusCheckRollup`.
     /// Returns nil when the payload can't be decoded.
