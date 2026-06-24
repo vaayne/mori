@@ -6,9 +6,10 @@
 
 ## Tier 1 — `gh dash` 作为 companion tool（性价比最高，先做）
 
-把官方扩展 [`gh dash`](https://github.com/dlvhdr/gh-dash) 当成一个内嵌 TUI，跑在右侧 ~420pt 的 companion pane，⌥G 唤起 —— 完全复用现有的 lazygit 集成架构（`CompanionToolPaneController`）。
+把官方扩展 [`gh dash`](https://github.com/dlvhdr/gh-dash) 当成一个内嵌 TUI，跑在右侧 ~420pt 的 companion pane，**⌘⇧G** 唤起 —— 完全复用现有的 lazygit 集成架构（`CompanionToolPaneController`）。
 
-- 新增 `CompanionTool.githubDash` 枚举值 + 一个键位，几乎零新 UI。
+- 新增 `CompanionTool.githubDash` 枚举值 + `tools.ghDash` 键位（⌘⇧G），几乎零新 UI。
+- **lazygit（⌘G）/ yazi（⌘E）完全不动**：三者平级共用一个面板，按各自键互相切换，和现状逻辑一致。
 - PR / Issue 列表、review 队列、checkout、评论、看 diff，全在终端里。
 - 前提：用户已装 `gh` 和 `gh-dash` 扩展（启动时探测，缺了给一行提示）。
 
