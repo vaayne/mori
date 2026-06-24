@@ -13,7 +13,15 @@ public struct WorktreeRowView: View {
     let worktree: Worktree
     let agentName: String?
     let isSelected: Bool
+    /// Number of tmux windows in this worktree. A chip appears when > 1 so the
+    /// second level stays collapsed by default (keeps the tree at two levels).
+    let windowCount: Int
+    let isExpanded: Bool
+    /// Non-nil when a *hidden* window needs attention while collapsed; drives a
+    /// small dot on the chip so alerts surface without forcing the level open.
+    let hiddenAlertColor: Color?
     let onSelect: () -> Void
+    var onToggleExpand: (() -> Void)?
     var onRemove: (() -> Void)?
 
     @State private var isHovered = false
@@ -22,40 +30,59 @@ public struct WorktreeRowView: View {
         worktree: Worktree,
         agentName: String? = nil,
         isSelected: Bool,
+        windowCount: Int = 0,
+        isExpanded: Bool = false,
+        hiddenAlertColor: Color? = nil,
         onSelect: @escaping () -> Void,
+        onToggleExpand: (() -> Void)? = nil,
         onRemove: (() -> Void)? = nil
     ) {
         self.worktree = worktree
         self.agentName = agentName
         self.isSelected = isSelected
+        self.windowCount = windowCount
+        self.isExpanded = isExpanded
+        self.hiddenAlertColor = hiddenAlertColor
         self.onSelect = onSelect
+        self.onToggleExpand = onToggleExpand
         self.onRemove = onRemove
     }
 
     public var body: some View {
         Button(action: onSelect) {
             HStack(alignment: .center, spacing: MoriTokens.Spacing.md) {
-                Circle()
-                    .fill(statusDotColor)
-                    .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
+                // Leading glyph fuses identity (branch vs session) and agent state
+                // into one 17pt symbol — pulses while an agent waits on you.
+                Image(systemName: worktreeIcon)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(glyphColor)
+                    .frame(width: 17, height: 17)
+                    .symbolEffect(.pulse, options: .repeating, isActive: worktree.agentState == .waitingForInput)
 
                 Text(branchDisplayText)
-                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular, design: .monospaced))
-                    .foregroundStyle(isSelected ? Color.primary : MoriTokens.Color.muted)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                    .foregroundStyle(nameColor)
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
 
-                if let timeText = relativeTimeText {
-                    Text(timeText)
+                if let gitSummaryText {
+                    Text(gitSummaryText)
                         .font(MoriTokens.Font.monoSmall)
-                        .foregroundStyle(MoriTokens.Color.inactive)
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.85) : MoriTokens.Color.muted)
                         .lineLimit(1)
                 }
+
+                windowChip
 
                 if isHovered {
                     overflowMenu
                         .transition(.opacity)
+                } else if let timeText = relativeTimeText {
+                    Text(timeText)
+                        .font(MoriTokens.Font.monoShortcut)
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.7) : MoriTokens.Color.inactive)
+                        .lineLimit(1)
                 }
             }
             .padding(.vertical, 6)
@@ -64,29 +91,6 @@ public struct WorktreeRowView: View {
         }
         .buttonStyle(.plain)
         .background(rowBackground)
-        .overlay {
-            RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
-                .strokeBorder(rowOutlineColor, lineWidth: rowOutlineColor == .clear ? 0 : 1)
-        }
-        .overlay(alignment: .leading) {
-            if worktree.agentState == .none && worktree.status != .active {
-                Circle()
-                    .strokeBorder(MoriTokens.Color.inactive.opacity(0.55), lineWidth: 1.5)
-                    .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
-                    .padding(.leading, MoriTokens.Spacing.lg)
-            }
-        }
-        .overlay(alignment: .leading) {
-            if isSelected {
-                // 2pt accent bar, inset 6pt top/bottom, rounded on the trailing edge.
-                // Mirrors `.wt.sel::before` in the V1 design.
-                Rectangle()
-                    .fill(MoriTokens.Color.active)
-                    .frame(width: MoriTokens.Size.selectedIndicatorWidth)
-                    .padding(.vertical, MoriTokens.Size.selectedIndicatorInset)
-                    .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.hairline))
-            }
-        }
         .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -95,14 +99,55 @@ public struct WorktreeRowView: View {
         }
     }
 
-    private var statusDotColor: Color {
-        if worktree.agentState == .error { return MoriTokens.Color.error }
-        if worktree.agentState == .waitingForInput { return MoriTokens.Color.attention }
-        if worktree.agentState == .running { return MoriTokens.Color.success }
-        // Live session with no agent: solid muted dot ("warm"), so semantic
-        // colors stay reserved for agent activity.
-        if worktree.status == .active { return MoriTokens.Color.inactive }
-        return .clear
+    /// Tint for the leading glyph: agent state first, then live/idle session.
+    private var glyphColor: Color {
+        if isSelected { return .white }
+        switch worktree.agentState {
+        case .error: return MoriTokens.Color.error
+        case .waitingForInput: return MoriTokens.Color.attention
+        case .running, .completed: return MoriTokens.Color.success
+        case .none:
+            return worktree.status == .active ? Color.primary.opacity(0.75) : MoriTokens.Color.inactive
+        }
+    }
+
+    private var nameColor: Color {
+        if isSelected { return .white }
+        return (worktree.status == .active || worktree.agentState != .none)
+            ? Color.primary : MoriTokens.Color.muted
+    }
+
+    /// Collapsed-by-default window count. Tapping toggles the third level so it
+    /// only appears on demand; a dot warns when a hidden window needs attention.
+    @ViewBuilder
+    private var windowChip: some View {
+        if windowCount >= 2, let onToggleExpand {
+            Button(action: onToggleExpand) {
+                HStack(spacing: 2) {
+                    Text("\(windowCount)")
+                    Image(systemName: "chevron.down")
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                }
+                .font(MoriTokens.Font.monoShortcut)
+                .foregroundStyle(isSelected ? Color.white.opacity(0.85) : MoriTokens.Color.muted)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule().fill(isSelected
+                        ? Color.white.opacity(0.18)
+                        : MoriTokens.Color.muted.opacity(MoriTokens.Opacity.light))
+                )
+                .overlay(alignment: .topTrailing) {
+                    if let hiddenAlertColor, !isExpanded {
+                        Circle()
+                            .fill(hiddenAlertColor)
+                            .frame(width: 5, height: 5)
+                            .offset(x: 2, y: -2)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private var iconView: some View {
@@ -211,41 +256,26 @@ public struct WorktreeRowView: View {
 
     private var rowBackground: AnyShapeStyle {
         if isSelected {
-            // Left-anchored gradient fade — accent fog on the left, clear on the right.
-            // Gives the selected row real presence without a flat tinted block.
-            let gradient = LinearGradient(
-                gradient: Gradient(colors: [
-                    MoriTokens.Color.active.opacity(MoriTokens.Opacity.light),
-                    MoriTokens.Color.active.opacity(MoriTokens.Opacity.quiet)
-                ]),
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            return AnyShapeStyle(gradient)
+            // Solid accent fill with white text — unmistakable "you are here".
+            return AnyShapeStyle(MoriTokens.Color.active)
         }
         if isHovered {
-            return AnyShapeStyle(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle))
+            return AnyShapeStyle(Color.primary.opacity(MoriTokens.Opacity.subtle))
         }
         return AnyShapeStyle(Color.clear)
-    }
-
-    private var rowOutlineColor: Color {
-        if isSelected {
-            return MoriTokens.Color.active.opacity(0.25)
-        }
-        if isHovered {
-            return Color.primary.opacity(MoriTokens.Opacity.quiet)
-        }
-        return .clear
     }
 
     // MARK: - Derived Content
 
     private var worktreeIcon: String {
-        if worktree.branch == nil {
-            return "house.fill"
+        if worktree.isDetached || worktree.branch == nil {
+            return "circle.dotted"
         }
-        return worktree.isMainWorktree ? "star.fill" : "arrow.triangle.branch"
+        // Main branch reads as a "trunk"; linked worktrees as a node graph,
+        // echoing Stella's branch-vs-merge glyph distinction.
+        return worktree.isMainWorktree
+            ? "arrow.triangle.branch"
+            : "point.3.connected.trianglepath.dotted"
     }
 
     private var branchText: String? {

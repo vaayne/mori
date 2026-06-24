@@ -85,13 +85,16 @@ public struct WindowRowView: View {
                 onSelect()
             }) {
             HStack(spacing: MoriTokens.Spacing.md) {
-                // Colored type dot
-                Circle()
-                    .fill(windowDotColor)
-                    .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
+                // Small SF Symbol glyph in the same family as the worktree row,
+                // tinted by state — keeps the two levels visually related.
+                Image(systemName: windowGlyph)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(windowGlyphColor)
+                    .frame(width: 14, height: 14)
+                    .symbolEffect(.pulse, options: .repeating, isActive: window.agentState == .waitingForInput)
 
                 Text(window.title.isEmpty ? .localized("Window \(window.tmuxWindowIndex)") : window.title)
-                    .font(MoriTokens.Font.windowTitle)
+                    .font(.system(size: 12, weight: isActive ? .semibold : .regular))
                     .lineLimit(1)
                     .foregroundStyle(isActive ? Color.primary : Color.primary.opacity(0.72))
 
@@ -107,37 +110,39 @@ public struct WindowRowView: View {
                     } else {
                         Text("⌘\(shortcutIndex)")
                             .font(MoriTokens.Font.monoShortcut)
-                            .foregroundStyle(MoriTokens.Color.muted)
-                            .padding(.horizontal, MoriTokens.Spacing.sm)
-                            .padding(.vertical, MoriTokens.Spacing.xxs)
-                            .background(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.quiet))
-                            .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.badge))
+                            .foregroundStyle(MoriTokens.Color.inactive)
                             .accessibilityLabel("Command Option \(shortcutIndex)")
                     }
                 }
             }
-            .padding(.vertical, MoriTokens.Spacing.sm)
+            .padding(.vertical, 5)
             .padding(.horizontal, MoriTokens.Spacing.lg)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .background(rowBackground)
-        .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.projectTile))
-        .overlay {
-            RoundedRectangle(cornerRadius: MoriTokens.Radius.projectTile)
-                .strokeBorder(rowOutlineColor, lineWidth: rowOutlineColor == .clear ? 0 : 1)
-        }
+        .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
         .animation(.easeInOut(duration: 0.14), value: shortcutHintsVisible)
     }
 
-    /// Color of the dot indicator based on window type/state.
-    private var windowDotColor: Color {
-        if isActive { return MoriTokens.Color.active }
-        if window.detectedAgent != nil || window.agentState != .none { return MoriTokens.Color.info }
-        switch window.tag {
-        case .server: return MoriTokens.Color.success
-        case .agent: return MoriTokens.Color.info
-        default: return MoriTokens.Color.inactive
+    /// Glyph for the window row: a node graph for windows that look agent-ish,
+    /// terminal icon otherwise. Matches the language used on worktree rows.
+    private var windowGlyph: String {
+        if window.detectedAgent != nil || window.agentState != .none || window.tag == .agent {
+            return "point.3.connected.trianglepath.dotted"
+        }
+        if window.tag == .server { return "server.rack" }
+        return "terminal"
+    }
+
+    private var windowGlyphColor: Color {
+        switch window.agentState {
+        case .error: return MoriTokens.Color.error
+        case .waitingForInput: return MoriTokens.Color.attention
+        case .running, .completed: return MoriTokens.Color.success
+        case .none:
+            if isActive { return MoriTokens.Color.active }
+            return MoriTokens.Color.inactive
         }
     }
 
@@ -157,22 +162,12 @@ public struct WindowRowView: View {
 
     private var rowBackground: some ShapeStyle {
         if isActive {
-            return AnyShapeStyle(MoriTokens.Color.active.opacity(MoriTokens.Opacity.quiet))
+            return AnyShapeStyle(MoriTokens.Color.active.opacity(MoriTokens.Opacity.light))
         } else if isHovered {
-            return AnyShapeStyle(Color.primary.opacity(MoriTokens.Opacity.quiet))
+            return AnyShapeStyle(Color.primary.opacity(MoriTokens.Opacity.subtle))
         } else {
             return AnyShapeStyle(Color.clear)
         }
-    }
-
-    private var rowOutlineColor: Color {
-        if isActive {
-            return MoriTokens.Color.active.opacity(0.18)
-        }
-        if isHovered {
-            return Color.primary.opacity(MoriTokens.Opacity.quiet)
-        }
-        return .clear
     }
 
     @ViewBuilder

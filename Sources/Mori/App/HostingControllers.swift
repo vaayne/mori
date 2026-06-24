@@ -72,9 +72,17 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
     }
 
     /// Sync the hosting controller's view appearance with the ghostty theme.
+    ///
+    /// The sidebar's background is intentionally pushed one step back from the
+    /// terminal canvas — darkened in dark themes, gently darkened in light themes —
+    /// so the chrome reads as its own plane (matching Finder/Mail/Xcode), instead
+    /// of dissolving into the terminal when both use Ghostty's background colour.
     func updateAppearance(themeInfo: GhosttyThemeInfo) {
         view.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
-        view.layer?.backgroundColor = themeInfo.effectiveBackground.cgColor
+        let base = themeInfo.effectiveBackground
+        let fraction: CGFloat = themeInfo.isDark ? 0.22 : 0.06
+        let tinted = base.blended(withFraction: fraction, of: .black) ?? base
+        view.layer?.backgroundColor = tinted.cgColor
         // Force SwiftUI to re-render with the updated appearance context.
         view.needsDisplay = true
     }
