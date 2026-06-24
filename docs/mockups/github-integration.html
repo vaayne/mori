@@ -112,7 +112,9 @@
     border-radius: 6px; background: rgba(255,255,255,0.035);
     font-size: 11px;
   }
-  body.t2 .pr, body.both .pr { display: flex; }
+  /* only the selected worktree expands its PR strip */
+  body.t2 .wt.sel + .pr, body.both .wt.sel + .pr { display: flex; }
+  .pr .open-hint { margin-left: 4px; color: var(--fg-faint); font-size: 10px; flex-shrink: 0; }
   .pr .num { font-family: var(--mono); font-size: 10.5px; color: var(--fg-muted); }
   .pr .state { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
     padding: 2px 6px; border-radius: 3px; }
@@ -202,6 +204,7 @@
           <span class="num">#91</span>
           <span class="ttl">redesign the sidebar — calmer…</span>
           <span class="checks"><span class="ok">✓ 12</span></span>
+          <span class="open-hint">↗</span>
         </div>
 
         <div class="wt">
@@ -314,7 +317,7 @@
 
   <div class="annot">
     <span><b>Tier 1</b> — <code>gh dash</code> 作为 companion tool 跑在右侧面板，⌥G 唤起，复用 lazygit 那套架构</span>
-    <span><b>Tier 2</b> — 每个 worktree 行下挂一条 PR 状态条：编号 / 状态 / CI checks，绑定当前 branch</span>
+    <span><b>Tier 2</b> — 仅选中 worktree 展开 PR 状态条：编号 / 状态 / CI checks，点击 ↗ 开浏览器</span>
   </div>
 
   <script>

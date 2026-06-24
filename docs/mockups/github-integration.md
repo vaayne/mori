@@ -15,11 +15,11 @@
 
 ## Tier 2 — worktree PR 状态条（小幅 native，让它有上下文）
 
-每个 worktree 行下挂一条 PR 状态条，绑定该 branch：
+**仅选中的 worktree** 展开一条 PR 状态条（其余行收起，保持 sidebar 干净），绑定该 branch：
 
 - `gh pr view <branch> --json number,state,statusCheckRollup,reviewDecision`
 - 显示 编号 / 状态（open·draft·review）/ CI checks（✓ ✕ ●）。
-- 点击 → checkout 或 `gh pr view --web`。
+- 点击 → `gh pr view --web`（开浏览器）。
 - 新建 `MoriGitHub` 包，沿用 `MoriGit` 的 actor + 轮询模式（`GitStatusCoordinator` 同款）。
 
 这是 Mori 比裸 `gh` 强的地方：把 GitHub 状态钉在 worktree 上。
