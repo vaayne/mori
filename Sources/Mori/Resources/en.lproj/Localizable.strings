@@ -211,6 +211,9 @@
 "Replace" = "Replace";
 "Cancel" = "Cancel";
 "OK" = "OK";
+"Imported %d worktree(s)." = "Imported %d worktree(s).";
+"No new worktrees found." = "No new worktrees found.";
+"Failed to import worktrees." = "Failed to import worktrees.";
 
 /* Agent command palette */
 "Idle" = "Idle";

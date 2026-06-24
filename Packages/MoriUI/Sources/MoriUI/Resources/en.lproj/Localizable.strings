@@ -94,6 +94,7 @@
 "Previous Worktree" = "Previous Worktree";
 "Registers an extension in Pi's settings.json for agent start, end, and tool execution events." = "Registers an extension in Pi's settings.json for agent start, end, and tool execution events.";
 "Remove Project…" = "Remove Project…";
+"Import Existing Worktrees" = "Import Existing Worktrees";
 "Remove Worktree…" = "Remove Worktree…";
 "Resize Pane" = "Resize Pane";
 "Restart Mori to apply language change." = "Restart Mori to apply language change.";

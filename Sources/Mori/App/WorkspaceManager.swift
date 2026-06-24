@@ -697,10 +697,85 @@ final class WorkspaceManager {
         // Refresh state
         try loadAll()
 
+        // Pull in any worktrees that already exist on disk for this repo, so a
+        // freshly added project shows all of its branches, not just the root.
+        if try await git.isGitRepo(path: path) {
+            _ = try? await importExistingWorktrees(projectId: project.id)
+        }
+
         // Select the new project
         selectProject(project.id)
 
         return project
+    }
+
+    /// Scan the project's git repo for worktrees that exist on disk but aren't
+    /// tracked yet, and import them into the workspace. Returns the count imported.
+    ///
+    /// Idempotent: already-tracked paths (including the main worktree) and bare
+    /// entries are skipped, so re-running only picks up newly created worktrees.
+    @discardableResult
+    func importExistingWorktrees(projectId: UUID) async throws -> Int {
+        guard let project = appState.projects.first(where: { $0.id == projectId }) else {
+            throw WorkspaceError.projectNotFound
+        }
+        let projectLocation = location(for: project)
+        let git = gitBackend(for: projectLocation)
+        guard try await git.isGitRepo(path: project.repoRootPath) else { return 0 }
+
+        let infos = try await git.listWorktrees(repoPath: project.repoRootPath)
+        let knownPaths = Set(
+            appState.worktrees
+                .filter { $0.projectId == projectId }
+                .map { Self.normalizeWorktreePath($0.path) }
+        )
+
+        let tmux = tmuxBackend(for: projectLocation)
+        var imported: [Worktree] = []
+        for info in infos where !info.isBare {
+            if knownPaths.contains(Self.normalizeWorktreePath(info.path)) { continue }
+
+            let name = info.branchName ?? (info.path as NSString).lastPathComponent
+            let sessionName = SessionNaming.sessionName(projectShortName: project.shortName, worktree: name)
+            let worktree = Worktree(
+                projectId: projectId,
+                name: name,
+                path: info.path,
+                branch: info.branchName,
+                headSHA: info.head,
+                isMainWorktree: false,
+                isDetached: info.isDetached,
+                tmuxSessionName: sessionName,
+                status: .active,
+                location: projectLocation
+            )
+            try worktreeRepo.save(worktree)
+            imported.append(worktree)
+
+            // tmux session is best-effort, matching createWorktree() behavior.
+            let captured = worktree
+            Task {
+                _ = try? await tmux.createSession(
+                    name: sessionName,
+                    cwd: info.path,
+                    environment: moriPaneEnvironment(for: captured)
+                )
+                await onSessionCreated?(tmux)
+            }
+        }
+
+        appState.worktrees.append(contentsOf: imported)
+        return imported.count
+    }
+
+    /// Normalize a worktree path for set membership: expand `~`, collapse `..`,
+    /// and drop a trailing slash so DB and `git worktree list` paths compare equal.
+    private static func normalizeWorktreePath(_ path: String) -> String {
+        var normalized = (path as NSString).standardizingPath
+        if normalized.count > 1, normalized.hasSuffix("/") {
+            normalized.removeLast()
+        }
+        return normalized
     }
 
     @discardableResult

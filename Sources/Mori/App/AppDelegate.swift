@@ -163,6 +163,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                     await manager.removeProject(projectId: projectId)
                 }
             },
+            onImportWorktrees: { [weak manager] projectId in
+                guard let manager else { return }
+                Task { @MainActor in
+                    let alert = NSAlert()
+                    do {
+                        let count = try await manager.importExistingWorktrees(projectId: projectId)
+                        alert.messageText = count > 0
+                            ? String(format: .localized("Imported %d worktree(s)."), count)
+                            : .localized("No new worktrees found.")
+                        alert.alertStyle = .informational
+                    } catch {
+                        alert.messageText = .localized("Failed to import worktrees.")
+                        alert.informativeText = error.localizedDescription
+                        alert.alertStyle = .warning
+                    }
+                    alert.addButton(withTitle: .localized("OK"))
+                    alert.runModal()
+                }
+            },
             onEditRemoteProject: { [weak self] projectId in
                 self?.showEditRemoteCredentialsPanel(projectId: projectId)
             },

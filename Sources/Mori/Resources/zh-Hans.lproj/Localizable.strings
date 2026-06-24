@@ -211,6 +211,9 @@
 "Replace" = "替换";
 "Cancel" = "取消";
 "OK" = "好";
+"Imported %d worktree(s)." = "已导入 %d 个 worktree。";
+"No new worktrees found." = "未发现新的 worktree。";
+"Failed to import worktrees." = "导入 worktree 失败。";
 
 /* Agent command palette */
 "Idle" = "空闲";

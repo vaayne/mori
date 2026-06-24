@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Features
 
 - **macOS**: Added a configurable worktree location in Settings → General. New local worktrees are created under this base directory (defaults to `~/.mori`); existing worktrees are left where they are. Remote SSH worktrees still use the repo's parent directory.
+- **macOS**: Mori now imports a repo's existing git worktrees. Adding a project pulls in all of its on-disk worktrees automatically (not just the root), and a new "Import Existing Worktrees" item in the project context menu rescans on demand. Already-tracked worktrees are skipped, so re-running only picks up new ones.
 - **iOS (MoriRemote)**: Reworked the keyboard accessory bar by role and frequency — low-frequency app chrome (switch host, customize keys, detach) folds into one leading "•••" overflow menu; the high-frequency context actions (sessions switcher, tmux) stay pinned; the rest of the bar is typing keys with keyboard-dismiss pinned at the end. Removes the back/gear buttons that sat next to `ctrl`/`esc` and were easy to fat-finger.
 - **iOS (MoriRemote)**: The sidebar now mirrors the desktop hierarchy — projects group their tmux sessions (branches), and each window lists its panes (with agent-state badges) so you can switch project, tab, and pane from one place.
 
