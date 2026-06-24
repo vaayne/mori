@@ -31,6 +31,7 @@ public struct SidebarContainerView: View {
     private let onSendKeys: ((String, String) -> Void)?
     private let onUpdateProject: ((Project) -> Void)?
     private let onReorderProjects: (([UUID]) -> Void)?
+    private let pullRequests: [UUID: PullRequestInfo]
     private let isSidebarCollapsed: Bool
 
     public init(
@@ -57,6 +58,7 @@ public struct SidebarContainerView: View {
         onSendKeys: ((String, String) -> Void)? = nil,
         onUpdateProject: ((Project) -> Void)? = nil,
         onReorderProjects: (([UUID]) -> Void)? = nil,
+        pullRequests: [UUID: PullRequestInfo] = [:],
         isSidebarCollapsed: Bool = false
     ) {
         self.projects = projects
@@ -82,6 +84,7 @@ public struct SidebarContainerView: View {
         self.onSendKeys = onSendKeys
         self.onUpdateProject = onUpdateProject
         self.onReorderProjects = onReorderProjects
+        self.pullRequests = pullRequests
         self.isSidebarCollapsed = isSidebarCollapsed
     }
 
@@ -114,6 +117,7 @@ public struct SidebarContainerView: View {
             onSendKeys: onSendKeys,
             onUpdateProject: onUpdateProject,
             onReorderProjects: onReorderProjects,
+            pullRequests: pullRequests,
             isSidebarCollapsed: isSidebarCollapsed
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)

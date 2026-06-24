@@ -140,6 +140,7 @@ struct SidebarContentView: View {
             onSendKeys: onSendKeys,
             onUpdateProject: onUpdateProject,
             onReorderProjects: onReorderProjects,
+            pullRequests: appState.pullRequests,
             isSidebarCollapsed: layoutState.isCollapsed
         )
     }
