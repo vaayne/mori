@@ -94,6 +94,7 @@
 "Previous Worktree" = "上一个工作区";
 "Registers an extension in Pi's settings.json for agent start, end, and tool execution events." = "在 Pi 的 settings.json 中注册扩展，用于代理启动、结束和工具执行事件。";
 "Remove Project…" = "移除项目…";
+"Import Existing Worktrees" = "导入已有 Worktree";
 "Remove Worktree…" = "移除工作树…";
 "Resize Pane" = "调整面板大小";
 "Restart Mori to apply language change." = "重启 Mori 以应用语言更改。";
@@ -158,6 +159,9 @@
 "Apply" = "应用";
 "Unsaved changes" = "未保存的更改";
 "Proxy changes only affect new tabs and panes. Existing shells keep their current environment." = "代理更改仅影响新的标签页和面板。已有的 shell 会保留当前环境变量。";
+"Worktree location" = "Worktree 位置";
+"Base directory for new local worktrees. Leave empty to use the default ~/.mori. Existing worktrees are not moved." = "新建本地 worktree 的基础目录。留空则使用默认的 ~/.mori。已有的 worktree 不会被移动。";
+"Resolved: %@" = "解析为:%@";
 
 /* Task Mode Sidebar */
 "Tasks" = "任务";

@@ -379,7 +379,10 @@ public struct GhosttySettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     switch selectedCategory {
-                    case .general: GeneralSettingsContent()
+                    case .general: GeneralSettingsContent(
+                        toolSettings: $toolSettings,
+                        onWorktreeBasePathChanged: { onToolSettingsChanged?(toolSettings) }
+                    )
                     case .theme: ThemeSettingsContent(model: $model, availableThemes: availableThemes, onChanged: onChanged)
                     case .fonts: FontSettingsContent(model: $model, onChanged: onChanged)
                     case .cursor: CursorSettingsContent(model: $model, onChanged: onChanged)
@@ -573,10 +576,15 @@ private struct GeneralSettingsContent: View {
         ("简体中文", "zh-Hans"),
     ]
 
+    @Binding var toolSettings: ToolSettings
+    let onWorktreeBasePathChanged: () -> Void
+
     @State private var selectedLocale: String = {
         let lang = String.moriLanguage
         return lang.lowercased().hasPrefix("zh") ? "zh-Hans" : "en"
     }()
+
+    @State private var hasUnappliedChanges = false
 
     var body: some View {
         SettingsCard {
@@ -601,6 +609,49 @@ private struct GeneralSettingsContent: View {
             Text(String.localized("Restart Mori to apply language change."))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
+        }
+
+        SettingsCard {
+            SettingRow(
+                title: .localized("Worktree location"),
+                description: .localized("Base directory for new local worktrees. Leave empty to use the default ~/.mori. Existing worktrees are not moved.")
+            ) {
+                VStack(alignment: .trailing, spacing: 4) {
+                    TextField("~/.mori", text: $toolSettings.worktreeBasePath)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 280)
+                        .font(.system(size: 12, design: .monospaced))
+                        .onChange(of: toolSettings.worktreeBasePath) { _, _ in
+                            hasUnappliedChanges = true
+                        }
+
+                    Text(String(format: .localized("Resolved: %@"), toolSettings.resolvedWorktreeBaseDir()))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 280, alignment: .trailing)
+                        .multilineTextAlignment(.trailing)
+                        .textSelection(.enabled)
+                }
+            }
+
+            CardDivider()
+
+            HStack {
+                Button(String.localized("Apply")) {
+                    onWorktreeBasePathChanged()
+                    hasUnappliedChanges = false
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!hasUnappliedChanges)
+
+                if hasUnappliedChanges {
+                    Text(String.localized("Unsaved changes"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange)
+                }
+
+                Spacer()
+            }
         }
     }
 }

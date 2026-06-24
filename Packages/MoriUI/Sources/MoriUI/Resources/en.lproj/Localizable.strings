@@ -94,6 +94,7 @@
 "Previous Worktree" = "Previous Worktree";
 "Registers an extension in Pi's settings.json for agent start, end, and tool execution events." = "Registers an extension in Pi's settings.json for agent start, end, and tool execution events.";
 "Remove Project…" = "Remove Project…";
+"Import Existing Worktrees" = "Import Existing Worktrees";
 "Remove Worktree…" = "Remove Worktree…";
 "Resize Pane" = "Resize Pane";
 "Restart Mori to apply language change." = "Restart Mori to apply language change.";
@@ -158,6 +159,9 @@
 "Apply" = "Apply";
 "Unsaved changes" = "Unsaved changes";
 "Proxy changes only affect new tabs and panes. Existing shells keep their current environment." = "Proxy changes only affect new tabs and panes. Existing shells keep their current environment.";
+"Worktree location" = "Worktree location";
+"Base directory for new local worktrees. Leave empty to use the default ~/.mori. Existing worktrees are not moved." = "Base directory for new local worktrees. Leave empty to use the default ~/.mori. Existing worktrees are not moved.";
+"Resolved: %@" = "Resolved: %@";
 
 /* Task Mode Sidebar */
 "Tasks" = "Tasks";
