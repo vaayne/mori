@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-24
+
 ### 🎨 Design
 
 - **macOS**: Moved the terminal tabs into the window titlebar (Chrome-style) instead of a separate strip above the terminal. The tabs now fill the previously-empty titlebar space next to the toolbar icons, reclaiming a full row of vertical height for the terminal.
@@ -32,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **iOS (MoriRemote)**: The tmux shortcuts (new tab, next/prev tab, split, pane navigation, zoom, close pane, detach) now actually do something. They were typed as text into the shell channel, which only reaches tmux at a bare prompt — but the pane is usually running an agent that swallowed the keystrokes. They now run over the exec channel, targeting the client's current session, so they work regardless of the foreground program.
 - **iOS (MoriRemote)**: Added a visible "⋯" menu on each server row for Edit/Delete — previously editing was only reachable via a hidden long-press.
 - **iOS (MoriRemote)**: Added a sidebar button to the keyboard accessory bar on iPhone, so the project/tab/pane switcher is reachable without knowing the left-edge swipe (and without spending a row of terminal space on a top overlay).
+
+**Full Changelog**: [v0.4.8...v0.5.0](https://github.com/vaayne/mori/compare/v0.4.8...v0.5.0)
 
 ## [0.4.8] - 2026-06-12
 
