@@ -215,7 +215,16 @@ public struct WorktreeSidebarView: View {
         let waiting = visibleWorktrees(for: project).filter { $0.agentState == .waitingForInput }.count
         return Button { onSelectProject?(project.id) } label: {
             ProjectLetterTile(project: project, size: 34, cornerRadius: 9, fontSize: 13)
-                .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(selected ? MoriTokens.Color.active : state.color, lineWidth: (selected || state != .idle) ? 2 : 0))
+                .overlay {
+                    // Pulse the ring when an agent is waiting (and the project isn't
+                    // the selected one), mirroring the expanded glyph — so the dock
+                    // actively pulls your eye to whoever needs you.
+                    if state == .waiting && !selected {
+                        PulsingRing(color: state.color, cornerRadius: 9)
+                    } else {
+                        RoundedRectangle(cornerRadius: 9).strokeBorder(selected ? MoriTokens.Color.active : state.color, lineWidth: (selected || state != .idle) ? 2 : 0)
+                    }
+                }
                 .overlay(alignment: .topTrailing) { if waiting > 0 { Text("\(waiting)").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundStyle(.black).padding(.horizontal, 4).frame(minWidth: 15, minHeight: 15).background(Capsule().fill(MoriTokens.Color.attention)).offset(x: 6, y: -5) } }
         }
         .buttonStyle(.plain)
@@ -259,6 +268,21 @@ private enum SidebarStatus { case waiting, running, idle, error; var color: Colo
 private struct AgentPaneItem: Identifiable { let pane: RuntimePane; let window: RuntimeWindow; let worktree: Worktree; let projectName: String; var id: String { pane.tmuxPaneId }; var agentName: String { pane.detectedAgent ?? window.detectedAgent ?? window.title }; var path: String { "\(projectName)/\(worktree.branch ?? worktree.name)" }; var elapsed: String { RelativeTime.short(since: worktree.lastActiveAt) } }
 
 private struct StatusDot: View { let state: SidebarStatus; var pulsing = false; var body: some View { Circle().fill(state == .idle ? Color.clear : state.color).frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot).overlay(Circle().strokeBorder(state == .idle ? state.color : Color.clear, lineWidth: 1.5)).symbolEffect(.pulse, options: .repeating, value: pulsing) } }
+
+/// A rounded-rect stroke that breathes — used on the collapsed rail to flag a
+/// project whose agent is waiting on you.
+private struct PulsingRing: View {
+    let color: Color
+    let cornerRadius: CGFloat
+    @State private var dim = false
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .strokeBorder(color, lineWidth: 2)
+            .opacity(dim ? 0.3 : 1)
+            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dim)
+            .onAppear { dim = true }
+    }
+}
 private struct AgentCompactRow: View { let item: AgentPaneItem; let shortcutIndex: Int?; let onSelect: () -> Void; var body: some View { Button(action: onSelect) { HStack(spacing: MoriTokens.Spacing.md) { ProgressView().controlSize(.small).tint(MoriTokens.Color.success); Text(item.agentName).font(.system(size: 12, weight: .semibold, design: .monospaced)); Text(item.path).font(MoriTokens.Font.monoSmall).foregroundStyle(MoriTokens.Color.muted).lineLimit(1); Spacer(); if let shortcutIndex { ShortcutHintPill("⌘\(shortcutIndex)") } else { Text(item.elapsed).font(MoriTokens.Font.monoSmall).foregroundStyle(MoriTokens.Color.inactive) } }.padding(.horizontal, MoriTokens.Spacing.lg).padding(.vertical, 7).contentShape(Rectangle()) }.buttonStyle(.plain) } }
 
 private struct NeedsYouCard: View { let item: AgentPaneItem; let shortcutIndex: Int?; let onSelect: () -> Void; let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?; let onSendKeys: ((String, String) -> Void)?; @State private var output: String?; @State private var replying = false; @State private var sent = false
