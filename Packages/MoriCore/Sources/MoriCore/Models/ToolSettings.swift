@@ -7,17 +7,21 @@ public struct ToolSettings: Codable, Equatable, Sendable {
     public var lazygitPath: String
     public var yaziPath: String
     public var applyMoriTmuxDefaults: Bool
+    /// Custom base directory for new local worktrees. Empty means use the default `~/.mori`.
+    public var worktreeBasePath: String
 
     public init(
         tmuxPath: String = "",
         lazygitPath: String = "",
         yaziPath: String = "",
-        applyMoriTmuxDefaults: Bool = true
+        applyMoriTmuxDefaults: Bool = true,
+        worktreeBasePath: String = ""
     ) {
         self.tmuxPath = tmuxPath
         self.lazygitPath = lazygitPath
         self.yaziPath = yaziPath
         self.applyMoriTmuxDefaults = applyMoriTmuxDefaults
+        self.worktreeBasePath = worktreeBasePath
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -25,6 +29,7 @@ public struct ToolSettings: Codable, Equatable, Sendable {
         case lazygitPath
         case yaziPath
         case applyMoriTmuxDefaults
+        case worktreeBasePath
     }
 
     private static let defaultsKey = "toolSettings"
@@ -48,6 +53,7 @@ public struct ToolSettings: Codable, Equatable, Sendable {
         lazygitPath = try container.decodeIfPresent(String.self, forKey: .lazygitPath) ?? ""
         yaziPath = try container.decodeIfPresent(String.self, forKey: .yaziPath) ?? ""
         applyMoriTmuxDefaults = try container.decodeIfPresent(Bool.self, forKey: .applyMoriTmuxDefaults) ?? true
+        worktreeBasePath = try container.decodeIfPresent(String.self, forKey: .worktreeBasePath) ?? ""
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -56,6 +62,17 @@ public struct ToolSettings: Codable, Equatable, Sendable {
         try container.encode(lazygitPath, forKey: .lazygitPath)
         try container.encode(yaziPath, forKey: .yaziPath)
         try container.encode(applyMoriTmuxDefaults, forKey: .applyMoriTmuxDefaults)
+        try container.encode(worktreeBasePath, forKey: .worktreeBasePath)
+    }
+
+    /// Resolved base directory for new local worktrees, expanding `~` and falling
+    /// back to `~/.mori` when no custom path is configured.
+    public func resolvedWorktreeBaseDir() -> String {
+        let trimmed = worktreeBasePath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return (NSHomeDirectory() as NSString).appendingPathComponent(".mori")
+        }
+        return NSString(string: trimmed).expandingTildeInPath
     }
 
     public func configuredPath(for command: String) -> String? {

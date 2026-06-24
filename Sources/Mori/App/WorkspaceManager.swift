@@ -936,12 +936,12 @@ final class WorkspaceManager {
         let branchSlug = SessionNaming.slugify(trimmed)
 
         // Compute worktree path.
-        // Local: ~/.mori/{project-slug}/{branch-slug}
+        // Local: <worktree base dir>/{project-slug}/{branch-slug} (defaults to ~/.mori)
         // Remote SSH: <repo parent>/.mori/{project-slug}/{branch-slug}
         let projectDir: String
         switch projectLocation {
         case .local:
-            let moriDir = (NSHomeDirectory() as NSString).appendingPathComponent(".mori")
+            let moriDir = ToolSettings.load().resolvedWorktreeBaseDir()
             projectDir = (moriDir as NSString).appendingPathComponent(projectSlug)
         case .ssh:
             let parentDir = (project.repoRootPath as NSString).deletingLastPathComponent

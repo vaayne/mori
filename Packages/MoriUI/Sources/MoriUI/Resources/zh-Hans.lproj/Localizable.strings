@@ -158,6 +158,9 @@
 "Apply" = "应用";
 "Unsaved changes" = "未保存的更改";
 "Proxy changes only affect new tabs and panes. Existing shells keep their current environment." = "代理更改仅影响新的标签页和面板。已有的 shell 会保留当前环境变量。";
+"Worktree location" = "Worktree 位置";
+"Base directory for new local worktrees. Leave empty to use the default ~/.mori. Existing worktrees are not moved." = "新建本地 worktree 的基础目录。留空则使用默认的 ~/.mori。已有的 worktree 不会被移动。";
+"Resolved: %@" = "解析为:%@";
 
 /* Task Mode Sidebar */
 "Tasks" = "任务";

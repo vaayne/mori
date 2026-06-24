@@ -158,6 +158,9 @@
 "Apply" = "Apply";
 "Unsaved changes" = "Unsaved changes";
 "Proxy changes only affect new tabs and panes. Existing shells keep their current environment." = "Proxy changes only affect new tabs and panes. Existing shells keep their current environment.";
+"Worktree location" = "Worktree location";
+"Base directory for new local worktrees. Leave empty to use the default ~/.mori. Existing worktrees are not moved." = "Base directory for new local worktrees. Leave empty to use the default ~/.mori. Existing worktrees are not moved.";
+"Resolved: %@" = "Resolved: %@";
 
 /* Task Mode Sidebar */
 "Tasks" = "Tasks";
