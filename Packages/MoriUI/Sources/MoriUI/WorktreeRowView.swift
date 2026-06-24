@@ -13,7 +13,15 @@ public struct WorktreeRowView: View {
     let worktree: Worktree
     let agentName: String?
     let isSelected: Bool
+    /// Number of tmux windows in this worktree. A chip appears when > 1 so the
+    /// second level stays collapsed by default (keeps the tree at two levels).
+    let windowCount: Int
+    let isExpanded: Bool
+    /// Non-nil when a *hidden* window needs attention while collapsed; drives a
+    /// small dot on the chip so alerts surface without forcing the level open.
+    let hiddenAlertColor: Color?
     let onSelect: () -> Void
+    var onToggleExpand: (() -> Void)?
     var onRemove: (() -> Void)?
 
     @State private var isHovered = false
@@ -22,13 +30,21 @@ public struct WorktreeRowView: View {
         worktree: Worktree,
         agentName: String? = nil,
         isSelected: Bool,
+        windowCount: Int = 0,
+        isExpanded: Bool = false,
+        hiddenAlertColor: Color? = nil,
         onSelect: @escaping () -> Void,
+        onToggleExpand: (() -> Void)? = nil,
         onRemove: (() -> Void)? = nil
     ) {
         self.worktree = worktree
         self.agentName = agentName
         self.isSelected = isSelected
+        self.windowCount = windowCount
+        self.isExpanded = isExpanded
+        self.hiddenAlertColor = hiddenAlertColor
         self.onSelect = onSelect
+        self.onToggleExpand = onToggleExpand
         self.onRemove = onRemove
     }
 
@@ -56,6 +72,8 @@ public struct WorktreeRowView: View {
                         .foregroundStyle(isSelected ? Color.white.opacity(0.85) : MoriTokens.Color.muted)
                         .lineLimit(1)
                 }
+
+                windowChip
 
                 if isHovered {
                     overflowMenu
@@ -97,6 +115,39 @@ public struct WorktreeRowView: View {
         if isSelected { return .white }
         return (worktree.status == .active || worktree.agentState != .none)
             ? Color.primary : MoriTokens.Color.muted
+    }
+
+    /// Collapsed-by-default window count. Tapping toggles the third level so it
+    /// only appears on demand; a dot warns when a hidden window needs attention.
+    @ViewBuilder
+    private var windowChip: some View {
+        if windowCount >= 2, let onToggleExpand {
+            Button(action: onToggleExpand) {
+                HStack(spacing: 2) {
+                    Text("\(windowCount)")
+                    Image(systemName: "chevron.down")
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                }
+                .font(MoriTokens.Font.monoShortcut)
+                .foregroundStyle(isSelected ? Color.white.opacity(0.85) : MoriTokens.Color.muted)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule().fill(isSelected
+                        ? Color.white.opacity(0.18)
+                        : MoriTokens.Color.muted.opacity(MoriTokens.Opacity.light))
+                )
+                .overlay(alignment: .topTrailing) {
+                    if let hiddenAlertColor, !isExpanded {
+                        Circle()
+                            .fill(hiddenAlertColor)
+                            .frame(width: 5, height: 5)
+                            .offset(x: 2, y: -2)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private var iconView: some View {

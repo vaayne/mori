@@ -36,6 +36,9 @@ public struct WorktreeSidebarView: View {
     @State private var filter: SidebarFilter = .all
     @State private var idleExpanded = false
     @State private var awakenedProjectIds: Set<UUID> = []
+    /// Worktrees whose tmux windows (the third level) are expanded. Collapsed by
+    /// default so the sidebar reads as two levels: project → worktree.
+    @State private var expandedWorktrees: Set<UUID> = []
 
     public init(
         projects: [Project] = [], selectedProjectId: UUID? = nil, worktrees: [Worktree], windows: [RuntimeWindow], panes: [RuntimePane] = [], selectedWorktreeId: UUID?, selectedWindowId: String?, shortcutHintsVisible: Bool = false, onSelectProject: ((UUID) -> Void)? = nil, onSelectWorktree: @escaping (UUID) -> Void, onSelectWindow: @escaping (String) -> Void, onSelectPane: ((String) -> Void)? = nil, onShowCreatePanel: (() -> Void)? = nil, onRemoveWorktree: ((UUID) -> Void)? = nil, onRemoveProject: ((UUID) -> Void)? = nil, onEditRemoteProject: ((UUID) -> Void)? = nil, onCloseWindow: ((String) -> Void)? = nil, onToggleCollapse: ((UUID) -> Void)? = nil, onAddProject: (() -> Void)? = nil, onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil, onSendKeys: ((String, String) -> Void)? = nil, onUpdateProject: ((Project) -> Void)? = nil, onReorderProjects: (([UUID]) -> Void)? = nil, isSidebarCollapsed: Bool = false
@@ -138,10 +141,12 @@ public struct WorktreeSidebarView: View {
                     if projectWorktrees.isEmpty, project.id == selectedProjectId { Text("No worktrees").font(MoriTokens.Font.caption).foregroundStyle(MoriTokens.Color.muted).padding(.horizontal, MoriTokens.Spacing.xl).padding(.vertical, MoriTokens.Spacing.sm) }
                     ForEach(projectWorktrees) { worktree in
                         worktreeRow(worktree)
-                        ForEach(visibleDetailWindows(for: worktree)) { window in
-                            WindowRowView(window: window, isActive: window.tmuxWindowId == selectedWindowId, shortcutIndex: globalWindowIndices[window.tmuxWindowId], shortcutHintsVisible: shortcutHintsVisible, onSelect: { onSelectWindow(window.tmuxWindowId) }, onRequestPaneOutput: onRequestPaneOutput, onSendKeys: onSendKeys)
-                                .padding(.leading, MoriTokens.Spacing.xxl)
-                                .padding(.horizontal, MoriTokens.Spacing.sm)
+                        if expandedWorktrees.contains(worktree.id) {
+                            ForEach(allWindows(for: worktree)) { window in
+                                WindowRowView(window: window, isActive: window.tmuxWindowId == selectedWindowId, shortcutIndex: globalWindowIndices[window.tmuxWindowId], shortcutHintsVisible: shortcutHintsVisible, onSelect: { onSelectWindow(window.tmuxWindowId) }, onRequestPaneOutput: onRequestPaneOutput, onSendKeys: onSendKeys)
+                                    .padding(.leading, MoriTokens.Spacing.xxl)
+                                    .padding(.horizontal, MoriTokens.Spacing.sm)
+                            }
                         }
                     }
                 }.padding(.top, MoriTokens.Spacing.xs).padding(.bottom, MoriTokens.Spacing.xs)
@@ -156,29 +161,45 @@ public struct WorktreeSidebarView: View {
         .contextMenu { projectActions(project) }
     }
 
+    // Demoted to a quiet group label: small tile, muted name, no selected fill,
+    // and a status pip only when something here needs you — so the worktree rows
+    // below stay the visual focus rather than competing with the header.
     private func projectHeader(_ project: Project, count: Int, selected: Bool) -> some View {
-        HStack(spacing: MoriTokens.Spacing.md) {
-            Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down").font(MoriTokens.Font.sidebarChevron).foregroundStyle(MoriTokens.Color.inactive).frame(width: MoriTokens.Size.sidebarChevron)
-            ProjectLetterTile(project: project)
-            Text(project.name).font(MoriTokens.Font.projectTitle).foregroundStyle(Color.primary).lineLimit(1)
-            if project.isFavorite { Image(systemName: "pin.fill").font(.system(size: 9, weight: .semibold)).foregroundStyle(MoriTokens.Color.inactive) }
+        let agg = aggregateState(for: project)
+        return HStack(spacing: MoriTokens.Spacing.sm) {
+            Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(MoriTokens.Color.inactive).frame(width: MoriTokens.Size.sidebarChevron)
+            ProjectLetterTile(project: project, size: 16, cornerRadius: 4, fontSize: 9)
+            Text(project.name).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(MoriTokens.Color.muted).lineLimit(1)
+            if project.isFavorite { Image(systemName: "pin.fill").font(.system(size: 8, weight: .semibold)).foregroundStyle(MoriTokens.Color.inactive) }
             Spacer(minLength: 0)
-            StatusDot(state: aggregateState(for: project), pulsing: aggregateState(for: project) == .waiting)
+            if agg == .waiting || agg == .error { Circle().fill(agg == .error ? MoriTokens.Color.error : MoriTokens.Color.attention).frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot) }
             if hoveredProjectId == project.id { Menu { projectActions(project) } label: { Image(systemName: "ellipsis").font(MoriTokens.Font.sidebarAccessory).foregroundStyle(MoriTokens.Color.muted) }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: MoriTokens.Size.sidebarAccessory) }
         }
         .padding(.horizontal, MoriTokens.Spacing.md)
-        .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: MoriTokens.Radius.small).fill(selected ? MoriTokens.Color.active.opacity(MoriTokens.Opacity.quiet) : Color.clear))
+        .padding(.vertical, 5)
         .contentShape(Rectangle())
         .onTapGesture { onToggleCollapse?(project.id); onSelectProject?(project.id) }
     }
 
     private func worktreeRow(_ worktree: Worktree) -> some View {
-        WorktreeRowView(worktree: worktree, agentName: nil, isSelected: worktree.id == selectedWorktreeId, onSelect: { onSelectWorktree(worktree.id) }, onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } })
+        let wins = allWindows(for: worktree)
+        let expanded = expandedWorktrees.contains(worktree.id)
+        return WorktreeRowView(worktree: worktree, agentName: nil, isSelected: worktree.id == selectedWorktreeId, windowCount: wins.count, isExpanded: expanded, hiddenAlertColor: hiddenWindowAlert(wins, expanded: expanded), onSelect: { onSelectWorktree(worktree.id) }, onToggleExpand: { toggleExpand(worktree.id) }, onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } })
             .padding(.leading, 14)
             .padding(.horizontal, MoriTokens.Spacing.sm)
             .overlay(alignment: .leading) { Rectangle().fill(Color.primary.opacity(MoriTokens.Opacity.subtle)).frame(width: 1).padding(.leading, 18) }
             .contextMenu { worktreeActions(worktree) }
+    }
+
+    private func toggleExpand(_ id: UUID) { if expandedWorktrees.contains(id) { expandedWorktrees.remove(id) } else { expandedWorktrees.insert(id) } }
+
+    /// Colour for a hidden window that needs you (error wins over waiting), or nil
+    /// when nothing is hidden — drives the dot on the worktree's window chip.
+    private func hiddenWindowAlert(_ windows: [RuntimeWindow], expanded: Bool) -> Color? {
+        guard !expanded, windows.count >= 2 else { return nil }
+        if windows.contains(where: { $0.badge == .error || $0.agentState == .error }) { return MoriTokens.Color.error }
+        if windows.contains(where: { $0.badge == .waiting || $0.agentState == .waitingForInput }) { return MoriTokens.Color.attention }
+        return nil
     }
 
     @ViewBuilder private var idleCluster: some View {
@@ -216,7 +237,6 @@ public struct WorktreeSidebarView: View {
     private func projectMatchesFilter(_ project: Project) -> Bool { filter == .all || visibleWorktrees(for: project).contains { filter == .waiting ? $0.agentState == .waitingForInput : ($0.agentState == .running || $0.status == .active) } }
     private func aggregateState(for project: Project) -> SidebarStatus { let ws = visibleWorktrees(for: project); if ws.contains(where: { $0.agentState == .error }) { return .error }; if ws.contains(where: { $0.agentState == .waitingForInput }) { return .waiting }; if ws.contains(where: { $0.agentState == .running }) { return .running }; return .idle }
     private func allWindows(for worktree: Worktree) -> [RuntimeWindow] { windows.filter { $0.worktreeId == worktree.id }.sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex } }
-    private func visibleDetailWindows(for worktree: Worktree) -> [RuntimeWindow] { let all = allWindows(for: worktree); let relevant = all.filter { $0.tmuxWindowId == selectedWindowId || $0.detectedAgent != nil || $0.agentState != .none || $0.badge != nil || $0.hasUnreadOutput }; return relevant.isEmpty ? Array(all.prefix(1)) : relevant }
     private var globalWindowIndices: [String: Int] { var result: [String: Int] = [:]; var i = waitingItems.count + runningItems.count + 1; for project in sortedProjects where !project.isCollapsed { for worktree in visibleWorktrees(for: project) { for window in allWindows(for: worktree) { if i <= 9 { result[window.tmuxWindowId] = i }; i += 1 } } }; return result }
     private func select(_ item: AgentPaneItem) { onSelectProject?(item.worktree.projectId); onSelectWorktree(item.worktree.id); if let onSelectPane { onSelectPane(item.pane.tmuxPaneId) } else { onSelectWindow(item.window.tmuxWindowId) } }
     private func renameProject() { if let id = renamingProjectId, var project = projects.first(where: { $0.id == id }), !renameText.trimmingCharacters(in: .whitespaces).isEmpty { project.name = renameText.trimmingCharacters(in: .whitespaces); onUpdateProject?(project) }; renamingProjectId = nil }
