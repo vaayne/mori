@@ -265,7 +265,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         self.sidebarController = sidebarController
         sidebarController.updateAppearance(themeInfo: themeInfo)
 
-        terminalArea.configureTabs(
+        let tabsView = TerminalTabsBarView(
             appState: state,
             onSelectWindow: { [weak manager, weak self] windowId in
                 manager?.selectWindow(windowId)
@@ -285,6 +285,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 }
             }
         )
+        windowController.installTabsView(tabsView)
 
         let splitVC = RootSplitViewController(
             sidebarController: sidebarController,

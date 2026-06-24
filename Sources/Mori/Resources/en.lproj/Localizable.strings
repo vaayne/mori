@@ -122,6 +122,7 @@
 "Trying to restore remote session..." = "Trying to restore remote session...";
 "This will remove the project and all its worktrees from Mori. Git repositories on disk will not be deleted." = "This will remove the project and all its worktrees from Mori. Git repositories on disk will not be deleted.";
 "This worktree is at %@" = "This worktree is at %@";
+"Tabs" = "Tabs";
 "Tmux" = "Tmux";
 "Toggle Full Screen" = "Toggle Full Screen";
 "Toggle Pane Zoom" = "Toggle Pane Zoom";

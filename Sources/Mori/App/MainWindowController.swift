@@ -20,6 +20,8 @@ final class MainWindowController: NSWindowController {
         static let git = NSToolbarItem.Identifier("openGit")
         static let splitRight = NSToolbarItem.Identifier("splitRight")
         static let splitDown = NSToolbarItem.Identifier("splitDown")
+        static let tabsLeadingSpacer = NSToolbarItem.Identifier("terminalTabsLeadingSpacer")
+        static let tabs = NSToolbarItem.Identifier("terminalTabs")
     }
 
     private struct ToolbarItemDef {
@@ -75,6 +77,13 @@ final class MainWindowController: NSWindowController {
     /// The hosting view for the update pill, overlaid on the titlebar.
     private var updateOverlay: NSView?
 
+    /// Native AppKit terminal tabs strip, shown as a toolbar item in the titlebar.
+    /// Created by `installTabsView(_:)` once AppState/callbacks are available; the
+    /// toolbar is built afterwards so the item has a real size.
+    private var tabsView: TerminalTabsBarView?
+    private var tabsLeftMargin: CGFloat?
+    private var rightToolbarTrailingInset: CGFloat?
+
     // MARK: - Shortcut Hints
 
     private let shortcutHintMonitor = ShortcutHintModifierMonitor()
@@ -102,7 +111,6 @@ final class MainWindowController: NSWindowController {
         super.init(window: window)
 
         window.delegate = self
-        configureToolbar()
         startShortcutHintMonitor()
     }
 
@@ -130,6 +138,16 @@ final class MainWindowController: NSWindowController {
 
     func showCreateWorktreePanel() {
         onShowCreateWorktreePanel?()
+    }
+
+    /// Install the terminal tabs strip into the titlebar and build the toolbar.
+    /// The tabs view reports an intrinsic content size that tracks the tab count,
+    /// so the toolbar item grows and shrinks with the tabs. The toolbar is
+    /// configured here (not in init) so the item already has a real size when
+    /// AppKit first measures it — otherwise it gets shoved into the overflow menu.
+    func installTabsView(_ rootView: TerminalTabsBarView) {
+        tabsView = rootView
+        configureToolbar()
     }
 
     func addUpdateAccessory(viewModel: UpdateViewModel) {
@@ -165,6 +183,43 @@ final class MainWindowController: NSWindowController {
         toolbar.showsBaselineSeparator = false
         window?.toolbar = toolbar
         window?.toolbarStyle = .unifiedCompact
+        DispatchQueue.main.async { [weak self] in
+            self?.updateTabsStripWidth()
+        }
+    }
+
+    private func updateTabsStripWidth() {
+        guard let window,
+              let tabsView,
+              let leftAnchor = visibleToolbarView(for: ToolbarID.agentDashboard),
+              let rightAnchor = visibleToolbarView(for: ToolbarID.files) else { return }
+        window.contentView?.superview?.layoutSubtreeIfNeeded()
+
+        let leftMax = leftAnchor.convert(leftAnchor.bounds, to: nil).maxX
+        let tabsFrame = tabsView.convert(tabsView.bounds, to: nil)
+        guard tabsFrame.width > 0 else { return }
+
+        let measuredLeftMargin = max(0, tabsFrame.minX - leftMax)
+        if tabsLeftMargin == nil || measuredLeftMargin > 0 {
+            tabsLeftMargin = measuredLeftMargin
+        }
+
+        if rightAnchor.window === window {
+            let rightMin = rightAnchor.convert(rightAnchor.bounds, to: nil).minX
+            if rightMin > leftMax, rightMin < window.frame.width {
+                rightToolbarTrailingInset = window.frame.width - rightMin
+            }
+        }
+
+        guard let tabsLeftMargin, let rightToolbarTrailingInset else { return }
+        let targetRightMin = window.frame.width - rightToolbarTrailingInset
+        let targetWidth = targetRightMin - tabsFrame.minX - tabsLeftMargin
+        tabsView.setStripWidth(targetWidth)
+    }
+
+    private func visibleToolbarView(for id: NSToolbarItem.Identifier) -> NSView? {
+        let visibleItems = window?.toolbar?.visibleItems ?? []
+        return visibleItems.first(where: { $0.itemIdentifier == id })?.view
     }
 
     private static let symbolConfig = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
@@ -282,6 +337,10 @@ extension MainWindowController: NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) {
         onWindowAppearanceInvalidated?()
     }
+
+    func windowDidResize(_ notification: Notification) {
+        updateTabsStripWidth()
+    }
 }
 
 // MARK: - NSToolbarDelegate
@@ -293,6 +352,8 @@ extension MainWindowController: NSToolbarDelegate {
         ToolbarID.openProject,
         ToolbarID.commandPalette,
         ToolbarID.agentDashboard,
+        ToolbarID.tabsLeadingSpacer,
+        ToolbarID.tabs,
         .flexibleSpace,
         ToolbarID.files,
         ToolbarID.git,
@@ -314,6 +375,29 @@ extension MainWindowController: NSToolbarDelegate {
         itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
         willBeInsertedIntoToolbar flag: Bool
     ) -> NSToolbarItem? {
+        if itemIdentifier == ToolbarID.tabsLeadingSpacer {
+            let item = NSToolbarItem(itemIdentifier: ToolbarID.tabsLeadingSpacer)
+            let spacer = NSView(frame: NSRect(x: 0, y: 0, width: 14, height: 24))
+            spacer.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                spacer.widthAnchor.constraint(equalToConstant: 14),
+                spacer.heightAnchor.constraint(equalToConstant: 24),
+            ])
+            item.view = spacer
+            return item
+        }
+        if itemIdentifier == ToolbarID.tabs {
+            let item = NSToolbarItem(itemIdentifier: ToolbarID.tabs)
+            item.label = .localized("Tabs")
+            item.paletteLabel = .localized("Tabs")
+            item.visibilityPriority = .high
+            item.view = tabsView
+            tabsView?.onIntrinsicContentSizeChanged = { [weak self, weak toolbar] in
+                toolbar?.validateVisibleItems()
+                DispatchQueue.main.async { self?.updateTabsStripWidth() }
+            }
+            return item
+        }
         guard let def = Self.toolbarItemDefs.first(where: { $0.id == itemIdentifier }) else {
             return nil
         }
