@@ -76,10 +76,7 @@ private final class WorkspaceGlassBackgroundView: NSView {
 /// running `tmux new-session -A -s <session-name>` to attach-or-create.
 @MainActor
 final class TerminalAreaViewController: NSViewController {
-    private static let tabBarHeight: CGFloat = 34
-
     private var glassBackgroundView: NSView?
-    private var tabsHostingController: NSHostingController<TerminalTabsBarView>?
 
     // MARK: - Dependencies
 
@@ -139,7 +136,6 @@ final class TerminalAreaViewController: NSViewController {
         let container = NSView()
         container.wantsLayer = true
         self.view = container
-        installTabsViewIfNeeded()
         updateAppearance(themeInfo: themeInfo, isKeyWindow: true)
         showEmptyState()
     }
@@ -150,25 +146,6 @@ final class TerminalAreaViewController: NSViewController {
         if let surface = currentSurface {
             terminalHost.surfaceDidResize(surface, to: surface.bounds.size)
         }
-    }
-
-    func configureTabs(
-        appState: AppState,
-        onSelectWindow: @escaping (String) -> Void,
-        onCloseWindow: @escaping (String) -> Void,
-        onCreateWindow: @escaping () -> Void
-    ) {
-        let tabsView = TerminalTabsBarView(
-            appState: appState,
-            onSelectWindow: onSelectWindow,
-            onCloseWindow: onCloseWindow,
-            onCreateWindow: onCreateWindow
-        )
-        let controller = NSHostingController(rootView: tabsView)
-        controller.sizingOptions = []
-        tabsHostingController = controller
-        addChild(controller)
-        installTabsViewIfNeeded()
     }
 
     func updateAppearance(themeInfo: GhosttyThemeInfo, isKeyWindow: Bool) {
@@ -410,26 +387,7 @@ final class TerminalAreaViewController: NSViewController {
     }
 
     private var terminalContentTopAnchor: NSLayoutYAxisAnchor {
-        if let tabsView = tabsHostingController?.view, tabsView.superview === view {
-            return tabsView.bottomAnchor
-        }
-        return view.topAnchor
-    }
-
-    private func installTabsViewIfNeeded() {
-        guard isViewLoaded,
-              let controller = tabsHostingController,
-              controller.view.superview == nil else { return }
-
-        let tabsView = controller.view
-        tabsView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(tabsView)
-        NSLayoutConstraint.activate([
-            tabsView.topAnchor.constraint(equalTo: view.topAnchor),
-            tabsView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            tabsView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tabsView.heightAnchor.constraint(equalToConstant: Self.tabBarHeight),
-        ])
+        view.topAnchor
     }
 
     @objc private func emptyStateButtonClicked() {
@@ -536,8 +494,7 @@ final class TerminalAreaViewController: NSViewController {
 
     /// Defensive cleanup in case a dead surface view was not tracked as current.
     private func removeResidualTerminalSubviews() {
-        let tabsView = tabsHostingController?.view
-        for subview in view.subviews where subview !== emptyStateView && subview !== tabsView {
+        for subview in view.subviews where subview !== emptyStateView {
             if subview !== currentSurface {
                 subview.removeFromSuperview()
             }
@@ -617,118 +574,6 @@ final class TerminalAreaViewController: NSViewController {
         // Auto-recover when a worktree is selected (session died / ssh dropped).
         if hasSelectedWorktree {
             onCreateSession?()
-        }
-    }
-}
-
-private struct TerminalTabsBarView: View {
-    @Bindable var appState: AppState
-    let onSelectWindow: (String) -> Void
-    let onCloseWindow: (String) -> Void
-    let onCreateWindow: () -> Void
-
-    private var windows: [RuntimeWindow] {
-        appState.windowsForSelectedWorktree
-    }
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            ForEach(windows) { window in
-                terminalTab(for: window)
-            }
-
-            Button(action: onCreateWindow) {
-                Image(systemName: "plus")
-                    .font(.system(size: 13, weight: .semibold))
-                    .frame(width: 28, height: 26)
-                    .foregroundStyle(MoriTokens.Color.muted)
-                    .background(Color.primary.opacity(MoriTokens.Opacity.quiet))
-                    .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
-            }
-            .buttonStyle(.plain)
-            .help(String.localized("New Tab"))
-            .accessibilityLabel(String.localized("New Tab"))
-            .padding(.leading, MoriTokens.Spacing.sm)
-            .padding(.bottom, 5)
-
-            Spacer(minLength: 0)
-        }
-        .padding(.leading, MoriTokens.Spacing.xl)
-        .padding(.trailing, MoriTokens.Spacing.lg)
-        .background(Color.clear)
-    }
-
-    private func terminalTab(for window: RuntimeWindow) -> some View {
-        let isSelected = window.tmuxWindowId == appState.uiState.selectedWindowId
-
-        return HStack(spacing: MoriTokens.Spacing.sm) {
-            Circle()
-                .fill(tabDotColor(for: window, isSelected: isSelected))
-                .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
-
-            Text(tabTitle(for: window))
-                .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .foregroundStyle(isSelected ? Color.primary : MoriTokens.Color.muted)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            if isSelected {
-                Button(action: { onCloseWindow(window.tmuxWindowId) }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(MoriTokens.Color.muted)
-                        .frame(width: 16, height: 16)
-                        .background(Color.primary.opacity(MoriTokens.Opacity.quiet))
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .help(String.localized("Close Tab"))
-                .accessibilityLabel(String.localized("Close Tab"))
-            }
-        }
-        .padding(.horizontal, MoriTokens.Spacing.lg)
-        .frame(width: 170, height: 32)
-        .contentShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.medium, style: .continuous))
-        .onTapGesture {
-            onSelectWindow(window.tmuxWindowId)
-        }
-        .background(
-            RoundedRectangle(
-                cornerRadius: MoriTokens.Radius.medium,
-                style: .continuous
-            )
-            .fill(isSelected ? Color.primary.opacity(0.11) : Color.primary.opacity(0.055))
-        )
-        .overlay(alignment: .bottom) {
-            if isSelected {
-                Rectangle()
-                    .fill((Color(nsColor: .windowBackgroundColor)))
-                    .frame(height: 1)
-            }
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: MoriTokens.Radius.medium, style: .continuous)
-                .strokeBorder(isSelected ? Color.primary.opacity(0.16) : Color.clear, lineWidth: 1)
-        }
-        .padding(.top, 2)
-    }
-
-    private func tabTitle(for window: RuntimeWindow) -> String {
-        if !window.title.isEmpty {
-            return window.title
-        }
-        return String.localized("Window \(window.tmuxWindowIndex)")
-    }
-
-    private func tabDotColor(for window: RuntimeWindow, isSelected: Bool) -> Color {
-        if isSelected { return MoriTokens.Color.active }
-        if window.detectedAgent != nil || window.agentState != .none { return MoriTokens.Color.info }
-        if window.hasUnreadOutput { return MoriTokens.Color.attention }
-        switch window.tag {
-        case .server: return MoriTokens.Color.success
-        case .agent: return MoriTokens.Color.info
-        default: return MoriTokens.Color.inactive
         }
     }
 }

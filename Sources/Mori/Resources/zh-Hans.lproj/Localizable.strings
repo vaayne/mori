@@ -122,6 +122,7 @@
 "Trying to restore remote session..." = "正在尝试恢复远端会话...";
 "This will remove the project and all its worktrees from Mori. Git repositories on disk will not be deleted." = "此操作将从 Mori 移除该项目及其所有工作树。磁盘上的 Git 仓库不会被删除。";
 "This worktree is at %@" = "此工作树位于 %@";
+"Tabs" = "标签页";
 "Tmux" = "Tmux";
 "Toggle Full Screen" = "切换全屏";
 "Toggle Pane Zoom" = "切换窗格缩放";
