@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🎨 Design
 
+- **macOS**: Reworked the sidebar worktree row to read like a native list instead of a dense terminal node. The leading dot is now a glyph that fuses identity and agent state — a branch glyph for the main worktree, a node graph for linked worktrees, tinted by state and pulsing while an agent waits on you. Branch names switched from monospace to a proportional 13pt, and the selected row is a solid accent fill with white text instead of a faint gradient, so "you are here" reads at a glance.
 - **iOS (MoriRemote)**: Replaced the app icon with the Mori brand mark (dark-green potted sprout with a `>_` prompt), matching the macOS app. The previous AI-generated stump illustration with baked-in "Mori" text turned to mush at home-screen sizes; the new icon is full-bleed and opaque so iOS applies its own corner mask.
 
 ### ✨ Features
