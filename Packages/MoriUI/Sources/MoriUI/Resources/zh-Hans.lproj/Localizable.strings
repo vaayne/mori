@@ -96,6 +96,8 @@
 "Remove Project…" = "移除项目…";
 "Import Existing Worktrees" = "导入已有 Worktree";
 "Remove Worktree…" = "移除工作树…";
+"Open PR on GitHub" = "在 GitHub 打开 PR";
+"Open PR on DiffsHub" = "在 DiffsHub 打开 PR";
 "Resize Pane" = "调整面板大小";
 "Restart Mori to apply language change." = "重启 Mori 以应用语言更改。";
 "Reveal in Finder" = "在访达中显示";

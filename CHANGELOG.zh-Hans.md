@@ -20,6 +20,7 @@
 
 - **macOS**：在「设置 → 通用」中新增可自定义的 worktree 位置。新建的本地 worktree 会创建在该基础目录下(默认 `~/.mori`);已有的 worktree 保持原位不动。远程 SSH worktree 仍使用仓库的父目录。
 - **macOS**:Mori 现在会导入仓库已有的 git worktree。添加项目时会自动带出磁盘上的全部 worktree(不再只有根目录),项目右键菜单新增「导入已有 Worktree」可随时重新扫描。已跟踪的 worktree 会跳过,重复执行只会拾取新增的。
+- **macOS**：选中的 worktree 的侧栏行现在带一个紧凑的 GitHub PR 徽标——`#编号` 按 PR 状态（open/draft/review/approved/changes/merged）着色，外加一个 CI 图标（✓/✕/⧗），完整状态见 tooltip。徽标只用于展示；右键该 worktree 可在 **GitHub** 或 **DiffsHub** 打开 PR。本地 worktree 通过 `gh` 实时获取；没有 PR 或未装 `gh` 时不显示。徽标内嵌在行内，侧栏保持两级。
 - **iOS（MoriRemote）**：键盘功能栏按角色和频率重排——低频 app 操作(切主机、自定义键、detach)折进最左的「•••」溢出菜单;高频上下文操作(会话切换器、tmux)常驻;其余为打字键,收键盘键钉在末尾。移除了原先紧贴 `ctrl`/`esc`、容易误触的返回键与齿轮键。
 - **iOS（MoriRemote）**：侧栏改为与桌面端一致的层级——项目下分组各自的 tmux 会话（分支），每个窗口列出其窗格（带 agent 状态徽标），可在一处切换项目、标签页与窗格。
 

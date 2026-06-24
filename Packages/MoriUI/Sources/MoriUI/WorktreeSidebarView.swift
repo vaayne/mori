@@ -26,6 +26,8 @@ public struct WorktreeSidebarView: View {
     private let onSendKeys: ((String, String) -> Void)?
     private let onUpdateProject: ((Project) -> Void)?
     private let onReorderProjects: (([UUID]) -> Void)?
+    /// Live PR snapshots keyed by worktree id; only the selected row renders one.
+    private let pullRequests: [UUID: PullRequestInfo]
     private let shortcutHintsVisible: Bool
     private let isSidebarCollapsed: Bool
 
@@ -42,9 +44,9 @@ public struct WorktreeSidebarView: View {
     @State private var expandedWorktrees: Set<UUID> = []
 
     public init(
-        projects: [Project] = [], selectedProjectId: UUID? = nil, worktrees: [Worktree], windows: [RuntimeWindow], panes: [RuntimePane] = [], selectedWorktreeId: UUID?, selectedWindowId: String?, shortcutHintsVisible: Bool = false, onSelectProject: ((UUID) -> Void)? = nil, onSelectWorktree: @escaping (UUID) -> Void, onSelectWindow: @escaping (String) -> Void, onSelectPane: ((String) -> Void)? = nil, onShowCreatePanel: (() -> Void)? = nil, onRemoveWorktree: ((UUID) -> Void)? = nil, onRemoveProject: ((UUID) -> Void)? = nil, onImportWorktrees: ((UUID) -> Void)? = nil, onEditRemoteProject: ((UUID) -> Void)? = nil, onCloseWindow: ((String) -> Void)? = nil, onToggleCollapse: ((UUID) -> Void)? = nil, onAddProject: (() -> Void)? = nil, onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil, onSendKeys: ((String, String) -> Void)? = nil, onUpdateProject: ((Project) -> Void)? = nil, onReorderProjects: (([UUID]) -> Void)? = nil, isSidebarCollapsed: Bool = false
+        projects: [Project] = [], selectedProjectId: UUID? = nil, worktrees: [Worktree], windows: [RuntimeWindow], panes: [RuntimePane] = [], selectedWorktreeId: UUID?, selectedWindowId: String?, shortcutHintsVisible: Bool = false, onSelectProject: ((UUID) -> Void)? = nil, onSelectWorktree: @escaping (UUID) -> Void, onSelectWindow: @escaping (String) -> Void, onSelectPane: ((String) -> Void)? = nil, onShowCreatePanel: (() -> Void)? = nil, onRemoveWorktree: ((UUID) -> Void)? = nil, onRemoveProject: ((UUID) -> Void)? = nil, onImportWorktrees: ((UUID) -> Void)? = nil, onEditRemoteProject: ((UUID) -> Void)? = nil, onCloseWindow: ((String) -> Void)? = nil, onToggleCollapse: ((UUID) -> Void)? = nil, onAddProject: (() -> Void)? = nil, onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil, onSendKeys: ((String, String) -> Void)? = nil, onUpdateProject: ((Project) -> Void)? = nil, onReorderProjects: (([UUID]) -> Void)? = nil, pullRequests: [UUID: PullRequestInfo] = [:], isSidebarCollapsed: Bool = false
     ) {
-        self.projects = projects; self.selectedProjectId = selectedProjectId; self.worktrees = worktrees; self.windows = windows; self.panes = panes; self.selectedWorktreeId = selectedWorktreeId; self.selectedWindowId = selectedWindowId; self.onSelectProject = onSelectProject; self.onSelectWorktree = onSelectWorktree; self.onSelectWindow = onSelectWindow; self.onSelectPane = onSelectPane; self.onShowCreatePanel = onShowCreatePanel; self.onRemoveWorktree = onRemoveWorktree; self.onRemoveProject = onRemoveProject; self.onImportWorktrees = onImportWorktrees; self.onEditRemoteProject = onEditRemoteProject; self.onCloseWindow = onCloseWindow; self.onToggleCollapse = onToggleCollapse; self.onAddProject = onAddProject; self.onRequestPaneOutput = onRequestPaneOutput; self.onSendKeys = onSendKeys; self.onUpdateProject = onUpdateProject; self.onReorderProjects = onReorderProjects; self.shortcutHintsVisible = shortcutHintsVisible; self.isSidebarCollapsed = isSidebarCollapsed
+        self.projects = projects; self.selectedProjectId = selectedProjectId; self.worktrees = worktrees; self.windows = windows; self.panes = panes; self.selectedWorktreeId = selectedWorktreeId; self.selectedWindowId = selectedWindowId; self.onSelectProject = onSelectProject; self.onSelectWorktree = onSelectWorktree; self.onSelectWindow = onSelectWindow; self.onSelectPane = onSelectPane; self.onShowCreatePanel = onShowCreatePanel; self.onRemoveWorktree = onRemoveWorktree; self.onRemoveProject = onRemoveProject; self.onImportWorktrees = onImportWorktrees; self.onEditRemoteProject = onEditRemoteProject; self.onCloseWindow = onCloseWindow; self.onToggleCollapse = onToggleCollapse; self.onAddProject = onAddProject; self.onRequestPaneOutput = onRequestPaneOutput; self.onSendKeys = onSendKeys; self.onUpdateProject = onUpdateProject; self.onReorderProjects = onReorderProjects; self.pullRequests = pullRequests; self.shortcutHintsVisible = shortcutHintsVisible; self.isSidebarCollapsed = isSidebarCollapsed
     }
 
     public var body: some View {
@@ -194,11 +196,11 @@ public struct WorktreeSidebarView: View {
     private func worktreeRow(_ worktree: Worktree) -> some View {
         let wins = allWindows(for: worktree)
         let expanded = expandedWorktrees.contains(worktree.id)
-        return WorktreeRowView(worktree: worktree, agentName: nil, isSelected: worktree.id == selectedWorktreeId, windowCount: wins.count, isExpanded: expanded, hiddenAlertColor: hiddenWindowAlert(wins, expanded: expanded), onSelect: { onSelectWorktree(worktree.id) }, onToggleExpand: { toggleExpand(worktree.id) }, onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } })
+        return WorktreeRowView(worktree: worktree, agentName: nil, isSelected: worktree.id == selectedWorktreeId, windowCount: wins.count, isExpanded: expanded, hiddenAlertColor: hiddenWindowAlert(wins, expanded: expanded), pullRequest: pullRequests[worktree.id], onSelect: { onSelectWorktree(worktree.id) }, onToggleExpand: { toggleExpand(worktree.id) }, onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } })
             .padding(.leading, 14)
             .padding(.horizontal, MoriTokens.Spacing.sm)
             .overlay(alignment: .leading) { Rectangle().fill(Color.primary.opacity(MoriTokens.Opacity.subtle)).frame(width: 1).padding(.leading, 18) }
-            .contextMenu { worktreeActions(worktree) }
+            .contextMenu { WorktreeContextActions(worktree: worktree, pullRequest: pullRequests[worktree.id], onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } }) }
     }
 
     private func toggleExpand(_ id: UUID) { if expandedWorktrees.contains(id) { expandedWorktrees.remove(id) } else { expandedWorktrees.insert(id) } }
@@ -271,7 +273,6 @@ public struct WorktreeSidebarView: View {
         if case .ssh = (project.location ?? .local), let onEditRemoteProject { Button { onEditRemoteProject(project.id) } label: { Label("Update Remote Credentials…", systemImage: "key") } }
         if let onRemoveProject { Divider(); Button(role: .destructive) { onRemoveProject(project.id) } label: { Label("Remove Project…", systemImage: "trash") } }
     }
-    @ViewBuilder private func worktreeActions(_ worktree: Worktree) -> some View { let editors = EditorLauncher.installed; if !editors.isEmpty { ForEach(editors) { editor in Button { editor.open(path: worktree.path) } label: { Label("Open in \(editor.name)", systemImage: editor.icon) } }; Divider() }; Button { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: worktree.path) } label: { Label("Reveal in Finder", systemImage: "folder") }; if !worktree.isMainWorktree, let onRemoveWorktree { Divider(); Button(role: .destructive) { onRemoveWorktree(worktree.id) } label: { Label("Remove Worktree…", systemImage: "trash") } } }
 }
 
 private enum SidebarFilter { case all, waiting, running }

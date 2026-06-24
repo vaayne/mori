@@ -20,6 +20,9 @@ public struct WorktreeRowView: View {
     /// Non-nil when a *hidden* window needs attention while collapsed; drives a
     /// small dot on the chip so alerts surface without forcing the level open.
     let hiddenAlertColor: Color?
+    /// GitHub PR for this worktree's branch. Rendered as a status strip below the
+    /// row only while selected, keeping the sidebar quiet for unselected rows.
+    let pullRequest: PullRequestInfo?
     let onSelect: () -> Void
     var onToggleExpand: (() -> Void)?
     var onRemove: (() -> Void)?
@@ -33,6 +36,7 @@ public struct WorktreeRowView: View {
         windowCount: Int = 0,
         isExpanded: Bool = false,
         hiddenAlertColor: Color? = nil,
+        pullRequest: PullRequestInfo? = nil,
         onSelect: @escaping () -> Void,
         onToggleExpand: (() -> Void)? = nil,
         onRemove: (() -> Void)? = nil
@@ -43,6 +47,7 @@ public struct WorktreeRowView: View {
         self.windowCount = windowCount
         self.isExpanded = isExpanded
         self.hiddenAlertColor = hiddenAlertColor
+        self.pullRequest = pullRequest
         self.onSelect = onSelect
         self.onToggleExpand = onToggleExpand
         self.onRemove = onRemove
@@ -71,6 +76,10 @@ public struct WorktreeRowView: View {
                         .font(MoriTokens.Font.monoSmall)
                         .foregroundStyle(isSelected ? Color.white.opacity(0.85) : MoriTokens.Color.muted)
                         .lineLimit(1)
+                }
+
+                if let pullRequest {
+                    PullRequestBadge(info: pullRequest, isSelected: isSelected)
                 }
 
                 windowChip
@@ -217,32 +226,7 @@ public struct WorktreeRowView: View {
 
     private var overflowMenu: some View {
         Menu {
-            let editors = EditorLauncher.installed
-            if !editors.isEmpty {
-                ForEach(editors) { editor in
-                    Button {
-                        editor.open(path: worktree.path)
-                    } label: {
-                        Label("Open in \(editor.name)", systemImage: editor.icon)
-                    }
-                }
-                Divider()
-            }
-
-            Button {
-                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: worktree.path)
-            } label: {
-                Label("Reveal in Finder", systemImage: "folder")
-            }
-
-            if !worktree.isMainWorktree, let onRemove {
-                Divider()
-                Button(role: .destructive) {
-                    onRemove()
-                } label: {
-                    Label("Remove Worktree…", systemImage: "trash")
-                }
-            }
+            WorktreeContextActions(worktree: worktree, pullRequest: pullRequest, onRemove: onRemove)
         } label: {
             Image(systemName: "ellipsis")
                 .font(MoriTokens.Font.sidebarAccessory)

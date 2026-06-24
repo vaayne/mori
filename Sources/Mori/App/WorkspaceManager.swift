@@ -77,6 +77,8 @@ final class WorkspaceManager {
     /// Local git backend.
     let gitBackend: GitBackend
     let gitStatusCoordinator: GitStatusCoordinator
+    /// Read-only GitHub PR lookups for the selected worktree (local only).
+    let gitHubBackend = GitHubBackend()
     let unreadTracker: UnreadTracker
     let notificationManager: NotificationManager
     let hookRunner: HookRunner
@@ -512,7 +514,36 @@ final class WorkspaceManager {
         // Fire onWorktreeFocus hook
         fireHook(event: .onWorktreeFocus, worktreeId: worktreeId)
 
+        // Refresh the GitHub PR strip for the newly selected worktree.
+        Task { await refreshPullRequest(for: worktreeId, force: true) }
+
         saveUIState()
+    }
+
+    // MARK: - GitHub PR
+
+    /// Wall-clock of the last `gh` fetch per worktree, to keep the 5s poll from
+    /// spawning a subprocess every tick. CI/review state moves on a minute scale.
+    private var lastPullRequestFetch: [UUID: Date] = [:]
+    private static let pullRequestThrottle: TimeInterval = 60
+
+    /// Fetch the PR for a worktree's branch and update `appState.pullRequests`.
+    /// Local worktrees only; remote (SSH) worktrees are skipped. Best-effort —
+    /// a missing gh, no PR, or any error just leaves the cache entry empty.
+    /// `force` bypasses the throttle (used on selection for an immediate refresh).
+    func refreshPullRequest(for worktreeId: UUID, force: Bool = false) async {
+        guard let worktree = appState.worktrees.first(where: { $0.id == worktreeId }),
+              let branch = worktree.branch,
+              case .local = location(for: worktree) else { return }
+
+        if !force, let last = lastPullRequestFetch[worktreeId],
+           Date().timeIntervalSince(last) < Self.pullRequestThrottle { return }
+        lastPullRequestFetch[worktreeId] = Date()
+
+        let info = await gitHubBackend.pullRequest(forBranch: branch, directory: worktree.path)
+        if appState.pullRequests[worktreeId] != info {
+            appState.pullRequests[worktreeId] = info
+        }
     }
 
     // MARK: - Select Window
@@ -1562,6 +1593,11 @@ final class WorkspaceManager {
 
         // Update worktree fields from git status
         updateWorktreeGitStatus(gitStatuses)
+
+        // Refresh the GitHub PR strip for the selected worktree (local only).
+        if let selectedId = appState.uiState.selectedWorktreeId {
+            await refreshPullRequest(for: selectedId)
+        }
 
         // Roll up unread counts and aggregate badges
         updateUnreadCounts()

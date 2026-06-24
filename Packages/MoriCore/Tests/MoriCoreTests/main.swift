@@ -1469,6 +1469,9 @@ testBinaryResolverDefaultSearchDirectoriesIncludeExplicitFallbacks()
 // KeyBinding
 runKeyBindingTests()
 
+// PullRequestInfo
+runPullRequestInfoTests()
+
 printResults()
 
 if failCount > 0 {

@@ -9,6 +9,10 @@ public final class AppState {
     public var runtimePanes: [RuntimePane] = []
     public var uiState: UIState = UIState()
 
+    /// Live GitHub PR snapshots keyed by worktree id. Transient (not persisted);
+    /// fetched on demand for the selected worktree. Absent = no PR or not fetched.
+    public var pullRequests: [UUID: PullRequestInfo] = [:]
+
     public init() {}
 
     // MARK: - Derived state

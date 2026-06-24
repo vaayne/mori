@@ -96,6 +96,8 @@
 "Remove Project…" = "Remove Project…";
 "Import Existing Worktrees" = "Import Existing Worktrees";
 "Remove Worktree…" = "Remove Worktree…";
+"Open PR on GitHub" = "Open PR on GitHub";
+"Open PR on DiffsHub" = "Open PR on DiffsHub";
 "Resize Pane" = "Resize Pane";
 "Restart Mori to apply language change." = "Restart Mori to apply language change.";
 "Reveal in Finder" = "Reveal in Finder";
