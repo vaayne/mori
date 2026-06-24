@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mori · GitHub 集成 Mockup</title>
+<style>
+  /* ---- Mori dark theme (Ghostty-ish neutral dark) ---- */
+  :root {
+    --bg:          #16161c;
+    --bg-sidebar:  #1b1b22;
+    --bg-pane:     #17171d;
+    --bg-header:   #22222b;   /* companion header = bg blended 12% white */
+    --bg-term:     #131319;
+    --line:        rgba(255,255,255,0.08);
+    --line-strong: rgba(255,255,255,0.14);
+    --fg:          #e6e6ec;
+    --fg-muted:    rgba(230,230,236,0.55);
+    --fg-faint:    rgba(230,230,236,0.32);
+    --accent:      #6e8efb;   /* selection fill */
+    --accent-soft: rgba(110,142,251,0.16);
+    --green:  #7dd3a8;
+    --red:    #ff8a9e;
+    --amber:  #e6b450;
+    --violet: #c6a0ff;
+    --sky:    #7cb0ff;
+    --font: -apple-system, "SF Pro Text", system-ui, sans-serif;
+    --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0c0c0f;
+    color: var(--fg);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+  }
+
+  /* ---- toolbar to switch tiers ---- */
+  .controls { display: flex; gap: 8px; align-items: center; }
+  .controls h1 { font-size: 14px; font-weight: 600; margin-right: 14px; letter-spacing: .2px; }
+  .controls h1 span { color: var(--fg-muted); font-weight: 400; }
+  .seg { display: flex; background: #1b1b22; border: 1px solid var(--line); border-radius: 9px; padding: 3px; }
+  .seg button {
+    font-family: var(--font); font-size: 12px; color: var(--fg-muted);
+    background: transparent; border: 0; padding: 6px 14px; border-radius: 6px; cursor: pointer;
+    transition: all .15s;
+  }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .caption { font-size: 12px; color: var(--fg-faint); max-width: 980px; text-align: center; line-height: 1.6; }
+
+  /* ---- window frame ---- */
+  .window {
+    width: 1080px; height: 660px;
+    background: var(--bg);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .titlebar {
+    height: 38px; display: flex; align-items: center; gap: 8px;
+    padding: 0 14px; background: #1e1e26; border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  .lights { display: flex; gap: 8px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .lights i:nth-child(1){ background:#ff5f57; } .lights i:nth-child(2){ background:#febc2e; } .lights i:nth-child(3){ background:#28c840; }
+  .title-mid { flex: 1; text-align: center; font-size: 12.5px; color: var(--fg-muted); }
+  .toolbtns { display: flex; gap: 14px; color: var(--fg-faint); font-size: 13px; }
+  .toolbtns .hot { color: var(--accent); }
+
+  .body { flex: 1; display: flex; min-height: 0; }
+
+  /* ---- sidebar ---- */
+  .sidebar {
+    width: 248px; background: var(--bg-sidebar); border-right: 1px solid var(--line);
+    flex-shrink: 0; padding: 12px 0; overflow: hidden; display: flex; flex-direction: column;
+  }
+  .proj-header {
+    display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 14px;
+  }
+  .tile { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center;
+    font-family: var(--mono); font-size: 10px; font-weight: 600; flex-shrink: 0; }
+  .tile.mori { background:#1e3d2e; color:#7dd3a8; }
+  .proj-header .name { font-size: 14px; font-weight: 700; }
+  .proj-header .chev { margin-left: auto; color: var(--fg-faint); font-size: 10px; }
+
+  .wt {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 16px 6px 26px; position: relative; cursor: default;
+    border-left: 2px solid transparent;
+  }
+  .wt .glyph { width: 17px; font-size: 13px; color: var(--fg-muted); text-align: center; flex-shrink: 0; }
+  .wt .branch { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wt.sel { background: var(--accent); border-radius: 7px; margin: 0 8px; padding-left: 18px; }
+  .wt.sel .branch, .wt.sel .glyph { color: #fff; }
+  .wt.sel .git { color: rgba(255,255,255,0.85) !important; }
+  .git { font-family: var(--mono); font-size: 10.5px; color: var(--fg-muted); margin-left: auto; white-space: nowrap; letter-spacing: -.2px; }
+  .git .up { color: var(--green); } .git .down { color: var(--amber); } .git .mod { color: var(--sky); }
+  .wt.sel .git .up, .wt.sel .git .down, .wt.sel .git .mod { color: rgba(255,255,255,0.85); }
+
+  /* ---- Tier 2: PR strip under worktree row ---- */
+  .pr {
+    display: none; align-items: center; gap: 6px;
+    margin: 1px 8px 3px 8px; padding: 4px 8px 4px 10px;
+    border-radius: 6px; background: rgba(255,255,255,0.035);
+    font-size: 11px;
+  }
+  body.t2 .pr, body.both .pr { display: flex; }
+  .pr .num { font-family: var(--mono); font-size: 10.5px; color: var(--fg-muted); }
+  .pr .state { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+    padding: 2px 6px; border-radius: 3px; }
+  .pr .state.open   { background: rgba(125,211,168,0.16); color: var(--green); }
+  .pr .state.draft  { background: rgba(230,230,236,0.10); color: var(--fg-muted); }
+  .pr .state.review { background: rgba(198,160,255,0.16); color: var(--violet); }
+  .pr .ttl { color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .pr .checks { display: flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 10px; flex-shrink: 0; }
+  .pr .checks .ok { color: var(--green); } .pr .checks .bad { color: var(--red); } .pr .checks .run { color: var(--amber); }
+  .wt.sel + .pr { background: rgba(110,142,251,0.10); }
+
+  .sec { font-size: 11px; font-weight: 700; color: var(--fg-faint); text-transform: uppercase;
+    letter-spacing: 1.2px; padding: 14px 16px 6px; }
+
+  /* ---- terminal area ---- */
+  .term { flex: 1; background: var(--bg-term); min-width: 0; display: flex; flex-direction: column;
+    font-family: var(--mono); font-size: 12px; line-height: 1.65; padding: 14px 16px; color: #c9d1d9; overflow: hidden; }
+  .term .p { color: var(--green); } .term .c { color: var(--sky); } .term .d { color: var(--fg-faint); }
+
+  /* ---- companion pane ---- */
+  .pane { width: 420px; flex-shrink: 0; background: var(--bg-pane); border-left: 1px solid var(--line);
+    display: none; flex-direction: column; }
+  body.t1 .pane, body.both .pane { display: flex; }
+  .pane-header {
+    height: 28px; flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+    padding: 0 10px; background: var(--bg-header); border-bottom: 1px solid var(--line-strong);
+    font-size: 12px; font-weight: 500;
+  }
+  .pane-header .ico { color: var(--violet); }
+  .pane-header .kbd { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--fg-faint);
+    border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+
+  /* gh dash TUI */
+  .dash { flex: 1; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; padding: 8px 0; overflow: hidden; color: #c9d1d9; }
+  .dash .tabs { display: flex; gap: 0; padding: 0 10px 6px; border-bottom: 1px solid var(--line); }
+  .dash .tabs span { padding: 3px 12px; color: var(--fg-faint); }
+  .dash .tabs span.on { color: var(--fg); border-bottom: 2px solid var(--violet); font-weight: 600; }
+  .dash .row { display: flex; gap: 8px; padding: 5px 10px; align-items: baseline; }
+  .dash .row.hl { background: var(--accent-soft); }
+  .dash .row .st { width: 14px; text-align: center; flex-shrink: 0; }
+  .dash .row .st.ok { color: var(--green); } .dash .row .st.bad { color: var(--red); } .dash .row .st.run { color: var(--amber); }
+  .dash .row .n { color: var(--fg-faint); width: 38px; flex-shrink: 0; }
+  .dash .row .t { color: var(--fg); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dash .row .meta { color: var(--fg-faint); flex-shrink: 0; }
+  .dash .row .av { color: var(--sky); }
+  .dash .foot { margin-top: auto; padding: 6px 10px; border-top: 1px solid var(--line);
+    color: var(--fg-faint); font-size: 10.5px; display: flex; gap: 14px; }
+  .dash .foot b { color: var(--fg-muted); font-weight: 600; }
+
+  .annot { font-size: 11.5px; color: var(--fg-faint); display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 1080px; }
+  .annot b { color: var(--green); }
+</style>
+</head>
+<body class="both">
+  <div class="controls">
+    <h1>Mori <span>· GitHub 集成 mockup</span></h1>
+    <div class="seg">
+      <button data-mode="t1">Tier 1 · gh dash 面板</button>
+      <button data-mode="t2">Tier 2 · PR 状态条</button>
+      <button data-mode="both" class="on">两者叠加</button>
+    </div>
+  </div>
+
+  <div class="window">
+    <div class="titlebar">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="title-mid">mori — feat/sidebar-redesign</div>
+      <div class="toolbtns"><span>⌂</span><span>⌘K</span><span class="hot">⌥G</span><span>⚙</span><span>⊟</span></div>
+    </div>
+
+    <div class="body">
+      <!-- SIDEBAR -->
+      <div class="sidebar">
+        <div class="proj-header">
+          <div class="tile mori">MO</div>
+          <div class="name">mori</div>
+          <div class="chev">▾</div>
+        </div>
+
+        <div class="wt sel">
+          <span class="glyph">⎇</span>
+          <span class="branch">feat/sidebar-redesign</span>
+          <span class="git"><span class="up">↑2</span> <span class="mod">~4</span></span>
+        </div>
+        <div class="pr">
+          <span class="state review">review</span>
+          <span class="num">#91</span>
+          <span class="ttl">redesign the sidebar — calmer…</span>
+          <span class="checks"><span class="ok">✓ 12</span></span>
+        </div>
+
+        <div class="wt">
+          <span class="glyph">⌥</span>
+          <span class="branch">fix/tmux-switching</span>
+          <span class="git"><span class="up">↑1</span></span>
+        </div>
+        <div class="pr">
+          <span class="state open">open</span>
+          <span class="num">#88</span>
+          <span class="ttl">fix tmux session list + switch</span>
+          <span class="checks"><span class="run">● 3</span></span>
+        </div>
+
+        <div class="wt">
+          <span class="glyph">⌥</span>
+          <span class="branch">github-integration</span>
+          <span class="git"><span class="mod">~7</span> <span>?2</span></span>
+        </div>
+        <div class="pr">
+          <span class="state draft">draft</span>
+          <span class="num">#93</span>
+          <span class="ttl">MoriGitHub: gh dash + PR strip</span>
+          <span class="checks"><span class="bad">✕ 1</span></span>
+        </div>
+
+        <div class="wt">
+          <span class="glyph">⎇</span>
+          <span class="branch">main</span>
+          <span class="git"><span class="d">⊘</span></span>
+        </div>
+
+        <div class="sec">最近的 PR</div>
+        <div class="wt" style="padding-left:18px">
+          <span class="glyph" style="font-size:11px">◍</span>
+          <span class="branch" style="font-weight:400;font-size:12.5px;color:var(--fg-muted)">#85 brand mark icon</span>
+          <span class="git"><span class="d">merged</span></span>
+        </div>
+      </div>
+
+      <!-- TERMINAL -->
+      <div class="term">
+        <div><span class="p">mori</span> <span class="c">feat/sidebar-redesign</span> <span class="d">~/workspace/mori</span></div>
+        <div>❯ swift build</div>
+        <div class="d">Building for debugging...</div>
+        <div class="d">[142/142] Compiling Mori MainWindowController.swift</div>
+        <div><span class="p">Build complete!</span> <span class="d">(8.41s)</span></div>
+        <div style="height:8px"></div>
+        <div>❯ <span style="opacity:.6">gh pr checks 91</span></div>
+        <div><span class="p">✓</span> build-and-test <span class="d">2m13s</span></div>
+        <div><span class="p">✓</span> swiftlint <span class="d">14s</span></div>
+        <div><span class="p">✓</span> bundle-app <span class="d">1m02s</span></div>
+        <div>❯ <span style="border-left:6px solid var(--fg);opacity:.7">&nbsp;</span></div>
+      </div>
+
+      <!-- COMPANION PANE: gh dash -->
+      <div class="pane">
+        <div class="pane-header">
+          <span class="ico">◆</span>
+          <span>gh dash — mori</span>
+          <span class="kbd">⌥G</span>
+        </div>
+        <div class="dash">
+          <div class="tabs">
+            <span class="on">My Pull Requests</span>
+            <span>Needs Review</span>
+            <span>Issues</span>
+          </div>
+          <div class="row hl">
+            <span class="st review" style="color:var(--violet)">◐</span>
+            <span class="n">#91</span>
+            <span class="t">redesign the sidebar — calmer, two levels</span>
+            <span class="meta av">●12 ✓</span>
+          </div>
+          <div class="row">
+            <span class="st ok">✓</span>
+            <span class="n">#88</span>
+            <span class="t">fix tmux session list + switching</span>
+            <span class="meta run">◷3</span>
+          </div>
+          <div class="row">
+            <span class="st bad">✕</span>
+            <span class="n">#93</span>
+            <span class="t">MoriGitHub: gh dash + PR strip mockup</span>
+            <span class="meta">draft</span>
+          </div>
+          <div class="row">
+            <span class="st ok">✓</span>
+            <span class="n">#84</span>
+            <span class="t">MoriRemote: rework key bar by role</span>
+            <span class="meta av">●2 ✓✓</span>
+          </div>
+          <div class="row">
+            <span class="st run">◷</span>
+            <span class="n">#82</span>
+            <span class="t">MoriIPC: SSH endpoint reconnect backoff</span>
+            <span class="meta run">running</span>
+          </div>
+          <div class="foot">
+            <span><b>↵</b> checkout</span>
+            <span><b>o</b> browser</span>
+            <span><b>c</b> comment</span>
+            <span><b>d</b> diff</span>
+            <span><b>/</b> filter</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="annot">
+    <span><b>Tier 1</b> — <code>gh dash</code> 作为 companion tool 跑在右侧面板，⌥G 唤起，复用 lazygit 那套架构</span>
+    <span><b>Tier 2</b> — 每个 worktree 行下挂一条 PR 状态条：编号 / 状态 / CI checks，绑定当前 branch</span>
+  </div>
+
+  <script>
+    const seg = document.querySelector('.seg');
+    seg.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      seg.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      document.body.className = b.dataset.mode;
+    });
+  </script>
+</body>
+</html>
