@@ -83,23 +83,32 @@ public struct WorktreeSidebarView: View {
 
     private var filterBar: some View {
         HStack(spacing: MoriTokens.Spacing.sm) {
-            filterPill(.all, label: String.localized("All"), count: availableWorktreeCount)
-            filterPill(.waiting, label: "●", count: waitingItems.count, tint: MoriTokens.Color.attention)
-            filterPill(.running, label: "●", count: runningItems.count, tint: MoriTokens.Color.success)
+            filterPill(.all, count: availableWorktreeCount, word: String.localized("All"), tint: .primary, showDot: false)
+            // Suppress zero-count states so the strip stays quiet when nothing is happening.
+            if waitingItems.count > 0 || filter == .waiting {
+                filterPill(.waiting, count: waitingItems.count, word: String.localized("waiting"), tint: MoriTokens.Color.attention, showDot: true)
+            }
+            if runningItems.count > 0 || filter == .running {
+                filterPill(.running, count: runningItems.count, word: String.localized("running"), tint: MoriTokens.Color.success, showDot: true)
+            }
             Spacer()
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(MoriTokens.Color.inactive)
         }
         .padding(.horizontal, MoriTokens.Spacing.md)
         .padding(.bottom, MoriTokens.Spacing.sm)
     }
 
-    private func filterPill(_ value: SidebarFilter, label: String, count: Int, tint: Color = .primary) -> some View {
+    private func filterPill(_ value: SidebarFilter, count: Int, word: String, tint: Color, showDot: Bool) -> some View {
         Button { filter = value } label: {
-            HStack(spacing: MoriTokens.Spacing.sm) {
-                Text(label).foregroundStyle(tint)
-                Text("\(count)").font(MoriTokens.Font.monoSmall)
+            HStack(spacing: 5) {
+                if showDot {
+                    Circle().fill(tint).frame(width: 6, height: 6)
+                }
+                Text("\(count)").font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Color.primary)
+                Text(word).font(.system(size: 11.5, weight: .medium)).foregroundStyle(MoriTokens.Color.muted)
             }
-            .font(.system(size: 11.5, weight: .medium))
-            .foregroundStyle(filter == value ? Color.primary : MoriTokens.Color.muted)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
             .background(Capsule().fill(filter == value ? MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle) : Color.clear))
@@ -161,22 +170,22 @@ public struct WorktreeSidebarView: View {
         .contextMenu { projectActions(project) }
     }
 
-    // Demoted to a quiet group label: small tile, muted name, no selected fill,
-    // and a status pip only when something here needs you — so the worktree rows
-    // below stay the visual focus rather than competing with the header.
+    // Middle weight: bold-name + 20pt tile gives the project a real header so
+    // grouping is unmistakable, but no row-fill selection so the worktree row
+    // below it (which DOES fill on selection) keeps the visual lead.
     private func projectHeader(_ project: Project, count: Int, selected: Bool) -> some View {
         let agg = aggregateState(for: project)
-        return HStack(spacing: MoriTokens.Spacing.sm) {
-            Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(MoriTokens.Color.inactive).frame(width: MoriTokens.Size.sidebarChevron)
-            ProjectLetterTile(project: project, size: 16, cornerRadius: 4, fontSize: 9)
-            Text(project.name).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(MoriTokens.Color.muted).lineLimit(1)
-            if project.isFavorite { Image(systemName: "pin.fill").font(.system(size: 8, weight: .semibold)).foregroundStyle(MoriTokens.Color.inactive) }
+        return HStack(spacing: MoriTokens.Spacing.md) {
+            Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(MoriTokens.Color.inactive).frame(width: MoriTokens.Size.sidebarChevron)
+            ProjectLetterTile(project: project, size: 20, cornerRadius: 5, fontSize: 11)
+            Text(project.name).font(.system(size: 14, weight: .bold)).foregroundStyle(Color.primary).lineLimit(1)
+            if project.isFavorite { Image(systemName: "pin.fill").font(.system(size: 9, weight: .semibold)).foregroundStyle(MoriTokens.Color.inactive) }
             Spacer(minLength: 0)
-            if agg == .waiting || agg == .error { Circle().fill(agg == .error ? MoriTokens.Color.error : MoriTokens.Color.attention).frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot) }
+            if agg == .waiting || agg == .error { Circle().fill(agg == .error ? MoriTokens.Color.error : MoriTokens.Color.attention).frame(width: 7, height: 7) }
             if hoveredProjectId == project.id { Menu { projectActions(project) } label: { Image(systemName: "ellipsis").font(MoriTokens.Font.sidebarAccessory).foregroundStyle(MoriTokens.Color.muted) }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: MoriTokens.Size.sidebarAccessory) }
         }
         .padding(.horizontal, MoriTokens.Spacing.md)
-        .padding(.vertical, 5)
+        .padding(.vertical, 6)
         .contentShape(Rectangle())
         .onTapGesture { onToggleCollapse?(project.id); onSelectProject?(project.id) }
     }
