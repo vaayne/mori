@@ -36,7 +36,7 @@ struct WorktreeContextActions: View {
             } label: {
                 Label("Open PR on GitHub", systemImage: "arrow.up.forward.app")
             }
-            if let diffshub = pullRequest.diffsHubURL {
+            if let diffshub = diffsHubURL(from: github) {
                 Button {
                     NSWorkspace.shared.open(diffshub)
                 } label: {
@@ -53,5 +53,14 @@ struct WorktreeContextActions: View {
                 Label("Remove Worktree…", systemImage: "trash")
             }
         }
+    }
+
+    /// DiffsHub mirrors a github.com PR at the same path on its own host. Returns
+    /// nil for non-github.com URLs (e.g. GHE) so the option simply doesn't appear.
+    private func diffsHubURL(from github: URL) -> URL? {
+        guard var components = URLComponents(url: github, resolvingAgainstBaseURL: false),
+              components.host == "github.com" else { return nil }
+        components.host = "diffshub.com"
+        return components.url
     }
 }

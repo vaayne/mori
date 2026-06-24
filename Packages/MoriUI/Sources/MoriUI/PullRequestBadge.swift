@@ -49,34 +49,47 @@ struct PullRequestBadge: View {
             .foregroundStyle(isSelected ? Color.white.opacity(0.85) : color)
     }
 
-    /// Short state used in the tooltip — review decision wins over a plain "open".
-    private var stateLabel: String {
-        if info.isDraft { return "Draft" }
+    /// The PR's display state, derived once (draft wins, then merged/closed, then
+    /// the review decision on an open PR) so the label and color can't diverge.
+    private enum DisplayState {
+        case draft, merged, closed, open, reviewRequired, approved, changesRequested
+    }
+
+    private var displayState: DisplayState {
+        if info.isDraft { return .draft }
         switch info.state {
-        case .merged: return "Merged"
-        case .closed: return "Closed"
+        case .merged: return .merged
+        case .closed: return .closed
         case .open:
             switch info.reviewDecision {
-            case .changesRequested: return "Changes requested"
-            case .approved: return "Approved"
-            case .required: return "Review required"
-            case .none: return "Open"
+            case .changesRequested: return .changesRequested
+            case .approved: return .approved
+            case .required: return .reviewRequired
+            case .none: return .open
             }
         }
     }
 
+    /// Short state used in the tooltip.
+    private var stateLabel: String {
+        switch displayState {
+        case .draft: return "Draft"
+        case .merged: return "Merged"
+        case .closed: return "Closed"
+        case .open: return "Open"
+        case .reviewRequired: return "Review required"
+        case .approved: return "Approved"
+        case .changesRequested: return "Changes requested"
+        }
+    }
+
     private var stateColor: Color {
-        if info.isDraft { return MoriTokens.Color.muted }
-        switch info.state {
+        switch displayState {
+        case .draft: return MoriTokens.Color.muted
         case .merged: return MoriTokens.Color.active
-        case .closed: return MoriTokens.Color.error
-        case .open:
-            switch info.reviewDecision {
-            case .changesRequested: return MoriTokens.Color.error
-            case .approved: return MoriTokens.Color.success
-            case .required: return MoriTokens.Color.info
-            case .none: return MoriTokens.Color.success
-            }
+        case .closed, .changesRequested: return MoriTokens.Color.error
+        case .open, .approved: return MoriTokens.Color.success
+        case .reviewRequired: return MoriTokens.Color.info
         }
     }
 }
