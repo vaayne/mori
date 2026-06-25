@@ -88,11 +88,12 @@ public struct WorktreeSidebarView: View {
         HStack(spacing: MoriTokens.Spacing.sm) {
             filterPill(.all, count: availableWorktreeCount, word: String.localized("All"), tint: .primary, showDot: false)
             // Suppress zero-count states so the strip stays quiet when nothing is happening.
+            // Dot color already encodes the state, so drop the word to keep the strip narrow.
             if waitingItems.count > 0 || filter == .waiting {
-                filterPill(.waiting, count: waitingItems.count, word: String.localized("waiting"), tint: MoriTokens.Color.attention, showDot: true)
+                filterPill(.waiting, count: waitingItems.count, word: nil, tint: MoriTokens.Color.attention, showDot: true)
             }
             if runningItems.count > 0 || filter == .running {
-                filterPill(.running, count: runningItems.count, word: String.localized("running"), tint: MoriTokens.Color.success, showDot: true)
+                filterPill(.running, count: runningItems.count, word: nil, tint: MoriTokens.Color.success, showDot: true)
             }
             Spacer()
             Image(systemName: "magnifyingglass")
@@ -103,15 +104,19 @@ public struct WorktreeSidebarView: View {
         .padding(.bottom, MoriTokens.Spacing.sm)
     }
 
-    private func filterPill(_ value: SidebarFilter, count: Int, word: String, tint: Color, showDot: Bool) -> some View {
+    private func filterPill(_ value: SidebarFilter, count: Int, word: String?, tint: Color, showDot: Bool) -> some View {
         Button { filter = value } label: {
             HStack(spacing: 5) {
                 if showDot {
                     Circle().fill(tint).frame(width: 6, height: 6)
                 }
                 Text("\(count)").font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Color.primary)
-                Text(word).font(.system(size: 11.5, weight: .medium)).foregroundStyle(MoriTokens.Color.muted)
+                if let word {
+                    Text(word).font(.system(size: 11.5, weight: .medium)).foregroundStyle(MoriTokens.Color.muted)
+                }
             }
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
             .background(Capsule().fill(filter == value ? MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle) : Color.clear))
