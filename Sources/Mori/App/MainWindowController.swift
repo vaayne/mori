@@ -81,8 +81,13 @@ final class MainWindowController: NSWindowController {
     /// Created by `installTabsView(_:)` once AppState/callbacks are available; the
     /// toolbar is built afterwards so the item has a real size.
     private var tabsView: TerminalTabsBarView?
-    private var tabsLeftMargin: CGFloat?
-    private var rightToolbarTrailingInset: CGFloat?
+    /// Cached titlebar geometry, refreshed whenever the anchor items are on-screen and reused while
+    /// they're in the `»` overflow menu — so a transient overflow can't strand the strip at a stale
+    /// width (which would keep it overflowed forever, since the anchors would never reappear).
+    private var cachedStripOriginX: CGFloat?
+    private var cachedRightInset: CGFloat?
+    /// Breathing room between the tab strip and the trailing toolbar group (mirrors the leading spacer).
+    private static let tabsTrailingMargin: CGFloat = 14
 
     // MARK: - Shortcut Hints
 
@@ -188,33 +193,31 @@ final class MainWindowController: NSWindowController {
         }
     }
 
+    /// Size the tab strip to the gap between the leading and trailing toolbar groups.
+    ///
+    /// Deliberately computed from `window.frame.width` plus cached geometry rather than the live
+    /// frames of the neighbouring toolbar items: once the window narrows enough for NSToolbar to push
+    /// those items into the `»` overflow menu, their views vanish, and any measurement that depends on
+    /// them stalls — leaving the strip stuck at its old (now-too-wide) size and permanently overflowed.
     private func updateTabsStripWidth() {
-        guard let window,
-              let tabsView,
-              let leftAnchor = visibleToolbarView(for: ToolbarID.agentDashboard),
-              let rightAnchor = visibleToolbarView(for: ToolbarID.files) else { return }
+        guard let window, let tabsView else { return }
         window.contentView?.superview?.layoutSubtreeIfNeeded()
 
-        let leftMax = leftAnchor.convert(leftAnchor.bounds, to: nil).maxX
+        // Refresh the caches only while the anchors are genuinely on-screen.
         let tabsFrame = tabsView.convert(tabsView.bounds, to: nil)
-        guard tabsFrame.width > 0 else { return }
-
-        let measuredLeftMargin = max(0, tabsFrame.minX - leftMax)
-        if tabsLeftMargin == nil || measuredLeftMargin > 0 {
-            tabsLeftMargin = measuredLeftMargin
+        if visibleToolbarView(for: ToolbarID.agentDashboard) != nil, tabsFrame.width > 0 {
+            cachedStripOriginX = tabsFrame.minX
         }
-
-        if rightAnchor.window === window {
+        if let rightAnchor = visibleToolbarView(for: ToolbarID.files), rightAnchor.window === window {
             let rightMin = rightAnchor.convert(rightAnchor.bounds, to: nil).minX
-            if rightMin > leftMax, rightMin < window.frame.width {
-                rightToolbarTrailingInset = window.frame.width - rightMin
+            if rightMin > 0, rightMin < window.frame.width {
+                cachedRightInset = window.frame.width - rightMin
             }
         }
 
-        guard let tabsLeftMargin, let rightToolbarTrailingInset else { return }
-        let targetRightMin = window.frame.width - rightToolbarTrailingInset
-        let targetWidth = targetRightMin - tabsFrame.minX - tabsLeftMargin
-        tabsView.setStripWidth(targetWidth)
+        guard let originX = cachedStripOriginX, let rightInset = cachedRightInset else { return }
+        let available = window.frame.width - rightInset - originX - Self.tabsTrailingMargin
+        tabsView.setStripWidth(max(available, 0))
     }
 
     private func visibleToolbarView(for id: NSToolbarItem.Identifier) -> NSView? {

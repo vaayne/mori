@@ -9,7 +9,8 @@ import MoriUI
 /// flexible-space layout has repeatedly rendered hosted SwiftUI as a blank strip.
 @MainActor
 final class TerminalTabsBarView: NSView {
-    private static let tabWidth: CGFloat = 160
+    private static let defaultTabWidth: CGFloat = 160
+    private static let minTabWidth: CGFloat = 60
     private static let tabHeight: CGFloat = 24
     private static let plusWidth: CGFloat = 26
     private static let horizontalPadding = MoriTokens.Spacing.sm
@@ -20,11 +21,14 @@ final class TerminalTabsBarView: NSView {
     private let onCloseWindow: (String) -> Void
     private let onCreateWindow: () -> Void
     private let stackView = NSStackView()
-    private lazy var widthConstraint = widthAnchor.constraint(equalToConstant: contentWidth)
+    private var tabControls: [TerminalTabControl] = []
+    private lazy var widthConstraint = widthAnchor.constraint(equalToConstant: layoutWidth)
     private lazy var heightConstraint = heightAnchor.constraint(equalToConstant: TerminalTabsBarView.tabHeight)
 
-    private var contentWidth: CGFloat = TerminalTabsBarView.horizontalPadding * 2 + TerminalTabsBarView.plusWidth
-    private var stripWidth: CGFloat = TerminalTabsBarView.horizontalPadding * 2 + TerminalTabsBarView.plusWidth
+    /// Width the controller offers the strip; `nil` until first measured so tabs start at the default.
+    private var availableWidth: CGFloat?
+    /// Actual laid-out strip width (≤ availableWidth) — drives the toolbar item size so it never overflows.
+    private var layoutWidth: CGFloat = TerminalTabsBarView.horizontalPadding * 2 + TerminalTabsBarView.plusWidth
     var onIntrinsicContentSizeChanged: (() -> Void)?
 
     init(
@@ -50,7 +54,7 @@ final class TerminalTabsBarView: NSView {
     override var isFlipped: Bool { true }
 
     override var intrinsicContentSize: NSSize {
-        NSSize(width: ceil(max(stripWidth, contentWidth)), height: Self.tabHeight)
+        NSSize(width: ceil(layoutWidth), height: Self.tabHeight)
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -106,6 +110,7 @@ final class TerminalTabsBarView: NSView {
             view.removeFromSuperview()
         }
 
+        tabControls.removeAll()
         for window in windows {
             let tab = TerminalTabControl(
                 window: window,
@@ -113,6 +118,7 @@ final class TerminalTabsBarView: NSView {
                 onSelect: onSelectWindow,
                 onClose: onCloseWindow
             )
+            tabControls.append(tab)
             stackView.addArrangedSubview(tab)
         }
 
@@ -127,35 +133,38 @@ final class TerminalTabsBarView: NSView {
         )
         stackView.addArrangedSubview(addButton)
 
-        let slackSpacer = NSView()
-        slackSpacer.translatesAutoresizingMaskIntoConstraints = false
-        slackSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        slackSpacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let slackWidth = slackSpacer.widthAnchor.constraint(equalToConstant: 10_000)
-        slackWidth.priority = .defaultLow
-        NSLayoutConstraint.activate([
-            slackWidth,
-            slackSpacer.heightAnchor.constraint(equalToConstant: Self.tabHeight),
-        ])
-        stackView.addArrangedSubview(slackSpacer)
-
-        let itemCount = windows.count + 1
-        contentWidth = Self.horizontalPadding * 2
-            + CGFloat(windows.count) * Self.tabWidth
-            + Self.plusWidth
-            + CGFloat(max(0, itemCount)) * Self.spacing
-        syncStripWidth()
+        applyTabLayout()
     }
 
     func setStripWidth(_ width: CGFloat) {
-        let width = ceil(max(width, contentWidth))
-        guard abs(width - stripWidth) > 0.5 else { return }
-        stripWidth = width
-        syncStripWidth()
+        guard width.isFinite else { return }
+        let clamped = max(width, 0)
+        if let availableWidth, abs(clamped - availableWidth) <= 0.5 { return }
+        availableWidth = clamped
+        applyTabLayout()
     }
 
-    private func syncStripWidth() {
-        widthConstraint.constant = max(stripWidth, contentWidth)
+    /// Safari-style sizing: tabs stretch to fill the width the toolbar hands the strip, so there's no
+    /// dead gap before the trailing controls; as tabs pile up they shrink evenly toward `minTabWidth`,
+    /// keeping the strip within its allotment so it never collapses into the `»` overflow menu.
+    /// Before the controller measures the strip we fall back to `defaultTabWidth`.
+    private func applyTabLayout() {
+        let count = tabControls.count
+        let gaps = CGFloat(count + 1) * Self.spacing
+        let fixed = Self.horizontalPadding * 2 + Self.plusWidth + gaps
+        let perTab: CGFloat
+        if count == 0 {
+            perTab = 0
+        } else if let availableWidth {
+            // No upper cap: a lone tab spans the bar by design (fill chosen over a width ceiling).
+            perTab = max(Self.minTabWidth, (availableWidth - fixed) / CGFloat(count))
+        } else {
+            perTab = Self.defaultTabWidth
+        }
+        for tab in tabControls { tab.setWidth(perTab) }
+
+        layoutWidth = ceil(fixed + perTab * CGFloat(count))
+        widthConstraint.constant = layoutWidth
         heightConstraint.constant = Self.tabHeight
         invalidateIntrinsicContentSize()
         needsLayout = true
@@ -173,6 +182,7 @@ private final class TerminalTabControl: NSControl {
     private let onSelect: (String) -> Void
     private let onClose: (String) -> Void
     private let closeButton: TerminalIconButton
+    private var widthConstraint: NSLayoutConstraint!
 
     init(
         window: RuntimeWindow,
@@ -195,8 +205,9 @@ private final class TerminalTabControl: NSControl {
         )
         super.init(frame: NSRect(x: 0, y: 0, width: Self.width, height: Self.height))
         translatesAutoresizingMaskIntoConstraints = false
+        widthConstraint = widthAnchor.constraint(equalToConstant: Self.width)
         NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: Self.width),
+            widthConstraint,
             heightAnchor.constraint(equalToConstant: Self.height),
         ])
         setContentHuggingPriority(.required, for: .horizontal)
@@ -218,7 +229,17 @@ private final class TerminalTabControl: NSControl {
     override var isFlipped: Bool { true }
 
     override var intrinsicContentSize: NSSize {
-        NSSize(width: Self.width, height: Self.height)
+        NSSize(width: widthConstraint?.constant ?? Self.width, height: Self.height)
+    }
+
+    /// Resize the tab in place (Chrome-style shrink-to-fit); the title truncates and the close
+    /// button re-anchors to the trailing edge automatically via `layout()`/`draw(_:)`.
+    func setWidth(_ width: CGFloat) {
+        guard abs(widthConstraint.constant - width) > 0.5 else { return }
+        widthConstraint.constant = width
+        invalidateIntrinsicContentSize()
+        needsLayout = true
+        needsDisplay = true
     }
 
     override func layout() {
