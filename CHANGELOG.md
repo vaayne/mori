@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-06-25
+
+### 🐛 Bug Fixes
+
+- **macOS**: The titlebar no longer collapses into a `»` overflow menu when the window narrows. Terminal tabs now size to fit — they stretch to fill the space between the toolbar groups (so there's no dead gap before the trailing controls) and shrink evenly toward a minimum as the window narrows or tabs pile up, keeping the toolbar buttons visible instead of pushing them into the overflow.
+
+### 🎨 Design
+
+- **macOS**: Decluttered the sidebar filter strip — the `waiting`/`running` pills now show just a status dot and count (the colour already says which is which, and the section headers below repeat the words), and the pills no longer wrap their text vertically when the sidebar is narrow.
+
 ## [0.5.0] - 2026-06-24
 
 ### 🎨 Design
