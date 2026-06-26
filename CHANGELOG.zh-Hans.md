@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-06-26
+
 ### 🎨 界面优化
 
 - **macOS**：侧栏每个 project header 新增可见的 `+` 操作，不用打开溢出菜单也能创建新 worktree。
@@ -14,6 +16,8 @@
 - **macOS**：将命令面板改成跟随 Ghostty 主题的 HUD，替代默认白色 AppKit 面板。
 - **macOS**：统一 `⌘P` 和 `⇧⌘P`，两者都打开同一个命令面板，不再分成 project-only 和 all-actions 两个面板。
 - **macOS**：收紧命令面板间距，优化搜索框样式和选中行视觉。
+
+**完整变更**：[v0.5.3...v0.5.4](https://github.com/vaayne/mori/compare/v0.5.3...v0.5.4)
 
 ## [0.5.3] - 2026-06-26
 

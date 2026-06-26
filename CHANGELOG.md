@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-06-26
+
 ### 🎨 Design
 
 - **macOS**: Added a visible `+` action to each sidebar project header for creating a new worktree without opening the overflow menu.
@@ -14,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **macOS**: Restyled the command palette as a Ghostty-themed HUD instead of a default white AppKit panel.
 - **macOS**: Unified `⌘P` and `⇧⌘P` so both open the same command palette instead of separate project-only and all-actions panels.
 - **macOS**: Tightened command palette spacing, search field styling, and selected-row treatment.
+
+**Full Changelog**: [v0.5.3...v0.5.4](https://github.com/vaayne/mori/compare/v0.5.3...v0.5.4)
 
 ## [0.5.3] - 2026-06-26
 
