@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🎨 Design
+
+- **macOS**: Added a visible `+` action to each sidebar project header for creating a new worktree without opening the overflow menu.
+
 ## [0.5.3] - 2026-06-26
 
 ### 🐛 Bug Fixes

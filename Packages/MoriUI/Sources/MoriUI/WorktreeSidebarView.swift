@@ -190,6 +190,7 @@ public struct WorktreeSidebarView: View {
             if project.isFavorite { Image(systemName: "pin.fill").font(.system(size: 9, weight: .semibold)).foregroundStyle(MoriTokens.Color.inactive) }
             Spacer(minLength: 0)
             if agg == .waiting || agg == .error { Circle().fill(agg == .error ? MoriTokens.Color.error : MoriTokens.Color.attention).frame(width: 7, height: 7) }
+            if onShowCreatePanel != nil { Button { onSelectProject?(project.id); onShowCreatePanel?() } label: { Image(systemName: "plus").font(MoriTokens.Font.sidebarAccessory).foregroundStyle(MoriTokens.Color.muted) }.buttonStyle(.plain).frame(width: MoriTokens.Size.sidebarAccessory).help("New Workspace…") }
             if hoveredProjectId == project.id { Menu { projectActions(project) } label: { Image(systemName: "ellipsis").font(MoriTokens.Font.sidebarAccessory).foregroundStyle(MoriTokens.Color.muted) }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: MoriTokens.Size.sidebarAccessory) }
         }
         .padding(.horizontal, MoriTokens.Spacing.md)
