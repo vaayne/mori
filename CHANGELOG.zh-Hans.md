@@ -11,6 +11,10 @@
 
 - **macOS**：Mori 现在支持 Ghostty 的浅色 / 深色双主题。在 Ghostty 配置里写 `theme = light:…,dark:…`（或在 设置 → 主题 打开 **跟随系统外观** 并分别选好浅色、深色主题），切换 macOS 外观时，终端与 Mori 自身的 chrome——侧栏、窗口、面板、tmux——都会实时跟随切换。
 
+### 🎨 界面优化
+
+- **macOS**：调整侧栏层级：project header 保持弱化，选中的 worktree 更像两行的圆角 workspace card。Git/PR 元信息放在第二行，PR 徽标可完整显示 `#编号`，不再挤占主行。
+
 ## [0.5.1] - 2026-06-25
 
 ### 🐛 问题修复

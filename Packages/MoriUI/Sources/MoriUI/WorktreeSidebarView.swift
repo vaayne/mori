@@ -178,15 +178,15 @@ public struct WorktreeSidebarView: View {
         .contextMenu { projectActions(project) }
     }
 
-    // Middle weight: bold-name + 20pt tile gives the project a real header so
-    // grouping is unmistakable, but no row-fill selection so the worktree row
-    // below it (which DOES fill on selection) keeps the visual lead.
+    // Quiet group label: visible enough to anchor the cluster, but deliberately
+    // lighter than the worktree rows, which are the actual workspaces.
     private func projectHeader(_ project: Project, count: Int, selected: Bool) -> some View {
         let agg = aggregateState(for: project)
         return HStack(spacing: MoriTokens.Spacing.md) {
             Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(MoriTokens.Color.inactive).frame(width: MoriTokens.Size.sidebarChevron)
             ProjectLetterTile(project: project, size: 20, cornerRadius: 5, fontSize: 11)
-            Text(project.name).font(.system(size: 14, weight: .bold)).foregroundStyle(Color.primary).lineLimit(1)
+                .opacity(0.72)
+            Text(project.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(MoriTokens.Color.muted).lineLimit(1)
             if project.isFavorite { Image(systemName: "pin.fill").font(.system(size: 9, weight: .semibold)).foregroundStyle(MoriTokens.Color.inactive) }
             Spacer(minLength: 0)
             if agg == .waiting || agg == .error { Circle().fill(agg == .error ? MoriTokens.Color.error : MoriTokens.Color.attention).frame(width: 7, height: 7) }

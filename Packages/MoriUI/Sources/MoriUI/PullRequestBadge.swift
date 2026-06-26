@@ -1,9 +1,8 @@
 import SwiftUI
 import MoriCore
 
-/// Compact inline PR indicator shown on the worktree row itself (not a sub-row),
-/// so the sidebar stays two levels. Reads at a glance — `#number` tinted by PR
-/// state, plus a CI check glyph; the exact state spells out in the tooltip.
+/// Compact PR indicator for the worktree metadata line. Keeping it off the
+/// primary row lets the full PR number show without competing with the worktree name.
 ///
 /// Deliberately non-interactive: opening the PR in a browser is heavyweight and
 /// hard to undo, so it lives in the row's right-click menu rather than as a click
@@ -17,6 +16,8 @@ struct PullRequestBadge: View {
             Text("#\(info.number)")
                 .font(MoriTokens.Font.monoSmall)
                 .foregroundStyle(numberColor)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
             checksGlyph
         }
         .padding(.horizontal, 5)

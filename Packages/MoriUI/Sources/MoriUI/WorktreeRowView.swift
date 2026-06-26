@@ -55,44 +55,37 @@ public struct WorktreeRowView: View {
 
     public var body: some View {
         Button(action: onSelect) {
-            HStack(alignment: .center, spacing: MoriTokens.Spacing.md) {
-                // Leading glyph fuses identity (branch vs session) and agent state
-                // into one 17pt symbol — pulses while an agent waits on you.
-                Image(systemName: worktreeIcon)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(glyphColor)
-                    .frame(width: 17, height: 17)
-                    .symbolEffect(.pulse, options: .repeating, isActive: worktree.agentState == .waitingForInput)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .center, spacing: MoriTokens.Spacing.md) {
+                    // Leading glyph fuses identity (branch vs session) and agent state
+                    // into one 17pt symbol — pulses while an agent waits on you.
+                    Image(systemName: worktreeIcon)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(glyphColor)
+                        .frame(width: 17, height: 17)
+                        .symbolEffect(.pulse, options: .repeating, isActive: worktree.agentState == .waitingForInput)
 
-                Text(branchDisplayText)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-                    .foregroundStyle(nameColor)
-                    .lineLimit(1)
-
-                Spacer(minLength: 0)
-
-                if let gitSummaryText {
-                    Text(gitSummaryText)
-                        .font(MoriTokens.Font.monoSmall)
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.85) : MoriTokens.Color.muted)
+                    Text(branchDisplayText)
+                        .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                        .foregroundStyle(nameColor)
                         .lineLimit(1)
+
+                    Spacer(minLength: 0)
+
+                    windowChip
+
+                    if isHovered {
+                        overflowMenu
+                            .transition(.opacity)
+                    } else if let timeText = relativeTimeText {
+                        Text(timeText)
+                            .font(MoriTokens.Font.monoShortcut)
+                            .foregroundStyle(isSelected ? Color.white.opacity(0.7) : MoriTokens.Color.inactive)
+                            .lineLimit(1)
+                    }
                 }
 
-                if let pullRequest {
-                    PullRequestBadge(info: pullRequest, isSelected: isSelected)
-                }
-
-                windowChip
-
-                if isHovered {
-                    overflowMenu
-                        .transition(.opacity)
-                } else if let timeText = relativeTimeText {
-                    Text(timeText)
-                        .font(MoriTokens.Font.monoShortcut)
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.7) : MoriTokens.Color.inactive)
-                        .lineLimit(1)
-                }
+                metadataLine
             }
             .padding(.vertical, 6)
             .padding(.horizontal, MoriTokens.Spacing.lg)
@@ -100,7 +93,7 @@ public struct WorktreeRowView: View {
         }
         .buttonStyle(.plain)
         .background(rowBackground)
-        .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.small))
+        .clipShape(RoundedRectangle(cornerRadius: MoriTokens.Radius.medium))
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
@@ -124,6 +117,29 @@ public struct WorktreeRowView: View {
         if isSelected { return .white }
         return (worktree.status == .active || worktree.agentState != .none)
             ? Color.primary : MoriTokens.Color.muted
+    }
+
+    @ViewBuilder
+    private var metadataLine: some View {
+        if gitSummaryText != nil || pullRequest != nil {
+            HStack(spacing: MoriTokens.Spacing.sm) {
+                Spacer()
+                    .frame(width: 17 + MoriTokens.Spacing.md - MoriTokens.Spacing.sm)
+
+                if let pullRequest {
+                    PullRequestBadge(info: pullRequest, isSelected: isSelected)
+                }
+
+                if let gitSummaryText {
+                    Text(gitSummaryText)
+                        .font(MoriTokens.Font.monoSmall)
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.72) : MoriTokens.Color.muted)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+            }
+        }
     }
 
     /// Collapsed-by-default window count. Tapping toggles the third level so it
@@ -240,7 +256,7 @@ public struct WorktreeRowView: View {
 
     private var rowBackground: AnyShapeStyle {
         if isSelected {
-            // Solid accent fill with white text — unmistakable "you are here".
+            // Card-like selected workspace; project headers stay quiet above it.
             return AnyShapeStyle(MoriTokens.Color.active)
         }
         if isHovered {

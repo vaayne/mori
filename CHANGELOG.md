@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **macOS**: Mori now follows Ghostty's split light/dark themes. Set `theme = light:…,dark:…` in your Ghostty config (or toggle **Sync with system appearance** in Settings → Theme and pick a light and a dark theme) and the terminal *and* Mori's own chrome — sidebar, windows, panels, tmux — switch live when you change the macOS appearance.
 
+### 🎨 Design
+
+- **macOS**: Refined the sidebar hierarchy so project headers stay quiet while the selected worktree reads as a rounded two-line workspace card. Git/PR metadata sits on the second line, with the full PR `#number` shown without crowding the main row.
+
 ## [0.5.1] - 2026-06-25
 
 ### 🐛 Bug Fixes
