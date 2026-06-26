@@ -7,10 +7,6 @@ final class CommandPaletteDataSource {
 
     private let appState: AppState
 
-    /// Optional filter to restrict which items are shown.
-    /// When set, only items passing this predicate are included.
-    var itemFilter: (@Sendable (CommandPaletteItem) -> Bool)?
-
     init(appState: AppState) {
         self.appState = appState
     }
@@ -102,12 +98,7 @@ final class CommandPaletteDataSource {
     /// Supports `tag:<tagname>` prefix to filter windows by semantic tag.
     /// Supports `agent:` prefix to filter agent windows.
     func search(query: String) -> [CommandPaletteItem] {
-        var items = allItems()
-
-        // Apply item filter if set
-        if let filter = itemFilter {
-            items = items.filter(filter)
-        }
+        let items = allItems()
 
         if query.isEmpty {
             return items

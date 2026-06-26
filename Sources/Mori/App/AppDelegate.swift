@@ -1031,6 +1031,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         sidebarController?.updateAppearance(themeInfo: themeInfo)
         terminalAreaController?.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
         companionToolController?.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
+        commandPaletteController?.updateAppearance(themeInfo: themeInfo)
     }
 
     private func refreshSettingsWindowAppearance(adapter: GhosttyAdapter, themeInfo: GhosttyThemeInfo) {
@@ -1588,6 +1589,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     private func setupCommandPalette(appState: AppState, manager: WorkspaceManager) {
         let palette = CommandPaletteController(appState: appState)
+        if let themeInfo = terminalAreaController?.themeInfo {
+            palette.updateAppearance(themeInfo: themeInfo)
+        }
         self.commandPaletteController = palette
 
         // Wire item selection to WorkspaceManager navigation and actions
@@ -1647,7 +1651,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             "settings.reload": { [weak self] in self?.terminalAreaController?.reloadConfig() },
             "other.openProject": { [weak self] in self?.showAddProjectPanel() },
             "other.agentDashboard": { [weak self] in self?.toggleAgentDashboardAction() },
-            "other.projectSwitcher": { [weak self] in self?.commandPaletteController?.toggle(mode: .projectsOnly) },
+            // Backward-compatible alias for users who still have the old project switcher binding.
+            "other.projectSwitcher": { [weak self] in self?.commandPaletteController?.toggle(mode: .allItems) },
         ]
 
         // Register key monitor that dispatches via the key binding store

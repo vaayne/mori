@@ -106,7 +106,7 @@ public enum KeyBindingDefaults {
                    shortcut: Shortcut(key: "a", modifiers: .cmdShift)),
         KeyBinding(id: "commandPalette.toggle", displayNameKey: "keybinding.commandPalette.toggle", category: .other,
                    shortcut: Shortcut(key: "p", modifiers: .cmdShift)),
-        KeyBinding(id: "other.projectSwitcher", displayNameKey: "keybinding.other.projectSwitcher", category: .other,
+        KeyBinding(id: "other.projectSwitcher", displayNameKey: "keybinding.commandPalette.alternate", category: .other,
                    shortcut: Shortcut(key: "p", modifiers: .cmd)),
     ]
 

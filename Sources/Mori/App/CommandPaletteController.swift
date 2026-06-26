@@ -1,5 +1,6 @@
 import AppKit
 import MoriCore
+import MoriTerminal
 
 /// NSWindowController managing a floating command palette panel.
 /// Contains an NSTextField for search and an NSTableView for results.
@@ -20,56 +21,39 @@ final class CommandPaletteController: NSWindowController {
 
     // MARK: - Views
 
-    private let searchField = NSTextField()
+    private let searchField = PaletteSearchField()
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
-    private let containerView = NSView()
+    private let containerView = PaletteContainerView()
+    private var themeInfo: GhosttyThemeInfo = .fallback
 
     // MARK: - Presentation Mode
 
     enum Mode: Equatable {
         case allItems
-        case projectsOnly
 
         var placeholder: String {
-            switch self {
-            case .allItems:
-                return .localized("Search projects, worktrees, windows, actions...")
-            case .projectsOnly:
-                return .localized("Switch project...")
-            }
-        }
-
-        var itemFilter: (@Sendable (CommandPaletteItem) -> Bool)? {
-            switch self {
-            case .allItems:
-                return nil
-            case .projectsOnly:
-                return { item in
-                    if case .project = item { return true }
-                    return false
-                }
-            }
+            .localized("Search projects, worktrees, windows, actions...")
         }
     }
 
     // MARK: - Layout Constants
 
     private enum Layout {
-        static let panelWidth: CGFloat = 500
-        static let searchFieldHeight: CGFloat = 36
-        static let rowHeight: CGFloat = 32
+        static let panelWidth: CGFloat = 520
+        static let searchFieldHeight: CGFloat = 38
+        static let rowHeight: CGFloat = 36
         static let maxVisibleRows: Int = 10
-        static let panelPadding: CGFloat = 8
-        static let fieldHorizontalPadding: CGFloat = 12
-        static let cellIconSize: CGFloat = 18
-        static let cellLeadingPadding: CGFloat = 8
+        static let panelPadding: CGFloat = 14
+        static let fieldHorizontalPadding: CGFloat = 18
+        static let cellIconSize: CGFloat = 17
+        static let cellLeadingPadding: CGFloat = 14
         static let cellSpacing: CGFloat = 8
         static let cellTrailingPadding: CGFloat = 8
         static let titleFontSize: CGFloat = 13
         static let subtitleFontSize: CGFloat = 11
         static let shortcutFontSize: CGFloat = 11
-        static let searchFontSize: CGFloat = 16
+        static let searchFontSize: CGFloat = 14.5
         static let panelTopOffset: CGFloat = 80
     }
 
@@ -78,7 +62,7 @@ final class CommandPaletteController: NSWindowController {
     init(appState: AppState) {
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: Layout.panelWidth, height: 400),
-            styleMask: [.titled, .closable, .nonactivatingPanel],
+            styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: true
         )
@@ -87,10 +71,13 @@ final class CommandPaletteController: NSWindowController {
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.hasShadow = true
-        panel.backgroundColor = .windowBackgroundColor
+        panel.backgroundColor = .clear
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = true
         panel.becomesKeyOnlyIfNeeded = true
+        panel.standardWindowButton(.closeButton)?.isHidden = true
+        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        panel.standardWindowButton(.zoomButton)?.isHidden = true
 
         self.dataSource = CommandPaletteDataSource(appState: appState)
 
@@ -120,13 +107,32 @@ final class CommandPaletteController: NSWindowController {
 
     func show(mode requestedMode: Mode = .allItems) {
         mode = requestedMode
-        dataSource.itemFilter = requestedMode.itemFilter
         searchField.placeholderString = requestedMode.placeholder
+        updateAppearance(themeInfo: themeInfo)
         presentPalette()
     }
 
     func dismiss() {
         window?.orderOut(nil)
+    }
+
+    func updateAppearance(themeInfo: GhosttyThemeInfo) {
+        self.themeInfo = themeInfo
+        let appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        window?.appearance = appearance
+        window?.backgroundColor = .clear
+        containerView.themeInfo = themeInfo
+        searchField.textColor = themeInfo.foreground
+        searchField.backgroundColor = themeInfo.foreground.withAlphaComponent(themeInfo.isDark ? 0.06 : 0.08)
+        searchField.placeholderAttributedString = NSAttributedString(
+            string: mode.placeholder,
+            attributes: [.foregroundColor: themeInfo.foreground.withAlphaComponent(0.45)]
+        )
+        tableView.appearance = appearance
+        tableView.backgroundColor = .clear
+        scrollView.backgroundColor = .clear
+        scrollView.scrollerStyle = .overlay
+        tableView.reloadData()
     }
 
     // MARK: - Private Helpers
@@ -149,6 +155,7 @@ final class CommandPaletteController: NSWindowController {
         guard let panel = window else { return }
 
         containerView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.wantsLayer = true
         panel.contentView = containerView
 
         setupSearchField()
@@ -162,8 +169,10 @@ final class CommandPaletteController: NSWindowController {
         searchField.font = .systemFont(ofSize: Layout.searchFontSize)
         searchField.isBordered = false
         searchField.focusRingType = .none
-        searchField.bezelStyle = .roundedBezel
-        searchField.isBezeled = true
+        searchField.drawsBackground = true
+        searchField.wantsLayer = true
+        searchField.layer?.cornerRadius = 10
+        searchField.layer?.masksToBounds = true
         searchField.delegate = self
         searchField.target = self
         searchField.action = #selector(searchFieldAction(_:))
@@ -179,13 +188,14 @@ final class CommandPaletteController: NSWindowController {
         tableView.delegate = self
         tableView.dataSource = self
         tableView.rowHeight = Layout.rowHeight
-        tableView.selectionHighlightStyle = .regular
+        tableView.selectionHighlightStyle = .none
         tableView.intercellSpacing = NSSize(width: 0, height: 0)
         tableView.target = self
         tableView.doubleAction = #selector(tableDoubleClicked)
 
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.documentView = tableView
+        scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.borderType = .noBorder
@@ -193,25 +203,16 @@ final class CommandPaletteController: NSWindowController {
     }
 
     private func layoutViews() {
-        let separator = NSBox()
-        separator.translatesAutoresizingMaskIntoConstraints = false
-        separator.boxType = .separator
-        containerView.addSubview(separator)
-
         NSLayoutConstraint.activate([
-            searchField.topAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.panelPadding),
+            searchField.topAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.panelPadding + 10),
             searchField.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.fieldHorizontalPadding),
             searchField.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.fieldHorizontalPadding),
             searchField.heightAnchor.constraint(equalToConstant: Layout.searchFieldHeight),
 
-            separator.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: Layout.panelPadding),
-            separator.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            separator.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-
-            scrollView.topAnchor.constraint(equalTo: separator.bottomAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: Layout.panelPadding),
+            scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.fieldHorizontalPadding),
+            scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.fieldHorizontalPadding),
+            scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -Layout.panelPadding),
         ])
     }
 
@@ -236,7 +237,7 @@ final class CommandPaletteController: NSWindowController {
     private func computePanelHeight() -> CGFloat {
         let visibleRows = min(results.count, Layout.maxVisibleRows)
         let tableHeight = CGFloat(max(visibleRows, 1)) * Layout.rowHeight
-        let topPadding = Layout.panelPadding + Layout.searchFieldHeight + Layout.panelPadding + 1
+        let topPadding = Layout.panelPadding + 10 + Layout.searchFieldHeight + Layout.panelPadding
         return topPadding + tableHeight + Layout.panelPadding
     }
 
@@ -251,6 +252,7 @@ final class CommandPaletteController: NSWindowController {
         if selectedIndex >= 0 {
             tableView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
         }
+        redrawVisibleRows()
 
         // Resize panel to fit results
         resizePanel()
@@ -292,6 +294,7 @@ final class CommandPaletteController: NSWindowController {
         selectedIndex = max(0, selectedIndex - 1)
         tableView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
         tableView.scrollRowToVisible(selectedIndex)
+        redrawVisibleRows()
     }
 
     private func moveSelectionDown() {
@@ -299,6 +302,15 @@ final class CommandPaletteController: NSWindowController {
         selectedIndex = min(results.count - 1, selectedIndex + 1)
         tableView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
         tableView.scrollRowToVisible(selectedIndex)
+        redrawVisibleRows()
+    }
+
+    private func redrawVisibleRows() {
+        let rows = tableView.rows(in: tableView.visibleRect)
+        guard rows.location != NSNotFound else { return }
+        for row in rows.location..<(rows.location + rows.length) {
+            tableView.view(atColumn: 0, row: row, makeIfNecessary: false)?.needsDisplay = true
+        }
     }
 
     // MARK: - Actions
@@ -376,22 +388,30 @@ extension CommandPaletteController: NSTableViewDelegate {
         // Configure icon
         if let iconName = item.iconName {
             cell.imageView?.image = NSImage(systemSymbolName: iconName, accessibilityDescription: nil)
+            cell.imageView?.contentTintColor = themeInfo.foreground.withAlphaComponent(0.65)
         } else {
             cell.imageView?.image = nil
         }
 
         // Configure text
         cell.textField?.stringValue = item.title
+        cell.textField?.textColor = themeInfo.foreground
 
         // Configure subtitle (second text field, tag 100)
+        if let paletteCell = cell as? PaletteCellView {
+            paletteCell.themeInfo = themeInfo
+        }
+
         if let subtitleField = cell.viewWithTag(100) as? NSTextField {
             subtitleField.stringValue = item.subtitle ?? ""
+            subtitleField.textColor = themeInfo.foreground.withAlphaComponent(0.58)
             subtitleField.isHidden = item.subtitle == nil
         }
 
         // Configure shortcut hint (third text field, tag 101)
         if let shortcutField = cell.viewWithTag(101) as? NSTextField {
             shortcutField.stringValue = item.shortcutHint ?? ""
+            shortcutField.textColor = themeInfo.foreground.withAlphaComponent(0.45)
             shortcutField.isHidden = item.shortcutHint == nil
         }
 
@@ -403,10 +423,11 @@ extension CommandPaletteController: NSTableViewDelegate {
         if row >= 0 {
             selectedIndex = row
         }
+        redrawVisibleRows()
     }
 
     private func makeCell(identifier: NSUserInterfaceItemIdentifier) -> NSTableCellView {
-        let cell = NSTableCellView()
+        let cell = PaletteCellView()
         cell.identifier = identifier
 
         let imageView = NSImageView()
@@ -418,6 +439,7 @@ extension CommandPaletteController: NSTableViewDelegate {
         let titleField = NSTextField(labelWithString: "")
         titleField.translatesAutoresizingMaskIntoConstraints = false
         titleField.font = .systemFont(ofSize: Layout.titleFontSize)
+        titleField.textColor = themeInfo.foreground
         titleField.lineBreakMode = .byTruncatingTail
         cell.addSubview(titleField)
         cell.textField = titleField
@@ -425,7 +447,7 @@ extension CommandPaletteController: NSTableViewDelegate {
         let subtitleField = NSTextField(labelWithString: "")
         subtitleField.translatesAutoresizingMaskIntoConstraints = false
         subtitleField.font = .systemFont(ofSize: Layout.subtitleFontSize)
-        subtitleField.textColor = .secondaryLabelColor
+        subtitleField.textColor = themeInfo.foreground.withAlphaComponent(0.58)
         subtitleField.lineBreakMode = .byTruncatingTail
         subtitleField.tag = 100
         cell.addSubview(subtitleField)
@@ -433,7 +455,7 @@ extension CommandPaletteController: NSTableViewDelegate {
         let shortcutField = NSTextField(labelWithString: "")
         shortcutField.translatesAutoresizingMaskIntoConstraints = false
         shortcutField.font = .monospacedSystemFont(ofSize: Layout.shortcutFontSize, weight: .regular)
-        shortcutField.textColor = .tertiaryLabelColor
+        shortcutField.textColor = themeInfo.foreground.withAlphaComponent(0.45)
         shortcutField.alignment = .right
         shortcutField.tag = 101
         cell.addSubview(shortcutField)
@@ -460,5 +482,66 @@ extension CommandPaletteController: NSTableViewDelegate {
         shortcutField.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
 
         return cell
+    }
+}
+
+private final class PaletteSearchField: NSTextField {
+    override class var cellClass: AnyClass? {
+        get { PaletteSearchFieldCell.self }
+        set {}
+    }
+}
+
+private final class PaletteSearchFieldCell: NSTextFieldCell {
+    private let insets = NSSize(width: 12, height: 0)
+
+    override func drawingRect(forBounds rect: NSRect) -> NSRect {
+        super.drawingRect(forBounds: rect).insetBy(dx: insets.width, dy: insets.height)
+    }
+
+
+    override func titleRect(forBounds rect: NSRect) -> NSRect {
+        super.titleRect(forBounds: rect).insetBy(dx: insets.width, dy: insets.height)
+    }
+}
+
+private final class PaletteContainerView: NSView {
+    var themeInfo: GhosttyThemeInfo = .fallback {
+        didSet { needsDisplay = true }
+    }
+
+    override var wantsUpdateLayer: Bool { false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        let bounds = bounds.insetBy(dx: 0.5, dy: 0.5)
+        let path = NSBezierPath(roundedRect: bounds, xRadius: 18, yRadius: 18)
+        themeInfo.background.withAlphaComponent(themeInfo.isDark ? 0.96 : 0.98).setFill()
+        path.fill()
+        themeInfo.foreground.withAlphaComponent(themeInfo.isDark ? 0.14 : 0.10).setStroke()
+        path.lineWidth = 1
+        path.stroke()
+    }
+}
+
+private final class PaletteCellView: NSTableCellView {
+    var themeInfo: GhosttyThemeInfo = .fallback {
+        didSet { needsDisplay = true }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        if isSelectedRow {
+            let selectionRect = bounds.insetBy(dx: 0, dy: 3)
+            let path = NSBezierPath(roundedRect: selectionRect, xRadius: 9, yRadius: 9)
+            let accent = NSColor.controlAccentColor.usingColorSpace(.sRGB) ?? .controlAccentColor
+            accent.withAlphaComponent(themeInfo.isDark ? 0.34 : 0.22).setFill()
+            path.fill()
+        }
+        super.draw(dirtyRect)
+    }
+
+    private var isSelectedRow: Bool {
+        guard let tableView = enclosingScrollView?.documentView as? NSTableView else { return false }
+        return tableView.selectedRow == tableView.row(for: self)
     }
 }
