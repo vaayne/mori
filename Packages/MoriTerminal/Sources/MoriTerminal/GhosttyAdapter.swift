@@ -35,14 +35,11 @@ public final class GhosttyAdapter: TerminalHost {
         GhosttyApp.shared.reloadConfig()
     }
 
-    /// Switch the active light/dark color scheme. Pushes it to the app and every
-    /// live surface so split themes re-resolve, and re-extracts chrome colors.
-    /// Read `themeInfo` afterwards to repaint Mori's own UI.
+    /// Switch the active light/dark color scheme by rebuilding Ghostty's config
+    /// with the matching resolved theme. Read `themeInfo` afterwards to repaint
+    /// Mori's own UI.
     public func setColorScheme(_ scheme: GhosttyColorScheme) {
         GhosttyApp.shared.setColorScheme(scheme)
-        for surface in surfaces.values {
-            ghostty_surface_set_color_scheme(surface, scheme.cValue)
-        }
     }
 
     /// Apply Ghostty-derived window translucency and blur to the main workspace window.
@@ -113,10 +110,6 @@ public final class GhosttyAdapter: TerminalHost {
 
         surfaceView.ghosttySurface = surface
         surfaces[ObjectIdentifier(surfaceView)] = surface
-
-        // Match the surface to the current color scheme so a split theme resolves
-        // to the right variant from the start (new surfaces default to light).
-        ghostty_surface_set_color_scheme(surface, GhosttyApp.shared.colorScheme.cValue)
 
         // Register in app's surface registry for clipboard callbacks
         let userdata = Unmanaged.passUnretained(surfaceView).toOpaque()

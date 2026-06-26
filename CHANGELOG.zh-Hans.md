@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-06-26
+
+### 🐛 问题修复
+
+- **macOS**：修复 v0.5.2 回归：通过 libghostty color-scheme mutation 应用浅色 / 深色双主题时，可能干扰新 terminal surface 启动，导致 zsh 启动文件无法稳定加载。
+
+**完整变更**：[v0.5.2...v0.5.3](https://github.com/vaayne/mori/compare/v0.5.2...v0.5.3)
+
 ## [0.5.2] - 2026-06-26
 
 ### ✨ 新功能

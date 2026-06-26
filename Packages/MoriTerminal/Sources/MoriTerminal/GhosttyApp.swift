@@ -90,14 +90,15 @@ final class GhosttyApp {
         // themes start on the correct variant.
         self.colorScheme = GhosttyColorScheme.system
 
-        // Build config: user's ghostty config + Mori overrides
-        guard let config = buildConfig() else {
+        // Build config: user's ghostty config + Mori overrides, with split themes
+        // resolved before libghostty creates surfaces. Avoid mutating color-scheme
+        // state after surface creation; that path has caused shell startup regressions.
+        guard let config = buildConfig(resolvingThemeFor: colorScheme) else {
             NSLog("[GhosttyApp] failed to create config")
             return
         }
 
-        // Extract chrome theme colors for the active appearance (resolving any
-        // split light/dark theme ourselves). Independent of the app config below.
+        // Extract chrome theme colors from the same resolved appearance.
         self.themeInfo = extractThemeInfo(for: colorScheme)
 
         // Build runtime config in nonisolated context so closures don't
@@ -116,10 +117,6 @@ final class GhosttyApp {
 
         // Set initial focus state
         ghostty_app_set_focus(app, NSApp.isActive)
-
-        // Push the resolved color scheme so libghostty's conditional state (and
-        // any surfaces created later) match the system appearance.
-        ghostty_app_set_color_scheme(app, colorScheme.cValue)
     }
 
     // Singleton lives for app lifetime — no deinit needed.
@@ -147,9 +144,8 @@ final class GhosttyApp {
     /// Build a ghostty config: load user's config first, then apply Mori overrides.
     ///
     /// - Parameter forcingTheme: when non-nil, a single theme name appended last so it
-    ///   overrides the user's `theme`. Used only for chrome color extraction of a
-    ///   resolved split-theme variant; the terminal's own config passes nil to keep
-    ///   the split theme intact so libghostty can switch variants live.
+    ///   overrides the user's `theme`. Used to resolve split light/dark themes before
+    ///   libghostty applies the config.
     func buildConfig(forcingTheme: String? = nil) -> ghostty_config_t? {
         guard let config = ghostty_config_new() else { return nil }
 
@@ -163,7 +159,8 @@ final class GhosttyApp {
         let overridePath = GhosttyConfigWriter.write(appSupportDirectory: MoriPaths.appSupportDirectory)
         ghostty_config_load_file(config, overridePath)
 
-        // 3. Optionally force a single resolved theme (split-theme extraction).
+        // 3. Optionally force a single resolved theme (split-theme extraction or
+        // runtime split-theme resolution).
         if let forcingTheme {
             let themePath = GhosttyConfigWriter.writeThemeOverride(
                 appSupportDirectory: MoriPaths.appSupportDirectory,
@@ -176,35 +173,46 @@ final class GhosttyApp {
         return config
     }
 
+    /// Build runtime config for `scheme`, resolving a split light/dark theme to a
+    /// single concrete theme before libghostty applies it.
+    private func buildConfig(resolvingThemeFor scheme: GhosttyColorScheme) -> ghostty_config_t? {
+        buildConfig(forcingTheme: resolvedThemeOverride(for: scheme))
+    }
+
     /// Extract chrome theme colors for `scheme`, resolving a split light/dark theme
-    /// to the matching variant. Builds a throwaway config since libghostty exposes
-    /// no way to query the non-default variant from a finalized config.
+    /// to the matching variant.
     private func extractThemeInfo(for scheme: GhosttyColorScheme) -> GhosttyThemeInfo {
-        let userTheme = GhosttyConfigFile().get("theme")
-        let forced = userTheme.flatMap { GhosttyThemeSpec.resolveSplit($0, scheme: scheme) }
-        guard let config = buildConfig(forcingTheme: forced) else { return .fallback }
+        guard let config = buildConfig(resolvingThemeFor: scheme) else { return .fallback }
         defer { ghostty_config_free(config) }
         return GhosttyThemeInfo.from(config: config)
+    }
+
+    private func resolvedThemeOverride(for scheme: GhosttyColorScheme) -> String? {
+        GhosttyConfigFile().get("theme").flatMap { GhosttyThemeSpec.resolveSplit($0, scheme: scheme) }
     }
 
     /// Reload config from disk and update the running app + extract new theme.
     /// Call after writing changes to ~/.config/ghostty/config.
     func reloadConfig() {
         guard let app else { return }
-        guard let config = buildConfig() else { return }
+        guard let config = buildConfig(resolvingThemeFor: colorScheme) else { return }
         ghostty_app_update_config(app, config)
         ghostty_config_free(config)
         self.themeInfo = extractThemeInfo(for: colorScheme)
     }
 
-    /// Update the active color scheme: push it to libghostty (so the terminal
-    /// re-resolves a split theme) and re-extract Mori's chrome colors.
-    /// Per-surface propagation is handled by `GhosttyAdapter`.
+    /// Update the active color scheme by rebuilding Ghostty's config with the
+    /// matching resolved theme, avoiding libghostty color-scheme mutation after
+    /// surfaces exist.
     func setColorScheme(_ scheme: GhosttyColorScheme) {
         colorScheme = scheme
-        if let app {
-            ghostty_app_set_color_scheme(app, scheme.cValue)
+        guard let app else {
+            self.themeInfo = extractThemeInfo(for: scheme)
+            return
         }
+        guard let config = buildConfig(resolvingThemeFor: scheme) else { return }
+        ghostty_app_update_config(app, config)
+        ghostty_config_free(config)
         self.themeInfo = extractThemeInfo(for: scheme)
     }
 
