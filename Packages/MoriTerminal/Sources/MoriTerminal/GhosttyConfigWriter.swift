@@ -29,5 +29,18 @@ enum GhosttyConfigWriter {
         try? content.write(to: configFilePath, atomically: true, encoding: .utf8)
         return configFilePath.path
     }
+
+    /// Write a single-theme override used only when extracting chrome colors for a
+    /// resolved split-theme variant. Returns the file path. Loaded last so it wins
+    /// over the user's split `theme` value. Not used for the terminal's own config,
+    /// which keeps the split theme so libghostty can switch variants live.
+    @discardableResult
+    static func writeThemeOverride(appSupportDirectory: URL, theme: String) -> String {
+        let configFilePath = appSupportDirectory.appendingPathComponent("ghostty-mori-theme.conf")
+        let content = "# Mori resolved-theme override — do not edit manually.\ntheme = \(theme)\n"
+        try? FileManager.default.createDirectory(at: appSupportDirectory, withIntermediateDirectories: true)
+        try? content.write(to: configFilePath, atomically: true, encoding: .utf8)
+        return configFilePath.path
+    }
 }
 #endif

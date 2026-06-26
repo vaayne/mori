@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- **macOS**: Mori now follows Ghostty's split light/dark themes. Set `theme = light:…,dark:…` in your Ghostty config (or toggle **Sync with system appearance** in Settings → Theme and pick a light and a dark theme) and the terminal *and* Mori's own chrome — sidebar, windows, panels, tmux — switch live when you change the macOS appearance.
+
 ## [0.5.1] - 2026-06-25
 
 ### 🐛 Bug Fixes
