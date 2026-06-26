@@ -96,9 +96,6 @@ public struct WorktreeSidebarView: View {
                 filterPill(.running, count: runningItems.count, word: nil, tint: MoriTokens.Color.success, showDot: true)
             }
             Spacer()
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(MoriTokens.Color.inactive)
         }
         .padding(.horizontal, MoriTokens.Spacing.md)
         .padding(.bottom, MoriTokens.Spacing.sm)
@@ -144,7 +141,7 @@ public struct WorktreeSidebarView: View {
 
     private var projectsHeader: some View {
         sectionHeader { Text(String.localized("Projects")).font(MoriTokens.Font.sectionTitle).tracking(MoriTokens.Sidebar.sectionTracking).foregroundStyle(MoriTokens.Color.muted) } accessory: {
-            if let onAddProject { Button(action: onAddProject) { Image(systemName: "plus").font(.system(size: 12, weight: .medium)).foregroundStyle(MoriTokens.Color.muted) }.buttonStyle(.plain).help(String.localized("Add Project")) }
+            EmptyView()
         }.padding(.top, MoriTokens.Spacing.lg)
     }
 
