@@ -49,13 +49,17 @@ Always build release before tagging.
 ## Theme / Appearance
 
 All windows and panels **must** sync their appearance with the Ghostty terminal theme.
-The theme is resolved at startup via `GhosttyThemeInfo` (from `MoriTerminal`) and updated
-on config reload in `AppDelegate.reloadGhosttyConfig()`.
+The theme is resolved at startup via `GhosttyThemeInfo` (from `MoriTerminal`) and re-applied
+through `AppDelegate.propagateGhosttyTheme(adapter:)` — called both on config reload
+(`reloadGhosttyConfig()`) and on system dark/light changes (`handleSystemAppearanceChange()`).
+Split themes (`theme = light:…,dark:…`) resolve per appearance: Mori pushes the color scheme
+to libghostty via `GhosttyAdapter.setColorScheme(_:)` and re-extracts chrome colors for the
+matching variant (libghostty exposes no API to query the non-active variant from a config).
 
 When adding a new `NSWindow` or `NSPanel`:
 1. Set `window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)`
 2. Set `window.backgroundColor = themeInfo.background`
-3. Add an `updateAppearance(themeInfo:)` method and call it from `reloadGhosttyConfig()`
+3. Add an `updateAppearance(themeInfo:)` method and call it from `propagateGhosttyTheme(adapter:)`
 
 SwiftUI views inside `NSHostingView` automatically inherit the window's `NSAppearance`,
 so semantic colors like `Color.primary`, `Color(nsColor: .controlBackgroundColor)`, and

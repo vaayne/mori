@@ -292,3 +292,11 @@
 "sent" = "已发送";
 "Waiting for input" = "等待输入";
 "now" = "现在";
+"Sync with system appearance" = "跟随系统外观";
+"Use separate light and dark themes that follow the macOS appearance." = "使用随 macOS 外观切换的浅色 / 深色主题。";
+"Light theme" = "浅色主题";
+"Dark theme" = "深色主题";
+"Used when macOS is in light appearance." = "macOS 处于浅色外观时使用。";
+"Used when macOS is in dark appearance." = "macOS 处于深色外观时使用。";
+"Light" = "浅色";
+"Dark" = "深色";

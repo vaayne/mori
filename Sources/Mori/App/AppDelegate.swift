@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var remoteConnectWizardController: RemoteConnectWizardController?
     private var updateController: UpdateController?
     private var agentDashboardPanel: AgentDashboardPanel?
+    private var appearanceObserver: NSKeyValueObservation?
     private var keyBindingStore: KeyBindingStore!
     private var configurableMenuItems: [String: NSMenuItem] = [:]
     private var keyMonitorActionMap: [String: () -> Void] = [:]
@@ -339,6 +340,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                   let window = windowController?.window else { return }
             adapter.syncWorkspaceWindowAppearance(window)
             self.refreshGhosttyThemeBackgrounds(themeInfo: adapter.themeInfo)
+        }
+
+        // Track system dark/light changes so split themes (theme = light:…,dark:…)
+        // re-resolve for both the terminal and Mori's own chrome. start() already
+        // applied the initial scheme, so we only react to subsequent changes.
+        appearanceObserver = NSApp.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in
+            MainActor.assumeIsolated {
+                self?.handleSystemAppearanceChange()
+            }
         }
 
         windowController.contentViewController = splitVC
@@ -898,10 +908,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     private func readSettingsModel(from cf: GhosttyConfigFile) -> GhosttySettingsModel {
-        GhosttySettingsModel(
+        let rawTheme = cf.get("theme") ?? ""
+        let split = GhosttyThemeSpec.parseSplit(rawTheme)
+        return GhosttySettingsModel(
             fontFamily: cf.get("font-family") ?? "",
             fontSize: Int(cf.get("font-size") ?? "") ?? 13,
-            theme: cf.get("theme") ?? "",
+            theme: split?.light ?? rawTheme,
+            darkTheme: split?.dark ?? "",
+            syncAppearance: split != nil,
             cursorStyle: cf.get("cursor-style") ?? "block",
             cursorBlink: (cf.get("cursor-style-blink") ?? "true") != "false",
             backgroundOpacity: Double(cf.get("background-opacity") ?? "1.0") ?? 1.0,
@@ -926,7 +940,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         cf.set("font-size", value: "\(model.fontSize)")
 
-        if model.theme.isEmpty {
+        if model.syncAppearance, !model.theme.isEmpty || !model.darkTheme.isEmpty {
+            // Mirror a missing side so both variants are always valid theme names.
+            let light = model.theme.isEmpty ? model.darkTheme : model.theme
+            let dark = model.darkTheme.isEmpty ? model.theme : model.darkTheme
+            cf.set("theme", value: GhosttyThemeSpec.splitValue(light: light, dark: dark))
+        } else if model.theme.isEmpty {
             cf.remove("theme")
         } else {
             cf.set("theme", value: model.theme)
@@ -948,7 +967,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func reloadGhosttyConfig() {
         guard let adapter = terminalAreaController?.terminalHost as? GhosttyAdapter else { return }
         adapter.reloadConfig()
+        propagateGhosttyTheme(adapter: adapter)
+    }
 
+    /// React to a macOS appearance (dark/light) change: push the new color scheme to
+    /// ghostty so split themes re-resolve, then repaint Mori's chrome to match.
+    private func handleSystemAppearanceChange() {
+        guard let adapter = terminalAreaController?.terminalHost as? GhosttyAdapter else { return }
+        adapter.setColorScheme(.system)
+        propagateGhosttyTheme(adapter: adapter)
+    }
+
+    /// Sync the current ghostty theme colors to the window, sidebar, panels, and tmux.
+    private func propagateGhosttyTheme(adapter: GhosttyAdapter) {
         let themeInfo = adapter.themeInfo
         if let window = mainWindowController?.window {
             adapter.syncWorkspaceWindowAppearance(window)

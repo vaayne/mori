@@ -292,3 +292,11 @@
 "sent" = "sent";
 "Waiting for input" = "Waiting for input";
 "now" = "now";
+"Sync with system appearance" = "Sync with system appearance";
+"Use separate light and dark themes that follow the macOS appearance." = "Use separate light and dark themes that follow the macOS appearance.";
+"Light theme" = "Light theme";
+"Dark theme" = "Dark theme";
+"Used when macOS is in light appearance." = "Used when macOS is in light appearance.";
+"Used when macOS is in dark appearance." = "Used when macOS is in dark appearance.";
+"Light" = "Light";
+"Dark" = "Dark";

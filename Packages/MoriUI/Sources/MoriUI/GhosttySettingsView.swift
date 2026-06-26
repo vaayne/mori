@@ -61,7 +61,12 @@ public enum GhosttyBackgroundBlur: Equatable {
 public struct GhosttySettingsModel: Equatable {
     public var fontFamily: String
     public var fontSize: Int
+    /// Single theme, or the light variant when `syncAppearance` is on.
     public var theme: String
+    /// Dark variant, used only when `syncAppearance` is on.
+    public var darkTheme: String
+    /// When on, follow the system appearance: theme = light:<theme>,dark:<darkTheme>.
+    public var syncAppearance: Bool
     public var cursorStyle: String
     public var cursorBlink: Bool
     public var backgroundOpacity: Double
@@ -78,6 +83,8 @@ public struct GhosttySettingsModel: Equatable {
         fontFamily: String = "",
         fontSize: Int = 13,
         theme: String = "",
+        darkTheme: String = "",
+        syncAppearance: Bool = false,
         cursorStyle: String = "block",
         cursorBlink: Bool = true,
         backgroundOpacity: Double = 1.0,
@@ -93,6 +100,8 @@ public struct GhosttySettingsModel: Equatable {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
+        self.darkTheme = darkTheme
+        self.syncAppearance = syncAppearance
         self.cursorStyle = cursorStyle
         self.cursorBlink = cursorBlink
         self.backgroundOpacity = backgroundOpacity
@@ -669,11 +678,15 @@ private struct ThemeSettingsContent: View {
         var id: String { rawValue }
     }
 
+    private enum ThemeVariant: Hashable { case light, dark }
+
     @Binding var model: GhosttySettingsModel
     let availableThemes: [String]
     let onChanged: () -> Void
 
     @State private var themeSearch = ""
+    /// Which variant the shared theme list edits when `syncAppearance` is on.
+    @State private var editingVariant: ThemeVariant = .light
 
     private var blurPreset: Binding<BackgroundBlurPreset> {
         Binding(
@@ -726,13 +739,48 @@ private struct ThemeSettingsContent: View {
         // Theme settings card
         SettingsCard {
             SettingRow(
-                title: .localized("Color theme"),
-                description: .localized("Select a color scheme for the terminal.")
+                title: .localized("Sync with system appearance"),
+                description: .localized("Use separate light and dark themes that follow the macOS appearance.")
             ) {
-                Text(model.theme.isEmpty ? .localized("Default") : model.theme)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 160, alignment: .trailing)
+                Toggle("", isOn: $model.syncAppearance)
+                    .labelsHidden()
+                    .onChange(of: model.syncAppearance) { _, _ in onChanged() }
+            }
+
+            CardDivider()
+
+            if model.syncAppearance {
+                SettingRow(
+                    title: .localized("Light theme"),
+                    description: .localized("Used when macOS is in light appearance.")
+                ) {
+                    themeValueLabel(model.theme)
+                }
+
+                CardDivider()
+
+                SettingRow(
+                    title: .localized("Dark theme"),
+                    description: .localized("Used when macOS is in dark appearance.")
+                ) {
+                    themeValueLabel(model.darkTheme)
+                }
+
+                CardDivider()
+
+                Picker("", selection: $editingVariant) {
+                    Text(String.localized("Light")).tag(ThemeVariant.light)
+                    Text(String.localized("Dark")).tag(ThemeVariant.dark)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            } else {
+                SettingRow(
+                    title: .localized("Color theme"),
+                    description: .localized("Select a color scheme for the terminal.")
+                ) {
+                    themeValueLabel(model.theme)
+                }
             }
 
             CardDivider()
@@ -850,9 +898,33 @@ private struct ThemeSettingsContent: View {
         return availableThemes.filter { $0.lowercased().contains(query) }
     }
 
+    /// The theme name the list currently edits — a specific variant when syncing,
+    /// otherwise the single theme.
+    private var selectedThemeName: String {
+        guard model.syncAppearance else { return model.theme }
+        return editingVariant == .dark ? model.darkTheme : model.theme
+    }
+
+    private func selectTheme(_ name: String) {
+        if model.syncAppearance, editingVariant == .dark {
+            model.darkTheme = name
+        } else {
+            model.theme = name
+        }
+        onChanged()
+    }
+
+    @ViewBuilder
+    private func themeValueLabel(_ value: String) -> some View {
+        Text(value.isEmpty ? .localized("Default") : value)
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .frame(width: 160, alignment: .trailing)
+    }
+
     @ViewBuilder
     private func themeListRow(_ name: String) -> some View {
-        let isSelected = model.theme.lowercased() == name.lowercased()
+        let isSelected = selectedThemeName.lowercased() == name.lowercased()
         HStack {
             Text(name)
                 .font(.system(size: 12, design: .monospaced))
@@ -869,8 +941,7 @@ private struct ThemeSettingsContent: View {
         .background(isSelected ? Color.accentColor.opacity(0.1) : .clear)
         .contentShape(Rectangle())
         .onTapGesture {
-            model.theme = name
-            onChanged()
+            selectTheme(name)
         }
     }
 }
