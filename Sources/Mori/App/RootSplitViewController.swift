@@ -35,7 +35,6 @@ final class RootSplitViewController: NSViewController {
     private var toolPaneState = CompanionToolPaneState()
 
     var onCompanionWidthChanged: ((CGFloat) -> Void)?
-    var onSidebarCollapsedChanged: ((Bool) -> Void)?
 
     init(
         sidebarController: NSViewController,
@@ -205,7 +204,6 @@ final class RootSplitViewController: NSViewController {
         saveCompanionWidth()
     }
 
-    var isSidebarCollapsed: Bool { collapsed }
     var currentCompanionWidth: CGFloat { companionWidth }
 
     func toggleSidebar() {
@@ -213,7 +211,6 @@ final class RootSplitViewController: NSViewController {
             ctx.duration = 0.2
             ctx.allowsImplicitAnimation = true
             collapsed.toggle()
-            onSidebarCollapsedChanged?(collapsed)
             updateLayout()
         }
     }

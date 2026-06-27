@@ -298,9 +298,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         splitVC.onCompanionWidthChanged = { [weak self] width in
             self?.companionToolState.width = width
         }
-        splitVC.onSidebarCollapsedChanged = { [weak sidebarController] isCollapsed in
-            sidebarController?.setSidebarCollapsed(isCollapsed)
-        }
         splitVC.updateCompanionPane(state: companionToolState)
 
         windowController.onToggleSidebar = { [weak splitVC] in
