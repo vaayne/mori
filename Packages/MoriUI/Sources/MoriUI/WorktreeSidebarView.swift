@@ -144,7 +144,6 @@ public struct WorktreeSidebarView: View {
         let showingAll = expandedProjects.contains(project.id)
         let visible = showingAll ? all : Array(all.prefix(worktreeLimit))
         VStack(alignment: .leading, spacing: 1) {
-            worktreesSubheader(count: all.count)
             if all.isEmpty {
                 Text("No worktrees").font(MoriTokens.Font.caption).foregroundStyle(MoriTokens.Color.muted)
                     .padding(.horizontal, MoriTokens.Spacing.sm).padding(.vertical, MoriTokens.Spacing.xs)
@@ -166,24 +165,6 @@ public struct WorktreeSidebarView: View {
         .padding(.leading, MoriTokens.Spacing.lg)
     }
 
-    private func worktreesSubheader(count: Int) -> some View {
-        HStack(spacing: MoriTokens.Spacing.md) {
-            // Empty gutter matching the row status dot so the label aligns with the
-            // worktree names below it.
-            Color.clear.frame(width: 6, height: 6)
-            Text(String.localized("Worktrees")).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.primary)
-            Spacer(minLength: 0)
-            Image(systemName: "arrow.triangle.branch").font(.system(size: 11, weight: .medium)).foregroundStyle(MoriTokens.Color.muted)
-            Text("\(count)")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .foregroundStyle(Color.primary.opacity(0.85))
-                .frame(minWidth: 18, minHeight: 18)
-                .background(Circle().fill(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.medium)))
-        }
-        .padding(.horizontal, MoriTokens.Spacing.sm)
-        .padding(.vertical, 3)
-    }
-
     private func showMoreButton(remaining: Int, project: Project) -> some View {
         Button { toggle(&expandedProjects, project.id) } label: {
             Text(String(format: String.localized("Show %lld more"), remaining))
@@ -203,7 +184,10 @@ public struct WorktreeSidebarView: View {
         let expanded = expandedWorktrees.contains(worktree.id)
         return Button { onSelectWorktree(worktree.id) } label: {
             HStack(spacing: MoriTokens.Spacing.md) {
-                worktreeStatusDot(worktree)
+                Image(systemName: worktreeGlyph(worktree))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(worktreeIconColor(worktree, selected: selected))
+                    .frame(width: 15)
                 Text(worktree.branch ?? worktree.name)
                     .font(.system(size: 13, weight: selected ? .semibold : .regular))
                     .foregroundStyle(worktreeNameColor(worktree, selected: selected))
@@ -228,27 +212,26 @@ public struct WorktreeSidebarView: View {
         .contextMenu { WorktreeContextActions(worktree: worktree, pullRequest: pullRequests[worktree.id], onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } }) }
     }
 
-    /// Far-left status dot: colored only while the agent is active (waiting / error
-    /// / running) or the worktree is the live one. Idle rows render an empty gutter
-    /// so names stay aligned. Pulses while waiting on you.
-    @ViewBuilder
-    private func worktreeStatusDot(_ w: Worktree) -> some View {
-        // Dot tracks live agent activity only — a merely checked-out (idle) worktree
-        // stays dotless, matching the reference's restraint.
-        let color: Color? = {
-            switch w.agentState {
-            case .error: return MoriTokens.Color.error
-            case .waitingForInput: return MoriTokens.Color.attention
-            case .running: return MoriTokens.Color.success
-            case .completed, .none: return nil
-            }
-        }()
-        ZStack {
-            if let color {
-                Circle().fill(color).frame(width: 6, height: 6)
-            }
+    /// The main/master checkout and linked worktrees read as different shapes; a
+    /// detached HEAD gets its own dotted glyph. Colour stays quiet unless an agent
+    /// is live (error / waiting / running), so the icon doubles as a status cue.
+    private func worktreeGlyph(_ w: Worktree) -> String {
+        if w.isDetached || w.branch == nil { return "circle.dotted" }
+        return isPrimaryWorktree(w) ? "arrow.triangle.branch" : "point.3.connected.trianglepath.dotted"
+    }
+
+    private func isPrimaryWorktree(_ w: Worktree) -> Bool {
+        w.branch == "main" || w.branch == "master"
+    }
+
+    private func worktreeIconColor(_ w: Worktree, selected: Bool) -> Color {
+        if selected { return Color.primary }
+        switch w.agentState {
+        case .error: return MoriTokens.Color.error
+        case .waitingForInput: return MoriTokens.Color.attention
+        case .running: return MoriTokens.Color.success
+        case .completed, .none: return MoriTokens.Color.muted
         }
-        .frame(width: 6, height: 6)
     }
 
     private func windowChip(count: Int, expanded: Bool, selected: Bool, alert: Color?, toggle: @escaping () -> Void) -> some View {
