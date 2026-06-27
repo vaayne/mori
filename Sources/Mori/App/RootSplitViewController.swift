@@ -13,7 +13,9 @@ final class RootSplitViewController: NSViewController {
     private(set) var companionController: NSViewController
 
     private static let sidebarWidthKey = "MoriSidebarWidth"
-    private static let sidebarCollapsedWidth: CGFloat = 56
+    /// Collapsed = fully hidden (no rail). The sidebar container and its divider
+    /// are removed from layout so the content area takes the whole window.
+    private static let sidebarCollapsedWidth: CGFloat = 0
     private static let companionWidthKey = "MoriCompanionToolPaneWidth"
     private static let sidebarMinWidth: CGFloat = 220
     private static let sidebarMaxWidth: CGFloat = 260
@@ -94,7 +96,7 @@ final class RootSplitViewController: NSViewController {
     private func updateLayout() {
         let bounds = view.bounds
         let sidebarWidth = collapsed ? Self.sidebarCollapsedWidth : self.sidebarWidth
-        let sidebarDividerWidth: CGFloat = 1
+        let sidebarDividerWidth: CGFloat = collapsed ? 0 : 1
         let availableWidth = bounds.width - sidebarWidth - sidebarDividerWidth
         let companionVisible = toolPaneState.isVisible
         let companionDividerWidth: CGFloat = companionVisible ? 1 : 0
@@ -118,8 +120,8 @@ final class RootSplitViewController: NSViewController {
             height: bounds.height
         )
 
-        sidebarContainer.isHidden = false
-        sidebarDividerView.isHidden = false
+        sidebarContainer.isHidden = collapsed
+        sidebarDividerView.isHidden = collapsed
         contentContainer.isHidden = false
         companionContainer.isHidden = !companionVisible
         companionDividerView.isHidden = !companionVisible
