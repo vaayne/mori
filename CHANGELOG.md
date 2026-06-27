@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🎨 Design
+
+- **macOS**: Redesigned the sidebar as a calm project tree — flat folder-style project list, each expanding into a quiet "Worktrees" group of compact single-line worktree rows. Dropped the attention-inbox sections (filter pills, Needs You / Running, project letter tiles).
+
 ## [0.5.4] - 2026-06-26
 
 ### 🎨 Design
