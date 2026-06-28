@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import MoriCore
 
 /// Sidebar as a calm project tree: a flat list of projects (folder glyph + name),
@@ -178,11 +179,9 @@ public struct WorktreeSidebarView: View {
                 // works, otherwise the branch/main identity glyph.
                 Group {
                     if worktree.agentState == .running {
-                        // Shimmering AI glyph signals the agent is actively working.
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(selected ? Color.primary : MoriTokens.Color.success)
-                            .symbolEffect(.variableColor.iterative, options: .repeating)
+                        // The working agent's own (template-tinted) glyph, breathing.
+                        AgentWorkingIcon(asset: workingAgentAsset(worktree),
+                                         color: selected ? Color.primary : MoriTokens.Color.success)
                     } else {
                         Image(systemName: worktreeGlyph(worktree))
                             .font(.system(size: 11, weight: .medium))
@@ -301,6 +300,19 @@ public struct WorktreeSidebarView: View {
     private func visibleWorktrees(for project: Project) -> [Worktree] { worktrees.filter { $0.projectId == project.id && $0.status != .unavailable } }
     private func aggregateState(for project: Project) -> SidebarStatus { let ws = visibleWorktrees(for: project); if ws.contains(where: { $0.agentState == .error }) { return .error }; if ws.contains(where: { $0.agentState == .waitingForInput }) { return .waiting }; if ws.contains(where: { $0.agentState == .running }) { return .running }; return .idle }
     private func allWindows(for worktree: Worktree) -> [RuntimeWindow] { windows.filter { $0.worktreeId == worktree.id }.sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex } }
+
+    /// Bundled template-icon name for the coding agent working in this worktree,
+    /// resolved from the detected process name; nil falls back to a generic glyph.
+    private func workingAgentAsset(_ worktree: Worktree) -> String? {
+        let wins = allWindows(for: worktree)
+        let detected = wins.first { $0.agentState == .running && $0.detectedAgent != nil }?.detectedAgent
+            ?? wins.compactMap(\.detectedAgent).first
+        guard let d = detected?.lowercased() else { return nil }
+        if d.contains("claude") { return "agent-claude" }
+        if d.contains("codex") { return "agent-codex" }
+        if d == "pi" || d.hasPrefix("pi-") || d.hasPrefix("pi.") { return "agent-pi" }
+        return nil
+    }
     private var globalWindowIndices: [String: Int] { var result: [String: Int] = [:]; var i = 1; for project in sortedProjects where !project.isCollapsed { for worktree in visibleWorktrees(for: project) { for window in allWindows(for: worktree) { if i <= 9 { result[window.tmuxWindowId] = i }; i += 1 } } }; return result }
     private func renameProject() { if let id = renamingProjectId, var project = projects.first(where: { $0.id == id }), !renameText.trimmingCharacters(in: .whitespaces).isEmpty { project.name = renameText.trimmingCharacters(in: .whitespaces); onUpdateProject?(project) }; renamingProjectId = nil }
     private func reorder(dragged: String?, before project: Project) -> Bool { guard let s = dragged, let draggedId = UUID(uuidString: s), draggedId != project.id else { dropTargetProjectId = nil; return false }; if var draggedProject = projects.first(where: { $0.id == draggedId }), draggedProject.isFavorite != project.isFavorite { draggedProject.isFavorite = project.isFavorite; onUpdateProject?(draggedProject) }; var ids = projects.map(\.id); guard let from = ids.firstIndex(of: draggedId), let to = ids.firstIndex(of: project.id) else { return false }; ids.remove(at: from); ids.insert(draggedId, at: to); onReorderProjects?(ids); dropTargetProjectId = nil; draggingProjectId = nil; return true }
@@ -318,3 +330,47 @@ public struct WorktreeSidebarView: View {
 }
 
 private enum SidebarStatus { case waiting, running, idle, error }
+
+/// The working cue in a worktree row's leading slot: the agent's own brand glyph
+/// (template-tinted to the running colour), or a generic AI glyph when the agent
+/// is unknown. Breathes to signal live activity — asset images can't carry an SF
+/// `symbolEffect`, so the pulse is a plain opacity animation.
+private struct AgentWorkingIcon: View {
+    let asset: String?
+    let color: Color
+    @State private var breathing = false
+    var body: some View {
+        Group {
+            if let asset, let image = AgentIconLoader.image(named: asset) {
+                Image(nsImage: image)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 12, height: 12)
+            } else {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 11, weight: .medium))
+            }
+        }
+        .foregroundStyle(color)
+        .opacity(breathing ? 0.45 : 1)
+        .animation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true), value: breathing)
+        .onAppear { breathing = true }
+    }
+}
+
+/// Loads bundled agent SVGs as tintable template images. SwiftPM doesn't compile
+/// asset catalogs, so the glyphs ship as loose SVG files read straight off the
+/// module bundle via `NSImage` (macOS 13+ renders SVG natively) and cached.
+@MainActor
+private enum AgentIconLoader {
+    private static var cache: [String: NSImage] = [:]
+    static func image(named name: String) -> NSImage? {
+        if let cached = cache[name] { return cached }
+        guard let url = Bundle.module.url(forResource: name, withExtension: "svg"),
+              let image = NSImage(contentsOf: url) else { return nil }
+        image.isTemplate = true
+        cache[name] = image
+        return image
+    }
+}
