@@ -178,6 +178,8 @@ public struct WorktreeSidebarView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(worktreeIconColor(worktree, selected: selected))
                     .frame(width: 15)
+                    // Breathing pulse while the agent is actively working.
+                    .symbolEffect(.pulse, options: .repeating, isActive: worktree.agentState == .running)
                 Text(worktree.branch ?? worktree.name)
                     .font(.system(size: 13, weight: selected ? .semibold : .regular))
                     .foregroundStyle(worktreeNameColor(worktree, selected: selected))
