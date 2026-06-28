@@ -174,12 +174,18 @@ public struct WorktreeSidebarView: View {
         let expanded = expandedWorktrees.contains(worktree.id)
         return Button { onSelectWorktree(worktree.id) } label: {
             HStack(spacing: MoriTokens.Spacing.md) {
-                Image(systemName: worktreeGlyph(worktree))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(worktreeIconColor(worktree, selected: selected))
-                    .frame(width: 15)
-                    // Breathing pulse while the agent is actively working.
-                    .symbolEffect(.pulse, options: .repeating, isActive: worktree.agentState == .running)
+                // The leading slot doubles as a live cue: a spinner while the agent
+                // works, otherwise the branch/main identity glyph.
+                Group {
+                    if worktree.agentState == .running {
+                        WorkingSpinner(color: selected ? Color.primary : MoriTokens.Color.success)
+                    } else {
+                        Image(systemName: worktreeGlyph(worktree))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(worktreeIconColor(worktree, selected: selected))
+                    }
+                }
+                .frame(width: 15)
                 Text(worktree.branch ?? worktree.name)
                     .font(.system(size: 13, weight: selected ? .semibold : .regular))
                     .foregroundStyle(worktreeNameColor(worktree, selected: selected))
@@ -308,3 +314,19 @@ public struct WorktreeSidebarView: View {
 }
 
 private enum SidebarStatus { case waiting, running, idle, error }
+
+/// A small continuously-spinning arc shown in a worktree row's leading slot while
+/// its agent is working — the live "in progress" cue from the Conductor reference.
+private struct WorkingSpinner: View {
+    let color: Color
+    @State private var spinning = false
+    var body: some View {
+        Circle()
+            .trim(from: 0, to: 0.7)
+            .stroke(color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+            .frame(width: 11, height: 11)
+            .rotationEffect(.degrees(spinning ? 360 : 0))
+            .animation(.linear(duration: 0.8).repeatForever(autoreverses: false), value: spinning)
+            .onAppear { spinning = true }
+    }
+}
