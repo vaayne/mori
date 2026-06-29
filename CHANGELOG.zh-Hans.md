@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### 🎨 界面优化
+
+- **macOS**：侧栏重新设计为克制的项目树——扁平的 folder 项目列表，展开后是安静的「Worktrees」分组与紧凑单行 worktree 行。移除了注意力收件箱（过滤药丸、Needs You / Running、项目字母块）。
+- **macOS**：收起侧栏（⌘B）时现在完全隐藏，而不是留下一条窄的项目图标 rail，内容区铺满整个窗口。
+- **macOS**：worktree 行在其 agent 正在工作时，会在最前面显示该 agent 自己的图标（Claude Code、Codex 或 Pi）——染成侧栏配色并呼吸闪动表示正在运行；无法识别的 agent 回退到通用 AI 图标。
+
 ## [0.5.4] - 2026-06-26
 
 ### 🎨 界面优化

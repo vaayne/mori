@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🎨 Design
+
+- **macOS**: Redesigned the sidebar as a calm project tree — flat folder-style project list, each expanding into a quiet "Worktrees" group of compact single-line worktree rows. Dropped the attention-inbox sections (filter pills, Needs You / Running, project letter tiles).
+- **macOS**: Collapsing the sidebar (⌘B) now fully hides it instead of leaving a narrow project-icon rail, so the content area takes the whole window.
+- **macOS**: A worktree row shows the working agent's own glyph (Claude Code, Codex, or Pi) in its leading slot while its agent is active — tinted to match the sidebar and breathing to signal live work. Falls back to a generic AI glyph for unrecognized agents.
+
 ## [0.5.4] - 2026-06-26
 
 ### 🎨 Design

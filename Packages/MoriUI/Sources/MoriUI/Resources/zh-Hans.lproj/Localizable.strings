@@ -204,6 +204,7 @@
 "Panes" = "面板";
 "Tools" = "工具";
 "Worktrees" = "工作树";
+"Show %lld more" = "显示其余 %lld 个";
 "Other" = "其他";
 "System" = "系统";
 
