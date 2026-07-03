@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-07-03
+
+### 🎨 Design
+
+- **macOS**: The sidebar now degrades gracefully at narrow widths — the agent summary strip and footer drop their text labels instead of clipping at the left edge — and the sidebar scroll bar is fully hidden, including for always-on legacy scroller settings.
+
+**Full Changelog**: [v0.5.5...v0.5.6](https://github.com/vaayne/mori/compare/v0.5.5...v0.5.6)
+
 ## [0.5.5] - 2026-07-03
 
 ### 🎨 Design
