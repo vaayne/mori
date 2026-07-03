@@ -51,6 +51,15 @@ public struct Project: Identifiable, Codable, Equatable, Sendable {
         self.location = location
     }
 
+    /// The special $HOME workspace: pinned as a single "Home" row atop the
+    /// sidebar for tasks that don't belong to any repository. Identified by
+    /// path so no schema change or migration is needed.
+    public var isHomeWorkspace: Bool {
+        guard (location ?? .local) == .local else { return false }
+        let path = (repoRootPath as NSString).expandingTildeInPath
+        return path == NSHomeDirectory() || path == NSHomeDirectory() + "/"
+    }
+
     /// Auto-generate a short name from the project name.
     /// If <= 8 chars, use as-is (lowercased). Otherwise take initials of hyphen/word segments.
     public static func autoShortName(from name: String) -> String {

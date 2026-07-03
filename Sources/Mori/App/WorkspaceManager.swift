@@ -2393,9 +2393,10 @@ final class WorkspaceManager {
     /// Iterates projects in display order, skipping collapsed ones, to match
     /// the sidebar's ⌘N hints. Index 9 selects the last worktree regardless of count.
     private func selectWorktreeByGlobalIndex(_ index: Int) {
-        // Sort pinned-first to match sidebar display order.
-        let sortedProjects = appState.projects.filter { $0.isFavorite }
-            + appState.projects.filter { !$0.isFavorite }
+        // Sort pinned-first, Home excluded, to match sidebar display order.
+        let repos = appState.projects.filter { !$0.isHomeWorkspace }
+        let sortedProjects = repos.filter { $0.isFavorite }
+            + repos.filter { !$0.isFavorite }
         let allWorktrees = sortedProjects
             .filter { !$0.isCollapsed }
             .flatMap { project in

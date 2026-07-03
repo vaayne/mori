@@ -55,8 +55,11 @@ public struct WorktreeSidebarView: View {
         VStack(spacing: 0) {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 0) {
+                    if let home = homeProject {
+                        homeRow(home)
+                    }
                     ForEach(Array(sortedProjects.enumerated()), id: \.element.id) { index, project in
-                        projectSection(project, isFirst: index == 0)
+                        projectSection(project, isFirst: index == 0 && homeProject == nil)
                     }
                 }
                 .padding(.bottom, MoriTokens.Spacing.md)
@@ -70,6 +73,54 @@ public struct WorktreeSidebarView: View {
             Button("Rename") { renameProject() }
             Button("Cancel", role: .cancel) { renamingProjectId = nil }
         }
+    }
+
+    // MARK: - Home row
+
+    /// The $HOME workspace as a single Conductor-style "Home" row: no workspace
+    /// list, no "+ New workspace" — one click drops into a session at $HOME for
+    /// tasks that don't belong to any repository.
+    @ViewBuilder
+    private func homeRow(_ project: Project) -> some View {
+        let worktree = visibleWorktrees(for: project).first
+        let selected = worktree != nil && worktree?.id == selectedWorktreeId
+        let agg = aggregateState(for: project)
+        Button {
+            onSelectProject?(project.id)
+            if let worktree { onSelectWorktree(worktree.id) }
+        } label: {
+            HStack(spacing: MoriTokens.Spacing.md) {
+                Group {
+                    if let worktree, worktree.agentState == .running {
+                        AgentWorkingIcon(asset: workingAgentAsset(worktree),
+                                         color: selected ? Color.primary : MoriTokens.Color.success)
+                    } else {
+                        Image(systemName: "house")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(selected ? Color.primary : MoriTokens.Color.muted)
+                    }
+                }
+                .frame(width: 15)
+                Text(project.name)
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Color.primary.opacity(selected ? 1 : 0.85))
+                Spacer(minLength: 0)
+                if agg == .waiting || agg == .error {
+                    Circle().fill(agg == .error ? MoriTokens.Color.error : MoriTokens.Color.attention).frame(width: 7, height: 7)
+                }
+            }
+            .padding(.horizontal, MoriTokens.Spacing.md)
+            .padding(.vertical, MoriTokens.Spacing.lg)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(
+            RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
+                .fill(selected ? Color.primary.opacity(MoriTokens.Opacity.subtle) : Color.clear)
+        )
+        .padding(.horizontal, MoriTokens.Spacing.md)
+        .padding(.top, MoriTokens.Spacing.sm)
+        .contextMenu { projectActions(project, allowNewWorkspace: false) }
     }
 
     // MARK: - Project section
@@ -381,7 +432,8 @@ public struct WorktreeSidebarView: View {
         return nil
     }
 
-    private var sortedProjects: [Project] { projects.filter(\.isFavorite) + projects.filter { !$0.isFavorite } }
+    private var homeProject: Project? { projects.first(where: \.isHomeWorkspace) }
+    private var sortedProjects: [Project] { let repos = projects.filter { !$0.isHomeWorkspace }; return repos.filter(\.isFavorite) + repos.filter { !$0.isFavorite } }
     private func visibleWorktrees(for project: Project) -> [Worktree] { worktrees.filter { $0.projectId == project.id && $0.status != .unavailable } }
     private func aggregateState(for project: Project) -> SidebarStatus { let ws = visibleWorktrees(for: project); if ws.contains(where: { $0.agentState == .error }) { return .error }; if ws.contains(where: { $0.agentState == .waitingForInput }) { return .waiting }; if ws.contains(where: { $0.agentState == .running }) { return .running }; return .idle }
     private func allWindows(for worktree: Worktree) -> [RuntimeWindow] { windows.filter { $0.worktreeId == worktree.id }.sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex } }
@@ -406,8 +458,8 @@ public struct WorktreeSidebarView: View {
     private func renameProject() { if let id = renamingProjectId, var project = projects.first(where: { $0.id == id }), !renameText.trimmingCharacters(in: .whitespaces).isEmpty { project.name = renameText.trimmingCharacters(in: .whitespaces); onUpdateProject?(project) }; renamingProjectId = nil }
     private func reorder(dragged: String?, before project: Project) -> Bool { guard let s = dragged, let draggedId = UUID(uuidString: s), draggedId != project.id else { dropTargetProjectId = nil; return false }; if var draggedProject = projects.first(where: { $0.id == draggedId }), draggedProject.isFavorite != project.isFavorite { draggedProject.isFavorite = project.isFavorite; onUpdateProject?(draggedProject) }; var ids = projects.map(\.id); guard let from = ids.firstIndex(of: draggedId), let to = ids.firstIndex(of: project.id) else { return false }; ids.remove(at: from); ids.insert(draggedId, at: to); onReorderProjects?(ids); dropTargetProjectId = nil; draggingProjectId = nil; return true }
 
-    @ViewBuilder private func projectActions(_ project: Project) -> some View {
-        if !project.isCollapsed, onShowCreatePanel != nil { Button { onSelectProject?(project.id); onShowCreatePanel?() } label: { Label("New Workspace…", systemImage: "plus") } }
+    @ViewBuilder private func projectActions(_ project: Project, allowNewWorkspace: Bool = true) -> some View {
+        if allowNewWorkspace, !project.isCollapsed, onShowCreatePanel != nil { Button { onSelectProject?(project.id); onShowCreatePanel?() } label: { Label("New Workspace…", systemImage: "plus") } }
         let editors = EditorLauncher.installed; if !editors.isEmpty { Divider(); ForEach(editors) { editor in Button { editor.open(path: project.repoRootPath) } label: { Label("Open in \(editor.name)", systemImage: editor.icon) } } }
         Divider(); Button { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.repoRootPath) } label: { Label("Reveal in Finder", systemImage: "folder") }
         Divider(); Button { renameText = project.name; renamingProjectId = project.id } label: { Label("Rename Project…", systemImage: "pencil") }
