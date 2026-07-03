@@ -11,6 +11,23 @@ final class ServerStore {
 
     private static let fileName = "servers.json"
 
+    var sortedServers: [Server] {
+        servers.enumerated()
+            .sorted { lhs, rhs in
+                switch (lhs.element.lastConnectedAt, rhs.element.lastConnectedAt) {
+                case let (left?, right?) where left != right:
+                    return left > right
+                case (.some, .none):
+                    return true
+                case (.none, .some):
+                    return false
+                default:
+                    return lhs.offset < rhs.offset
+                }
+            }
+            .map(\.element)
+    }
+
     init() {
         servers = Self.load()
     }
@@ -25,6 +42,12 @@ final class ServerStore {
         guard let index = servers.firstIndex(where: { $0.id == server.id }) else { return }
         server.savePasswordToKeychain()
         servers[index] = server
+        save()
+    }
+
+    func markConnected(_ serverID: Server.ID, at date: Date = Date()) {
+        guard let index = servers.firstIndex(where: { $0.id == serverID }) else { return }
+        servers[index].lastConnectedAt = date
         save()
     }
 

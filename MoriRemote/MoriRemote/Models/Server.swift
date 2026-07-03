@@ -8,12 +8,13 @@ struct Server: Identifiable, Codable, Equatable, Sendable {
     var port: Int
     var username: String
     var defaultSession: String
+    var lastConnectedAt: Date?
 
     /// Transient — not persisted to JSON. Loaded from / saved to Keychain.
     var password: String
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, host, port, username, defaultSession
+        case id, name, host, port, username, defaultSession, lastConnectedAt
     }
 
     init(
@@ -23,7 +24,8 @@ struct Server: Identifiable, Codable, Equatable, Sendable {
         port: Int = 22,
         username: String = "",
         password: String = "",
-        defaultSession: String = "main"
+        defaultSession: String = "main",
+        lastConnectedAt: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -32,6 +34,7 @@ struct Server: Identifiable, Codable, Equatable, Sendable {
         self.username = username
         self.password = password
         self.defaultSession = defaultSession
+        self.lastConnectedAt = lastConnectedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -42,6 +45,7 @@ struct Server: Identifiable, Codable, Equatable, Sendable {
         port = try c.decode(Int.self, forKey: .port)
         username = try c.decode(String.self, forKey: .username)
         defaultSession = try c.decode(String.self, forKey: .defaultSession)
+        lastConnectedAt = try c.decodeIfPresent(Date.self, forKey: .lastConnectedAt)
         password = KeychainHelper.load(account: id.uuidString) ?? ""
     }
 
@@ -53,6 +57,7 @@ struct Server: Identifiable, Codable, Equatable, Sendable {
         try c.encode(port, forKey: .port)
         try c.encode(username, forKey: .username)
         try c.encode(defaultSession, forKey: .defaultSession)
+        try c.encodeIfPresent(lastConnectedAt, forKey: .lastConnectedAt)
     }
 
     /// Persist the password to Keychain (call after add/update).
@@ -75,7 +80,9 @@ struct Server: Identifiable, Codable, Equatable, Sendable {
     }
 
     var subtitle: String {
-        "\(username)@\(address)"
+        let session = defaultSession.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !session.isEmpty else { return "\(username)@\(address)" }
+        return "\(username)@\(address) · \(session)"
     }
 
     var isValid: Bool {

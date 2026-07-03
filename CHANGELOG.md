@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🎨 Design
+
+- **MoriRemote**: Host list management — swipe to edit or delete a server, recently connected hosts sort first, and each row shows its default tmux session in the subtitle.
 ## [0.5.6] - 2026-07-03
 
 ### 🎨 Design

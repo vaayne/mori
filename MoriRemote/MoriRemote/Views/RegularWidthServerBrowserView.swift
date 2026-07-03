@@ -117,7 +117,7 @@ struct RegularWidthServerBrowserView: View {
             Theme.sidebarBg.ignoresSafeArea()
 
             ServerListContentView(
-                servers: store.servers,
+                servers: store.sortedServers,
                 selectedServerID: selection.selectedServerID,
                 connectingServerID: connectingServerID,
                 onSelect: handleSidebarSelection,

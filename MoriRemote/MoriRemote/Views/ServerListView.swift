@@ -13,7 +13,7 @@ struct ServerListView: View {
                 Theme.bg.ignoresSafeArea()
 
                 ServerListContentView(
-                    servers: store.servers,
+                    servers: store.sortedServers,
                     selectedServerID: nil,
                     connectingServerID: connectingServerID,
                     onSelect: connectToServer,
@@ -108,30 +108,29 @@ struct ServerListContentView: View {
         if servers.isEmpty {
             ServerListEmptyState(onAdd: onAdd)
         } else {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
+            List {
+                Section {
+                    ForEach(servers) { server in
+                        ServerRow(
+                            server: server,
+                            isSelected: server.id == selectedServerID,
+                            isConnecting: server.id == connectingServerID,
+                            onTap: { onSelect(server) },
+                            onEdit: { onEdit(server) },
+                            onDelete: { onDelete(server) }
+                        )
+                        .listRowInsets(EdgeInsets(top: 4, leading: Theme.contentInset, bottom: 4, trailing: Theme.contentInset))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                    }
+                } header: {
                     Text(String(localized: "Servers"))
                         .moriSectionHeaderStyle()
-                        .padding(.horizontal, Theme.contentInset)
-
-                    LazyVStack(spacing: Theme.rowSpacing) {
-                        ForEach(servers) { server in
-                            ServerRow(
-                                server: server,
-                                isSelected: server.id == selectedServerID,
-                                isConnecting: server.id == connectingServerID,
-                                onTap: { onSelect(server) },
-                                onEdit: { onEdit(server) },
-                                onDelete: { onDelete(server) }
-                            )
-                        }
-                    }
-                    .padding(.horizontal, Theme.contentInset)
                 }
-                .padding(.top, 12)
-                .padding(.bottom, 32)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Theme.bg)
         }
     }
 }
@@ -249,6 +248,17 @@ private struct ServerRow: View {
             Button { onEdit() } label: {
                 Label(String(localized: "Edit"), systemImage: "pencil")
             }
+            Button(role: .destructive) { showDeleteConfirm = true } label: {
+                Label(String(localized: "Delete"), systemImage: "trash")
+            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button { onEdit() } label: {
+                Label(String(localized: "Edit"), systemImage: "pencil")
+            }
+            .tint(Theme.accent)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) { showDeleteConfirm = true } label: {
                 Label(String(localized: "Delete"), systemImage: "trash")
             }
