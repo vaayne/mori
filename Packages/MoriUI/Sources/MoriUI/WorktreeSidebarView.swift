@@ -388,33 +388,63 @@ public struct WorktreeSidebarView: View {
 
     // MARK: - Footer
 
-    /// Quiet aggregate strip above the footer: one dot + count per agent state
-    /// (waiting / running / error), dimmed when zero.
+    /// Aggregate strip above the footer: one dot + count per agent state
+    /// (waiting / running / error), dimmed when zero. Clicking a state jumps
+    /// to the next workspace in that state, cycling on repeated clicks.
     private var agentSummaryStrip: some View {
-        let active = worktrees.filter { $0.status != .unavailable }
-        let waiting = active.filter { $0.agentState == .waitingForInput }.count
-        let running = active.filter { $0.agentState == .running }.count
-        let errors = active.filter { $0.agentState == .error }.count
+        let ordered = worktreesInDisplayOrder
+        let waiting = ordered.filter { $0.agentState == .waitingForInput }
+        let running = ordered.filter { $0.agentState == .running }
+        let errors = ordered.filter { $0.agentState == .error }
         return HStack(spacing: MoriTokens.Spacing.xl) {
-            summaryIndicator(count: waiting, word: String.localized("waiting"), tint: MoriTokens.Color.attention)
-            summaryIndicator(count: running, word: String.localized("running"), tint: MoriTokens.Color.success)
-            summaryIndicator(count: errors, word: String.localized("error"), tint: MoriTokens.Color.error)
+            summaryIndicator(candidates: waiting, state: .waitingForInput, word: String.localized("waiting"), tint: MoriTokens.Color.attention)
+            summaryIndicator(candidates: running, state: .running, word: String.localized("running"), tint: MoriTokens.Color.success)
+            summaryIndicator(candidates: errors, state: .error, word: String.localized("error"), tint: MoriTokens.Color.error)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, MoriTokens.Spacing.xl)
         .padding(.vertical, MoriTokens.Spacing.sm)
     }
 
-    private func summaryIndicator(count: Int, word: String, tint: Color) -> some View {
-        HStack(spacing: MoriTokens.Spacing.sm) {
-            Circle()
-                .fill(count > 0 ? tint : MoriTokens.Color.inactive.opacity(MoriTokens.Opacity.medium))
-                .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
-            Text(verbatim: "\(count) \(word)")
-                .font(MoriTokens.Font.monoSmall)
-                .foregroundStyle(count > 0 ? Color.primary.opacity(0.85) : MoriTokens.Color.inactive)
-                .lineLimit(1)
+    private func summaryIndicator(candidates: [Worktree], state: AgentState, word: String, tint: Color) -> some View {
+        let count = candidates.count
+        return Button { jumpToNext(in: candidates, state: state) } label: {
+            HStack(spacing: MoriTokens.Spacing.sm) {
+                Circle()
+                    .fill(count > 0 ? tint : MoriTokens.Color.inactive.opacity(MoriTokens.Opacity.medium))
+                    .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
+                Text(verbatim: "\(count) \(word)")
+                    .font(MoriTokens.Font.monoSmall)
+                    .foregroundStyle(count > 0 ? Color.primary.opacity(0.85) : MoriTokens.Color.inactive)
+                    .lineLimit(1)
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .disabled(count == 0)
+        .help(String.localized("Jump to next"))
+    }
+
+    /// Cycle to the next workspace whose agent is in `state`, starting after the
+    /// current selection, and land on the matching tmux window inside it.
+    private func jumpToNext(in candidates: [Worktree], state: AgentState) {
+        guard !candidates.isEmpty else { return }
+        var target = candidates[0]
+        if let idx = candidates.firstIndex(where: { $0.id == selectedWorktreeId }) {
+            target = candidates[(idx + 1) % candidates.count]
+        }
+        onSelectWorktree(target.id)
+        if let window = allWindows(for: target).first(where: { $0.agentState == state }) {
+            onSelectWindow(window.tmuxWindowId)
+        }
+    }
+
+    /// All jumpable worktrees in sidebar display order (Home first, then repo
+    /// sections pinned-first) — including collapsed projects, since an agent
+    /// that needs you shouldn't hide behind a folded section.
+    private var worktreesInDisplayOrder: [Worktree] {
+        let projectOrder = [homeProject].compactMap { $0 } + sortedProjects
+        return projectOrder.flatMap { visibleWorktrees(for: $0) }
     }
 
     private var sidebarFooter: some View {
