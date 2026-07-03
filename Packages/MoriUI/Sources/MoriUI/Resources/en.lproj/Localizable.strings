@@ -191,6 +191,7 @@
 "Needs input" = "Needs input";
 "Merge conflicts" = "Merge conflicts";
 "Ready to merge" = "Ready to merge";
+"error" = "error";
 
 /* Keyboard Shortcut Settings */
 "Press keys…" = "Press keys…";

@@ -191,6 +191,7 @@
 "Needs input" = "等待输入";
 "Merge conflicts" = "合并冲突";
 "Ready to merge" = "可以合并";
+"error" = "出错";
 
 /* Keyboard Shortcut Settings */
 "Press keys…" = "按下按键…";

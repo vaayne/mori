@@ -65,6 +65,7 @@ public struct WorktreeSidebarView: View {
                 .padding(.bottom, MoriTokens.Spacing.md)
             }
             .scrollIndicators(.hidden)
+            agentSummaryStrip
             sidebarFooter
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -386,6 +387,35 @@ public struct WorktreeSidebarView: View {
     }
 
     // MARK: - Footer
+
+    /// Quiet aggregate strip above the footer: one dot + count per agent state
+    /// (waiting / running / error), dimmed when zero.
+    private var agentSummaryStrip: some View {
+        let active = worktrees.filter { $0.status != .unavailable }
+        let waiting = active.filter { $0.agentState == .waitingForInput }.count
+        let running = active.filter { $0.agentState == .running }.count
+        let errors = active.filter { $0.agentState == .error }.count
+        return HStack(spacing: MoriTokens.Spacing.xl) {
+            summaryIndicator(count: waiting, word: String.localized("waiting"), tint: MoriTokens.Color.attention)
+            summaryIndicator(count: running, word: String.localized("running"), tint: MoriTokens.Color.success)
+            summaryIndicator(count: errors, word: String.localized("error"), tint: MoriTokens.Color.error)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, MoriTokens.Spacing.xl)
+        .padding(.vertical, MoriTokens.Spacing.sm)
+    }
+
+    private func summaryIndicator(count: Int, word: String, tint: Color) -> some View {
+        HStack(spacing: MoriTokens.Spacing.sm) {
+            Circle()
+                .fill(count > 0 ? tint : MoriTokens.Color.inactive.opacity(MoriTokens.Opacity.medium))
+                .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
+            Text(verbatim: "\(count) \(word)")
+                .font(MoriTokens.Font.monoSmall)
+                .foregroundStyle(count > 0 ? Color.primary.opacity(0.85) : MoriTokens.Color.inactive)
+                .lineLimit(1)
+        }
+    }
 
     private var sidebarFooter: some View {
         HStack(spacing: MoriTokens.Spacing.md) {
