@@ -64,7 +64,7 @@ public struct WorktreeSidebarView: View {
                 }
                 .padding(.bottom, MoriTokens.Spacing.md)
             }
-            .scrollIndicators(.hidden)
+            .scrollIndicators(.never)
             agentSummaryStrip
             sidebarFooter
         }
@@ -390,23 +390,31 @@ public struct WorktreeSidebarView: View {
 
     /// Aggregate strip above the footer: one dot + count per agent state
     /// (waiting / running / error), dimmed when zero. Clicking a state lists
-    /// its workspaces — pick one to jump straight to it.
+    /// its workspaces — pick one to jump straight to it. Falls back to dots +
+    /// counts (no words) when the sidebar is too narrow for the full labels.
     private var agentSummaryStrip: some View {
-        let ordered = worktreesInDisplayOrder
-        let waiting = ordered.filter { $0.agentState == .waitingForInput }
-        let running = ordered.filter { $0.agentState == .running }
-        let errors = ordered.filter { $0.agentState == .error }
-        return HStack(spacing: MoriTokens.Spacing.xl) {
-            summaryIndicator(candidates: waiting, state: .waitingForInput, word: String.localized("waiting"), tint: MoriTokens.Color.attention)
-            summaryIndicator(candidates: running, state: .running, word: String.localized("running"), tint: MoriTokens.Color.success)
-            summaryIndicator(candidates: errors, state: .error, word: String.localized("error"), tint: MoriTokens.Color.error)
-            Spacer(minLength: 0)
+        ViewThatFits(in: .horizontal) {
+            summaryStripContent(showWords: true)
+            summaryStripContent(showWords: false)
         }
         .padding(.horizontal, MoriTokens.Spacing.xl)
         .padding(.vertical, MoriTokens.Spacing.sm)
     }
 
-    private func summaryIndicator(candidates: [Worktree], state: AgentState, word: String, tint: Color) -> some View {
+    private func summaryStripContent(showWords: Bool) -> some View {
+        let ordered = worktreesInDisplayOrder
+        let waiting = ordered.filter { $0.agentState == .waitingForInput }
+        let running = ordered.filter { $0.agentState == .running }
+        let errors = ordered.filter { $0.agentState == .error }
+        return HStack(spacing: MoriTokens.Spacing.xl) {
+            summaryIndicator(candidates: waiting, state: .waitingForInput, word: showWords ? String.localized("waiting") : nil, tint: MoriTokens.Color.attention)
+            summaryIndicator(candidates: running, state: .running, word: showWords ? String.localized("running") : nil, tint: MoriTokens.Color.success)
+            summaryIndicator(candidates: errors, state: .error, word: showWords ? String.localized("error") : nil, tint: MoriTokens.Color.error)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func summaryIndicator(candidates: [Worktree], state: AgentState, word: String?, tint: Color) -> some View {
         let count = candidates.count
         return Menu {
             ForEach(candidates) { worktree in
@@ -419,7 +427,7 @@ public struct WorktreeSidebarView: View {
                 Circle()
                     .fill(count > 0 ? tint : MoriTokens.Color.inactive.opacity(MoriTokens.Opacity.medium))
                     .frame(width: MoriTokens.Icon.dot, height: MoriTokens.Icon.dot)
-                Text(verbatim: "\(count) \(word)")
+                Text(verbatim: word.map { "\(count) \($0)" } ?? "\(count)")
                     .font(MoriTokens.Font.monoSmall)
                     .foregroundStyle(count > 0 ? Color.primary.opacity(0.85) : MoriTokens.Color.inactive)
                     .lineLimit(1)
@@ -431,7 +439,6 @@ public struct WorktreeSidebarView: View {
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
-        .fixedSize()
         .disabled(count == 0)
     }
 
@@ -462,9 +469,12 @@ public struct WorktreeSidebarView: View {
         HStack(spacing: MoriTokens.Spacing.md) {
             if let onAddProject {
                 Button(action: onAddProject) {
-                    HStack(spacing: 6) {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "folder.badge.plus").font(.system(size: 12, weight: .medium))
+                            Text("Add repository").font(.system(size: 12.5)).lineLimit(1)
+                        }
                         Image(systemName: "folder.badge.plus").font(.system(size: 12, weight: .medium))
-                        Text("Add repository").font(.system(size: 12.5))
                     }
                     .foregroundStyle(MoriTokens.Color.muted)
                     .contentShape(Rectangle())
