@@ -628,6 +628,8 @@ extension TmuxWindow {
     var workspaceTitle: String {
         let pane = panes.first(where: { $0.agentName?.isEmpty == false }) ?? panes.first
         if let agentName = pane?.agentName, !agentName.isEmpty { return agentName }
+        if !name.isEmpty && name != "[tmux]" { return name }
+        if let command = fallbackCommand, !command.isEmpty { return command }
         return name
     }
 

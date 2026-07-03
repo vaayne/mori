@@ -132,3 +132,16 @@
 2. 模拟器:server 行 swipe 出现 Edit/Delete;连接后 chips 条正确高亮并可切换(单 window 时不显示);
    key bar sidebar 键弹出 workspace sheet,选择后 dismiss 并切换;选择模式键切换后长按可出 copy 菜单。
 3. 新字符串双语;CHANGELOG 双语在一轮条目上扩写或新增条目。
+
+---
+
+# 三轮:窗口标题 "[tmux]" 修复
+
+根因:tmux 默认 `automatic-rename-format` = `#{?pane_in_mode,[tmux],#{pane_current_command}}`,
+pane 处于 copy-mode 时窗口名变成 "[tmux]"。app 直接信任 window.name,
+多个窗口滚动过 scrollback 后 chips / 行标题全是 "[tmux]",无法区分。
+
+修复(纯展示层,不动主机 tmux 配置):`TmuxWindow.workspaceTitle` 优先级改为
+agent 名 → window.name(非空且 != "[tmux]")→ fallbackCommand → 原始 name。
+`TerminalScreen.compactTopBar` 标题从 `currentWindow?.name` 改用 `workspaceTitle`。
+不加新字符串、不加 CHANGELOG(修的是未发布功能)。

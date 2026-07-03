@@ -125,7 +125,7 @@ struct TerminalScreen: View {
 
             Button { sessionHost.showSidebar = true } label: {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(currentWindow?.name ?? String(localized: "Terminal"))
+                    Text(currentWindow?.workspaceTitle ?? String(localized: "Terminal"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Theme.textPrimary)
                         .lineLimit(1)
