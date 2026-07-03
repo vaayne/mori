@@ -426,7 +426,10 @@ public struct WorktreeSidebarView: View {
             }
             .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
+        // .borderlessButton flattens the custom label to monochrome text,
+        // losing the status dot's tint; .button + .plain keeps the view as-is.
+        .menuStyle(.button)
+        .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
         .disabled(count == 0)
