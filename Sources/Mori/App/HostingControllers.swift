@@ -26,6 +26,7 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         onCloseWindow: ((String) -> Void)? = nil,
         onToggleCollapse: ((UUID) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
+        onOpenSettings: (() -> Void)? = nil,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil,
         onUpdateProject: ((Project) -> Void)? = nil,
@@ -46,6 +47,7 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
             onCloseWindow: onCloseWindow,
             onToggleCollapse: onToggleCollapse,
             onAddProject: onAddProject,
+            onOpenSettings: onOpenSettings,
             onRequestPaneOutput: onRequestPaneOutput,
             onSendKeys: onSendKeys,
             onUpdateProject: onUpdateProject,
@@ -97,6 +99,7 @@ struct SidebarContentView: View {
     let onCloseWindow: ((String) -> Void)?
     let onToggleCollapse: ((UUID) -> Void)?
     let onAddProject: (() -> Void)?
+    let onOpenSettings: (() -> Void)?
     let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     let onSendKeys: ((String, String) -> Void)?
     let onUpdateProject: ((Project) -> Void)?
@@ -123,6 +126,7 @@ struct SidebarContentView: View {
             onCloseWindow: onCloseWindow,
             onToggleCollapse: onToggleCollapse,
             onAddProject: onAddProject,
+            onOpenSettings: onOpenSettings,
             onRequestPaneOutput: onRequestPaneOutput,
             onSendKeys: onSendKeys,
             onUpdateProject: onUpdateProject,

@@ -57,6 +57,33 @@ public actor GitBackend: GitControlling {
         return GitStatusParser.parse(output)
     }
 
+    public func diffStat(worktreePath: String, baseRef: String? = nil) async throws -> GitDiffStat {
+        var base = "HEAD"
+        if let baseRef {
+            let mergeBase = try await runner.run(in: worktreePath, ["merge-base", baseRef, "HEAD"])
+            base = mergeBase.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        // `diff --shortstat <base>` compares the working tree to <base>, so both
+        // committed and uncommitted lines count; untracked files do not until added.
+        let output = try await runner.run(in: worktreePath, ["diff", "--shortstat", base])
+        var conflicts: Bool?
+        if let baseRef {
+            do {
+                // merge-tree (git 2.38+) probes in-memory: exit 0 = clean, 1 = conflicts.
+                _ = try await runner.run(
+                    in: worktreePath,
+                    ["merge-tree", "--write-tree", "--name-only", baseRef, "HEAD"]
+                )
+                conflicts = false
+            } catch GitError.executionFailed(_, let exitCode, _) where exitCode == 1 {
+                conflicts = true
+            } catch {
+                conflicts = nil
+            }
+        }
+        return GitDiffStat.parseShortstat(output, hasMergeConflicts: conflicts)
+    }
+
     public func isGitRepo(path: String) async throws -> Bool {
         do {
             _ = try await runner.run(

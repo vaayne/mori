@@ -27,6 +27,12 @@ public protocol GitControlling: Sendable {
     /// Get the current status of a worktree (dirty files, ahead/behind, branch).
     func status(worktreePath: String) async throws -> GitStatusInfo
 
+    /// Line-level diff of the working tree (committed + uncommitted) against the
+    /// merge-base with `baseRef`. When `baseRef` is nil the diff is taken against
+    /// HEAD (uncommitted changes only — the main worktree case). When `baseRef`
+    /// is set, the merge-tree conflict probe runs and fills `hasMergeConflicts`.
+    func diffStat(worktreePath: String, baseRef: String?) async throws -> GitDiffStat
+
     /// Check whether the given path is inside a git repository.
     func isGitRepo(path: String) async throws -> Bool
 

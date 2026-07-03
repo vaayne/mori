@@ -71,6 +71,13 @@ testParseStatusIgnoredEntries()
 testGitStatusInfoCleanStatic()
 testGitStatusInfoIsDirtyComputed()
 
+// GitDiffStat tests
+testParseShortstatBoth()
+testParseShortstatInsertionsOnly()
+testParseShortstatDeletionsOnly()
+testParseShortstatEmpty()
+testParseShortstatConflictsPassthrough()
+
 printResults()
 
 if failCount > 0 {

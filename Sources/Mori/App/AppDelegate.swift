@@ -198,6 +198,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             onAddProject: { [weak self] in
                 self?.showAddProjectPanel()
             },
+            onOpenSettings: { [weak self] in
+                self?.showSettingsWindow()
+            },
             onRequestPaneOutput: { [weak self, weak manager] paneId, completion in
                 guard let self, let manager else {
                     completion(nil)

@@ -15,6 +15,12 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
     public var stagedCount: Int
     public var modifiedCount: Int
     public var untrackedCount: Int
+    /// Lines added vs the project's base branch (committed + uncommitted).
+    public var additions: Int
+    /// Lines removed vs the project's base branch (committed + uncommitted).
+    public var deletions: Int
+    /// Whether merging into the base branch would conflict; nil = not probed.
+    public var hasMergeConflicts: Bool?
     public var hasUpstream: Bool
     public var lastActiveAt: Date?
     public var tmuxSessionId: String?
@@ -43,6 +49,9 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
         stagedCount: Int = 0,
         modifiedCount: Int = 0,
         untrackedCount: Int = 0,
+        additions: Int = 0,
+        deletions: Int = 0,
+        hasMergeConflicts: Bool? = nil,
         hasUpstream: Bool = true,
         lastActiveAt: Date? = nil,
         tmuxSessionId: String? = nil,
@@ -66,6 +75,9 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
         self.stagedCount = stagedCount
         self.modifiedCount = modifiedCount
         self.untrackedCount = untrackedCount
+        self.additions = additions
+        self.deletions = deletions
+        self.hasMergeConflicts = hasMergeConflicts
         self.hasUpstream = hasUpstream
         self.lastActiveAt = lastActiveAt
         self.tmuxSessionId = tmuxSessionId
@@ -94,6 +106,9 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
         stagedCount = try container.decodeIfPresent(Int.self, forKey: .stagedCount) ?? 0
         modifiedCount = try container.decodeIfPresent(Int.self, forKey: .modifiedCount) ?? 0
         untrackedCount = try container.decodeIfPresent(Int.self, forKey: .untrackedCount) ?? 0
+        additions = try container.decodeIfPresent(Int.self, forKey: .additions) ?? 0
+        deletions = try container.decodeIfPresent(Int.self, forKey: .deletions) ?? 0
+        hasMergeConflicts = try container.decodeIfPresent(Bool.self, forKey: .hasMergeConflicts)
         hasUpstream = try container.decodeIfPresent(Bool.self, forKey: .hasUpstream) ?? true
         lastActiveAt = try container.decodeIfPresent(Date.self, forKey: .lastActiveAt)
         tmuxSessionId = try container.decodeIfPresent(String.self, forKey: .tmuxSessionId)
