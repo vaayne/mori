@@ -35,6 +35,7 @@
 "New Window After" = "在后方新建窗口";
 "My Server" = "我的服务器";
 "New Session" = "新建会话";
+"New Window" = "新建窗口";
 "No Servers" = "没有服务器";
 "No tmux sessions" = "没有 tmux 会话";
 "Not Connected" = "未连接";
@@ -68,8 +69,11 @@
 "Status" = "状态";
 "Switch Host" = "切换主机";
 "Opening the interactive shell and checking tmux windows." = "正在打开交互式 shell，并检查 tmux 窗口。";
+"Terminal" = "终端";
 "Terminal renderer is not ready yet." = "终端渲染器尚未就绪。";
 "Window" = "窗口";
+"Working" = "运行中";
+"Needs input" = "等待输入";
 "TMUX SESSION" = "TMUX 会话";
 "tmux did not report a pane ID." = "tmux 没有返回 pane ID。";
 "Kill Session" = "结束会话";

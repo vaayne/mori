@@ -35,6 +35,7 @@
 "New Window After" = "New Window After";
 "My Server" = "My Server";
 "New Session" = "New Session";
+"New Window" = "New Window";
 "No Servers" = "No Servers";
 "No tmux sessions" = "No tmux sessions";
 "Not Connected" = "Not Connected";
@@ -68,8 +69,11 @@
 "Status" = "Status";
 "Switch Host" = "Switch Host";
 "Opening the interactive shell and checking tmux windows." = "Opening the interactive shell and checking tmux windows.";
+"Terminal" = "Terminal";
 "Terminal renderer is not ready yet." = "Terminal renderer is not ready yet.";
 "Window" = "Window";
+"Working" = "Working";
+"Needs input" = "Needs input";
 "TMUX SESSION" = "TMUX SESSION";
 "tmux did not report a pane ID." = "tmux did not report a pane ID.";
 "Kill Session" = "Kill Session";

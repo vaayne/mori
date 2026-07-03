@@ -22,6 +22,10 @@ enum Theme {
     static let warning = Color.yellow.opacity(0.95)
     static let destructive = Color.red.opacity(0.9)
 
+    static let agentWorking = Theme.accent
+    static let agentWaiting = Color.orange.opacity(0.95)
+    static let agentDone = Color.green.opacity(0.95)
+
     static let textPrimary = Color.white.opacity(0.96)
     static let textSecondary = Color.white.opacity(0.64)
     static let textTertiary = Color.white.opacity(0.38)
@@ -47,6 +51,9 @@ enum Theme {
     static let monoCaptionFont = Font.system(size: 10.5, design: .monospaced)
     static let monoDetailFont = Font.system(size: 11, design: .monospaced)
     static let shortcutFont = Font.system(size: 10, design: .monospaced)
+    static let chipFont = Font.system(size: 10.5, weight: .semibold)
+    static let chipHorizontalPadding: CGFloat = 7
+    static let chipVerticalPadding: CGFloat = 4
 
     // MARK: - View Modifiers
 

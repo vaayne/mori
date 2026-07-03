@@ -6,7 +6,9 @@ import UIKit
 @MainActor
 final class KeyBarView: UIView {
 
-    weak var terminalView: SwiftTerm.TerminalView?
+    weak var terminalView: SwiftTerm.TerminalView? {
+        didSet { resetSelectionMode() }
+    }
     var onBackTapped: (() -> Void)?
     var onSidebarTapped: (() -> Void)?
     var onCustomizeTapped: (() -> Void)?
@@ -22,6 +24,8 @@ final class KeyBarView: UIView {
     }
 
     private var ctrlActive = false
+    private var selectionModeActive = false
+    private weak var selectionButton: UIButton?
     private var repeatingButton: UIButton?
     private var repeatAction: KeyAction?
     private var repeatTask: Task<Void, Never>?
@@ -155,6 +159,11 @@ final class KeyBarView: UIView {
         let divEnd = makeDivider()
         stackView.addArrangedSubview(divEnd)
         keyButtons.append(divEnd)
+
+        let selectionButton = makeSelectionModeButton()
+        stackView.addArrangedSubview(selectionButton)
+        keyButtons.append(selectionButton)
+        self.selectionButton = selectionButton
 
         let keyboardButton = makeKeyboardDismissButton()
         stackView.addArrangedSubview(keyboardButton)
@@ -366,6 +375,44 @@ final class KeyBarView: UIView {
         DispatchQueue.main.async { [weak self] in
             self?.onTmuxMenuTapped?()
         }
+    }
+
+    private func makeSelectionModeButton() -> UIButton {
+        let button = KeyBarButton()
+        configurePanScrolling(button)
+        let config = UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
+        button.setImage(UIImage(systemName: "text.cursor", withConfiguration: config), for: .normal)
+        button.layer.cornerRadius = 7
+        button.layer.borderWidth = 1
+        button.clipsToBounds = true
+        button.addTarget(self, action: #selector(selectionModeTapped), for: .touchUpInside)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            button.heightAnchor.constraint(equalToConstant: 30),
+            button.widthAnchor.constraint(equalToConstant: 30),
+        ])
+        updateSelectionButton(button)
+        return button
+    }
+
+    @objc private func selectionModeTapped() {
+        UIDevice.current.playInputClick()
+        selectionModeActive.toggle()
+        terminalView?.allowMouseReporting = !selectionModeActive
+        updateSelectionButton()
+    }
+
+    private func resetSelectionMode() {
+        selectionModeActive = false
+        terminalView?.allowMouseReporting = true
+        updateSelectionButton()
+    }
+
+    private func updateSelectionButton(_ button: UIButton? = nil) {
+        guard let button = button ?? selectionButton else { return }
+        button.backgroundColor = selectionModeActive ? keyActiveBg : keySpecialBg
+        button.tintColor = selectionModeActive ? accentColor : textDim
+        button.layer.borderColor = (selectionModeActive ? tmuxBorder : keyBorder).cgColor
     }
 
     private func makeKeyboardDismissButton() -> UIButton {

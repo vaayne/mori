@@ -9,6 +9,7 @@ struct TerminalScreen: View {
     let serverName: String
     let onDisconnect: () -> Void
     let onSwitchHost: () -> Void
+    let onBackToWorkspace: () -> Void
 
     @State private var showRegularSidebar = true
 
@@ -57,6 +58,7 @@ struct TerminalScreen: View {
             )
         }
         .onChange(of: horizontalSizeClass) { _, newSizeClass in
+            sessionHost.accessoryBar.onBackTapped = onSwitchHost
             if newSizeClass == .regular {
                 sessionHost.showSidebar = false
             }
@@ -64,13 +66,20 @@ struct TerminalScreen: View {
     }
 
     private var compactWorkspace: some View {
-        terminalContent(showsCompactChrome: true)
-            .sheet(isPresented: sidebarBinding) {
-                sidebarContent(presentation: .overlay, onDismiss: { sessionHost.showSidebar = false })
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .presentationBackground(Theme.sidebarBg)
+        VStack(spacing: 0) {
+            compactTopBar
+            if compactWindows.count > 1 {
+                compactWindowChipsBar
             }
+            terminalContent(showsCompactChrome: true)
+        }
+        .background(Theme.terminalBg.ignoresSafeArea())
+        .sheet(isPresented: sidebarBinding) {
+            sidebarContent(presentation: .overlay, onDismiss: { sessionHost.showSidebar = false })
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(Theme.sidebarBg)
+        }
     }
 
     private var regularWorkspace: some View {
@@ -102,6 +111,84 @@ struct TerminalScreen: View {
             }
         }
         .background(Theme.terminalBg.ignoresSafeArea())
+    }
+
+    private var compactTopBar: some View {
+        HStack(spacing: 10) {
+            Button(action: onBackToWorkspace) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+
+            Button { sessionHost.showSidebar = true } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(currentWindow?.name ?? String(localized: "Terminal"))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                        .lineLimit(1)
+
+                    Text(coordinator.tmuxActiveSession?.name ?? serverName)
+                        .font(Theme.monoCaptionFont)
+                        .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Spacer(minLength: 8)
+
+            if let window = currentWindow {
+                AgentStatusChip(status: window.agentStatus, fallback: window.fallbackCommand)
+            }
+
+            Button { sessionHost.showTmuxCommands = true } label: {
+                Image(systemName: "command")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(height: 44)
+        .padding(.horizontal, 8)
+        .background(Theme.terminalBg)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.divider).frame(height: 1)
+        }
+    }
+
+    private var compactWindowChipsBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(compactWindows) { window in
+                    TerminalWindowChip(
+                        window: window,
+                        isSelected: window.isActive,
+                        onSelect: {
+                            coordinator.selectTmuxWindow(session: window.sessionName, windowIndex: window.index)
+                        }
+                    )
+                }
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 34)
+        }
+        .background(Theme.terminalBg)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.divider).frame(height: 1)
+        }
+    }
+
+    private var compactWindows: [TmuxWindow] {
+        coordinator.tmuxActiveSession?.windows ?? []
+    }
+
+    private var currentWindow: TmuxWindow? {
+        coordinator.tmuxActiveSession?.windows.first(where: { $0.isActive })
     }
 
     private func sidebarContent(
@@ -173,6 +260,60 @@ struct TerminalScreen: View {
             RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
         )
+    }
+}
+
+private struct TerminalWindowChip: View {
+    let window: TmuxWindow
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    @State private var pulse = false
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(chipColor)
+                    .frame(width: 5, height: 5)
+                    .opacity(window.agentStatus == .working && pulse ? 0.35 : 1)
+
+                Text(window.workspaceTitle)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(isSelected ? Theme.textPrimary : Theme.textSecondary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(isSelected ? Theme.accentSoft : Theme.mutedSurface, in: Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(isSelected ? Theme.accentBorder : Theme.cardBorder, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .onAppear { updatePulse(for: window.agentStatus) }
+        .onChange(of: window.agentStatus) { _, newStatus in
+            updatePulse(for: newStatus)
+        }
+    }
+
+    private var chipColor: Color {
+        window.agentStatus?.color ?? Theme.textTertiary
+    }
+
+    private func updatePulse(for status: TmuxAgentStatus?) {
+        if status == .working {
+            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        } else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                pulse = false
+            }
+        }
     }
 }
 
