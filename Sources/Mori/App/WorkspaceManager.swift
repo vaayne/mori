@@ -1541,11 +1541,14 @@ final class WorkspaceManager {
     func coordinatedPoll() async {
         // Run tmux scan and git status concurrently
         async let tmuxResult: [String: [TmuxSession]] = self.scanSessionsByEndpoint()
-        async let gitResult: [UUID: GitStatusInfo] = {
+        async let gitResult: [UUID: WorktreeGitSnapshot] = {
             await self.gitStatusCoordinator.pollAll(
                 worktrees: self.appState.worktrees,
                 backendForWorktree: { worktree in
                     self.gitBackend(for: worktree)
+                },
+                baseRefForWorktree: { worktree in
+                    self.baseRef(for: worktree)
                 }
             )
         }()
@@ -1857,11 +1860,25 @@ final class WorkspaceManager {
         }
     }
 
+    /// The branch a worktree's diff badge and merge probe compare against:
+    /// the project's main-worktree branch. nil for the main worktree itself,
+    /// which shows only its uncommitted changes.
+    private func baseRef(for worktree: Worktree) -> String? {
+        guard !worktree.isMainWorktree else { return nil }
+        let base = appState.worktrees
+            .first { $0.projectId == worktree.projectId && $0.isMainWorktree }?
+            .branch
+        // Diffing a branch against itself would always read as zero — skip.
+        return base == worktree.branch ? nil : base
+    }
+
     /// Update worktree git status fields from polled results and persist changes.
-    private func updateWorktreeGitStatus(_ statuses: [UUID: GitStatusInfo]) {
+    private func updateWorktreeGitStatus(_ snapshots: [UUID: WorktreeGitSnapshot]) {
         for i in appState.worktrees.indices {
-            guard let status = statuses[appState.worktrees[i].id] else { continue }
+            guard let snapshot = snapshots[appState.worktrees[i].id] else { continue }
+            let status = snapshot.status
             let wt = appState.worktrees[i]
+            let diff = snapshot.diff
             let changed = wt.hasUncommittedChanges != status.isDirty
                 || wt.aheadCount != status.ahead
                 || wt.behindCount != status.behind
@@ -1869,6 +1886,9 @@ final class WorkspaceManager {
                 || wt.modifiedCount != status.modifiedCount
                 || wt.untrackedCount != status.untrackedCount
                 || wt.hasUpstream != (status.upstream != nil)
+                || (diff != nil && (wt.additions != diff!.additions
+                    || wt.deletions != diff!.deletions
+                    || wt.hasMergeConflicts != diff!.hasMergeConflicts))
 
             if changed {
                 appState.worktrees[i].hasUncommittedChanges = status.isDirty
@@ -1878,6 +1898,11 @@ final class WorkspaceManager {
                 appState.worktrees[i].modifiedCount = status.modifiedCount
                 appState.worktrees[i].untrackedCount = status.untrackedCount
                 appState.worktrees[i].hasUpstream = status.upstream != nil
+                if let diff {
+                    appState.worktrees[i].additions = diff.additions
+                    appState.worktrees[i].deletions = diff.deletions
+                    appState.worktrees[i].hasMergeConflicts = diff.hasMergeConflicts
+                }
                 // Persist to DB
                 try? worktreeRepo.save(appState.worktrees[i])
             }
@@ -2359,39 +2384,31 @@ final class WorkspaceManager {
 
     // MARK: - Quick Jump (⌘1-9)
 
-    /// Unified sidebar quick jump: selects a window by global index across all visible worktrees.
+    /// Unified sidebar quick jump: selects a worktree by global index across all visible projects.
     func quickJump(index: Int) {
-        selectWindowByGlobalIndex(index)
+        selectWorktreeByGlobalIndex(index)
     }
 
-    /// Select a tmux window by 1-based global index across all projects and worktrees.
-    /// Iterates projects in display order, skipping collapsed ones, to match sidebar hints.
-    /// Index 9 selects the last window regardless of count.
-    private func selectWindowByGlobalIndex(_ index: Int) {
-        // Sort pinned-first to match sidebar display order.
-        let sortedProjects = appState.projects.filter { $0.isFavorite }
-            + appState.projects.filter { !$0.isFavorite }
-        let allWindows = sortedProjects
+    /// Select a worktree by 1-based global index across all projects.
+    /// Iterates projects in display order, skipping collapsed ones, to match
+    /// the sidebar's ⌘N hints. Index 9 selects the last worktree regardless of count.
+    private func selectWorktreeByGlobalIndex(_ index: Int) {
+        // Sort pinned-first, Home excluded, to match sidebar display order.
+        let repos = appState.projects.filter { !$0.isHomeWorkspace }
+        let sortedProjects = repos.filter { $0.isFavorite }
+            + repos.filter { !$0.isFavorite }
+        let allWorktrees = sortedProjects
             .filter { !$0.isCollapsed }
             .flatMap { project in
                 appState.worktrees
                     .filter { $0.projectId == project.id && $0.status != .unavailable }
-                    .flatMap { worktree in
-                        appState.runtimeWindows
-                            .filter { $0.worktreeId == worktree.id }
-                            .sorted { $0.tmuxWindowIndex < $1.tmuxWindowIndex }
-                    }
             }
-        guard !allWindows.isEmpty else { return }
+        guard !allWorktrees.isEmpty else { return }
 
-        let targetIndex = index == 9 ? allWindows.count - 1 : index - 1
-        guard targetIndex >= 0, targetIndex < allWindows.count else { return }
+        let targetIndex = index == 9 ? allWorktrees.count - 1 : index - 1
+        guard targetIndex >= 0, targetIndex < allWorktrees.count else { return }
 
-        let window = allWindows[targetIndex]
-        if window.worktreeId != appState.uiState.selectedWorktreeId {
-            selectWorktree(window.worktreeId)
-        }
-        selectWindow(window.tmuxWindowId)
+        selectWorktree(allWorktrees[targetIndex].id)
     }
 
 

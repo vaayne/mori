@@ -6,18 +6,11 @@ import MoriUI
 
 // MARK: - Sidebar Hosting (unified: project picker + worktrees + actions)
 
-@MainActor
-@Observable
-final class SidebarLayoutState {
-    var isCollapsed = false
-}
-
 /// Wraps SidebarContainerView in an NSHostingController, observing AppState.
 @MainActor
 final class SidebarHostingController: NSHostingController<SidebarContentView> {
 
     private let appState: AppState
-    private let layoutState = SidebarLayoutState()
 
     init(
         appState: AppState,
@@ -33,6 +26,7 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         onCloseWindow: ((String) -> Void)? = nil,
         onToggleCollapse: ((UUID) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
+        onOpenSettings: (() -> Void)? = nil,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil,
         onUpdateProject: ((Project) -> Void)? = nil,
@@ -41,7 +35,6 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         self.appState = appState
         let rootView = SidebarContentView(
             appState: appState,
-            layoutState: layoutState,
             onSelectProject: onSelectProject,
             onSelectWorktree: onSelectWorktree,
             onSelectWindow: onSelectWindow,
@@ -54,6 +47,7 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
             onCloseWindow: onCloseWindow,
             onToggleCollapse: onToggleCollapse,
             onAddProject: onAddProject,
+            onOpenSettings: onOpenSettings,
             onRequestPaneOutput: onRequestPaneOutput,
             onSendKeys: onSendKeys,
             onUpdateProject: onUpdateProject,
@@ -88,16 +82,11 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         // Force SwiftUI to re-render with the updated appearance context.
         view.needsDisplay = true
     }
-
-    func setSidebarCollapsed(_ isCollapsed: Bool) {
-        layoutState.isCollapsed = isCollapsed
-    }
 }
 
 /// Bindable wrapper that reads AppState observables into SidebarContainerView.
 struct SidebarContentView: View {
     @Bindable var appState: AppState
-    @Bindable var layoutState: SidebarLayoutState
     let onSelectProject: (UUID) -> Void
     let onSelectWorktree: (UUID) -> Void
     let onSelectWindow: (String) -> Void
@@ -110,6 +99,7 @@ struct SidebarContentView: View {
     let onCloseWindow: ((String) -> Void)?
     let onToggleCollapse: ((UUID) -> Void)?
     let onAddProject: (() -> Void)?
+    let onOpenSettings: (() -> Void)?
     let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     let onSendKeys: ((String, String) -> Void)?
     let onUpdateProject: ((Project) -> Void)?
@@ -136,12 +126,12 @@ struct SidebarContentView: View {
             onCloseWindow: onCloseWindow,
             onToggleCollapse: onToggleCollapse,
             onAddProject: onAddProject,
+            onOpenSettings: onOpenSettings,
             onRequestPaneOutput: onRequestPaneOutput,
             onSendKeys: onSendKeys,
             onUpdateProject: onUpdateProject,
             onReorderProjects: onReorderProjects,
-            pullRequests: appState.pullRequests,
-            isSidebarCollapsed: layoutState.isCollapsed
+            pullRequests: appState.pullRequests
         )
     }
 }

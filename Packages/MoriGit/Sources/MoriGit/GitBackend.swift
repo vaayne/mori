@@ -57,6 +57,50 @@ public actor GitBackend: GitControlling {
         return GitStatusParser.parse(output)
     }
 
+    public func diffStat(worktreePath: String, baseRef: String? = nil) async throws -> GitDiffStat {
+        guard let baseRef else {
+            // Main worktree: uncommitted changes only.
+            let output = try await runner.run(in: worktreePath, ["diff", "--shortstat", "HEAD"])
+            return GitDiffStat.parseShortstat(output)
+        }
+        // Prefer the repository's default branch (origin/HEAD): the local base
+        // checkout may be stale — or sitting on another feature branch entirely —
+        // which would inflate the diff with changes that aren't this branch's.
+        var base: String?
+        var mergeBase: String?
+        for candidate in ["origin/HEAD", baseRef] {
+            if let output = try? await runner.run(in: worktreePath, ["merge-base", candidate, "HEAD"]) {
+                base = candidate
+                mergeBase = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                break
+            }
+        }
+        guard let base, let mergeBase else {
+            throw GitError.executionFailed(
+                command: "git merge-base origin/HEAD|\(baseRef) HEAD",
+                exitCode: 1,
+                stderr: "no merge base"
+            )
+        }
+        // Committed lines only (merge-base..HEAD) — matches what a PR shows;
+        // uncommitted work is signalled separately via hasUncommittedChanges.
+        let output = try await runner.run(in: worktreePath, ["diff", "--shortstat", mergeBase, "HEAD"])
+        var conflicts: Bool?
+        do {
+            // merge-tree (git 2.38+) probes in-memory: exit 0 = clean, 1 = conflicts.
+            _ = try await runner.run(
+                in: worktreePath,
+                ["merge-tree", "--write-tree", "--name-only", base, "HEAD"]
+            )
+            conflicts = false
+        } catch GitError.executionFailed(_, let exitCode, _) where exitCode == 1 {
+            conflicts = true
+        } catch {
+            conflicts = nil
+        }
+        return GitDiffStat.parseShortstat(output, hasMergeConflicts: conflicts)
+    }
+
     public func isGitRepo(path: String) async throws -> Bool {
         do {
             _ = try await runner.run(

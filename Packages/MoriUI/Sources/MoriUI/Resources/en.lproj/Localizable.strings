@@ -182,6 +182,16 @@
 "%lldm ago" = "%lldm ago";
 "%lldh ago" = "%lldh ago";
 "%lldd ago" = "%lldd ago";
+"%lldmo ago" = "%lldmo ago";
+
+/* Conductor-style sidebar */
+"New workspace" = "New workspace";
+"Add repository" = "Add repository";
+"Working…" = "Working…";
+"Needs input" = "Needs input";
+"Merge conflicts" = "Merge conflicts";
+"Ready to merge" = "Ready to merge";
+"error" = "error";
 
 /* Keyboard Shortcut Settings */
 "Press keys…" = "Press keys…";
@@ -204,6 +214,7 @@
 "Panes" = "Panes";
 "Tools" = "Tools";
 "Worktrees" = "Worktrees";
+"Show %lld more" = "Show %lld more";
 "Other" = "Other";
 "System" = "System";
 

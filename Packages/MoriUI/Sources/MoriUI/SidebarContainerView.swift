@@ -27,12 +27,12 @@ public struct SidebarContainerView: View {
     private let onCloseWindow: ((String) -> Void)?
     private let onToggleCollapse: ((UUID) -> Void)?
     private let onAddProject: (() -> Void)?
+    private let onOpenSettings: (() -> Void)?
     private let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     private let onSendKeys: ((String, String) -> Void)?
     private let onUpdateProject: ((Project) -> Void)?
     private let onReorderProjects: (([UUID]) -> Void)?
     private let pullRequests: [UUID: PullRequestInfo]
-    private let isSidebarCollapsed: Bool
 
     public init(
         projects: [Project] = [],
@@ -54,12 +54,12 @@ public struct SidebarContainerView: View {
         onCloseWindow: ((String) -> Void)? = nil,
         onToggleCollapse: ((UUID) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
+        onOpenSettings: (() -> Void)? = nil,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil,
         onUpdateProject: ((Project) -> Void)? = nil,
         onReorderProjects: (([UUID]) -> Void)? = nil,
-        pullRequests: [UUID: PullRequestInfo] = [:],
-        isSidebarCollapsed: Bool = false
+        pullRequests: [UUID: PullRequestInfo] = [:]
     ) {
         self.projects = projects
         self.selectedProjectId = selectedProjectId
@@ -80,12 +80,12 @@ public struct SidebarContainerView: View {
         self.onCloseWindow = onCloseWindow
         self.onToggleCollapse = onToggleCollapse
         self.onAddProject = onAddProject
+        self.onOpenSettings = onOpenSettings
         self.onRequestPaneOutput = onRequestPaneOutput
         self.onSendKeys = onSendKeys
         self.onUpdateProject = onUpdateProject
         self.onReorderProjects = onReorderProjects
         self.pullRequests = pullRequests
-        self.isSidebarCollapsed = isSidebarCollapsed
     }
 
     /// Shared Cmd-hold shortcut hint monitor — one instance for the entire sidebar.
@@ -113,12 +113,12 @@ public struct SidebarContainerView: View {
             onCloseWindow: onCloseWindow,
             onToggleCollapse: onToggleCollapse,
             onAddProject: onAddProject,
+            onOpenSettings: onOpenSettings,
             onRequestPaneOutput: onRequestPaneOutput,
             onSendKeys: onSendKeys,
             onUpdateProject: onUpdateProject,
             onReorderProjects: onReorderProjects,
-            pullRequests: pullRequests,
-            isSidebarCollapsed: isSidebarCollapsed
+            pullRequests: pullRequests
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {

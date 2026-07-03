@@ -182,6 +182,16 @@
 "%lldm ago" = "%lld分钟前";
 "%lldh ago" = "%lld小时前";
 "%lldd ago" = "%lld天前";
+"%lldmo ago" = "%lld个月前";
+
+/* Conductor-style sidebar */
+"New workspace" = "新建工作区";
+"Add repository" = "添加仓库";
+"Working…" = "运行中…";
+"Needs input" = "等待输入";
+"Merge conflicts" = "合并冲突";
+"Ready to merge" = "可以合并";
+"error" = "出错";
 
 /* Keyboard Shortcut Settings */
 "Press keys…" = "按下按键…";
@@ -204,6 +214,7 @@
 "Panes" = "面板";
 "Tools" = "工具";
 "Worktrees" = "工作树";
+"Show %lld more" = "显示其余 %lld 个";
 "Other" = "其他";
 "System" = "系统";
 

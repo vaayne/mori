@@ -198,6 +198,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             onAddProject: { [weak self] in
                 self?.showAddProjectPanel()
             },
+            onOpenSettings: { [weak self] in
+                self?.showSettingsWindow()
+            },
             onRequestPaneOutput: { [weak self, weak manager] paneId, completion in
                 guard let self, let manager else {
                     completion(nil)
@@ -297,9 +300,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         companionToolState.width = splitVC.currentCompanionWidth
         splitVC.onCompanionWidthChanged = { [weak self] width in
             self?.companionToolState.width = width
-        }
-        splitVC.onSidebarCollapsedChanged = { [weak sidebarController] isCollapsed in
-            sidebarController?.setSidebarCollapsed(isCollapsed)
         }
         splitVC.updateCompanionPane(state: companionToolState)
 
