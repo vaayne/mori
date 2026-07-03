@@ -389,8 +389,8 @@ public struct WorktreeSidebarView: View {
     // MARK: - Footer
 
     /// Aggregate strip above the footer: one dot + count per agent state
-    /// (waiting / running / error), dimmed when zero. Clicking a state jumps
-    /// to the next workspace in that state, cycling on repeated clicks.
+    /// (waiting / running / error), dimmed when zero. Clicking a state lists
+    /// its workspaces — pick one to jump straight to it.
     private var agentSummaryStrip: some View {
         let ordered = worktreesInDisplayOrder
         let waiting = ordered.filter { $0.agentState == .waitingForInput }
@@ -408,7 +408,13 @@ public struct WorktreeSidebarView: View {
 
     private func summaryIndicator(candidates: [Worktree], state: AgentState, word: String, tint: Color) -> some View {
         let count = candidates.count
-        return Button { jumpToNext(in: candidates, state: state) } label: {
+        return Menu {
+            ForEach(candidates) { worktree in
+                Button { jump(to: worktree, state: state) } label: {
+                    Text(verbatim: menuTitle(for: worktree))
+                }
+            }
+        } label: {
             HStack(spacing: MoriTokens.Spacing.sm) {
                 Circle()
                     .fill(count > 0 ? tint : MoriTokens.Color.inactive.opacity(MoriTokens.Opacity.medium))
@@ -420,21 +426,23 @@ public struct WorktreeSidebarView: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
         .disabled(count == 0)
-        .help(String.localized("Jump to next"))
     }
 
-    /// Cycle to the next workspace whose agent is in `state`, starting after the
-    /// current selection, and land on the matching tmux window inside it.
-    private func jumpToNext(in candidates: [Worktree], state: AgentState) {
-        guard !candidates.isEmpty else { return }
-        var target = candidates[0]
-        if let idx = candidates.firstIndex(where: { $0.id == selectedWorktreeId }) {
-            target = candidates[(idx + 1) % candidates.count]
-        }
-        onSelectWorktree(target.id)
-        if let window = allWindows(for: target).first(where: { $0.agentState == state }) {
+    /// "project · branch" so same-named branches across repos stay distinguishable.
+    private func menuTitle(for worktree: Worktree) -> String {
+        let title = worktree.branch ?? worktree.name
+        guard let project = projects.first(where: { $0.id == worktree.projectId }) else { return title }
+        return "\(project.name) · \(title)"
+    }
+
+    /// Select the workspace and land on the tmux window whose agent is in `state`.
+    private func jump(to worktree: Worktree, state: AgentState) {
+        onSelectWorktree(worktree.id)
+        if let window = allWindows(for: worktree).first(where: { $0.agentState == state }) {
             onSelectWindow(window.tmuxWindowId)
         }
     }
