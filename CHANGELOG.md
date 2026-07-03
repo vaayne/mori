@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-07-03
+
 ### 🎨 Design
 
 - **macOS**: Rebuilt the sidebar in a Conductor-style layout — full-width repo sections with collapse chevrons and hairline dividers, a "+ New workspace" row per repo, and two-line workspace rows showing the branch, a live `+added −removed` line-diff badge against the repo's base branch, and a status line (Working / Needs input / Ready to merge / Merge conflicts / last activity) with a per-workspace ⌘1–9 quick-jump hint. The bottom bar now holds "Add repository" and Settings.
@@ -16,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **macOS**: Redesigned the sidebar as a calm project tree — flat folder-style project list, each expanding into a quiet "Worktrees" group of compact single-line worktree rows. Dropped the attention-inbox sections (filter pills, Needs You / Running, project letter tiles).
 - **macOS**: Collapsing the sidebar (⌘B) now fully hides it instead of leaving a narrow project-icon rail, so the content area takes the whole window.
 - **macOS**: A worktree row shows the working agent's own glyph (Claude Code, Codex, or Pi) in its leading slot while its agent is active — tinted to match the sidebar and breathing to signal live work. Falls back to a generic AI glyph for unrecognized agents.
+
+**Full Changelog**: [v0.5.4...v0.5.5](https://github.com/vaayne/mori/compare/v0.5.4...v0.5.5)
 
 ## [0.5.4] - 2026-06-26
 
