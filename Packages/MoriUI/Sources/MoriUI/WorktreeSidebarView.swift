@@ -61,6 +61,7 @@ public struct WorktreeSidebarView: View {
                 }
                 .padding(.bottom, MoriTokens.Spacing.md)
             }
+            .scrollIndicators(.hidden)
             sidebarFooter
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -216,13 +217,15 @@ public struct WorktreeSidebarView: View {
         if worktree.additions > 0 || worktree.deletions > 0 {
             HStack(spacing: MoriTokens.Spacing.sm) {
                 if worktree.additions > 0 {
-                    Text("+\(worktree.additions)").foregroundStyle(MoriTokens.Color.success)
+                    Text(verbatim: "+\(compactCount(worktree.additions))").foregroundStyle(MoriTokens.Color.success)
                 }
                 if worktree.deletions > 0 {
-                    Text("-\(worktree.deletions)").foregroundStyle(MoriTokens.Color.error)
+                    Text(verbatim: "-\(compactCount(worktree.deletions))").foregroundStyle(MoriTokens.Color.error)
                 }
             }
             .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+            .lineLimit(1)
+            .fixedSize()
             .padding(.horizontal, 5)
             .padding(.vertical, 1.5)
             .background(
@@ -230,6 +233,11 @@ public struct WorktreeSidebarView: View {
                     .stroke(Color.primary.opacity(MoriTokens.Opacity.light), lineWidth: 1)
             )
         }
+    }
+
+    /// Keeps the diff badge narrow on huge branches: 65031 reads as "65k".
+    private func compactCount(_ n: Int) -> String {
+        n >= 10_000 ? "\(n / 1000)k" : "\(n)"
     }
 
     /// Worktree name (when it differs from the branch title) · status, with the
