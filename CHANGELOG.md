@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **macOS**: Fixed a crash when an agent starts running and the sidebar fails to load the agent icon.
+
 ### 🎨 Design
 
 - **MoriRemote**: Host list management — swipe to edit or delete a server, recently connected hosts sort first, and each row shows its default tmux session in the subtitle.

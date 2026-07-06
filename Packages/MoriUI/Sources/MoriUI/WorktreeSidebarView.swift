@@ -589,7 +589,7 @@ private enum AgentIconLoader {
     private static var cache: [String: NSImage] = [:]
     static func image(named name: String) -> NSImage? {
         if let cached = cache[name] { return cached }
-        guard let url = Bundle.module.url(forResource: name, withExtension: "svg"),
+        guard let url = MoriUIResourceBundle.resourceBundle?.url(forResource: name, withExtension: "svg"),
               let image = NSImage(contentsOf: url) else { return nil }
         image.isTemplate = true
         cache[name] = image
