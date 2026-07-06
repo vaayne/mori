@@ -19,6 +19,7 @@
 "Attach Existing tmux Session" = "Attach Existing tmux Session";
 "Attach Session" = "Attach Session";
 "Agent Waiting for Input" = "Agent Waiting for Input";
+"Agent" = "Agent";
 "Branch: %@" = "Branch: %@";
 "CREATE NEW BRANCH" = "CREATE NEW BRANCH";
 "Cancel" = "Cancel";

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **macOS**: Redesigned the command palette visual treatment with a blurred Ghostty-themed container, lighter search chrome, tighter rows, clearer type labels, and stronger keyboard selection focus.
+
 ## [0.5.7] - 2026-07-06
 
 ### 🐛 Bug Fixes

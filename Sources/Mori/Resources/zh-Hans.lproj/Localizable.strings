@@ -19,6 +19,7 @@
 "Attach Existing tmux Session" = "接入已有 tmux 会话";
 "Attach Session" = "接入会话";
 "Agent Waiting for Input" = "代理等待输入";
+"Agent" = "代理";
 "Branch: %@" = "分支:%@";
 "CREATE NEW BRANCH" = "创建新分支";
 "Cancel" = "取消";

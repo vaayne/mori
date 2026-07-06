@@ -25,6 +25,10 @@ final class CommandPaletteController: NSWindowController {
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
     private let containerView = PaletteContainerView()
+    private let blurView = PaletteBlurView()
+    private let tintView = PaletteTintView()
+    private let searchIconView = NSImageView()
+    private let separatorView = PaletteSeparatorView()
     private var themeInfo: GhosttyThemeInfo = .fallback
 
     // MARK: - Presentation Mode
@@ -41,19 +45,24 @@ final class CommandPaletteController: NSWindowController {
 
     private enum Layout {
         static let panelWidth: CGFloat = 520
-        static let searchFieldHeight: CGFloat = 38
-        static let rowHeight: CGFloat = 36
+        static let searchAreaHeight: CGFloat = 48
+        static let searchIconSize: CGFloat = 15
+        static let searchIconLeading: CGFloat = 20
+        static let searchTextSpacing: CGFloat = 9
+        static let separatorHeight: CGFloat = 0.5
+        static let listTopPadding: CGFloat = 4
+        static let listHorizontalInset: CGFloat = 8
+        static let listBottomInset: CGFloat = 8
+        static let rowHeight: CGFloat = 34
         static let maxVisibleRows: Int = 10
-        static let panelPadding: CGFloat = 14
-        static let fieldHorizontalPadding: CGFloat = 18
-        static let cellIconSize: CGFloat = 17
-        static let cellLeadingPadding: CGFloat = 14
-        static let cellSpacing: CGFloat = 8
+        static let cellIconSize: CGFloat = 16
+        static let cellLeadingPadding: CGFloat = 12
+        static let cellSpacing: CGFloat = 10
         static let cellTrailingPadding: CGFloat = 8
         static let titleFontSize: CGFloat = 13
         static let subtitleFontSize: CGFloat = 11
         static let shortcutFontSize: CGFloat = 11
-        static let searchFontSize: CGFloat = 14.5
+        static let searchFontSize: CGFloat = 16
         static let panelTopOffset: CGFloat = 80
     }
 
@@ -121,9 +130,11 @@ final class CommandPaletteController: NSWindowController {
         let appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
         window?.appearance = appearance
         window?.backgroundColor = .clear
-        containerView.themeInfo = themeInfo
+        tintView.themeInfo = themeInfo
+        separatorView.themeInfo = themeInfo
+        searchIconView.contentTintColor = themeInfo.foreground.withAlphaComponent(0.35)
         searchField.textColor = themeInfo.foreground
-        searchField.backgroundColor = themeInfo.foreground.withAlphaComponent(themeInfo.isDark ? 0.06 : 0.08)
+        searchField.backgroundColor = .clear
         searchField.placeholderAttributedString = NSAttributedString(
             string: mode.placeholder,
             attributes: [.foregroundColor: themeInfo.foreground.withAlphaComponent(0.45)]
@@ -155,28 +166,44 @@ final class CommandPaletteController: NSWindowController {
         guard let panel = window else { return }
 
         containerView.translatesAutoresizingMaskIntoConstraints = false
-        containerView.wantsLayer = true
         panel.contentView = containerView
 
+        setupBackground()
         setupSearchField()
         setupTableView()
         layoutViews()
     }
 
+    private func setupBackground() {
+        blurView.translatesAutoresizingMaskIntoConstraints = false
+        blurView.blendingMode = .behindWindow
+        blurView.material = .popover
+        blurView.state = .active
+        containerView.addSubview(blurView)
+
+        tintView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(tintView)
+    }
+
     private func setupSearchField() {
+        searchIconView.translatesAutoresizingMaskIntoConstraints = false
+        searchIconView.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)
+        searchIconView.imageScaling = .scaleProportionallyDown
+        containerView.addSubview(searchIconView)
+
         searchField.translatesAutoresizingMaskIntoConstraints = false
         searchField.placeholderString = Mode.allItems.placeholder
         searchField.font = .systemFont(ofSize: Layout.searchFontSize)
         searchField.isBordered = false
         searchField.focusRingType = .none
-        searchField.drawsBackground = true
-        searchField.wantsLayer = true
-        searchField.layer?.cornerRadius = 10
-        searchField.layer?.masksToBounds = true
+        searchField.drawsBackground = false
         searchField.delegate = self
         searchField.target = self
         searchField.action = #selector(searchFieldAction(_:))
         containerView.addSubview(searchField)
+
+        separatorView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(separatorView)
     }
 
     private func setupTableView() {
@@ -204,15 +231,34 @@ final class CommandPaletteController: NSWindowController {
 
     private func layoutViews() {
         NSLayoutConstraint.activate([
-            searchField.topAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.panelPadding + 10),
-            searchField.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.fieldHorizontalPadding),
-            searchField.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.fieldHorizontalPadding),
-            searchField.heightAnchor.constraint(equalToConstant: Layout.searchFieldHeight),
+            blurView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            blurView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            blurView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            blurView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
 
-            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: Layout.panelPadding),
-            scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.fieldHorizontalPadding),
-            scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.fieldHorizontalPadding),
-            scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -Layout.panelPadding),
+            tintView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            tintView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            tintView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            tintView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+
+            searchIconView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.searchIconLeading),
+            searchIconView.centerYAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.searchAreaHeight / 2),
+            searchIconView.widthAnchor.constraint(equalToConstant: Layout.searchIconSize),
+            searchIconView.heightAnchor.constraint(equalToConstant: Layout.searchIconSize),
+
+            searchField.leadingAnchor.constraint(equalTo: searchIconView.trailingAnchor, constant: Layout.searchTextSpacing),
+            searchField.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.searchIconLeading),
+            searchField.centerYAnchor.constraint(equalTo: searchIconView.centerYAnchor),
+
+            separatorView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.searchAreaHeight),
+            separatorView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            separatorView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            separatorView.heightAnchor.constraint(equalToConstant: Layout.separatorHeight),
+
+            scrollView.topAnchor.constraint(equalTo: separatorView.bottomAnchor, constant: Layout.listTopPadding),
+            scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.listHorizontalInset),
+            scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.listHorizontalInset),
+            scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -Layout.listBottomInset),
         ])
     }
 
@@ -237,8 +283,7 @@ final class CommandPaletteController: NSWindowController {
     private func computePanelHeight() -> CGFloat {
         let visibleRows = min(results.count, Layout.maxVisibleRows)
         let tableHeight = CGFloat(max(visibleRows, 1)) * Layout.rowHeight
-        let topPadding = Layout.panelPadding + 10 + Layout.searchFieldHeight + Layout.panelPadding
-        return topPadding + tableHeight + Layout.panelPadding
+        return Layout.searchAreaHeight + Layout.separatorHeight + Layout.listTopPadding + tableHeight + Layout.listBottomInset
     }
 
     // MARK: - Results
@@ -251,6 +296,10 @@ final class CommandPaletteController: NSWindowController {
 
         if selectedIndex >= 0 {
             tableView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
+        }
+        tableView.noteNumberOfRowsChanged()
+        if selectedIndex >= 0 {
+            tableView.setNeedsDisplay(tableView.rect(ofRow: selectedIndex))
         }
         redrawVisibleRows()
 
@@ -408,11 +457,22 @@ extension CommandPaletteController: NSTableViewDelegate {
             subtitleField.isHidden = item.subtitle == nil
         }
 
-        // Configure shortcut hint (third text field, tag 101)
-        if let shortcutField = cell.viewWithTag(101) as? NSTextField {
-            shortcutField.stringValue = item.shortcutHint ?? ""
-            shortcutField.textColor = themeInfo.foreground.withAlphaComponent(0.45)
-            shortcutField.isHidden = item.shortcutHint == nil
+        // Configure trailing hint (third text field, tag 101)
+        if let hintField = cell.viewWithTag(101) as? NSTextField {
+            if let shortcutHint = item.shortcutHint {
+                hintField.stringValue = shortcutHint
+                hintField.font = .monospacedSystemFont(ofSize: Layout.shortcutFontSize, weight: .regular)
+                hintField.textColor = themeInfo.foreground.withAlphaComponent(0.45)
+                hintField.isHidden = false
+            } else if let typeLabel = item.typeLabel {
+                hintField.stringValue = typeLabel
+                hintField.font = .systemFont(ofSize: Layout.shortcutFontSize)
+                hintField.textColor = themeInfo.foreground.withAlphaComponent(0.4)
+                hintField.isHidden = false
+            } else {
+                hintField.stringValue = ""
+                hintField.isHidden = true
+            }
         }
 
         return cell
@@ -452,13 +512,13 @@ extension CommandPaletteController: NSTableViewDelegate {
         subtitleField.tag = 100
         cell.addSubview(subtitleField)
 
-        let shortcutField = NSTextField(labelWithString: "")
-        shortcutField.translatesAutoresizingMaskIntoConstraints = false
-        shortcutField.font = .monospacedSystemFont(ofSize: Layout.shortcutFontSize, weight: .regular)
-        shortcutField.textColor = themeInfo.foreground.withAlphaComponent(0.45)
-        shortcutField.alignment = .right
-        shortcutField.tag = 101
-        cell.addSubview(shortcutField)
+        let hintField = NSTextField(labelWithString: "")
+        hintField.translatesAutoresizingMaskIntoConstraints = false
+        hintField.font = .monospacedSystemFont(ofSize: Layout.shortcutFontSize, weight: .regular)
+        hintField.textColor = themeInfo.foreground.withAlphaComponent(0.45)
+        hintField.alignment = .right
+        hintField.tag = 101
+        cell.addSubview(hintField)
 
         NSLayoutConstraint.activate([
             imageView.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: Layout.cellLeadingPadding),
@@ -472,40 +532,31 @@ extension CommandPaletteController: NSTableViewDelegate {
             subtitleField.leadingAnchor.constraint(equalTo: titleField.trailingAnchor, constant: Layout.cellSpacing),
             subtitleField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
 
-            shortcutField.leadingAnchor.constraint(greaterThanOrEqualTo: subtitleField.trailingAnchor, constant: Layout.cellSpacing),
-            shortcutField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -Layout.cellTrailingPadding),
-            shortcutField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            hintField.leadingAnchor.constraint(greaterThanOrEqualTo: subtitleField.trailingAnchor, constant: Layout.cellSpacing),
+            hintField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -Layout.cellTrailingPadding),
+            hintField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
         ])
 
         titleField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         subtitleField.setContentCompressionResistancePriority(.defaultLow + 1, for: .horizontal)
-        shortcutField.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        hintField.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
 
         return cell
     }
 }
 
-private final class PaletteSearchField: NSTextField {
-    override class var cellClass: AnyClass? {
-        get { PaletteSearchFieldCell.self }
-        set {}
+private final class PaletteSearchField: NSTextField {}
+
+private final class PaletteContainerView: NSView {}
+
+private final class PaletteBlurView: NSVisualEffectView {
+    override func layout() {
+        super.layout()
+        maskImage = NSImage.roundedMask(size: bounds.size, radius: 14)
     }
 }
 
-private final class PaletteSearchFieldCell: NSTextFieldCell {
-    private let insets = NSSize(width: 12, height: 0)
-
-    override func drawingRect(forBounds rect: NSRect) -> NSRect {
-        super.drawingRect(forBounds: rect).insetBy(dx: insets.width, dy: insets.height)
-    }
-
-
-    override func titleRect(forBounds rect: NSRect) -> NSRect {
-        super.titleRect(forBounds: rect).insetBy(dx: insets.width, dy: insets.height)
-    }
-}
-
-private final class PaletteContainerView: NSView {
+private final class PaletteTintView: NSView {
     var themeInfo: GhosttyThemeInfo = .fallback {
         didSet { needsDisplay = true }
     }
@@ -515,12 +566,39 @@ private final class PaletteContainerView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         let bounds = bounds.insetBy(dx: 0.5, dy: 0.5)
-        let path = NSBezierPath(roundedRect: bounds, xRadius: 18, yRadius: 18)
-        themeInfo.background.withAlphaComponent(themeInfo.isDark ? 0.96 : 0.98).setFill()
+        let path = NSBezierPath(roundedRect: bounds, xRadius: 14, yRadius: 14)
+        themeInfo.background.withAlphaComponent(themeInfo.isDark ? 0.55 : 0.65).setFill()
         path.fill()
         themeInfo.foreground.withAlphaComponent(themeInfo.isDark ? 0.14 : 0.10).setStroke()
         path.lineWidth = 1
         path.stroke()
+    }
+}
+
+private final class PaletteSeparatorView: NSView {
+    var themeInfo: GhosttyThemeInfo = .fallback {
+        didSet { needsDisplay = true }
+    }
+
+    override var wantsUpdateLayer: Bool { false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        themeInfo.foreground.withAlphaComponent(themeInfo.isDark ? 0.12 : 0.08).setFill()
+        dirtyRect.fill()
+    }
+}
+
+private extension NSImage {
+    static func roundedMask(size: NSSize, radius: CGFloat) -> NSImage {
+        let image = NSImage(size: size)
+        image.lockFocus()
+        NSColor.black.setFill()
+        NSBezierPath(roundedRect: NSRect(origin: .zero, size: size), xRadius: radius, yRadius: radius).fill()
+        image.unlockFocus()
+        image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
+        image.resizingMode = .stretch
+        return image
     }
 }
 
@@ -531,10 +609,10 @@ private final class PaletteCellView: NSTableCellView {
 
     override func draw(_ dirtyRect: NSRect) {
         if isSelectedRow {
-            let selectionRect = bounds.insetBy(dx: 0, dy: 3)
-            let path = NSBezierPath(roundedRect: selectionRect, xRadius: 9, yRadius: 9)
+            let selectionRect = bounds.insetBy(dx: 0, dy: 2)
+            let path = NSBezierPath(roundedRect: selectionRect, xRadius: 8, yRadius: 8)
             let accent = NSColor.controlAccentColor.usingColorSpace(.sRGB) ?? .controlAccentColor
-            accent.withAlphaComponent(themeInfo.isDark ? 0.34 : 0.22).setFill()
+            accent.withAlphaComponent(themeInfo.isDark ? 0.4 : 0.28).setFill()
             path.fill()
         }
         super.draw(dirtyRect)

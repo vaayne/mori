@@ -27,14 +27,11 @@ enum CommandPaletteItem: Sendable {
     var subtitle: String? {
         switch self {
         case .project:
-            return .localized("Project")
+            return nil
         case .worktree(_, _, _, let branch):
-            return branch.map { .localized("Branch: \($0)") } ?? .localized("Worktree")
-        case .window(_, _, _, let tag):
-            if let tag {
-                return .localized("Window (\(tag.rawValue))")
-            }
-            return .localized("Window")
+            return branch
+        case .window:
+            return nil
         case .agent(_, _, let context, let state):
             let stateLabel = switch state {
             case .running: String.localized("Running")
@@ -46,6 +43,24 @@ enum CommandPaletteItem: Sendable {
             return context.isEmpty ? stateLabel : "\(context) — \(stateLabel)"
         case .action(_, _, let subtitle):
             return subtitle
+        }
+    }
+
+    var typeLabel: String? {
+        switch self {
+        case .project:
+            return .localized("Project")
+        case .worktree:
+            return .localized("Worktree")
+        case .window(_, _, _, let tag):
+            if let tag {
+                return .localized("Window (\(tag.rawValue))")
+            }
+            return .localized("Window")
+        case .agent:
+            return .localized("Agent")
+        case .action:
+            return nil
         }
     }
 
