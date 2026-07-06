@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [0.5.7] - 2026-07-06
+
+### 🐛 Bug Fixes
 
 - **macOS**: Fixed a crash when an agent starts running and the sidebar fails to load the agent icon.
 
@@ -15,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **MoriRemote**: Host list management — swipe to edit or delete a server, recently connected hosts sort first, and each row shows its default tmux session in the subtitle.
 - **MoriRemote**: Redesigned the mobile workspace around agent-first triage, with a project/session landing page, actionable agent status chips, a slim terminal top bar, in-terminal window chips, a quick workspace sheet, and a keyboard selection-mode toggle for native text copy.
+
+### 📦 Dependencies
+
+- Updated libghostty (`vendor/ghostty` submodule) to upstream `b213a72c0`, bringing roughly 590 upstream stability and correctness fixes.
+
+**Full Changelog**: [v0.5.6...v0.5.7](https://github.com/vaayne/mori/compare/v0.5.6...v0.5.7)
+
 ## [0.5.6] - 2026-07-03
 
 ### 🎨 Design

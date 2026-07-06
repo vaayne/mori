@@ -7,7 +7,9 @@
 
 ## [Unreleased]
 
-### 修复
+## [0.5.7] - 2026-07-06
+
+### 🐛 问题修复
 
 - **macOS**：修复 agent 开始运行时侧栏 agent 图标加载失败导致 app 崩溃的问题。
 
@@ -15,6 +17,13 @@
 
 - **MoriRemote**：Hosts 列表管理优化 — 服务器行支持左右滑动编辑 / 删除，最近连接的主机排在最前，副标题显示默认 tmux 会话。
 - **MoriRemote**：移动端工作区改为 agent-first triage 首页，按项目 / 会话展示可点击的 agent 状态 chip，并加入轻量终端顶部栏、终端内 window chips、快速切换工作区 sheet，以及用于原生复制的键盘选择模式开关。
+
+### 📦 依赖
+
+- 更新 libghostty（`vendor/ghostty` 子模块）到上游 `b213a72c0`，带来约 590 个上游提交的稳定性与正确性修复。
+
+**完整变更**：[v0.5.6...v0.5.7](https://github.com/vaayne/mori/compare/v0.5.6...v0.5.7)
+
 ## [0.5.6] - 2026-07-03
 
 ### 🎨 界面优化
