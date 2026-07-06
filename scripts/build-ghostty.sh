@@ -212,6 +212,16 @@ pub fn init(
     deps: *const SharedDeps,
     target: Target,
 ) !GhosttyXCFramework {
+    // Generate a headers directory with only ghostty.h and the module
+    // map. We can't use include/ directly because it also contains the
+    // libghostty-vt headers under include/ghostty/, which would trigger
+    // "umbrella header does not include header" warnings from Clang's
+    // module system.
+    const wf = b.addWriteFiles();
+    _ = wf.addCopyFile(b.path("include/ghostty.h"), "ghostty.h");
+    _ = wf.addCopyFile(b.path("include/module.modulemap"), "module.modulemap");
+    const headers = wf.getDirectory();
+
     const xcframework = switch (target) {
         .universal => blk: {
             const macos_universal = try GhosttyLib.initMacOSUniversal(b, deps);
@@ -240,17 +250,17 @@ pub fn init(
                 .libraries = &.{
                     .{
                         .library = macos_universal.output,
-                        .headers = b.path("include"),
+                        .headers = headers,
                         .dsym = macos_universal.dsym,
                     },
                     .{
                         .library = ios.output,
-                        .headers = b.path("include"),
+                        .headers = headers,
                         .dsym = ios.dsym,
                     },
                     .{
                         .library = ios_sim.output,
-                        .headers = b.path("include"),
+                        .headers = headers,
                         .dsym = ios_sim.dsym,
                     },
                 },
@@ -266,7 +276,7 @@ pub fn init(
                 .out_path = "macos/GhosttyKit.xcframework",
                 .libraries = &.{.{
                     .library = macos_native.output,
-                    .headers = b.path("include"),
+                    .headers = headers,
                     .dsym = macos_native.dsym,
                 }},
             });
