@@ -10,6 +10,7 @@ mise run build:release   # Release build
 mise run dev             # Build + run the app
 mise run test            # All tests (parallel across packages)
 mise run test:core       # MoriCore tests only
+mise run test:git        # MoriGit tests only
 mise run test:persistence # MoriPersistence tests only
 mise run test:tmux       # MoriTmux tests only
 mise run test:ipc        # MoriIPC tests only

@@ -39,10 +39,13 @@ swift build -c release --product Mori 2>&1 | xcbeautify
 
 [tasks.test]
 description = "Run all tests"
-depends = ["test:core", "test:persistence", "test:tmux", "test:ipc", "test:keybindings"]
+depends = ["test:core", "test:persistence", "test:tmux", "test:ipc", "test:keybindings", "test:git"]
 
 [tasks."test:core"]
 run = "cd Packages/MoriCore && swift run MoriCoreTests"
+
+[tasks."test:git"]
+run = "cd Packages/MoriGit && swift run MoriGitTests"
 
 [tasks."test:persistence"]
 run = "cd Packages/MoriPersistence && swift run MoriPersistenceTests"
