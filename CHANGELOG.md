@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **macOS**: Moved the sidebar's "New workspace" and overflow ("…") actions into the project header as hover-revealed icons next to the collapse chevron, removing the separate row beneath each project. The icons stay visible for projects with no workspaces yet.
 - **macOS**: Redesigned the command palette visual treatment with a blurred Ghostty-themed container, lighter search chrome, tighter rows, clearer type labels, and stronger keyboard selection focus.
 
 ## [0.5.7] - 2026-07-06

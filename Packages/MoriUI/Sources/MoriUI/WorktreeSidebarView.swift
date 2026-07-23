@@ -2,10 +2,10 @@ import SwiftUI
 import AppKit
 import MoriCore
 
-/// Conductor-style sidebar: full-width repo sections separated by hairlines,
-/// each expanding into a "+ New workspace" row and two-line workspace rows
-/// (branch + diff badge, then worktree name · status + ⌘N). A bottom bar holds
-/// "Add repository" and settings.
+/// Conductor-style sidebar: full-width repo sections separated by hairlines.
+/// Each header carries hover-revealed new-workspace / overflow accessories and
+/// expands into two-line workspace rows (branch + diff badge, then worktree
+/// name · status + ⌘N). A bottom bar holds "Add repository" and settings.
 public struct WorktreeSidebarView: View {
     private let projects: [Project]
     private let selectedProjectId: UUID?
@@ -133,7 +133,6 @@ public struct WorktreeSidebarView: View {
             }
             projectHeader(project)
             if !project.isCollapsed {
-                newWorkspaceRow(project)
                 worktreesGroup(project)
                     .padding(.bottom, MoriTokens.Spacing.md)
             }
@@ -145,10 +144,16 @@ public struct WorktreeSidebarView: View {
         .contextMenu { projectActions(project) }
     }
 
-    /// Repo name with a trailing chevron, Conductor-style. Tap toggles the
-    /// section open/closed; an aggregate dot flags attention while collapsed.
+    /// Repo name with hover-revealed accessories (new workspace, overflow menu)
+    /// and a trailing chevron, Conductor-style. Tap toggles the section
+    /// open/closed; an aggregate dot flags attention while collapsed.
+    ///
+    /// Accessories fade via opacity (not conditional insertion) so the chevron
+    /// never shifts; they stay visible for a project with no workspaces, where
+    /// hover-only would make the create entry point undiscoverable.
     private func projectHeader(_ project: Project) -> some View {
         let agg = aggregateState(for: project)
+        let revealAccessories = hoveredProjectId == project.id || visibleWorktrees(for: project).isEmpty
         return HStack(spacing: MoriTokens.Spacing.md) {
             Text(project.name)
                 .font(.system(size: 13.5, weight: .semibold))
@@ -159,6 +164,24 @@ public struct WorktreeSidebarView: View {
             if project.isCollapsed, agg == .waiting || agg == .error {
                 Circle().fill(agg == .error ? MoriTokens.Color.error : MoriTokens.Color.attention).frame(width: 7, height: 7)
             }
+            if onShowCreatePanel != nil {
+                Button { onSelectProject?(project.id); onShowCreatePanel?() } label: {
+                    Image(systemName: "plus")
+                        .font(MoriTokens.Font.sidebarAccessory)
+                        .foregroundStyle(MoriTokens.Color.muted)
+                        .frame(width: MoriTokens.Size.sidebarAccessory)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(String.localized("New Workspace"))
+                .opacity(revealAccessories ? 1 : 0)
+            }
+            Menu { projectActions(project) } label: {
+                Image(systemName: "ellipsis").font(MoriTokens.Font.sidebarAccessory).foregroundStyle(MoriTokens.Color.muted)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden)
+            .frame(width: MoriTokens.Size.sidebarAccessory)
+            .opacity(revealAccessories ? 1 : 0)
             Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down")
                 .font(MoriTokens.Font.sidebarChevron)
                 .foregroundStyle(MoriTokens.Color.muted)
@@ -168,32 +191,6 @@ public struct WorktreeSidebarView: View {
         .padding(.bottom, MoriTokens.Spacing.lg)
         .contentShape(Rectangle())
         .onTapGesture { onToggleCollapse?(project.id); onSelectProject?(project.id) }
-    }
-
-    /// "+ New workspace" with a trailing overflow menu carrying project actions.
-    @ViewBuilder
-    private func newWorkspaceRow(_ project: Project) -> some View {
-        if onShowCreatePanel != nil {
-            HStack(spacing: MoriTokens.Spacing.md) {
-                Button { onSelectProject?(project.id); onShowCreatePanel?() } label: {
-                    HStack(spacing: MoriTokens.Spacing.md) {
-                        Image(systemName: "plus").font(.system(size: 11, weight: .medium)).frame(width: 15)
-                        Text("New workspace").font(.system(size: 13))
-                        Spacer(minLength: 0)
-                    }
-                    .foregroundStyle(MoriTokens.Color.muted)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                Menu { projectActions(project) } label: {
-                    Image(systemName: "ellipsis").font(MoriTokens.Font.sidebarAccessory).foregroundStyle(MoriTokens.Color.muted)
-                }
-                .menuStyle(.borderlessButton).menuIndicator(.hidden)
-                .frame(width: MoriTokens.Size.sidebarAccessory)
-            }
-            .padding(.horizontal, MoriTokens.Spacing.xl)
-            .padding(.vertical, MoriTokens.Spacing.sm)
-        }
     }
 
     @ViewBuilder
@@ -540,7 +537,7 @@ public struct WorktreeSidebarView: View {
     private func reorder(dragged: String?, before project: Project) -> Bool { guard let s = dragged, let draggedId = UUID(uuidString: s), draggedId != project.id else { dropTargetProjectId = nil; return false }; if var draggedProject = projects.first(where: { $0.id == draggedId }), draggedProject.isFavorite != project.isFavorite { draggedProject.isFavorite = project.isFavorite; onUpdateProject?(draggedProject) }; var ids = projects.map(\.id); guard let from = ids.firstIndex(of: draggedId), let to = ids.firstIndex(of: project.id) else { return false }; ids.remove(at: from); ids.insert(draggedId, at: to); onReorderProjects?(ids); dropTargetProjectId = nil; draggingProjectId = nil; return true }
 
     @ViewBuilder private func projectActions(_ project: Project, allowNewWorkspace: Bool = true) -> some View {
-        if allowNewWorkspace, !project.isCollapsed, onShowCreatePanel != nil { Button { onSelectProject?(project.id); onShowCreatePanel?() } label: { Label("New Workspace…", systemImage: "plus") } }
+        if allowNewWorkspace, onShowCreatePanel != nil { Button { onSelectProject?(project.id); onShowCreatePanel?() } label: { Label("New Workspace…", systemImage: "plus") } }
         let editors = EditorLauncher.installed; if !editors.isEmpty { Divider(); ForEach(editors) { editor in Button { editor.open(path: project.repoRootPath) } label: { Label("Open in \(editor.name)", systemImage: editor.icon) } } }
         Divider(); Button { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.repoRootPath) } label: { Label("Reveal in Finder", systemImage: "folder") }
         Divider(); Button { renameText = project.name; renamingProjectId = project.id } label: { Label("Rename Project…", systemImage: "pencil") }
