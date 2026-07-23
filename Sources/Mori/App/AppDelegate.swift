@@ -747,6 +747,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 return try await manager.listBranches(projectId: projectId, repoPathHint: repoPath)
             }
 
+            controller.fetchGitHubItems = { [weak manager] projectId, repoPath in
+                guard let manager else { return [] }
+                return await manager.fetchGitHubWorkItems(projectId: projectId, repoPath: repoPath)
+            }
+
             controller.onCreateWorktree = { [weak manager] request in
                 guard let manager else { return }
                 Task { @MainActor in

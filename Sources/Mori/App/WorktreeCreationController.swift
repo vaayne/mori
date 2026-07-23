@@ -24,6 +24,10 @@ final class WorktreeCreationController: NSWindowController {
     /// Called to fetch branches asynchronously.
     var fetchBranches: ((_ projectId: UUID, _ repoPath: String) async throws -> [GitBranchInfo])?
 
+    /// Called to prefetch open GitHub issues + PRs for the `#` picker.
+    /// Returns `[]` for remote/SSH projects (gh is local-only).
+    var fetchGitHubItems: ((_ projectId: UUID, _ repoPath: String) async -> [GitHubWorkItem])?
+
     /// Called when the user switches projects in the popup.
     var onProjectChanged: ((UUID) -> Void)?
 
@@ -36,6 +40,13 @@ final class WorktreeCreationController: NSWindowController {
     private var fetchGeneration: Int = 0
     nonisolated(unsafe) private var localEventMonitor: Any?
 
+    // GitHub `#` picker state.
+    private var githubItems: [GitHubWorkItem] = []
+    private var filteredItems: [GitHubWorkItem] = []
+    private var githubFetchGeneration: Int = 0
+    private var githubModeActive: Bool = false
+    private var selectedSuggestionIndex: Int = -1
+
     // MARK: - Views
 
     private let branchNameField = NSTextField()
@@ -44,6 +55,12 @@ final class WorktreeCreationController: NSWindowController {
     private let baseBranchPopup = NSPopUpButton()
     private let createHintLabel = NSTextField(labelWithString: "")
     private let containerView = NSView()
+
+    // Suggestions list (GitHub `#` picker).
+    private let suggestionsScrollView = NSScrollView()
+    private let suggestionsTable = NSTableView()
+    private var suggestionsTopConstraint: NSLayoutConstraint!
+    private var suggestionsHeightConstraint: NSLayoutConstraint!
 
     // MARK: - Layout Constants
 
@@ -62,6 +79,12 @@ final class WorktreeCreationController: NSWindowController {
         static let panelHeight: CGFloat = 82
 
         static let panelTopOffset: CGFloat = 80
+
+        // Suggestions list.
+        static let suggestionsTopGap: CGFloat = 6
+        static let suggestionRowHeight: CGFloat = 26
+        static let maxVisibleSuggestions = 8
+        static let suggestionsBottomPadding: CGFloat = 8
     }
 
     // MARK: - Init
@@ -120,6 +143,7 @@ final class WorktreeCreationController: NSWindowController {
 
         branchNameField.stringValue = ""
         dataSource = nil
+        exitGitHubMode()
 
         applyTheme(themeInfo)
         populateProjectPopup()
@@ -130,6 +154,7 @@ final class WorktreeCreationController: NSWindowController {
         window?.makeFirstResponder(branchNameField)
 
         fetchBranchesAsync(repoPath: repoPath)
+        fetchGitHubItemsAsync(repoPath: repoPath)
     }
 
     /// Lightweight refresh when the user switches projects — re-fetches branches
@@ -145,11 +170,13 @@ final class WorktreeCreationController: NSWindowController {
 
         branchNameField.stringValue = ""
         dataSource = nil
+        exitGitHubMode()
 
         populateProjectPopup()
         resetBaseBranchPopup()
 
         fetchBranchesAsync(repoPath: repoPath)
+        fetchGitHubItemsAsync(repoPath: repoPath)
     }
 
     func dismiss() {
@@ -188,7 +215,36 @@ final class WorktreeCreationController: NSWindowController {
 
         setupBranchNameField()
         setupToolbarRow()
+        setupSuggestionsList()
         layoutViews()
+    }
+
+    private func setupSuggestionsList() {
+        suggestionsTable.translatesAutoresizingMaskIntoConstraints = false
+        suggestionsTable.headerView = nil
+        suggestionsTable.backgroundColor = .clear
+        suggestionsTable.rowHeight = Layout.suggestionRowHeight
+        suggestionsTable.intercellSpacing = NSSize(width: 0, height: 0)
+        suggestionsTable.selectionHighlightStyle = .regular
+        suggestionsTable.allowsEmptySelection = true
+        suggestionsTable.allowsMultipleSelection = false
+        suggestionsTable.gridStyleMask = []
+        suggestionsTable.dataSource = self
+        suggestionsTable.delegate = self
+        suggestionsTable.target = self
+        suggestionsTable.action = #selector(suggestionRowClicked(_:))
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("suggestion"))
+        column.resizingMask = .autoresizingMask
+        suggestionsTable.addTableColumn(column)
+
+        suggestionsScrollView.translatesAutoresizingMaskIntoConstraints = false
+        suggestionsScrollView.documentView = suggestionsTable
+        suggestionsScrollView.hasVerticalScroller = true
+        suggestionsScrollView.drawsBackground = false
+        suggestionsScrollView.borderType = .noBorder
+        suggestionsScrollView.automaticallyAdjustsContentInsets = false
+        suggestionsScrollView.isHidden = true
+        containerView.addSubview(suggestionsScrollView)
     }
 
     private func setupKeyEventMonitor() {
@@ -275,6 +331,14 @@ final class WorktreeCreationController: NSWindowController {
     // MARK: - Layout
 
     private func layoutViews() {
+        // The toolbar is NOT pinned to the container bottom: the panel frame has a
+        // fixed height, so pinning would fight the downward growth of the
+        // suggestions list. Vertical positions flow from the top instead.
+        suggestionsTopConstraint = suggestionsScrollView.topAnchor.constraint(
+            equalTo: toolbarContainer.bottomAnchor, constant: 0
+        )
+        suggestionsHeightConstraint = suggestionsScrollView.heightAnchor.constraint(equalToConstant: 0)
+
         NSLayoutConstraint.activate([
             // Branch name field
             branchNameField.topAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.branchNameTopPadding),
@@ -287,7 +351,12 @@ final class WorktreeCreationController: NSWindowController {
             toolbarContainer.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             toolbarContainer.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
             toolbarContainer.heightAnchor.constraint(equalToConstant: Layout.toolbarHeight),
-            toolbarContainer.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -Layout.bottomPadding),
+
+            // Suggestions list (below the toolbar; height/gap toggled at runtime)
+            suggestionsTopConstraint,
+            suggestionsScrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.panelPaddingH),
+            suggestionsScrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.panelPaddingH),
+            suggestionsHeightConstraint,
         ])
     }
 
@@ -337,6 +406,25 @@ final class WorktreeCreationController: NSWindowController {
         }
     }
 
+    /// Prefetch issues + PRs for the `#` picker. Uses the same generation-counter
+    /// staleness guard as branch fetching so a slow response from a previously
+    /// selected project can't clobber the current one.
+    private func fetchGitHubItemsAsync(repoPath: String) {
+        githubItems = []
+        githubFetchGeneration += 1
+        let currentGeneration = githubFetchGeneration
+        Task { [weak self] in
+            guard let self, let projectId = self.selectedProjectId else { return }
+            let items = await self.fetchGitHubItems?(projectId, repoPath) ?? []
+            guard self.githubFetchGeneration == currentGeneration else { return }
+            self.githubItems = items
+            // If the user already typed `#` before the fetch landed, re-filter.
+            if self.githubModeActive {
+                self.filterSuggestions(query: self.currentGitHubQuery())
+            }
+        }
+    }
+
     // MARK: - Populate Popups
 
     private func populateProjectPopup() {
@@ -370,6 +458,15 @@ final class WorktreeCreationController: NSWindowController {
     // MARK: - Confirm
 
     private func confirmInput() {
+        // In `#` picker mode, Enter/Cmd+Enter confirms the highlighted
+        // suggestion (if any) rather than creating a literal `#…` branch.
+        if githubModeActive {
+            if let item = currentSelectedItem() {
+                confirmSuggestion(item)
+            }
+            return
+        }
+
         let branchText = branchNameField.stringValue.trimmingCharacters(in: .whitespaces)
         guard !branchText.isEmpty else { return }
 
@@ -401,6 +498,170 @@ final class WorktreeCreationController: NSWindowController {
         return dataSource?.defaultBaseBranch ?? Self.fallbackBranch
     }
 
+    // MARK: - GitHub Picker
+
+    /// The text after the leading `#`, used to filter suggestions.
+    private func currentGitHubQuery() -> String {
+        let text = branchNameField.stringValue
+        guard text.hasPrefix("#") else { return "" }
+        return String(text.dropFirst())
+    }
+
+    private func currentSelectedItem() -> GitHubWorkItem? {
+        guard selectedSuggestionIndex >= 0, selectedSuggestionIndex < filteredItems.count else {
+            return nil
+        }
+        return filteredItems[selectedSuggestionIndex]
+    }
+
+    /// React to text changes: recognize a pasted GitHub URL, enter/leave `#`
+    /// picker mode, and filter suggestions.
+    private func handleTextChange() {
+        let text = branchNameField.stringValue
+
+        if let (kind, number) = GitHubWorkItem.parseURL(text) {
+            handleURLSelection(kind: kind, number: number)
+            return
+        }
+
+        if text.hasPrefix("#") {
+            githubModeActive = true
+            filterSuggestions(query: currentGitHubQuery())
+        } else {
+            exitGitHubMode()
+        }
+    }
+
+    private func filterSuggestions(query: String) {
+        let q = query.lowercased()
+        filteredItems = githubItems.filter { item in
+            if q.isEmpty { return true }
+            return "\(item.number)".hasPrefix(q) || item.title.lowercased().contains(q)
+        }
+        selectedSuggestionIndex = filteredItems.isEmpty ? -1 : 0
+        suggestionsTable.reloadData()
+        applySuggestionSelection()
+        updateSuggestionsLayout()
+    }
+
+    private func exitGitHubMode() {
+        githubModeActive = false
+        filteredItems = []
+        selectedSuggestionIndex = -1
+        suggestionsTable.reloadData()
+        updateSuggestionsLayout()
+    }
+
+    /// Grow/collapse the panel to fit the visible suggestion rows, keeping the
+    /// panel's top edge fixed (AppKit frames are bottom-left origin).
+    private func updateSuggestionsLayout() {
+        let rowCount = filteredItems.count
+        let visible = min(rowCount, Layout.maxVisibleSuggestions)
+        let listHeight = githubModeActive && rowCount > 0
+            ? CGFloat(visible) * Layout.suggestionRowHeight
+            : 0
+
+        suggestionsScrollView.isHidden = (listHeight == 0)
+        suggestionsHeightConstraint.constant = listHeight
+        suggestionsTopConstraint.constant = listHeight > 0 ? Layout.suggestionsTopGap : 0
+
+        let extra = listHeight > 0
+            ? Layout.suggestionsTopGap + listHeight + Layout.suggestionsBottomPadding
+            : 0
+        setPanelHeight(Layout.panelHeight + extra)
+    }
+
+    /// Resize the panel to `height` while pinning its top edge (max Y).
+    private func setPanelHeight(_ height: CGFloat) {
+        guard let panel = window else { return }
+        let frame = panel.frame
+        guard abs(frame.height - height) > 0.5 else { return }
+        let newFrame = NSRect(
+            x: frame.origin.x,
+            y: frame.maxY - height,
+            width: frame.width,
+            height: height
+        )
+        panel.setFrame(newFrame, display: true)
+    }
+
+    private func applySuggestionSelection() {
+        guard selectedSuggestionIndex >= 0, selectedSuggestionIndex < filteredItems.count else {
+            suggestionsTable.deselectAll(nil)
+            return
+        }
+        suggestionsTable.selectRowIndexes(
+            IndexSet(integer: selectedSuggestionIndex),
+            byExtendingSelection: false
+        )
+        suggestionsTable.scrollRowToVisible(selectedSuggestionIndex)
+    }
+
+    private func moveSuggestionSelection(by delta: Int) {
+        guard !filteredItems.isEmpty else { return }
+        let count = filteredItems.count
+        var next = (selectedSuggestionIndex < 0 ? 0 : selectedSuggestionIndex) + delta
+        next = max(0, min(count - 1, next))
+        selectedSuggestionIndex = next
+        applySuggestionSelection()
+    }
+
+    /// Confirm a picked issue/PR — creates immediately (no second confirm).
+    private func confirmSuggestion(_ item: GitHubWorkItem) {
+        dismiss()
+        switch item.kind {
+        case .issue:
+            let branch = GitHubWorkItem.issueBranchName(number: item.number, title: item.title)
+            onCreateWorktree?(WorktreeCreationRequest(
+                branchName: branch,
+                isNewBranch: true,
+                baseBranch: selectedBaseBranch(),
+                origin: .issue(number: item.number)
+            ))
+        case .pullRequest:
+            let headRef = item.headRefName ?? ""
+            onCreateWorktree?(WorktreeCreationRequest(
+                branchName: headRef.isEmpty ? "pr-\(item.number)" : headRef,
+                isNewBranch: false,
+                baseBranch: nil,
+                origin: .pullRequest(number: item.number, headRef: headRef)
+            ))
+        }
+    }
+
+    /// Handle a pasted GitHub URL. Match the prefetched list first; otherwise an
+    /// issue falls back to `issue-<n>` and a PR is resolved downstream via
+    /// `gh pr view` (empty headRef signals the manager to resolve it).
+    private func handleURLSelection(kind: GitHubWorkItem.Kind, number: Int) {
+        if let item = githubItems.first(where: { $0.kind == kind && $0.number == number }) {
+            confirmSuggestion(item)
+            return
+        }
+        dismiss()
+        switch kind {
+        case .issue:
+            onCreateWorktree?(WorktreeCreationRequest(
+                branchName: GitHubWorkItem.issueBranchName(number: number, title: ""),
+                isNewBranch: true,
+                baseBranch: selectedBaseBranch(),
+                origin: .issue(number: number)
+            ))
+        case .pullRequest:
+            onCreateWorktree?(WorktreeCreationRequest(
+                branchName: "pr-\(number)",
+                isNewBranch: false,
+                baseBranch: nil,
+                origin: .pullRequest(number: number, headRef: "")
+            ))
+        }
+    }
+
+    @objc private func suggestionRowClicked(_ sender: NSTableView) {
+        let row = sender.clickedRow
+        guard row >= 0, row < filteredItems.count else { return }
+        confirmSuggestion(filteredItems[row])
+    }
+
     // MARK: - Actions
 
     @objc private func branchNameAction(_ sender: NSTextField) {
@@ -422,8 +683,25 @@ final class WorktreeCreationController: NSWindowController {
 
 extension WorktreeCreationController: NSTextFieldDelegate {
 
+    func controlTextDidChange(_ obj: Notification) {
+        guard (obj.object as AnyObject) === branchNameField else { return }
+        handleTextChange()
+    }
+
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         guard control === branchNameField else { return false }
+
+        // Arrow keys drive the suggestion selection while in `#` picker mode.
+        if githubModeActive {
+            if commandSelector == #selector(NSResponder.moveUp(_:)) {
+                moveSuggestionSelection(by: -1)
+                return true
+            }
+            if commandSelector == #selector(NSResponder.moveDown(_:)) {
+                moveSuggestionSelection(by: 1)
+                return true
+            }
+        }
 
         if commandSelector == #selector(NSResponder.insertNewline(_:)) {
             confirmInput()
@@ -438,5 +716,81 @@ extension WorktreeCreationController: NSTextFieldDelegate {
             return true
         }
         return false
+    }
+}
+
+// MARK: - Suggestions Table
+
+extension WorktreeCreationController: NSTableViewDataSource, NSTableViewDelegate {
+
+    func numberOfRows(in tableView: NSTableView) -> Int {
+        filteredItems.count
+    }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        guard row >= 0, row < filteredItems.count else { return nil }
+        return makeSuggestionCell(for: filteredItems[row])
+    }
+
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+        true
+    }
+
+    /// Keep the model's selection index in sync with mouse-driven selection.
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        let row = suggestionsTable.selectedRow
+        if row >= 0, row < filteredItems.count {
+            selectedSuggestionIndex = row
+        }
+    }
+
+    private func makeSuggestionCell(for item: GitHubWorkItem) -> NSView {
+        let cell = NSTableCellView()
+
+        let icon = NSImageView()
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        let symbol = item.kind == .issue ? "smallcircle.filled.circle" : "arrow.triangle.pull"
+        icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        icon.contentTintColor = .secondaryLabelColor
+        icon.imageScaling = .scaleProportionallyDown
+
+        let numberLabel = NSTextField(labelWithString: "#\(item.number)")
+        numberLabel.translatesAutoresizingMaskIntoConstraints = false
+        numberLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        numberLabel.textColor = .secondaryLabelColor
+        numberLabel.setContentHuggingPriority(.required, for: .horizontal)
+        numberLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let titleLabel = NSTextField(labelWithString: item.title)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.font = .systemFont(ofSize: 12)
+        titleLabel.textColor = .labelColor
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.cell?.truncatesLastVisibleLine = true
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let stack = NSStackView(views: [icon, numberLabel, titleLabel])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 6
+
+        if item.kind == .pullRequest, item.isDraft {
+            let draftLabel = NSTextField(labelWithString: .localized("Draft"))
+            draftLabel.font = .systemFont(ofSize: 11)
+            draftLabel.textColor = .tertiaryLabelColor
+            draftLabel.setContentHuggingPriority(.required, for: .horizontal)
+            draftLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+            stack.addArrangedSubview(draftLabel)
+        }
+
+        cell.addSubview(stack)
+        NSLayoutConstraint.activate([
+            icon.widthAnchor.constraint(equalToConstant: 14),
+            stack.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
+            stack.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
+            stack.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+        ])
+        return cell
     }
 }

@@ -11,6 +11,30 @@ actor GitHubBackend {
     /// Fields requested from `gh pr view --json`. Kept in sync with `PullRequestInfo.parse`.
     private static let jsonFields = "number,title,url,state,isDraft,reviewDecision,statusCheckRollup"
 
+    /// Fields requested for the work-item picker (issue/PR list + single PR view).
+    private static let workItemFields = "number,title,headRefName,isDraft"
+
+    /// Errors from write-side gh operations that must fail loudly (checkout).
+    enum GitHubBackendError: Error, LocalizedError {
+        case ghUnavailable
+        case launchFailed
+        case commandFailed(stderr: String)
+
+        var errorDescription: String? {
+            switch self {
+            case .ghUnavailable:
+                return .localized("GitHub CLI (gh) was not found. Install it to work from an issue or PR.")
+            case .launchFailed:
+                return .localized("Failed to launch the GitHub CLI (gh).")
+            case .commandFailed(let stderr):
+                let detail = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                return detail.isEmpty
+                    ? .localized("The GitHub CLI (gh) command failed.")
+                    : String(format: .localized("The GitHub CLI (gh) command failed:\n\n%@"), detail)
+            }
+        }
+    }
+
     /// Fetch the PR for `branch` in the repo at `directory`. Returns nil when
     /// there is no open PR for the branch or gh is unavailable.
     func pullRequest(forBranch branch: String, directory: String) async -> PullRequestInfo? {
@@ -22,6 +46,62 @@ actor GitHubBackend {
         )
         guard let result, result.exitCode == 0 else { return nil }
         return PullRequestInfo.parse(jsonData: Data(result.stdout.utf8))
+    }
+
+    /// List open issues in the repo at `directory` for the `#` picker.
+    /// Best-effort: any failure (gh missing, no repo, auth) → empty array.
+    func issues(directory: String) async -> [GitHubWorkItem] {
+        guard let gh = binaryPath() else { return [] }
+        let result = await run(
+            gh,
+            ["issue", "list", "--json", "number,title", "--limit", "50"],
+            in: directory
+        )
+        guard let result, result.exitCode == 0 else { return [] }
+        return GitHubWorkItem.parse(listJSON: Data(result.stdout.utf8), kind: .issue)
+    }
+
+    /// List open pull requests in the repo at `directory` for the `#` picker.
+    /// Best-effort: any failure → empty array.
+    func openPullRequests(directory: String) async -> [GitHubWorkItem] {
+        guard let gh = binaryPath() else { return [] }
+        let result = await run(
+            gh,
+            ["pr", "list", "--json", Self.workItemFields, "--limit", "50"],
+            in: directory
+        )
+        guard let result, result.exitCode == 0 else { return [] }
+        return GitHubWorkItem.parse(listJSON: Data(result.stdout.utf8), kind: .pullRequest)
+    }
+
+    /// Resolve a single PR by number (used to recover a head branch for a
+    /// URL-pasted PR not in the prefetched list). Best-effort → nil.
+    func pullRequest(number: Int, directory: String) async -> GitHubWorkItem? {
+        guard let gh = binaryPath() else { return nil }
+        let result = await run(
+            gh,
+            ["pr", "view", "\(number)", "--json", Self.workItemFields],
+            in: directory
+        )
+        guard let result, result.exitCode == 0 else { return nil }
+        return GitHubWorkItem.parse(objectJSON: Data(result.stdout.utf8), kind: .pullRequest)
+    }
+
+    /// Check out PR `number` into the git repo at `directory` (`gh pr checkout`).
+    /// Unlike the read paths, this captures stderr and throws on non-zero exit so
+    /// workspace creation fails loudly and rolls back the optimistic placeholder.
+    func checkoutPullRequest(number: Int, directory: String) async throws {
+        guard let gh = binaryPath() else { throw GitHubBackendError.ghUnavailable }
+        guard let result = await runCapturingStderr(
+            gh,
+            ["pr", "checkout", "\(number)"],
+            in: directory
+        ) else {
+            throw GitHubBackendError.launchFailed
+        }
+        guard result.exitCode == 0 else {
+            throw GitHubBackendError.commandFailed(stderr: result.stderr)
+        }
     }
 
     // MARK: - Private
@@ -54,6 +134,43 @@ actor GitHubBackend {
             process.terminationHandler = { proc in
                 let data = stdout.fileHandleForReading.readDataToEndOfFile()
                 continuation.resume(returning: (String(data: data, encoding: .utf8) ?? "", proc.terminationStatus))
+            }
+
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(returning: nil)
+            }
+        }
+    }
+
+    /// Like `run`, but captures stderr separately for error reporting. Used by
+    /// the write path (`gh pr checkout`) where failures must surface to the user.
+    private func runCapturingStderr(
+        _ executablePath: String,
+        _ arguments: [String],
+        in directory: String
+    ) async -> (stdout: String, stderr: String, exitCode: Int32)? {
+        await withCheckedContinuation { continuation in
+            let process = Process()
+            let stdout = Pipe()
+            let stderr = Pipe()
+            process.executableURL = URL(fileURLWithPath: executablePath)
+            process.arguments = arguments
+            process.currentDirectoryURL = URL(fileURLWithPath: directory)
+            process.standardOutput = stdout
+            process.standardError = stderr
+            process.standardInput = FileHandle.nullDevice
+            process.environment = BinaryResolver.synthesizedEnvironment()
+
+            process.terminationHandler = { proc in
+                let outData = stdout.fileHandleForReading.readDataToEndOfFile()
+                let errData = stderr.fileHandleForReading.readDataToEndOfFile()
+                continuation.resume(returning: (
+                    String(data: outData, encoding: .utf8) ?? "",
+                    String(data: errData, encoding: .utf8) ?? "",
+                    proc.terminationStatus
+                ))
             }
 
             do {

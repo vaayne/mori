@@ -230,3 +230,12 @@
 "This workspace is a copy-on-write clone at %@.\n\nBranch \"%@\" and its unpushed work (%d commit(s) ahead, %@) exist only in this clone. Deleting the files will permanently lose them." = "该工作区是位于 %@ 的写时复制克隆。\n\n分支 \"%@\" 及其未推送的改动（领先 %d 个提交，%@）仅存在于此克隆中。删除文件将永久丢失这些内容。";
 "uncommitted changes present" = "存在未提交的改动";
 "no uncommitted changes" = "无未提交改动";
+
+/* Create workspace from GitHub issue / PR */
+"Draft" = "草稿";
+"GitHub CLI (gh) was not found. Install it to work from an issue or PR." = "未找到 GitHub CLI（gh）。请安装它以便从 issue 或 PR 创建工作区。";
+"Failed to launch the GitHub CLI (gh)." = "启动 GitHub CLI（gh）失败。";
+"The GitHub CLI (gh) command failed." = "GitHub CLI（gh）命令执行失败。";
+"The GitHub CLI (gh) command failed:\n\n%@" = "GitHub CLI（gh）命令执行失败：\n\n%@";
+"Could not resolve pull request #%d. Check that gh is installed, authenticated, and the PR exists." = "无法解析 PR #%d。请确认 gh 已安装并登录，且该 PR 存在。";
+"Creating a workspace from a pull request requires a git repository." = "从 PR 创建工作区需要一个 git 仓库。";

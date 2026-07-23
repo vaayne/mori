@@ -22,6 +22,8 @@ enum WorkspaceError: Error, LocalizedError {
     case remoteSessionNotFound(String)
     case remoteSessionAlreadyAttached(String)
     case unsafeWorkspaceDeletion(String)
+    case pullRequestUnavailable(Int)
+    case pullRequestRequiresGitRepo
 
     var errorDescription: String? {
         switch self {
@@ -61,6 +63,13 @@ enum WorkspaceError: Error, LocalizedError {
             )
         case .unsafeWorkspaceDeletion(let reason):
             return reason
+        case .pullRequestUnavailable(let number):
+            return String(
+                format: .localized("Could not resolve pull request #%d. Check that gh is installed, authenticated, and the PR exists."),
+                number
+            )
+        case .pullRequestRequiresGitRepo:
+            return .localized("Creating a workspace from a pull request requires a git repository.")
         }
     }
 }
@@ -972,6 +981,21 @@ final class WorkspaceManager {
         return try await git.listBranches(repoPath: repoPath)
     }
 
+    /// Prefetch open issues + PRs for the creation panel's `#` picker. Local
+    /// projects only — `gh` is a local-only tool, so remote/SSH projects (and a
+    /// missing gh) return an empty list, which keeps the panel's GitHub mode inert.
+    func fetchGitHubWorkItems(projectId: UUID, repoPath: String) async -> [GitHubWorkItem] {
+        guard let project = appState.projects.first(where: { $0.id == projectId }),
+              case .local = location(for: project) else {
+            return []
+        }
+        let dir = project.repoRootPath.isEmpty ? repoPath : project.repoRootPath
+        guard !dir.isEmpty else { return [] }
+        async let issues = gitHubBackend.issues(directory: dir)
+        async let prs = gitHubBackend.openPullRequests(directory: dir)
+        return await issues + prs
+    }
+
     /// Update authentication settings for an existing remote project.
     /// Supports switching between public key and password auth without re-adding the project.
     func updateRemoteAuth(
@@ -1114,15 +1138,44 @@ final class WorkspaceManager {
     ///   - branchName: The branch name (existing or new).
     ///   - createBranch: Whether to create a new branch (`true`) or use an existing one (`false`).
     ///   - baseBranch: Base branch for new branch creation (only used when `createBranch` is `true`).
+    ///   - origin: Where the request came from — a plain branch, a GitHub issue,
+    ///     or a GitHub PR (which is checked out onto its head branch).
     @discardableResult
     func createWorktree(
         projectId: UUID,
         branchName: String,
         createBranch: Bool = true,
-        baseBranch: String? = nil
+        baseBranch: String? = nil,
+        origin: CreationOrigin = .branch
     ) async throws -> Worktree {
+        guard let project = appState.projects.first(where: { $0.id == projectId }) else {
+            throw WorkspaceError.projectNotFound
+        }
+
+        // A PR origin works ON the PR's head branch rather than creating a new
+        // one. Resolve the head ref — carried from the panel, or recovered via
+        // `gh pr view` for a URL-pasted PR that wasn't in the prefetched list —
+        // so the worktree record's branch matches the PR badge/status pipeline.
+        var effectiveBranch = branchName
+        var effectiveCreateBranch = createBranch
+        var pullRequestNumber: Int?
+        if case .pullRequest(let number, let headRef) = origin {
+            let resolvedHead: String
+            if !headRef.isEmpty {
+                resolvedHead = headRef
+            } else if let item = await gitHubBackend.pullRequest(number: number, directory: project.repoRootPath),
+                      let head = item.headRefName, !head.isEmpty {
+                resolvedHead = head
+            } else {
+                throw WorkspaceError.pullRequestUnavailable(number)
+            }
+            effectiveBranch = resolvedHead
+            effectiveCreateBranch = false
+            pullRequestNumber = number
+        }
+
         // Validate inputs
-        let trimmed = branchName.trimmingCharacters(in: .whitespaces)
+        let trimmed = effectiveBranch.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else {
             throw WorkspaceError.branchNameEmpty
         }
@@ -1133,9 +1186,6 @@ final class WorkspaceManager {
             throw WorkspaceError.branchNameInvalid(trimmed)
         }
 
-        guard let project = appState.projects.first(where: { $0.id == projectId }) else {
-            throw WorkspaceError.projectNotFound
-        }
         let projectLocation = location(for: project)
         let git = gitBackend(for: projectLocation)
         let tmux = tmuxBackend(for: projectLocation)
@@ -1192,10 +1242,11 @@ final class WorkspaceManager {
                     repoRootPath: project.repoRootPath,
                     worktreePath: worktreePath,
                     branch: trimmed,
-                    createBranch: createBranch,
+                    createBranch: effectiveCreateBranch,
                     baseBranch: baseBranch,
                     isGitRepo: isGitRepo,
-                    git: git
+                    git: git,
+                    pullRequestNumber: pullRequestNumber
                 )
             } else if isGitRepo {
                 // SSH projects, or local with clones disabled: existing git worktree path.
@@ -1204,11 +1255,16 @@ final class WorkspaceManager {
                     repoPath: project.repoRootPath,
                     path: worktreePath,
                     branch: trimmed,
-                    createBranch: createBranch,
-                    baseBranch: baseBranch
+                    createBranch: effectiveCreateBranch,
+                    baseBranch: baseBranch,
+                    pullRequestNumber: pullRequestNumber
                 )
                 kind = .gitWorktree
             } else {
+                // Non-git plain-copy path can't check out a PR.
+                if pullRequestNumber != nil {
+                    throw WorkspaceError.pullRequestRequiresGitRepo
+                }
                 try await git.ensureDirectory(path: worktreePath)
                 kind = .plainDirectory
             }
@@ -1262,8 +1318,16 @@ final class WorkspaceManager {
         createBranch: Bool,
         baseBranch: String?,
         isGitRepo: Bool,
-        git: GitBackend
+        git: GitBackend,
+        pullRequestNumber: Int?
     ) async throws -> WorktreeKind {
+        // A PR checkout needs a git repo; reject before cloning so a non-git
+        // project never silently produces a plain copy with no PR checked out.
+        // (Thrown here, outside the do/catch, so the plain-copy fallback can't
+        // swallow it.)
+        if pullRequestNumber != nil, !isGitRepo {
+            throw WorkspaceError.pullRequestRequiresGitRepo
+        }
         do {
             try await Task.detached(priority: .userInitiated) {
                 try CowCloner.clone(from: repoRootPath, to: worktreePath)
@@ -1271,12 +1335,20 @@ final class WorkspaceManager {
 
             switch CowCloner.classify(path: worktreePath) {
             case .fullRepo:
-                try await CowCloner.gitFixup(
-                    clonePath: worktreePath,
-                    branch: branch,
-                    createBranch: createBranch,
-                    baseBranch: baseBranch
-                )
+                if let pullRequestNumber {
+                    // PR flow: reset the clone (drop inherited dirty tracked state
+                    // and stale worktree links) then let gh check out the PR head
+                    // branch, replacing gitFixup's branch checkout.
+                    try await CowCloner.resetForPullRequestCheckout(clonePath: worktreePath)
+                    try await gitHubBackend.checkoutPullRequest(number: pullRequestNumber, directory: worktreePath)
+                } else {
+                    try await CowCloner.gitFixup(
+                        clonePath: worktreePath,
+                        branch: branch,
+                        createBranch: createBranch,
+                        baseBranch: baseBranch
+                    )
+                }
                 return .cowClone
             case .plainDirectory:
                 // Non-git project cloned successfully — a deliberate feature.
@@ -1300,7 +1372,8 @@ final class WorkspaceManager {
                     path: worktreePath,
                     branch: branch,
                     createBranch: createBranch,
-                    baseBranch: baseBranch
+                    baseBranch: baseBranch,
+                    pullRequestNumber: pullRequestNumber
                 )
                 return .gitWorktree
             } else {
@@ -1316,14 +1389,22 @@ final class WorkspaceManager {
     }
 
     /// `git worktree add` with the "branch already exists" retry preserved.
+    /// For a PR origin, adds a detached worktree (on `baseBranch` when given)
+    /// and lets `gh pr checkout` create/switch to the PR's head branch inside it.
     private func addGitWorktreeWithRetry(
         git: GitBackend,
         repoPath: String,
         path: String,
         branch: String,
         createBranch: Bool,
-        baseBranch: String?
+        baseBranch: String?,
+        pullRequestNumber: Int? = nil
     ) async throws {
+        if let pullRequestNumber {
+            try await git.addWorktreeDetached(repoPath: repoPath, path: path, ref: baseBranch)
+            try await gitHubBackend.checkoutPullRequest(number: pullRequestNumber, directory: path)
+            return
+        }
         do {
             try await git.addWorktree(
                 repoPath: repoPath,
@@ -1374,7 +1455,8 @@ final class WorkspaceManager {
                 projectId: projectId,
                 branchName: trimmed,
                 createBranch: request.isNewBranch,
-                baseBranch: request.baseBranch
+                baseBranch: request.baseBranch,
+                origin: request.origin
             )
             await refreshRuntimeState()
         } catch {

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **macOS**: Create a workspace directly from an open GitHub issue or pull request in the creation panel — type `#` to filter a keyboard-navigable list of issues and PRs (or paste a GitHub issue/PR URL). Picking an issue makes a new branch off the selected base, auto-named `issue-<number>-<title-slug>`; picking a PR checks out the PR's head branch so its badge and CI status light up immediately.
 - **macOS**: Sidebar workspace rows now show a pull request badge (`#number` plus CI status) next to the status line, with the PR state and title in the tooltip. PR info refreshes in the background for all local workspaces, not just the selected one.
 - **macOS**: New local workspaces are now created as APFS copy-on-write clones of the project directory, so `node_modules`, build artifacts, and other untracked files are available instantly (a single `clonefile` syscall — seconds even for multi-GB repos). The new workspace appears in the sidebar immediately with a "Creating…" status while it materializes. Falls back to `git worktree` (git repos) or a plain copy (non-git) on non-APFS/cross-volume targets. A new setting under Worktree location — "Prefer copy-on-write clones for new workspaces" — toggles the behavior (on by default). Clones on disk are auto-discovered at launch, and deleting a clone warns before destroying unpushed local commits.
 
