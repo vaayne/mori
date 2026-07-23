@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🎨 Design (workspace creation)
+
+- **macOS**: Redesigned the workspace creation panel as a single searchable field over one unified list. Typing filters local branches, open pull requests, and open issues live (by number, title, or branch name), offers a "Create branch" row for new names, and `#123` or a pasted GitHub URL jumps straight to that PR/issue. The **Base** picker now appears only when it applies — creating a new branch or starting from an issue — since checking out an existing branch or a PR head has no base to choose. The separate "Check Out Existing" tab is gone.
+
 ### 🐛 Bug Fixes
 
 - **macOS**: Importing existing workspaces no longer spawns a tmux session (and its login shell) per imported row — sessions are created lazily when a workspace is first selected. Dead-session recovery during polling is likewise limited to the selected workspace instead of resurrecting a session for every row.

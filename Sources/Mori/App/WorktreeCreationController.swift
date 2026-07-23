@@ -3,21 +3,43 @@ import MoriCore
 import MoriGit
 import MoriTerminal
 
-// MARK: - Checkout Row Model
+// MARK: - Picker Row Model
 
-/// A single row in the "Check Out Existing" list: an existing local branch or an
-/// open pull request (whose head branch would be checked out). PRs are just
-/// "someone else's existing branch", so both live in one flat, selectable list.
-private enum CheckoutRow: Equatable {
+/// A row of the unified picker: section headers interleaved with actionable
+/// rows. `create` and `issue` produce a new branch, so the Base row applies to
+/// them; `branch` and `pr` check out something that already exists — there is
+/// no base to choose.
+private enum PickerRow {
+    case header(String)
+    /// Create a new branch with the typed name off the base branch.
+    case create(name: String)
+    /// Check out an existing branch (a remote one checks out its local name).
     case branch(GitBranchInfo)
+    /// Check out an open PR's head branch (`gh pr checkout`).
     case pr(GitHubWorkItem)
+    /// Create the derived `issue-<n>-<slug>` branch off the base branch.
+    case issue(GitHubWorkItem)
+
+    var isSelectable: Bool {
+        if case .header = self { return false }
+        return true
+    }
+
+    var createsNewBranch: Bool {
+        switch self {
+        case .create, .issue: return true
+        case .header, .branch, .pr: return false
+        }
+    }
 
     /// Identity used to preserve the highlighted row across async re-renders
     /// (a refreshed commit date or draft flag must not drop the selection).
-    func matchesIdentity(_ other: CheckoutRow) -> Bool {
+    func matchesIdentity(_ other: PickerRow) -> Bool {
         switch (self, other) {
+        case (.create, .create): return true
         case let (.branch(a), .branch(b)): return a.name == b.name
         case let (.pr(a), .pr(b)): return a.number == b.number
+        case let (.issue(a), .issue(b)): return a.number == b.number
         default: return false
         }
     }
@@ -26,16 +48,19 @@ private enum CheckoutRow: Equatable {
 // MARK: - Controller
 
 /// NSPanel driving workspace creation. The panel answers one question — which
-/// branch will the new workspace check out? — split across two tabs:
+/// branch will the new workspace check out? — with a single field over a single
+/// sectioned list:
 ///
-/// - **New Branch**: type a name (or start from a GitHub issue) to `checkout -b`
-///   off a base branch. If the name already names an existing branch, the panel
-///   silently switches to checking it out instead of blocking.
-/// - **Check Out Existing**: pick an existing local branch or an open PR's head
-///   branch. Branches already backing a workspace are excluded.
+/// - Typing filters everything at once: existing local branches, open PRs, and
+///   open issues. A non-empty name that matches no existing branch pins a
+///   "Create branch" row on top, pre-selected so Enter still means "create".
+/// - A name that exactly matches an existing branch selects that branch row
+///   instead — checking out, never blocking on "already exists".
+/// - The Base row appears only while the selected row creates a new branch
+///   (create / issue); checking out a branch or PR has no base to choose.
 ///
-/// The panel has a fixed frame; its two list areas scroll rather than resizing
-/// the window.
+/// The panel has a fixed frame; the list scrolls rather than resizing the
+/// window.
 @MainActor
 final class WorktreeCreationController: NSWindowController {
 
@@ -78,7 +103,7 @@ final class WorktreeCreationController: NSWindowController {
     private var repoPath: String = ""
 
     /// Branches already backing a workspace in the current project — excluded
-    /// from the "Check Out Existing" list (and PRs whose head is such a branch).
+    /// from the branch section (and PRs whose head is such a branch).
     private var excludedBranches: Set<String> = []
 
     private var fetchGeneration: Int = 0
@@ -88,23 +113,14 @@ final class WorktreeCreationController: NSWindowController {
     // Prefetched GitHub issues + PRs (volatile picker data).
     private var githubItems: [GitHubWorkItem] = []
 
-    // Tab 1 issue picker (open issues only).
-    private var issues: [GitHubWorkItem] = []
-    /// The name auto-filled from a picked issue and the issue's number. Cleared
-    /// once the user edits the name so it no longer matches the auto-fill.
-    private var autofilledName: String?
-    private var issueAssociation: Int?
+    // Unified picker list + highlight (-1 == nothing selected).
+    private var pickerRows: [PickerRow] = []
+    private var selectedPickerRow: Int = -1
 
-    // Tab 2 combined list + highlight (-1 == nothing selected).
-    private var checkoutRows: [CheckoutRow] = []
-    private var checkoutSelectedRow: Int = -1
-
-    private var currentTab = 0
-
-    /// Collapsed to zero while the exists-hint is hidden — `isHidden` alone
-    /// leaves dead space between the name field and the Base row.
-    private var hintTopConstraint: NSLayoutConstraint?
-    private var hintHeightConstraint: NSLayoutConstraint?
+    /// Collapsed to zero while the Base row is hidden — `isHidden` alone leaves
+    /// dead space between the name field and the list.
+    private var baseRowTopConstraint: NSLayoutConstraint?
+    private var baseRowHeightConstraint: NSLayoutConstraint?
 
     // MARK: - Views
 
@@ -115,24 +131,13 @@ final class WorktreeCreationController: NSWindowController {
     private let projectPopup = NSPopUpButton()
     private let closeButton = NSButton()
 
-    // Tab switch.
-    private let segmentedControl = NSSegmentedControl()
-
-    // Tab 1 — New Branch.
-    private let newBranchContainer = NSView()
+    // Content — one field, an on-demand Base row, one sectioned list.
+    private let contentContainer = NSView()
     private let branchNameField = NSTextField()
-    private let existsHintLabel = NSTextField(labelWithString: "")
     private let baseLabel = NSTextField(labelWithString: "")
     private let baseBranchPopup = NSPopUpButton()
-    private let issueSectionLabel = NSTextField(labelWithString: "")
-    private let issuesScrollView = NSScrollView()
-    private let issuesTable = NSTableView()
-
-    // Tab 2 — Check Out Existing.
-    private let checkoutContainer = NSView()
-    private let filterField = NSTextField()
-    private let checkoutScrollView = NSScrollView()
-    private let checkoutTable = NSTableView()
+    private let pickerScrollView = NSScrollView()
+    private let pickerTable = NSTableView()
 
     // Footer.
     private let createButton = NSButton()
@@ -151,21 +156,16 @@ final class WorktreeCreationController: NSWindowController {
 
         static let headerHeight: CGFloat = 22
         static let projectPopupWidth: CGFloat = 180
-        static let headerToSegmentGap: CGFloat = 12
-        static let segmentHeight: CGFloat = 24
-        static let segmentToContentGap: CGFloat = 12
+        static let headerToContentGap: CGFloat = 12
         static let contentToFooterGap: CGFloat = 12
         static let footerHeight: CGFloat = 32
 
         static let fieldHeight: CGFloat = 28
-        static let hintTopGap: CGFloat = 6
-        static let hintHeight: CGFloat = 14
         static let baseRowTopGap: CGFloat = 12
         static let baseRowHeight: CGFloat = 22
-        static let sectionLabelTopGap: CGFloat = 12
-        static let sectionLabelHeight: CGFloat = 14
-        static let listTopGap: CGFloat = 6
+        static let listTopGap: CGFloat = 12
         static let rowHeight: CGFloat = 28
+        static let sectionHeaderRowHeight: CGFloat = 24
 
         /// Content-width priority for popups: below the required edge pins so a
         /// long branch/project title truncates instead of driving the frame wide.
@@ -294,13 +294,10 @@ final class WorktreeCreationController: NSWindowController {
         }
 
         setupHeader()
-        setupSegmentedControl()
-        setupNewBranchTab()
-        setupCheckoutTab()
+        setupContent()
         setupFooter()
         layoutChrome()
 
-        selectTab(0)
         updateCreateButton()
     }
 
@@ -358,48 +355,27 @@ final class WorktreeCreationController: NSWindowController {
         containerView.addSubview(closeButton)
     }
 
-    private func setupSegmentedControl() {
-        segmentedControl.translatesAutoresizingMaskIntoConstraints = false
-        segmentedControl.segmentCount = 2
-        segmentedControl.setLabel(.localized("New Branch"), forSegment: 0)
-        segmentedControl.setLabel(.localized("Check Out Existing"), forSegment: 1)
-        segmentedControl.segmentDistribution = .fillEqually
-        segmentedControl.trackingMode = .selectOne
-        segmentedControl.selectedSegment = 0
-        segmentedControl.target = self
-        segmentedControl.action = #selector(segmentChanged(_:))
-        containerView.addSubview(segmentedControl)
-    }
+    // MARK: - Content
 
-    // MARK: - Tab 1 — New Branch
-
-    private func setupNewBranchTab() {
-        newBranchContainer.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(newBranchContainer)
+    private func setupContent() {
+        contentContainer.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(contentContainer)
 
         branchNameField.translatesAutoresizingMaskIntoConstraints = false
-        branchNameField.placeholderString = .localized("Branch name")
+        branchNameField.placeholderString = .localized("Branch name, or search branches, PRs, issues")
         branchNameField.font = .systemFont(ofSize: 14)
         branchNameField.isBordered = true
         branchNameField.bezelStyle = .roundedBezel
         branchNameField.focusRingType = .none
         branchNameField.delegate = self
-        newBranchContainer.addSubview(branchNameField)
-
-        existsHintLabel.translatesAutoresizingMaskIntoConstraints = false
-        existsHintLabel.stringValue = .localized("Branch already exists — it will be checked out")
-        existsHintLabel.font = .systemFont(ofSize: 11)
-        existsHintLabel.textColor = .secondaryLabelColor
-        existsHintLabel.lineBreakMode = .byTruncatingTail
-        existsHintLabel.isHidden = true
-        newBranchContainer.addSubview(existsHintLabel)
+        contentContainer.addSubview(branchNameField)
 
         baseLabel.translatesAutoresizingMaskIntoConstraints = false
         baseLabel.stringValue = .localized("Base")
         baseLabel.font = .systemFont(ofSize: 12)
         baseLabel.textColor = .secondaryLabelColor
         baseLabel.setContentHuggingPriority(.required, for: .horizontal)
-        newBranchContainer.addSubview(baseLabel)
+        contentContainer.addSubview(baseLabel)
 
         baseBranchPopup.translatesAutoresizingMaskIntoConstraints = false
         baseBranchPopup.controlSize = .regular
@@ -408,90 +384,45 @@ final class WorktreeCreationController: NSWindowController {
         baseBranchPopup.setContentCompressionResistancePriority(
             Layout.popupCompressionResistance, for: .horizontal
         )
-        newBranchContainer.addSubview(baseBranchPopup)
+        contentContainer.addSubview(baseBranchPopup)
 
-        issueSectionLabel.translatesAutoresizingMaskIntoConstraints = false
-        issueSectionLabel.stringValue = String.localized("Or start from an issue").uppercased()
-        issueSectionLabel.font = .systemFont(ofSize: 10, weight: .semibold)
-        issueSectionLabel.textColor = .tertiaryLabelColor
-        issueSectionLabel.lineBreakMode = .byTruncatingTail
-        newBranchContainer.addSubview(issueSectionLabel)
-
-        configureList(issuesTable, scroll: issuesScrollView, in: newBranchContainer)
-        issuesTable.target = self
-        issuesTable.action = #selector(issueRowClicked(_:))
+        configureList(pickerTable, scroll: pickerScrollView, in: contentContainer)
+        pickerTable.target = self
+        pickerTable.action = #selector(pickerRowClicked(_:))
+        pickerTable.doubleAction = #selector(pickerRowDoubleClicked(_:))
 
         resetBaseBranchPopup()
 
-        let hintTop = existsHintLabel.topAnchor.constraint(equalTo: branchNameField.bottomAnchor, constant: 0)
-        let hintHeight = existsHintLabel.heightAnchor.constraint(equalToConstant: 0)
-        hintTopConstraint = hintTop
-        hintHeightConstraint = hintHeight
+        // The Base row collapses while the selected row checks something out —
+        // there is no base to choose for an existing branch or a PR.
+        let baseTop = baseBranchPopup.topAnchor.constraint(
+            equalTo: branchNameField.bottomAnchor, constant: Layout.baseRowTopGap
+        )
+        let baseHeight = baseBranchPopup.heightAnchor.constraint(equalToConstant: Layout.baseRowHeight)
+        baseRowTopConstraint = baseTop
+        baseRowHeightConstraint = baseHeight
 
-        let padH: CGFloat = 0
         NSLayoutConstraint.activate([
-            branchNameField.topAnchor.constraint(equalTo: newBranchContainer.topAnchor),
-            branchNameField.leadingAnchor.constraint(equalTo: newBranchContainer.leadingAnchor, constant: padH),
-            branchNameField.trailingAnchor.constraint(equalTo: newBranchContainer.trailingAnchor, constant: -padH),
+            branchNameField.topAnchor.constraint(equalTo: contentContainer.topAnchor),
+            branchNameField.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
+            branchNameField.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
             branchNameField.heightAnchor.constraint(equalToConstant: Layout.fieldHeight),
 
-            hintTop,
-            existsHintLabel.leadingAnchor.constraint(equalTo: newBranchContainer.leadingAnchor, constant: 2),
-            existsHintLabel.trailingAnchor.constraint(equalTo: newBranchContainer.trailingAnchor),
-            hintHeight,
-
-            baseLabel.topAnchor.constraint(equalTo: existsHintLabel.bottomAnchor, constant: Layout.baseRowTopGap),
-            baseLabel.leadingAnchor.constraint(equalTo: newBranchContainer.leadingAnchor),
+            baseLabel.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
             baseLabel.centerYAnchor.constraint(equalTo: baseBranchPopup.centerYAnchor),
 
-            baseBranchPopup.topAnchor.constraint(equalTo: existsHintLabel.bottomAnchor, constant: Layout.baseRowTopGap),
+            baseTop,
+            baseHeight,
             baseBranchPopup.leadingAnchor.constraint(equalTo: baseLabel.trailingAnchor, constant: 8),
-            baseBranchPopup.trailingAnchor.constraint(equalTo: newBranchContainer.trailingAnchor),
-            baseBranchPopup.heightAnchor.constraint(equalToConstant: Layout.baseRowHeight),
+            baseBranchPopup.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
 
-            issueSectionLabel.topAnchor.constraint(equalTo: baseBranchPopup.bottomAnchor, constant: Layout.sectionLabelTopGap),
-            issueSectionLabel.leadingAnchor.constraint(equalTo: newBranchContainer.leadingAnchor, constant: 2),
-            issueSectionLabel.trailingAnchor.constraint(equalTo: newBranchContainer.trailingAnchor),
-            issueSectionLabel.heightAnchor.constraint(equalToConstant: Layout.sectionLabelHeight),
-
-            issuesScrollView.topAnchor.constraint(equalTo: issueSectionLabel.bottomAnchor, constant: Layout.listTopGap),
-            issuesScrollView.leadingAnchor.constraint(equalTo: newBranchContainer.leadingAnchor),
-            issuesScrollView.trailingAnchor.constraint(equalTo: newBranchContainer.trailingAnchor),
-            issuesScrollView.bottomAnchor.constraint(equalTo: newBranchContainer.bottomAnchor),
+            pickerScrollView.topAnchor.constraint(equalTo: baseBranchPopup.bottomAnchor, constant: Layout.listTopGap),
+            pickerScrollView.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
+            pickerScrollView.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+            pickerScrollView.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor),
         ])
-    }
 
-    // MARK: - Tab 2 — Check Out Existing
-
-    private func setupCheckoutTab() {
-        checkoutContainer.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(checkoutContainer)
-
-        filterField.translatesAutoresizingMaskIntoConstraints = false
-        filterField.placeholderString = .localized("Filter branches and PRs")
-        filterField.font = .systemFont(ofSize: 13)
-        filterField.isBordered = true
-        filterField.bezelStyle = .roundedBezel
-        filterField.focusRingType = .none
-        filterField.delegate = self
-        checkoutContainer.addSubview(filterField)
-
-        configureList(checkoutTable, scroll: checkoutScrollView, in: checkoutContainer)
-        checkoutTable.target = self
-        checkoutTable.action = #selector(checkoutRowClicked(_:))
-        checkoutTable.doubleAction = #selector(checkoutRowDoubleClicked(_:))
-
-        NSLayoutConstraint.activate([
-            filterField.topAnchor.constraint(equalTo: checkoutContainer.topAnchor),
-            filterField.leadingAnchor.constraint(equalTo: checkoutContainer.leadingAnchor),
-            filterField.trailingAnchor.constraint(equalTo: checkoutContainer.trailingAnchor),
-            filterField.heightAnchor.constraint(equalToConstant: Layout.fieldHeight),
-
-            checkoutScrollView.topAnchor.constraint(equalTo: filterField.bottomAnchor, constant: Layout.listTopGap + 2),
-            checkoutScrollView.leadingAnchor.constraint(equalTo: checkoutContainer.leadingAnchor),
-            checkoutScrollView.trailingAnchor.constraint(equalTo: checkoutContainer.trailingAnchor),
-            checkoutScrollView.bottomAnchor.constraint(equalTo: checkoutContainer.bottomAnchor),
-        ])
+        setBaseRowVisible(false)
     }
 
     private func configureList(_ table: NSTableView, scroll: NSScrollView, in parent: NSView) {
@@ -575,11 +506,11 @@ final class WorktreeCreationController: NSWindowController {
             projectPopup.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 8),
             projectPopup.heightAnchor.constraint(equalToConstant: Layout.headerHeight),
 
-            // Segmented control.
-            segmentedControl.topAnchor.constraint(equalTo: projectPopup.bottomAnchor, constant: Layout.headerToSegmentGap),
-            segmentedControl.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: padH),
-            segmentedControl.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -padH),
-            segmentedControl.heightAnchor.constraint(equalToConstant: Layout.segmentHeight),
+            // Content between the header and the footer.
+            contentContainer.topAnchor.constraint(equalTo: projectPopup.bottomAnchor, constant: Layout.headerToContentGap),
+            contentContainer.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: padH),
+            contentContainer.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -padH),
+            contentContainer.bottomAnchor.constraint(equalTo: createButton.topAnchor, constant: -Layout.contentToFooterGap),
 
             // Footer.
             createButton.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -padH),
@@ -587,17 +518,6 @@ final class WorktreeCreationController: NSWindowController {
             createButton.heightAnchor.constraint(equalToConstant: Layout.footerHeight),
             createButton.leadingAnchor.constraint(greaterThanOrEqualTo: containerView.leadingAnchor, constant: padH),
         ])
-
-        // Both tab containers occupy the same content area between the segmented
-        // control and the footer; only one is visible at a time.
-        for tab in [newBranchContainer, checkoutContainer] {
-            NSLayoutConstraint.activate([
-                tab.topAnchor.constraint(equalTo: segmentedControl.bottomAnchor, constant: Layout.segmentToContentGap),
-                tab.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: padH),
-                tab.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -padH),
-                tab.bottomAnchor.constraint(equalTo: createButton.topAnchor, constant: -Layout.contentToFooterGap),
-            ])
-        }
     }
 
     // MARK: - Positioning
@@ -620,8 +540,6 @@ final class WorktreeCreationController: NSWindowController {
     // MARK: - Reset
 
     private func resetForShow() {
-        segmentedControl.selectedSegment = 0
-        selectTab(0)
         resetInputs()
         populateProjectPopup()
         resetBaseBranchPopup()
@@ -629,28 +547,9 @@ final class WorktreeCreationController: NSWindowController {
 
     private func resetInputs() {
         branchNameField.stringValue = ""
-        filterField.stringValue = ""
-        autofilledName = nil
-        issueAssociation = nil
         dataSource = nil
         githubItems = []
-        issues = []
-        checkoutRows = []
-        checkoutSelectedRow = -1
-        updateExistsHint()
-        issuesTable.reloadData()
-        checkoutTable.reloadData()
-        updateIssueSectionVisibility()
-        updateCreateButton()
-    }
-
-    private func selectTab(_ index: Int) {
-        currentTab = index
-        newBranchContainer.isHidden = (index != 0)
-        checkoutContainer.isHidden = (index != 1)
-        let field: NSTextField = index == 0 ? branchNameField : filterField
-        window?.makeFirstResponder(field)
-        updateCreateButton()
+        rebuildPickerRows(preserveSelection: false)
     }
 
     // MARK: - Fetching
@@ -673,8 +572,7 @@ final class WorktreeCreationController: NSWindowController {
             guard self.fetchGeneration == generation else { return }
             self.dataSource = WorktreeCreationDataSource(branches: branches)
             self.populateBaseBranchPopup()
-            self.updateExistsHint()
-            self.rebuildCheckoutRows(preserveSelection: true)
+            self.rebuildPickerRows(preserveSelection: true)
         }
     }
 
@@ -687,8 +585,7 @@ final class WorktreeCreationController: NSWindowController {
             let items = await self.fetchGitHubItems?(projectId, repoPath) ?? []
             guard self.githubFetchGeneration == generation else { return }
             self.githubItems = items
-            self.reloadIssues()
-            self.rebuildCheckoutRows(preserveSelection: true)
+            self.rebuildPickerRows(preserveSelection: true)
         }
     }
 
@@ -738,107 +635,159 @@ final class WorktreeCreationController: NSWindowController {
         return dataSource?.defaultBaseBranch ?? Self.fallbackBranch
     }
 
-    private func setBaseRowEnabled(_ enabled: Bool) {
-        baseBranchPopup.isEnabled = enabled
-        baseBranchPopup.alphaValue = enabled ? 1 : 0.4
-        baseLabel.alphaValue = enabled ? 1 : 0.4
+    private func setBaseRowVisible(_ visible: Bool) {
+        baseLabel.isHidden = !visible
+        baseBranchPopup.isHidden = !visible
+        baseRowTopConstraint?.constant = visible ? Layout.baseRowTopGap : 0
+        baseRowHeightConstraint?.constant = visible ? Layout.baseRowHeight : 0
     }
 
-    // MARK: - Tab 1 Logic
+    // MARK: - Picker Logic
 
-    /// React to typing in the name field: route GitHub references (paste a URL,
-    /// or `#123`), otherwise keep the exists-hint and issue association honest.
+    /// React to typing: a pasted GitHub URL is normalized into a searchable
+    /// reference first, then the list rebuilds around the new query.
     private func handleNameChange() {
         let text = branchNameField.stringValue
 
         if let (kind, number) = GitHubWorkItem.parseURL(text) {
-            routeGitHubReference(kind: kind, number: number)
+            // A known item becomes a `#n` query so its row filters in and gets
+            // selected below. An issue outside the prefetched list still works
+            // as a derived branch name; an unknown PR cannot be checked out
+            // (no head ref), so its URL is left in place matching nothing.
+            if githubItems.contains(where: { $0.kind == kind && $0.number == number }) {
+                branchNameField.stringValue = "#\(number)"
+            } else if kind == .issue {
+                branchNameField.stringValue = GitHubWorkItem.issueBranchName(number: number, title: "")
+            }
+        }
+
+        rebuildPickerRows(preserveSelection: false)
+    }
+
+    private func rebuildPickerRows(preserveSelection: Bool) {
+        let previous: PickerRow? = (preserveSelection && selectedPickerRow >= 0 && selectedPickerRow < pickerRows.count)
+            ? pickerRows[selectedPickerRow] : nil
+
+        pickerRows = buildPickerRows()
+        pickerTable.reloadData()
+
+        if let previous, let idx = pickerRows.firstIndex(where: { $0.matchesIdentity(previous) }) {
+            selectedPickerRow = idx
+        } else {
+            selectedPickerRow = defaultSelection()
+        }
+        applyPickerSelection()
+    }
+
+    /// Create → Branches → Pull Requests → Issues, all filtered by one query.
+    private func buildPickerRows() -> [PickerRow] {
+        let query = branchNameField.stringValue.trimmingCharacters(in: .whitespaces)
+        let q = query.lowercased()
+        let referencedNumber = hashNumber(in: query)
+        var rows: [PickerRow] = []
+
+        // A name that is neither an existing branch nor a `#123` reference can
+        // be created.
+        if !query.isEmpty, referencedNumber == nil, dataSource?.exactMatch(for: query) == nil {
+            rows.append(.create(name: query))
+        }
+
+        var branches = dataSource?.checkoutBranches(excluding: excludedBranches, matching: query) ?? []
+        // An exact match on a remote-only branch stays selectable even though
+        // the list is local: typing its full name checks it out.
+        if let match = dataSource?.exactMatch(for: query), match.isRemote,
+           !branches.contains(where: { $0.name == match.name }) {
+            branches.insert(match, at: 0)
+        }
+        if !branches.isEmpty {
+            rows.append(.header(.localized("Branches")))
+            rows.append(contentsOf: branches.map { .branch($0) })
+        }
+
+        func matches(_ item: GitHubWorkItem) -> Bool {
+            if let referencedNumber { return item.number == referencedNumber }
+            guard !q.isEmpty else { return true }
+            let haystack = "#\(item.number) \(item.title) \(item.headRefName ?? "")".lowercased()
+            return haystack.contains(q)
+        }
+
+        let prs = githubItems.filter { item in
+            guard item.kind == .pullRequest else { return false }
+            if let head = item.headRefName, !head.isEmpty, excludedBranches.contains(head) { return false }
+            return matches(item)
+        }
+        if !prs.isEmpty {
+            rows.append(.header(.localized("Pull Requests")))
+            rows.append(contentsOf: prs.map { .pr($0) })
+        }
+
+        let issues = githubItems.filter { $0.kind == .issue && matches($0) }
+        if !issues.isEmpty {
+            rows.append(.header(.localized("Issues")))
+            rows.append(contentsOf: issues.map { .issue($0) })
+        }
+        return rows
+    }
+
+    /// The row Enter should act on without arrowing: the create row when the
+    /// typed name is new, the matching branch row when it already exists, the
+    /// referenced item for a `#123` query. An empty query selects nothing so
+    /// Enter can't fire on an arbitrary first row.
+    private func defaultSelection() -> Int {
+        let query = branchNameField.stringValue.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return -1 }
+
+        if case .create? = pickerRows.first { return 0 }
+
+        if let referencedNumber = hashNumber(in: query),
+           let idx = pickerRows.firstIndex(where: {
+               switch $0 {
+               case let .pr(item), let .issue(item): return item.number == referencedNumber
+               default: return false
+               }
+           }) {
+            return idx
+        }
+
+        if let match = dataSource?.exactMatch(for: query),
+           let idx = pickerRows.firstIndex(where: {
+               if case let .branch(branch) = $0 { return branch.name == match.name }
+               return false
+           }) {
+            return idx
+        }
+        return -1
+    }
+
+    private func movePickerSelection(by delta: Int) {
+        let selectable = pickerRows.indices.filter { pickerRows[$0].isSelectable }
+        guard !selectable.isEmpty else { return }
+        if let current = selectable.firstIndex(of: selectedPickerRow) {
+            let next = max(0, min(selectable.count - 1, current + delta))
+            selectedPickerRow = selectable[next]
+        } else {
+            selectedPickerRow = delta >= 0 ? selectable[0] : selectable[selectable.count - 1]
+        }
+        applyPickerSelection()
+    }
+
+    private func applyPickerSelection() {
+        defer {
+            updateBaseRowVisibility()
+            updateCreateButton()
+        }
+        guard selectedPickerRow >= 0, selectedPickerRow < pickerRows.count else {
+            pickerTable.deselectAll(nil)
             return
         }
-        if let number = hashNumber(in: text),
-           let item = githubItems.first(where: { $0.number == number }) {
-            route(item)
-            return
-        }
-
-        // A manual edit that no longer matches the auto-filled name drops the
-        // issue association so we don't tag an unrelated branch as issue-derived.
-        if let filled = autofilledName, text != filled {
-            autofilledName = nil
-            issueAssociation = nil
-            issuesTable.deselectAll(nil)
-        }
-        updateExistsHint()
-        updateCreateButton()
+        pickerTable.selectRowIndexes(IndexSet(integer: selectedPickerRow), byExtendingSelection: false)
+        pickerTable.scrollRowToVisible(selectedPickerRow)
     }
 
-    /// Route a GitHub reference (from a pasted URL) to the right tab: issues fill
-    /// the name field in place; PRs live in "Check Out Existing".
-    private func routeGitHubReference(kind: GitHubWorkItem.Kind, number: Int) {
-        if let item = githubItems.first(where: { $0.kind == kind && $0.number == number }) {
-            route(item)
-            return
-        }
-        switch kind {
-        case .issue:
-            fillFromIssue(number: number, title: "")
-        case .pullRequest:
-            switchToCheckout(selecting: number)
-        }
-    }
-
-    private func route(_ item: GitHubWorkItem) {
-        switch item.kind {
-        case .issue:
-            fillFromIssue(number: item.number, title: item.title)
-        case .pullRequest:
-            switchToCheckout(selecting: item.number)
-        }
-    }
-
-    private func fillFromIssue(number: Int, title: String) {
-        let name = GitHubWorkItem.issueBranchName(number: number, title: title)
-        branchNameField.stringValue = name
-        autofilledName = name
-        issueAssociation = number
-        updateExistsHint()
-        updateCreateButton()
-    }
-
-    private func switchToCheckout(selecting prNumber: Int) {
-        segmentedControl.selectedSegment = 1
-        selectTab(1)
-        if let idx = checkoutRows.firstIndex(where: {
-            if case let .pr(item) = $0 { return item.number == prNumber }
-            return false
-        }) {
-            checkoutSelectedRow = idx
-            applyCheckoutSelection()
-        }
-    }
-
-    /// Show the "already exists" hint and dim the base row when the typed name
-    /// exactly matches an existing branch — defining the "can't create" error out
-    /// of existence by silently switching to a checkout.
-    private func updateExistsHint() {
-        let trimmed = branchNameField.stringValue.trimmingCharacters(in: .whitespaces)
-        let exists = !trimmed.isEmpty && dataSource?.exactMatch(for: trimmed) != nil
-        existsHintLabel.isHidden = !exists
-        hintTopConstraint?.constant = exists ? Layout.hintTopGap : 0
-        hintHeightConstraint?.constant = exists ? Layout.hintHeight : 0
-        setBaseRowEnabled(!exists)
-    }
-
-    private func reloadIssues() {
-        issues = githubItems.filter { $0.kind == .issue }
-        issuesTable.reloadData()
-        updateIssueSectionVisibility()
-    }
-
-    private func updateIssueSectionVisibility() {
-        let hasIssues = !issues.isEmpty
-        issueSectionLabel.isHidden = !hasIssues
-        issuesScrollView.isHidden = !hasIssues
+    private func updateBaseRowVisibility() {
+        let selected: PickerRow? = (selectedPickerRow >= 0 && selectedPickerRow < pickerRows.count)
+            ? pickerRows[selectedPickerRow] : nil
+        setBaseRowVisible(selected?.createsNewBranch ?? false)
     }
 
     /// A bare `#123` reference (trimmed, digits only).
@@ -850,126 +799,35 @@ final class WorktreeCreationController: NSWindowController {
         return Int(digits)
     }
 
-    // MARK: - Tab 2 Logic
-
-    private func rebuildCheckoutRows(preserveSelection: Bool) {
-        let previous: CheckoutRow? = (preserveSelection && checkoutSelectedRow >= 0 && checkoutSelectedRow < checkoutRows.count)
-            ? checkoutRows[checkoutSelectedRow] : nil
-
-        checkoutRows = buildCheckoutRows()
-        checkoutTable.reloadData()
-
-        if let previous, let idx = checkoutRows.firstIndex(where: { $0.matchesIdentity(previous) }) {
-            checkoutSelectedRow = idx
-        } else {
-            // Empty filter shows no default selection so Enter never fires on an
-            // arbitrary first row; a filter that matches nothing clears too.
-            checkoutSelectedRow = -1
-        }
-        applyCheckoutSelection()
-    }
-
-    private func buildCheckoutRows() -> [CheckoutRow] {
-        guard let ds = dataSource else { return [] }
-        let filter = filterField.stringValue
-        var rows: [CheckoutRow] = ds
-            .checkoutBranches(excluding: excludedBranches, matching: filter)
-            .map { .branch($0) }
-
-        let q = filter.trimmingCharacters(in: .whitespaces).lowercased()
-        for item in githubItems where item.kind == .pullRequest {
-            let head = item.headRefName ?? ""
-            if !head.isEmpty, excludedBranches.contains(head) { continue }
-            if !q.isEmpty {
-                let haystack = "#\(item.number) \(item.title) \(head)".lowercased()
-                guard haystack.contains(q) else { continue }
-            }
-            rows.append(.pr(item))
-        }
-        return rows
-    }
-
-    private func moveCheckoutSelection(by delta: Int) {
-        guard !checkoutRows.isEmpty else { return }
-        if checkoutSelectedRow < 0 {
-            checkoutSelectedRow = delta >= 0 ? 0 : checkoutRows.count - 1
-        } else {
-            checkoutSelectedRow = max(0, min(checkoutRows.count - 1, checkoutSelectedRow + delta))
-        }
-        applyCheckoutSelection()
-    }
-
-    private func applyCheckoutSelection() {
-        defer { updateCreateButton() }
-        guard checkoutSelectedRow >= 0, checkoutSelectedRow < checkoutRows.count else {
-            checkoutTable.deselectAll(nil)
-            return
-        }
-        checkoutTable.selectRowIndexes(IndexSet(integer: checkoutSelectedRow), byExtendingSelection: false)
-        checkoutTable.scrollRowToVisible(checkoutSelectedRow)
-    }
-
     // MARK: - Create Button
 
     private func updateCreateButton() {
-        let enabled: Bool
-        if currentTab == 0 {
-            enabled = !branchNameField.stringValue.trimmingCharacters(in: .whitespaces).isEmpty
-        } else {
-            enabled = checkoutSelectedRow >= 0 && checkoutSelectedRow < checkoutRows.count
-        }
-        createButton.isEnabled = enabled
+        createButton.isEnabled = selectedPickerRow >= 0
+            && selectedPickerRow < pickerRows.count
+            && pickerRows[selectedPickerRow].isSelectable
     }
 
     // MARK: - Confirm
 
     private func confirm() {
-        currentTab == 0 ? confirmNewBranch() : confirmCheckout()
-    }
-
-    private func confirmNewBranch() {
-        let trimmed = branchNameField.stringValue.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
+        guard selectedPickerRow >= 0, selectedPickerRow < pickerRows.count else { return }
+        let row = pickerRows[selectedPickerRow]
+        guard row.isSelectable else { return }
         dismiss()
 
-        // The name already names a branch → check it out instead of creating.
-        if let match = dataSource?.exactMatch(for: trimmed) {
-            let name = match.isRemote ? match.displayName : match.name
+        switch row {
+        case .header:
+            break
+        case let .create(name):
             onCreateWorktree?(WorktreeCreationRequest(
                 branchName: name,
-                isNewBranch: false,
-                baseBranch: nil,
-                origin: .branch
-            ))
-            return
-        }
-
-        if let number = issueAssociation, branchNameField.stringValue == autofilledName {
-            onCreateWorktree?(WorktreeCreationRequest(
-                branchName: trimmed,
                 isNewBranch: true,
                 baseBranch: selectedBaseBranch(),
-                origin: .issue(number: number)
+                origin: .branch
             ))
-            return
-        }
-
-        onCreateWorktree?(WorktreeCreationRequest(
-            branchName: trimmed,
-            isNewBranch: true,
-            baseBranch: selectedBaseBranch(),
-            origin: .branch
-        ))
-    }
-
-    private func confirmCheckout() {
-        guard checkoutSelectedRow >= 0, checkoutSelectedRow < checkoutRows.count else { return }
-        let row = checkoutRows[checkoutSelectedRow]
-        dismiss()
-        switch row {
         case let .branch(branch):
             onCreateWorktree?(WorktreeCreationRequest(
-                branchName: branch.name,
+                branchName: branch.isRemote ? branch.displayName : branch.name,
                 isNewBranch: false,
                 baseBranch: nil,
                 origin: .branch
@@ -984,37 +842,32 @@ final class WorktreeCreationController: NSWindowController {
                 baseBranch: nil,
                 origin: .pullRequest(number: item.number, headRef: head)
             ))
+        case let .issue(item):
+            onCreateWorktree?(WorktreeCreationRequest(
+                branchName: GitHubWorkItem.issueBranchName(number: item.number, title: item.title),
+                isNewBranch: true,
+                baseBranch: selectedBaseBranch(),
+                origin: .issue(number: item.number)
+            ))
         }
     }
 
     // MARK: - Actions
 
-    @objc private func segmentChanged(_ sender: NSSegmentedControl) {
-        selectTab(sender.selectedSegment)
-    }
-
-    @objc private func issueRowClicked(_ sender: NSTableView) {
+    @objc private func pickerRowClicked(_ sender: NSTableView) {
         let row = sender.clickedRow
-        guard row >= 0, row < issues.count else { return }
-        let issue = issues[row]
-        fillFromIssue(number: issue.number, title: issue.title)
+        guard row >= 0, row < pickerRows.count, pickerRows[row].isSelectable else { return }
+        selectedPickerRow = row
+        applyPickerSelection()
+        // Keep the field first responder so Enter still confirms via its delegate.
         window?.makeFirstResponder(branchNameField)
     }
 
-    @objc private func checkoutRowClicked(_ sender: NSTableView) {
+    @objc private func pickerRowDoubleClicked(_ sender: NSTableView) {
         let row = sender.clickedRow
-        guard row >= 0, row < checkoutRows.count else { return }
-        checkoutSelectedRow = row
-        applyCheckoutSelection()
-        // Keep the field first responder so Enter still confirms via its delegate.
-        window?.makeFirstResponder(filterField)
-    }
-
-    @objc private func checkoutRowDoubleClicked(_ sender: NSTableView) {
-        let row = sender.clickedRow
-        guard row >= 0, row < checkoutRows.count else { return }
-        checkoutSelectedRow = row
-        confirmCheckout()
+        guard row >= 0, row < pickerRows.count, pickerRows[row].isSelectable else { return }
+        selectedPickerRow = row
+        confirm()
     }
 
     @objc private func createButtonClicked(_ sender: NSButton) {
@@ -1040,44 +893,29 @@ final class WorktreeCreationController: NSWindowController {
 extension WorktreeCreationController: NSTextFieldDelegate {
 
     func controlTextDidChange(_ obj: Notification) {
-        guard let field = obj.object as? NSTextField else { return }
-        if field === branchNameField {
-            handleNameChange()
-        } else if field === filterField {
-            rebuildCheckoutRows(preserveSelection: false)
-        }
+        guard let field = obj.object as? NSTextField, field === branchNameField else { return }
+        handleNameChange()
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        if control === branchNameField {
-            switch commandSelector {
-            case #selector(NSResponder.insertNewline(_:)):
-                confirm()
-                return true
-            case #selector(NSResponder.insertTab(_:)):
-                window?.makeFirstResponder(baseBranchPopup)
-                return true
-            default:
-                return false
-            }
+        guard control === branchNameField else { return false }
+        switch commandSelector {
+        case #selector(NSResponder.moveDown(_:)):
+            movePickerSelection(by: 1)
+            return true
+        case #selector(NSResponder.moveUp(_:)):
+            movePickerSelection(by: -1)
+            return true
+        case #selector(NSResponder.insertNewline(_:)):
+            confirm()
+            return true
+        case #selector(NSResponder.insertTab(_:)):
+            guard !baseBranchPopup.isHidden else { return false }
+            window?.makeFirstResponder(baseBranchPopup)
+            return true
+        default:
+            return false
         }
-
-        if control === filterField {
-            switch commandSelector {
-            case #selector(NSResponder.moveDown(_:)):
-                moveCheckoutSelection(by: 1)
-                return true
-            case #selector(NSResponder.moveUp(_:)):
-                moveCheckoutSelection(by: -1)
-                return true
-            case #selector(NSResponder.insertNewline(_:)):
-                confirm()
-                return true
-            default:
-                return false
-            }
-        }
-        return false
     }
 }
 
@@ -1086,28 +924,38 @@ extension WorktreeCreationController: NSTextFieldDelegate {
 extension WorktreeCreationController: NSTableViewDataSource, NSTableViewDelegate {
 
     func numberOfRows(in tableView: NSTableView) -> Int {
-        tableView === issuesTable ? issues.count : checkoutRows.count
+        pickerRows.count
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        if tableView === issuesTable {
-            guard row >= 0, row < issues.count else { return nil }
-            return makeIssueCell(issues[row])
-        }
-        guard row >= 0, row < checkoutRows.count else { return nil }
-        switch checkoutRows[row] {
+        guard row >= 0, row < pickerRows.count else { return nil }
+        switch pickerRows[row] {
+        case let .header(title): return makeHeaderCell(title)
+        case let .create(name): return makeCreateCell(name)
         case let .branch(branch): return makeBranchCell(branch)
         case let .pr(item): return makePRCell(item)
+        case let .issue(item): return makeIssueCell(item)
         }
     }
 
-    /// Mirror mouse-driven checkout selection back into the model so Enter and the
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+        row >= 0 && row < pickerRows.count && pickerRows[row].isSelectable
+    }
+
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        guard row >= 0, row < pickerRows.count else { return Layout.rowHeight }
+        if case .header = pickerRows[row] { return Layout.sectionHeaderRowHeight }
+        return Layout.rowHeight
+    }
+
+    /// Mirror mouse-driven selection back into the model so Enter and the
     /// create button track it.
     func tableViewSelectionDidChange(_ notification: Notification) {
-        guard notification.object as AnyObject === checkoutTable else { return }
-        let row = checkoutTable.selectedRow
-        if row >= 0, row < checkoutRows.count {
-            checkoutSelectedRow = row
+        guard notification.object as AnyObject === pickerTable else { return }
+        let row = pickerTable.selectedRow
+        if row >= 0, row < pickerRows.count, pickerRows[row].isSelectable {
+            selectedPickerRow = row
+            updateBaseRowVisibility()
             updateCreateButton()
         }
     }
@@ -1149,21 +997,59 @@ extension WorktreeCreationController: NSTableViewDataSource, NSTableViewDelegate
         return label
     }
 
+    private func makeHeaderCell(_ title: String) -> NSView {
+        let cell = NSTableCellView()
+        let label = NSTextField(labelWithString: title.uppercased())
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = .systemFont(ofSize: 10, weight: .semibold)
+        label.textColor = .tertiaryLabelColor
+        label.lineBreakMode = .byTruncatingTail
+        cell.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -8),
+            label.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -4),
+        ])
+        return cell
+    }
+
+    private func makeCreateCell(_ name: String) -> NSView {
+        let cell = NSTableCellView()
+        let icon = symbolIcon("plus.circle")
+        let title = primaryLabel(String(format: .localized("Create branch “%@”"), name))
+        cell.addSubview(icon)
+        cell.addSubview(title)
+        NSLayoutConstraint.activate([
+            icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
+            icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            title.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
+            title.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -8),
+            title.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+        ])
+        return cell
+    }
+
     private func makeIssueCell(_ item: GitHubWorkItem) -> NSView {
         let cell = NSTableCellView()
         let icon = symbolIcon("smallcircle.filled.circle")
         let number = dimLabel("#\(item.number)", monospacedDigits: true)
         let title = primaryLabel(item.title)
+        // The branch the row will create, so selecting an issue is not a surprise.
+        let branchLabel = dimLabel(GitHubWorkItem.issueBranchName(number: item.number, title: item.title))
+        branchLabel.lineBreakMode = .byTruncatingMiddle
+        branchLabel.setContentCompressionResistancePriority(.defaultLow + 1, for: .horizontal)
 
-        for view in [icon, number, title] { cell.addSubview(view) }
+        for view in [icon, number, title, branchLabel] { cell.addSubview(view) }
         NSLayoutConstraint.activate([
             icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
             icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
             number.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
             number.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
             title.leadingAnchor.constraint(equalTo: number.trailingAnchor, constant: 6),
-            title.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
+            title.trailingAnchor.constraint(lessThanOrEqualTo: branchLabel.leadingAnchor, constant: -8),
             title.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            branchLabel.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
+            branchLabel.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
         ])
         return cell
     }
