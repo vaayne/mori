@@ -196,10 +196,7 @@ public enum CowCloner {
     ) async throws {
         guard classify(path: clonePath) == .fullRepo else { return }
 
-        let worktreesDir = (clonePath as NSString)
-            .appendingPathComponent(".git")
-        let stale = (worktreesDir as NSString).appendingPathComponent("worktrees")
-        try? FileManager.default.removeItem(atPath: stale)
+        removeInheritedWorktreeRegistrations(clonePath: clonePath)
 
         if createBranch {
             var args = ["checkout", "-f", "-B", branch]
@@ -210,5 +207,32 @@ public enum CowCloner {
         } else {
             _ = try await runner.run(in: clonePath, ["checkout", "-f", branch])
         }
+    }
+
+    /// Prepare a freshly cloned full repository so an external `gh pr checkout`
+    /// can run cleanly, replacing `gitFixup`'s branch checkout for the PR flow.
+    ///
+    /// - Removes the inherited `.git/worktrees` registrations (same as `gitFixup`).
+    /// - `git reset --hard` discards tracked dirty state inherited from the source
+    ///   (same intent as `gitFixup`'s `checkout -f`). Untracked files are
+    ///   preserved — this deliberately never runs `git clean`.
+    ///
+    /// Knows nothing about GitHub/gh: the caller runs `gh pr checkout` afterward.
+    /// No-op unless `clonePath/.git` is a directory (i.e. a real clone).
+    public static func resetForPullRequestCheckout(
+        clonePath: String,
+        runner: GitCommandRunner = GitCommandRunner()
+    ) async throws {
+        guard classify(path: clonePath) == .fullRepo else { return }
+        removeInheritedWorktreeRegistrations(clonePath: clonePath)
+        _ = try await runner.run(in: clonePath, ["reset", "--hard"])
+    }
+
+    /// Drop `.git/worktrees` links copied from the source repo — they point at
+    /// the source's linked worktrees and are meaningless in the clone.
+    private static func removeInheritedWorktreeRegistrations(clonePath: String) {
+        let gitDir = (clonePath as NSString).appendingPathComponent(".git")
+        let stale = (gitDir as NSString).appendingPathComponent("worktrees")
+        try? FileManager.default.removeItem(atPath: stale)
     }
 }
