@@ -22,6 +22,7 @@ enum WorkspaceError: Error, LocalizedError {
     case remoteSessionNotFound(String)
     case remoteSessionAlreadyAttached(String)
     case unsafeWorkspaceDeletion(String)
+    case deletionInProgress
     case pullRequestUnavailable(Int)
     case pullRequestRequiresGitRepo
 
@@ -63,6 +64,8 @@ enum WorkspaceError: Error, LocalizedError {
             )
         case .unsafeWorkspaceDeletion(let reason):
             return reason
+        case .deletionInProgress:
+            return .localized("This workspace is already being deleted.")
         case .pullRequestUnavailable(let number):
             return String(
                 format: .localized("Could not resolve pull request #%d. Check that gh is installed, authenticated, and the PR exists."),
@@ -161,6 +164,13 @@ final class WorkspaceManager {
         for project in appState.projects {
             let wts = try worktreeRepo.fetchAll(forProject: project.id)
             allWorktrees.append(contentsOf: wts)
+        }
+        // Self-heal: a transient status in the store means a create/delete was
+        // interrupted (or an older build persisted one). Left as-is the row
+        // would be permanently unselectable and undeletable.
+        for i in allWorktrees.indices where allWorktrees[i].status.isTransient {
+            allWorktrees[i].status = .active
+            try? worktreeRepo.save(allWorktrees[i])
         }
         appState.worktrees = allWorktrees
         appState.uiState = try uiStateRepo.fetch()
@@ -490,10 +500,9 @@ final class WorkspaceManager {
     // MARK: - Select Worktree
 
     func selectWorktree(_ worktreeId: UUID) {
-        // Transient placeholders (creating/deleting) have no session to attach,
-        // and the save below would persist a status that must stay in-memory.
+        // Transient placeholders (creating/deleting) have no session to attach.
         if let transient = appState.worktrees.first(where: { $0.id == worktreeId }),
-           transient.status == .creating || transient.status == .deleting {
+           transient.status.isTransient {
             return
         }
         appState.uiState.selectedWorktreeId = worktreeId
@@ -565,8 +574,7 @@ final class WorkspaceManager {
         for project in appState.projects {
             guard case .local = location(for: project), !project.repoRootPath.isEmpty else { continue }
             let worktrees = appState.worktrees.filter {
-                $0.projectId == project.id && $0.branch != nil
-                    && $0.status != .creating && $0.status != .deleting
+                $0.projectId == project.id && $0.branch != nil && !$0.status.isTransient
             }
             guard !worktrees.isEmpty else { continue }
 
@@ -601,7 +609,7 @@ final class WorkspaceManager {
     /// `force` bypasses the throttle (used on selection for an immediate refresh).
     func refreshPullRequest(for worktreeId: UUID, force: Bool = false) async {
         guard let worktree = appState.worktrees.first(where: { $0.id == worktreeId }),
-              worktree.status != .creating, worktree.status != .deleting,
+              !worktree.status.isTransient,
               let branch = worktree.branch,
               case .local = location(for: worktree) else { return }
 
@@ -1509,7 +1517,7 @@ final class WorkspaceManager {
     func removeWorktree(worktreeId: UUID) async {
         guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }) else { return }
         let worktree = appState.worktrees[index]
-        guard worktree.status != .deleting else { return }
+        guard !worktree.status.isTransient else { return }
 
         // Don't allow removing the main worktree
         if worktree.isMainWorktree {
@@ -1552,11 +1560,16 @@ final class WorkspaceManager {
 
         switch response {
         case .alertFirstButtonReturn:
+            // Re-find by id: the awaits and modal above suspend the main actor,
+            // and a background deletion finishing meanwhile shifts the array —
+            // the entry index would remove the wrong row or trap.
+            guard let idx = appState.worktrees.firstIndex(where: { $0.id == worktree.id }),
+                  !appState.worktrees[idx].status.isTransient else { return }
             // Fire onWorktreeClose hook before cleanup
             fireHook(event: .onWorktreeClose, worktreeId: worktree.id)
             // Soft delete — remove from Mori but leave files on disk.
             recordDismissedWorkspacePath(projectId: worktree.projectId, path: worktree.path)
-            softDeleteWorktree(at: index)
+            softDeleteWorktree(at: idx)
 
         case .alertSecondButtonReturn:
             // Delete files. Clones/plain dirs are removed directly (they are not
@@ -1589,7 +1602,6 @@ final class WorkspaceManager {
         let worktree = appState.worktrees[index]
         let previousStatus = worktree.status
 
-        fireHook(event: .onWorktreeClose, worktreeId: worktree.id)
         appState.worktrees[index].status = .deleting
         deselectWorktree(worktree.id)
 
@@ -1597,6 +1609,10 @@ final class WorkspaceManager {
             guard let self else { return }
             do {
                 try await self.performWorktreeFileDeletion(worktree, force: force)
+                // Fire only once the deletion is irreversible: a failed attempt
+                // restores the row, and close hooks must not see false or
+                // duplicate (Force Delete retry) close events.
+                self.fireHook(event: .onWorktreeClose, worktreeId: worktree.id)
                 self.recordDismissedWorkspacePath(projectId: worktree.projectId, path: worktree.path)
                 if let idx = self.appState.worktrees.firstIndex(where: { $0.id == worktree.id }) {
                     self.softDeleteWorktree(at: idx)
@@ -1798,13 +1814,12 @@ final class WorkspaceManager {
         if worktree.isMainWorktree {
             throw WorkspaceError.cannotDeleteMainWorktree
         }
-        guard worktree.status != .deleting else { return }
+        guard worktree.status != .deleting else { throw WorkspaceError.deletionInProgress }
 
-        // Guardrails are checked before any side effect (hook, tmux kill,
-        // status flip) so a refusal leaves the workspace fully intact.
+        // Guardrails are checked before any side effect (tmux kill, status
+        // flip) so a refusal leaves the workspace fully intact.
         _ = try requiresDirectDeletion(worktree)
 
-        fireHook(event: .onWorktreeClose, worktreeId: worktree.id)
         let previousStatus = worktree.status
         appState.worktrees[index].status = .deleting
         deselectWorktree(worktree.id)
@@ -1818,6 +1833,8 @@ final class WorkspaceManager {
             throw error
         }
 
+        // As in the UI path: only a completed deletion is a close event.
+        fireHook(event: .onWorktreeClose, worktreeId: worktree.id)
         recordDismissedWorkspacePath(projectId: worktree.projectId, path: worktree.path)
         if let idx = appState.worktrees.firstIndex(where: { $0.id == worktree.id }) {
             softDeleteWorktree(at: idx)
@@ -1852,14 +1869,17 @@ final class WorkspaceManager {
 
     /// Check the actual git branch for a worktree and update if it changed.
     private func refreshWorktreeBranch(worktreeId: UUID) async {
-        guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }) else { return }
-        let worktree = appState.worktrees[index]
+        guard let worktree = appState.worktrees.first(where: { $0.id == worktreeId }) else { return }
 
         let git = gitBackend(for: worktree)
         guard let gitStatus = try? await git.status(worktreePath: worktree.path),
               let branch = gitStatus.branch,
               branch != worktree.branch else { return }
 
+        // Re-find by id: the array can shift during the await (a background
+        // deletion completing), and the row may have turned transient.
+        guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }),
+              !appState.worktrees[index].status.isTransient else { return }
         appState.worktrees[index].branch = branch
         appState.worktrees[index].name = branch
         try? worktreeRepo.save(appState.worktrees[index])
@@ -2403,6 +2423,10 @@ final class WorkspaceManager {
     private func updateWorktreeGitStatus(_ snapshots: [UUID: WorktreeGitSnapshot]) {
         for i in appState.worktrees.indices {
             guard let snapshot = snapshots[appState.worktrees[i].id] else { continue }
+            // The poll snapshot predates several awaits; the row may have
+            // flipped to a transient status (deletion started) since. Its git
+            // fields are about to be meaningless — don't touch or save them.
+            guard !appState.worktrees[i].status.isTransient else { continue }
             let status = snapshot.status
             let wt = appState.worktrees[i]
             let diff = snapshot.diff
@@ -2955,8 +2979,10 @@ final class WorkspaceManager {
     /// Cycle to the next or previous worktree (Ctrl+Tab / Ctrl+Shift+Tab).
     func cycleWorktree(forward: Bool) {
         guard let projectId = appState.uiState.selectedProjectId else { return }
+        // Skip transient rows: selectWorktree refuses them, so landing on one
+        // would leave the cycle stuck for as long as a deletion runs.
         let projectWorktrees = appState.worktrees
-            .filter { $0.projectId == projectId }
+            .filter { $0.projectId == projectId && !$0.status.isTransient }
         guard !projectWorktrees.isEmpty else { return }
 
         let currentIndex = projectWorktrees.firstIndex(where: {

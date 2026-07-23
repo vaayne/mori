@@ -253,8 +253,8 @@ public struct WorktreeSidebarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        // Creating/deleting placeholders have no session or files to select into.
-        .disabled(worktree.status == .creating || worktree.status == .deleting)
+        // Transient placeholders have no session or files to select into.
+        .disabled(worktree.status.isTransient)
         .background(
             RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
                 .fill(selected ? Color.primary.opacity(MoriTokens.Opacity.subtle) : (hovered ? Color.primary.opacity(MoriTokens.Opacity.quiet) : Color.clear))

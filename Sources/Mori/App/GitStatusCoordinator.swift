@@ -29,7 +29,7 @@ final class GitStatusCoordinator {
         baseRefForWorktree: @escaping @MainActor (Worktree) -> String?
     ) async -> [UUID: WorktreeGitSnapshot] {
         let activeWorktrees = worktrees.filter {
-            $0.status != .unavailable && $0.status != .creating && $0.status != .deleting && $0.branch != nil
+            $0.status != .unavailable && !$0.status.isTransient && $0.branch != nil
         }
         guard !activeWorktrees.isEmpty else { return [:] }
         return await withTaskGroup(of: (UUID, WorktreeGitSnapshot?).self) { group in

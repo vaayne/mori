@@ -46,6 +46,7 @@
 "Failed to create window" = "创建窗口失败";
 "Failed to delete worktree files" = "删除工作树文件失败";
 "Force Delete" = "强制删除";
+"This workspace is already being deleted." = "该工作区正在删除中。";
 "Force deleting discards uncommitted changes and untracked files in this worktree." = "强制删除会丢弃此工作树中未提交的改动和未跟踪的文件。";
 "Failed to open %@" = "打开 %@ 失败";
 "Failed to create embedded terminal surface." = "创建嵌入式终端界面失败。";

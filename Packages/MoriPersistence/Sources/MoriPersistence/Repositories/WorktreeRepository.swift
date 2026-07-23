@@ -26,6 +26,11 @@ public struct WorktreeRepository: Sendable {
     // MARK: - Write
 
     public func save(_ worktree: Worktree) throws {
+        // Transient statuses (creating/deleting) must never reach the store:
+        // callers race against them (a poll tick can save a row mid-deletion),
+        // and a persisted transient row can never heal. Skipping keeps the
+        // record's last durable state, matching the in-memory restore path.
+        guard !worktree.status.isTransient else { return }
         store.mutate { data in
             guard let pi = data.projects.firstIndex(where: { $0.project.id == worktree.projectId }) else { return }
             if let wi = data.projects[pi].worktrees.firstIndex(where: { $0.id == worktree.id }) {

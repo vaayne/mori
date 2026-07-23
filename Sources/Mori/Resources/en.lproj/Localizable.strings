@@ -46,6 +46,7 @@
 "Failed to create window" = "Failed to create window";
 "Failed to delete worktree files" = "Failed to delete worktree files";
 "Force Delete" = "Force Delete";
+"This workspace is already being deleted." = "This workspace is already being deleted.";
 "Force deleting discards uncommitted changes and untracked files in this worktree." = "Force deleting discards uncommitted changes and untracked files in this worktree.";
 "Failed to open %@" = "Failed to open %@";
 "Failed to create embedded terminal surface." = "Failed to create embedded terminal surface.";
