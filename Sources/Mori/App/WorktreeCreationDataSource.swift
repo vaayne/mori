@@ -4,11 +4,37 @@ import MoriGit
 
 // MARK: - Types
 
+/// Where a workspace-creation request originated. Defaults to `.branch` so the
+/// plain branch-name flow and all existing call sites stay unchanged.
+enum CreationOrigin: Sendable, Equatable {
+    /// Ordinary branch name (new or existing).
+    case branch
+    /// New branch from a GitHub issue; `branchName` carries the auto-generated name.
+    case issue(number: Int)
+    /// Work on a GitHub PR's head branch. `headRef` may be empty when it wasn't
+    /// resolvable panel-side (URL paste not in the prefetched list); the manager
+    /// then resolves it via `gh pr view` before creating.
+    case pullRequest(number: Int, headRef: String)
+}
+
 /// Represents a request to create a worktree from the creation panel.
 struct WorktreeCreationRequest: Sendable {
     let branchName: String
     let isNewBranch: Bool
     let baseBranch: String?
+    let origin: CreationOrigin
+
+    init(
+        branchName: String,
+        isNewBranch: Bool,
+        baseBranch: String?,
+        origin: CreationOrigin = .branch
+    ) {
+        self.branchName = branchName
+        self.isNewBranch = isNewBranch
+        self.baseBranch = baseBranch
+        self.origin = origin
+    }
 }
 
 // MARK: - DataSource
@@ -21,6 +47,9 @@ final class WorktreeCreationDataSource: Sendable {
 
     private let allBranches: [GitBranchInfo]
 
+    /// Local (non-remote) branches, computed once at init.
+    let localBranches: [GitBranchInfo]
+
     /// Local branch names, computed once at init.
     let localBranchNames: [String]
 
@@ -31,6 +60,7 @@ final class WorktreeCreationDataSource: Sendable {
         self.allBranches = branches
 
         let locals = branches.filter { !$0.isRemote }
+        self.localBranches = locals
         self.localBranchNames = locals.map(\.name)
 
         if let main = locals.first(where: { $0.name == "main" }) {
@@ -41,6 +71,18 @@ final class WorktreeCreationDataSource: Sendable {
             self.defaultBaseBranch = head.name
         } else {
             self.defaultBaseBranch = locals.first?.name ?? Self.fallbackBranch
+        }
+    }
+
+    /// Local branches available to check out: excludes any branch that already
+    /// backs a workspace in the current project, then narrows by a case-insensitive
+    /// substring query. An empty query keeps every non-excluded branch.
+    func checkoutBranches(excluding excluded: Set<String>, matching query: String) -> [GitBranchInfo] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        return localBranches.filter { branch in
+            guard !excluded.contains(branch.name) else { return false }
+            guard !q.isEmpty else { return true }
+            return branch.name.lowercased().contains(q)
         }
     }
 

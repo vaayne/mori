@@ -36,6 +36,22 @@ public actor GitBackend: GitControlling {
         _ = try await runner.run(in: repoPath, args)
     }
 
+    /// Add a detached worktree at `path`, checked out at `ref` (default HEAD).
+    /// Used as the base for `gh pr checkout` in the git-worktree fallback path:
+    /// the PR's local branch is created by the subsequent checkout, so this
+    /// deliberately avoids binding the worktree to any named branch.
+    public func addWorktreeDetached(
+        repoPath: String,
+        path: String,
+        ref: String? = nil
+    ) async throws {
+        var args = ["worktree", "add", "--detach", path]
+        if let ref, !ref.isEmpty {
+            args.append(ref)
+        }
+        _ = try await runner.run(in: repoPath, args)
+    }
+
     public func removeWorktree(
         repoPath: String,
         path: String,

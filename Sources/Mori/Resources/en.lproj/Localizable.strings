@@ -230,3 +230,21 @@
 "This workspace is a copy-on-write clone at %@.\n\nBranch \"%@\" and its unpushed work (%d commit(s) ahead, %@) exist only in this clone. Deleting the files will permanently lose them." = "This workspace is a copy-on-write clone at %@.\n\nBranch \"%@\" and its unpushed work (%d commit(s) ahead, %@) exist only in this clone. Deleting the files will permanently lose them.";
 "uncommitted changes present" = "uncommitted changes present";
 "no uncommitted changes" = "no uncommitted changes";
+
+/* Create workspace from GitHub issue / PR */
+"Draft" = "Draft";
+"New Workspace" = "New Workspace";
+"Close" = "Close";
+"New Branch" = "New Branch";
+"Check Out Existing" = "Check Out Existing";
+"Create Workspace" = "Create Workspace";
+"Base" = "Base";
+"Or start from an issue" = "Or start from an issue";
+"Branch already exists — it will be checked out" = "Branch already exists — it will be checked out";
+"Filter branches and PRs" = "Filter branches and PRs";
+"GitHub CLI (gh) was not found. Install it to work from an issue or PR." = "GitHub CLI (gh) was not found. Install it to work from an issue or PR.";
+"Failed to launch the GitHub CLI (gh)." = "Failed to launch the GitHub CLI (gh).";
+"The GitHub CLI (gh) command failed." = "The GitHub CLI (gh) command failed.";
+"The GitHub CLI (gh) command failed:\n\n%@" = "The GitHub CLI (gh) command failed:\n\n%@";
+"Could not resolve pull request #%d. Check that gh is installed, authenticated, and the PR exists." = "Could not resolve pull request #%d. Check that gh is installed, authenticated, and the PR exists.";
+"Creating a workspace from a pull request requires a git repository." = "Creating a workspace from a pull request requires a git repository.";

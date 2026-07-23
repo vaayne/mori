@@ -58,31 +58,32 @@ public struct PullRequestInfo: Equatable, Sendable {
         guard let dto = try? JSONDecoder().decode(GhPullRequestDTO.self, from: jsonData) else {
             return nil
         }
-        let state: State = switch dto.state.uppercased() {
-        case "MERGED": .merged
-        case "CLOSED": .closed
-        default: .open
+        return dto.info
+    }
+
+    /// Parse the JSON array emitted by `gh pr list --json <fields>,headRefName`
+    /// into a head-branch → PR map, so one repo-wide query can update every
+    /// worktree's badge. Returns nil when the payload can't be decoded (callers
+    /// treat that as "fetch failed", distinct from "no open PRs" → empty map).
+    ///
+    /// Entries without a headRefName are skipped. On duplicate head branches
+    /// (e.g. same-named branches in two forks) the first entry wins — gh lists
+    /// newest first.
+    public static func parseListByBranch(jsonData: Data) -> [String: PullRequestInfo]? {
+        guard let dtos = try? JSONDecoder().decode([GhPullRequestDTO].self, from: jsonData) else {
+            return nil
         }
-        let review: ReviewDecision = switch (dto.reviewDecision ?? "").uppercased() {
-        case "APPROVED": .approved
-        case "CHANGES_REQUESTED": .changesRequested
-        case "REVIEW_REQUIRED": .required
-        default: .none
+        var byBranch: [String: PullRequestInfo] = [:]
+        for dto in dtos {
+            guard let head = dto.headRefName, !head.isEmpty, byBranch[head] == nil else { continue }
+            byBranch[head] = dto.info
         }
-        return PullRequestInfo(
-            number: dto.number,
-            title: dto.title,
-            url: dto.url,
-            state: state,
-            isDraft: dto.isDraft ?? false,
-            checks: rollUpChecks(dto.statusCheckRollup ?? []),
-            reviewDecision: review
-        )
+        return byBranch
     }
 
     /// Collapse the heterogeneous check list (CheckRun + StatusContext) into one
     /// status. Any failure wins, then any pending, then passing, else none.
-    private static func rollUpChecks(_ items: [GhCheckDTO]) -> Checks {
+    fileprivate static func rollUpChecks(_ items: [GhCheckDTO]) -> Checks {
         guard !items.isEmpty else { return .none }
         var sawPending = false
         for item in items {
@@ -106,6 +107,31 @@ private struct GhPullRequestDTO: Decodable {
     let isDraft: Bool?
     let reviewDecision: String?
     let statusCheckRollup: [GhCheckDTO]?
+    /// Present only in `gh pr list` payloads that request it.
+    let headRefName: String?
+
+    var info: PullRequestInfo {
+        let state: PullRequestInfo.State = switch state.uppercased() {
+        case "MERGED": .merged
+        case "CLOSED": .closed
+        default: .open
+        }
+        let review: PullRequestInfo.ReviewDecision = switch (reviewDecision ?? "").uppercased() {
+        case "APPROVED": .approved
+        case "CHANGES_REQUESTED": .changesRequested
+        case "REVIEW_REQUIRED": .required
+        default: .none
+        }
+        return PullRequestInfo(
+            number: number,
+            title: title,
+            url: url,
+            state: state,
+            isDraft: isDraft ?? false,
+            checks: PullRequestInfo.rollUpChecks(statusCheckRollup ?? []),
+            reviewDecision: review
+        )
+    }
 }
 
 /// A single entry in `statusCheckRollup`. GitHub mixes two shapes: GitHub Actions

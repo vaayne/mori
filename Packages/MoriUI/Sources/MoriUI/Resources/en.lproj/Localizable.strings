@@ -316,3 +316,13 @@
 /* Copy-on-write clone workspaces */
 "Prefer copy-on-write clones for new workspaces" = "Prefer copy-on-write clones for new workspaces";
 "Create local workspaces as instant APFS clones of the project (keeping node_modules, build artifacts, and other untracked files). Falls back to a git worktree when cloning isn't possible." = "Create local workspaces as instant APFS clones of the project (keeping node_modules, build artifacts, and other untracked files). Falls back to a git worktree when cloning isn't possible.";
+
+/* Pull request badge */
+"right-click the worktree to open" = "right-click the worktree to open";
+"Draft" = "Draft";
+"Merged" = "Merged";
+"Closed" = "Closed";
+"Open" = "Open";
+"Review required" = "Review required";
+"Approved" = "Approved";
+"Changes requested" = "Changes requested";

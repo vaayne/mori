@@ -747,6 +747,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 return try await manager.listBranches(projectId: projectId, repoPathHint: repoPath)
             }
 
+            controller.fetchGitHubItems = { [weak manager] projectId, repoPath in
+                guard let manager else { return [] }
+                return await manager.fetchGitHubWorkItems(projectId: projectId, repoPath: repoPath)
+            }
+
             controller.onCreateWorktree = { [weak manager] request in
                 guard let manager else { return }
                 Task { @MainActor in
@@ -771,8 +776,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             projects: state.projects,
             selectedProjectId: projectId,
             repoPath: project.repoRootPath,
+            existingWorktreeBranches: existingWorktreeBranches(for: projectId, in: state),
             themeInfo: themeInfo
         )
+    }
+
+    /// Branches that already back a workspace in `projectId` — excluded from the
+    /// creation panel's checkout list so the same branch isn't opened twice.
+    private func existingWorktreeBranches(for projectId: UUID, in state: AppState) -> Set<String> {
+        Set(state.worktrees.filter { $0.projectId == projectId }.compactMap(\.branch))
     }
 
     /// Lightweight refresh when the user changes the project dropdown — only
@@ -785,7 +797,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         controller.refresh(
             projects: state.projects,
             selectedProjectId: projectId,
-            repoPath: project.repoRootPath
+            repoPath: project.repoRootPath,
+            existingWorktreeBranches: existingWorktreeBranches(for: projectId, in: state)
         )
     }
     // MARK: - Settings Window

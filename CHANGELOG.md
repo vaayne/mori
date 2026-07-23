@@ -9,10 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **macOS**: Redesigned the workspace creation panel as a two-tab dialog that answers one question — which branch the new workspace checks out. **New Branch** types a name to `checkout -b` off a chosen **Base**, or picks an open GitHub issue to start from (auto-named `issue-<number>-<title-slug>`); if the name already matches an existing branch, the panel says so and checks it out instead of blocking. **Check Out Existing** is one filterable list of local branches and open pull requests (a PR checks out its head branch, lighting up its badge and CI status), excluding any branch that already backs a workspace. A constant **Create Workspace** button confirms; Enter / ⌘⏎ / click work, Esc closes. Pasting a GitHub issue/PR URL — or typing `#123` — jumps to the right tab and selects it.
+- **macOS**: Sidebar workspace rows now show a pull request badge (`#number` plus CI status) next to the status line, with the PR state and title in the tooltip. PR info refreshes in the background for all local workspaces — one repo-wide query per project every ~20s — not just the selected one.
 - **macOS**: New local workspaces are now created as APFS copy-on-write clones of the project directory, so `node_modules`, build artifacts, and other untracked files are available instantly (a single `clonefile` syscall — seconds even for multi-GB repos). The new workspace appears in the sidebar immediately with a "Creating…" status while it materializes. Falls back to `git worktree` (git repos) or a plain copy (non-git) on non-APFS/cross-volume targets. A new setting under Worktree location — "Prefer copy-on-write clones for new workspaces" — toggles the behavior (on by default). Clones on disk are auto-discovered at launch, and deleting a clone warns before destroying unpushed local commits.
 
 ### Changed
 
+- **macOS**: Decluttered sidebar workspace rows so attention states stand out: the status line now appears only for agent activity, merge conflicts, creating, or a PR badge — "Ready to merge" and last-activity timestamps moved into the row tooltip (along with the full branch name). Diff counts render as quiet dimmed text instead of a bordered pill, and ⌘1–9 quick-jump hints show only while ⌘ is held.
 - **macOS**: Moved the sidebar's "New workspace" and overflow ("…") actions into the project header as hover-revealed icons next to the collapse chevron, removing the separate row beneath each project. The icons stay visible for projects with no workspaces yet.
 - **macOS**: Redesigned the command palette visual treatment with a blurred Ghostty-themed container, lighter search chrome, tighter rows, clearer type labels, and stronger keyboard selection focus.
 

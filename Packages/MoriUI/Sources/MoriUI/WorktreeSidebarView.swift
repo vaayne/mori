@@ -212,9 +212,11 @@ public struct WorktreeSidebarView: View {
 
     // MARK: - Worktree row
 
-    /// Two-line Conductor-style row. Line 1: branch glyph (or the working
-    /// agent's breathing brand glyph) + branch name + diff badge. Line 2:
-    /// worktree name · status + quick-jump ⌘N.
+    /// Conductor-style row. Line 1: branch glyph (or the working agent's
+    /// breathing brand glyph) + branch name + quiet diff text. A second line
+    /// appears only for attention states (agent activity, conflicts, creating)
+    /// or a PR badge; demoted info lives in the tooltip, and the quick-jump
+    /// ⌘N chip overlays the row only while ⌘ is held.
     private func worktreeRow(_ worktree: Worktree) -> some View {
         let selected = worktree.id == selectedWorktreeId
         let hovered = hoveredWorktreeId == worktree.id
@@ -258,31 +260,43 @@ public struct WorktreeSidebarView: View {
             RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
                 .fill(selected ? Color.primary.opacity(MoriTokens.Opacity.subtle) : (hovered ? Color.primary.opacity(MoriTokens.Opacity.quiet) : Color.clear))
         )
+        // Quick-jump hint appears only while ⌘ is held, as an overlay chip so
+        // rows never reflow. It may briefly cover the diff text — fine for a
+        // transient modifier hold.
+        .overlay(alignment: .trailing) {
+            if shortcutHintsVisible, let shortcut = worktreeShortcutIndices[worktree.id] {
+                Text("⌘\(shortcut)")
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(Color.primary.opacity(0.85))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.light)))
+                    .padding(.trailing, MoriTokens.Spacing.md)
+            }
+        }
+        .help(rowTooltip(worktree, title: title))
         .onHover { hoveredWorktreeId = $0 ? worktree.id : nil }
         .contextMenu { WorktreeContextActions(worktree: worktree, pullRequest: pullRequests[worktree.id], onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } }) }
     }
 
-    /// `+N -M` lines vs the project's base branch, in a quiet bordered pill.
+    /// `+N -M` lines vs the project's base branch. Reference info, not an action
+    /// signal, so it renders as quiet dimmed mono text — no pill, no border.
     @ViewBuilder
     private func diffBadge(_ worktree: Worktree) -> some View {
         if worktree.additions > 0 || worktree.deletions > 0 {
             HStack(spacing: MoriTokens.Spacing.sm) {
                 if worktree.additions > 0 {
-                    Text(verbatim: "+\(compactCount(worktree.additions))").foregroundStyle(MoriTokens.Color.success)
+                    Text(verbatim: "+\(compactCount(worktree.additions))")
+                        .foregroundStyle(MoriTokens.Color.success.opacity(0.75))
                 }
                 if worktree.deletions > 0 {
-                    Text(verbatim: "-\(compactCount(worktree.deletions))").foregroundStyle(MoriTokens.Color.error)
+                    Text(verbatim: "-\(compactCount(worktree.deletions))")
+                        .foregroundStyle(MoriTokens.Color.error.opacity(0.75))
                 }
             }
-            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
             .lineLimit(1)
             .fixedSize()
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1.5)
-            .background(
-                RoundedRectangle(cornerRadius: MoriTokens.Radius.badge + 1)
-                    .stroke(Color.primary.opacity(MoriTokens.Opacity.light), lineWidth: 1)
-            )
         }
     }
 
@@ -291,34 +305,31 @@ public struct WorktreeSidebarView: View {
         n >= 10_000 ? "\(n / 1000)k" : "\(n)"
     }
 
-    /// Worktree name (when it differs from the branch title) · status, with the
-    /// quick-jump shortcut on the right. The status word is the row's one loud
-    /// element: agent activity first, then merge readiness, then quiet time.
+    /// Appears only when the row needs attention (agent activity, conflicts,
+    /// creating) or has a PR badge — quiet rows stay single-line so the loud
+    /// ones stand out. Demoted info (worktree name, merge readiness, last
+    /// activity) lives in the row tooltip instead.
     @ViewBuilder
     private func secondLine(_ worktree: Worktree, title: String) -> some View {
         let status = statusText(worktree)
-        let shortcut = worktreeShortcutIndices[worktree.id]
-        if worktree.name != title || status != nil || shortcut != nil {
+        let pullRequest = pullRequests[worktree.id]
+        if status != nil || pullRequest != nil {
             HStack(spacing: MoriTokens.Spacing.sm) {
-                if worktree.name != title {
-                    Text(worktree.name).foregroundStyle(MoriTokens.Color.muted).lineLimit(1)
-                    if status != nil { Text("·").foregroundStyle(MoriTokens.Color.muted) }
-                }
                 if let status {
                     Text(status.text).foregroundStyle(status.color).lineLimit(1)
                 }
-                Spacer(minLength: 0)
-                if let shortcut {
-                    Text("⌘\(shortcut)")
-                        .font(.system(size: 10.5, design: .monospaced))
-                        .foregroundStyle(shortcutHintsVisible ? Color.primary.opacity(0.8) : MoriTokens.Color.inactive)
+                if let pullRequest {
+                    PullRequestBadge(info: pullRequest)
                 }
+                Spacer(minLength: 0)
             }
             .font(.system(size: 11.5))
             .padding(.leading, 15 + MoriTokens.Spacing.md)
         }
     }
 
+    /// Only states that need the user's attention earn a status line; anything
+    /// informational ("ready to merge", last activity) is tooltip material.
     private func statusText(_ w: Worktree) -> (text: String, color: Color)? {
         if w.status == .creating { return (String.localized("Creating…"), MoriTokens.Color.muted) }
         switch w.agentState {
@@ -328,11 +339,20 @@ public struct WorktreeSidebarView: View {
         case .completed, .none: break
         }
         if w.hasMergeConflicts == true { return (String.localized("Merge conflicts"), MoriTokens.Color.warning) }
-        if w.hasMergeConflicts == false, w.additions + w.deletions > 0, !w.hasUncommittedChanges {
-            return (String.localized("Ready to merge"), MoriTokens.Color.success)
-        }
-        if let time = relativeTime(w.lastActiveAt) { return (time, MoriTokens.Color.inactive) }
         return nil
+    }
+
+    /// Hover detail for the info demoted off the row: full branch title (rows
+    /// truncate), the worktree name when it differs, merge readiness, and last
+    /// activity.
+    private func rowTooltip(_ w: Worktree, title: String) -> String {
+        var parts: [String] = [title]
+        if w.name != title { parts.append(w.name) }
+        if w.hasMergeConflicts == false, w.additions + w.deletions > 0, !w.hasUncommittedChanges {
+            parts.append(String.localized("Ready to merge"))
+        }
+        if let time = relativeTime(w.lastActiveAt) { parts.append(time) }
+        return parts.joined(separator: " · ")
     }
 
     /// The main/master checkout and linked worktrees read as different shapes; a

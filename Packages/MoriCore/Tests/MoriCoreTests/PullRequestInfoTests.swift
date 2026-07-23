@@ -75,6 +75,39 @@ func testPullRequestParseInvalidReturnsNil() {
     assertNil(pr("{\"title\":\"missing number\"}"))
 }
 
+// MARK: - List parsing (gh pr list, keyed by head branch)
+
+func testPullRequestParseListByBranch() {
+    let json = """
+    [{"number":10,"title":"a","url":"u1","state":"OPEN","headRefName":"feat/a"},
+     {"number":11,"title":"b","url":"u2","state":"OPEN","isDraft":true,"headRefName":"fix/b"}]
+    """
+    let map = PullRequestInfo.parseListByBranch(jsonData: Data(json.utf8))
+    assertEqual(map?.count, 2)
+    assertEqual(map?["feat/a"]?.number, 10)
+    assertEqual(map?["fix/b"]?.number, 11)
+    assertEqual(map?["fix/b"]?.isDraft, true)
+}
+
+func testPullRequestParseListByBranchSkipsAndDeduplicates() {
+    // No headRefName → skipped; duplicate head branch → first (newest) wins.
+    let json = """
+    [{"number":1,"title":"no head","url":"u","state":"OPEN"},
+     {"number":2,"title":"newer","url":"u","state":"OPEN","headRefName":"same"},
+     {"number":3,"title":"older","url":"u","state":"OPEN","headRefName":"same"}]
+    """
+    let map = PullRequestInfo.parseListByBranch(jsonData: Data(json.utf8))
+    assertEqual(map?.count, 1)
+    assertEqual(map?["same"]?.number, 2)
+}
+
+func testPullRequestParseListByBranchFailureVsEmpty() {
+    // Decode failure → nil ("fetch failed"), distinct from [] → empty map.
+    assertNil(PullRequestInfo.parseListByBranch(jsonData: Data("not json".utf8)))
+    let empty = PullRequestInfo.parseListByBranch(jsonData: Data("[]".utf8))
+    assertEqual(empty?.count, 0)
+}
+
 func runPullRequestInfoTests() {
     testPullRequestParseOpenPassing()
     testPullRequestParseFailingCheckWins()
@@ -83,4 +116,7 @@ func runPullRequestInfoTests() {
     testPullRequestParseNoChecks()
     testPullRequestParseDraftAndMerged()
     testPullRequestParseInvalidReturnsNil()
+    testPullRequestParseListByBranch()
+    testPullRequestParseListByBranchSkipsAndDeduplicates()
+    testPullRequestParseListByBranchFailureVsEmpty()
 }
