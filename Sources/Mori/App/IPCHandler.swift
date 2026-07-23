@@ -204,6 +204,12 @@ final class IPCHandler {
             return .error(message: "Worktree has no tmux session")
         }
 
+        // Sessions are created lazily on selection; a worktree that was never
+        // selected in the UI has none yet, so create it before adding a window.
+        guard await manager.ensureTmuxSession(for: worktree) else {
+            return .error(message: "Failed to create tmux session for worktree \(worktreeName)")
+        }
+
         let tmux = manager.tmuxBackendForWorktree(worktree)
         do {
             let window = try await tmux.createWindow(

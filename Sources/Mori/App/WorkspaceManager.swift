@@ -1922,7 +1922,10 @@ final class WorkspaceManager {
     /// Ensure a tmux session exists for the given worktree, creating one if needed.
     /// Returns false if session scan/create failed.
     @discardableResult
-    private func ensureTmuxSession(for worktree: Worktree, showErrors: Bool = false) async -> Bool {
+    // Internal (not private): IPC entry points that need a live session
+    // (window new) must be able to create it — sessions are lazy since rows
+    // imported but never selected have none.
+    func ensureTmuxSession(for worktree: Worktree, showErrors: Bool = false) async -> Bool {
         guard let sessionName = worktree.tmuxSessionName else { return false }
         let tmux = tmuxBackend(for: worktree)
 
