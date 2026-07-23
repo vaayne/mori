@@ -78,8 +78,16 @@ testParseShortstatDeletionsOnly()
 testParseShortstatEmpty()
 testParseShortstatConflictsPassthrough()
 
+// CowCloner tests
+testCowCloneCopiesTreeAndSymlink()
+testCowCloneFailsWhenDestExists()
+testCowCloneCleansUpTempOnFailure()
+testCowClonerClassify()
+await testCowClonerGitFixupNewBranch()
+
 printResults()
 
 if failCount > 0 {
+    fflush(stdout)
     fatalError("Tests failed")
 }

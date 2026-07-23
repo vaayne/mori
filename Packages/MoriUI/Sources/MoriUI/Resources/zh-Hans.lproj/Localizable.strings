@@ -178,6 +178,7 @@
 "Cancelled" = "已取消";
 "Show Cancelled (%lld)" = "显示已取消 (%lld)";
 "Hide Cancelled" = "隐藏已取消";
+"Creating…" = "创建中…";
 "just now" = "刚刚";
 "%lldm ago" = "%lld分钟前";
 "%lldh ago" = "%lld小时前";
@@ -311,3 +312,7 @@
 "Used when macOS is in dark appearance." = "macOS 处于深色外观时使用。";
 "Light" = "浅色";
 "Dark" = "深色";
+
+/* Copy-on-write clone workspaces */
+"Prefer copy-on-write clones for new workspaces" = "新建工作区优先使用写时复制克隆";
+"Create local workspaces as instant APFS clones of the project (keeping node_modules, build artifacts, and other untracked files). Falls back to a git worktree when cloning isn't possible." = "以项目的 APFS 瞬时克隆方式创建本地工作区（保留 node_modules、构建产物等未跟踪文件）。无法克隆时回退到 git worktree。";

@@ -223,3 +223,10 @@
 "Running" = "运行中";
 "Waiting" = "等待中";
 "Error" = "错误";
+
+/* Copy-on-write clone workspaces */
+"Cannot delete workspace files" = "无法删除工作区文件";
+"Refusing to delete \"%@\": it is not inside the managed workspace directory." = "拒绝删除 \"%@\"：它不在受管理的工作区目录内。";
+"This workspace is a copy-on-write clone at %@.\n\nBranch \"%@\" and its unpushed work (%d commit(s) ahead, %@) exist only in this clone. Deleting the files will permanently lose them." = "该工作区是位于 %@ 的写时复制克隆。\n\n分支 \"%@\" 及其未推送的改动（领先 %d 个提交，%@）仅存在于此克隆中。删除文件将永久丢失这些内容。";
+"uncommitted changes present" = "存在未提交的改动";
+"no uncommitted changes" = "无未提交改动";

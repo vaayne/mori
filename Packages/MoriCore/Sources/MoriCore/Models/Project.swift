@@ -20,6 +20,10 @@ public struct Project: Identifiable, Codable, Equatable, Sendable {
     /// project/worktree endpoint locations aligned unless a worktree is intentionally
     /// assigned a different endpoint in a dedicated migration.
     public var location: WorkspaceLocation?
+    /// Normalized paths of workspaces the user removed from Mori while their files
+    /// still exist on disk. Consulted by workspace auto-discovery so a removed
+    /// clone/plain-dir is not resurrected on the next scan. nil = legacy/empty.
+    public var dismissedWorktreePaths: [String]?
 
     public init(
         id: UUID = UUID(),
@@ -34,7 +38,8 @@ public struct Project: Identifiable, Codable, Equatable, Sendable {
         lastActiveAt: Date? = nil,
         aggregateUnreadCount: Int = 0,
         aggregateAlertState: AlertState = .none,
-        location: WorkspaceLocation? = nil
+        location: WorkspaceLocation? = nil,
+        dismissedWorktreePaths: [String]? = nil
     ) {
         self.id = id
         self.name = name
@@ -49,6 +54,7 @@ public struct Project: Identifiable, Codable, Equatable, Sendable {
         self.aggregateUnreadCount = aggregateUnreadCount
         self.aggregateAlertState = aggregateAlertState
         self.location = location
+        self.dismissedWorktreePaths = dismissedWorktreePaths
     }
 
     /// The special $HOME workspace: pinned as a single "Home" row atop the

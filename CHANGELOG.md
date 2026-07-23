@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **macOS**: New local workspaces are now created as APFS copy-on-write clones of the project directory, so `node_modules`, build artifacts, and other untracked files are available instantly (a single `clonefile` syscall — seconds even for multi-GB repos). The new workspace appears in the sidebar immediately with a "Creating…" status while it materializes. Falls back to `git worktree` (git repos) or a plain copy (non-git) on non-APFS/cross-volume targets. A new setting under Worktree location — "Prefer copy-on-write clones for new workspaces" — toggles the behavior (on by default). Clones on disk are auto-discovered at launch, and deleting a clone warns before destroying unpushed local commits.
+
 ### Changed
 
+- **macOS**: Moved the sidebar's "New workspace" and overflow ("…") actions into the project header as hover-revealed icons next to the collapse chevron, removing the separate row beneath each project. The icons stay visible for projects with no workspaces yet.
 - **macOS**: Redesigned the command palette visual treatment with a blurred Ghostty-themed container, lighter search chrome, tighter rows, clearer type labels, and stronger keyboard selection focus.
 
 ## [0.5.7] - 2026-07-06

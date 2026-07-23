@@ -645,6 +645,20 @@ private struct GeneralSettingsContent: View {
 
             CardDivider()
 
+            SettingRow(
+                title: .localized("Prefer copy-on-write clones for new workspaces"),
+                description: .localized("Create local workspaces as instant APFS clones of the project (keeping node_modules, build artifacts, and other untracked files). Falls back to a git worktree when cloning isn't possible.")
+            ) {
+                Toggle("", isOn: $toolSettings.preferCowClones)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .onChange(of: toolSettings.preferCowClones) { _, _ in
+                        onWorktreeBasePathChanged()
+                    }
+            }
+
+            CardDivider()
+
             HStack {
                 Button(String.localized("Apply")) {
                     onWorktreeBasePathChanged()
