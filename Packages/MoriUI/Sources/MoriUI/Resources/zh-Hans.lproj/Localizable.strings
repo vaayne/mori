@@ -178,6 +178,7 @@
 "Cancelled" = "已取消";
 "Show Cancelled (%lld)" = "显示已取消 (%lld)";
 "Hide Cancelled" = "隐藏已取消";
+"Creating…" = "创建中…";
 "just now" = "刚刚";
 "%lldm ago" = "%lld分钟前";
 "%lldh ago" = "%lld小时前";

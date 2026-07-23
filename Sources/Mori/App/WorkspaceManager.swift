@@ -1152,51 +1152,67 @@ final class WorkspaceManager {
         let isGitRepo = try await git.isGitRepo(path: project.repoRootPath)
         let preferCow = ToolSettings.load().preferCowClones
 
-        // Materialize the workspace on disk and record how it was made.
-        let kind: WorktreeKind
-        if case .local = projectLocation, preferCow {
-            kind = try await materializeLocalWorkspace(
-                repoRootPath: project.repoRootPath,
-                worktreePath: worktreePath,
-                branch: trimmed,
-                createBranch: createBranch,
-                baseBranch: baseBranch,
-                isGitRepo: isGitRepo,
-                git: git
-            )
-        } else if isGitRepo {
-            // SSH projects, or local with clones disabled: existing git worktree path.
-            try await addGitWorktreeWithRetry(
-                git: git,
-                repoPath: project.repoRootPath,
-                path: worktreePath,
-                branch: trimmed,
-                createBranch: createBranch,
-                baseBranch: baseBranch
-            )
-            kind = .gitWorktree
-        } else {
-            try await git.ensureDirectory(path: worktreePath)
-            kind = .plainDirectory
-        }
-
-        // A previously-removed workspace at this exact path is being recreated;
-        // clear the dismissal so auto-discovery treats it as tracked again.
-        clearDismissedWorkspacePath(projectId: projectId, path: worktreePath)
-
-        // Step 2: Create Worktree model and save to DB
+        // Optimistic placeholder: the row appears in the sidebar immediately
+        // with a "Creating…" status while materialization runs. In-memory only —
+        // it is persisted after promotion to .active, so a crash mid-create
+        // can't leave a stale record pointing at a half-built directory.
         let sessionName = SessionNaming.sessionName(projectShortName: project.shortName, worktree: trimmed)
-        let worktree = Worktree(
+        var worktree = Worktree(
             projectId: projectId,
             name: trimmed,
             path: worktreePath,
             branch: trimmed,
             isMainWorktree: false,
             tmuxSessionName: sessionName,
-            status: .active,
-            location: projectLocation,
-            kind: kind
+            status: .creating,
+            location: projectLocation
         )
+        appState.worktrees.append(worktree)
+
+        // Materialize the workspace on disk and record how it was made.
+        let kind: WorktreeKind
+        do {
+            if case .local = projectLocation, preferCow {
+                kind = try await materializeLocalWorkspace(
+                    repoRootPath: project.repoRootPath,
+                    worktreePath: worktreePath,
+                    branch: trimmed,
+                    createBranch: createBranch,
+                    baseBranch: baseBranch,
+                    isGitRepo: isGitRepo,
+                    git: git
+                )
+            } else if isGitRepo {
+                // SSH projects, or local with clones disabled: existing git worktree path.
+                try await addGitWorktreeWithRetry(
+                    git: git,
+                    repoPath: project.repoRootPath,
+                    path: worktreePath,
+                    branch: trimmed,
+                    createBranch: createBranch,
+                    baseBranch: baseBranch
+                )
+                kind = .gitWorktree
+            } else {
+                try await git.ensureDirectory(path: worktreePath)
+                kind = .plainDirectory
+            }
+        } catch {
+            // Roll back the placeholder so the sidebar doesn't show a ghost row.
+            appState.worktrees.removeAll { $0.id == worktree.id }
+            throw error
+        }
+
+        // A previously-removed workspace at this exact path is being recreated;
+        // clear the dismissal so auto-discovery treats it as tracked again.
+        clearDismissedWorkspacePath(projectId: projectId, path: worktreePath)
+
+        // Step 2: Promote the placeholder and persist.
+        worktree.status = .active
+        worktree.kind = kind
+        if let idx = appState.worktrees.firstIndex(where: { $0.id == worktree.id }) {
+            appState.worktrees[idx] = worktree
+        }
         try worktreeRepo.save(worktree)
 
         // Step 3: Create tmux session (partial failure tolerant)
@@ -1211,8 +1227,7 @@ final class WorkspaceManager {
             // tmux failure is non-fatal — session will be created on next select
         }
 
-        // Step 4: Update app state
-        appState.worktrees.append(worktree)
+        // Step 4: Select (the row is already in appState from the placeholder)
         selectWorktree(worktree.id)
 
         // Fire onWorktreeCreate hook

@@ -17,7 +17,8 @@ final class GitStatusCoordinator {
 
     /// Poll git status and diff stats for all active worktrees concurrently.
     /// Returns a map of worktreeId -> WorktreeGitSnapshot.
-    /// Skips worktrees with status == .unavailable.
+    /// Skips worktrees with status == .unavailable, and .creating rows whose
+    /// path may not exist on disk yet.
     /// - Parameter baseRefForWorktree: the branch a worktree's diff badge compares
     ///   against (the project's default branch); nil for the main worktree, which
     ///   diffs its own uncommitted changes instead.
@@ -26,7 +27,7 @@ final class GitStatusCoordinator {
         backendForWorktree: @escaping @MainActor (Worktree) -> GitBackend,
         baseRefForWorktree: @escaping @MainActor (Worktree) -> String?
     ) async -> [UUID: WorktreeGitSnapshot] {
-        let activeWorktrees = worktrees.filter { $0.status != .unavailable && $0.branch != nil }
+        let activeWorktrees = worktrees.filter { $0.status != .unavailable && $0.status != .creating && $0.branch != nil }
         guard !activeWorktrees.isEmpty else { return [:] }
         return await withTaskGroup(of: (UUID, WorktreeGitSnapshot?).self) { group in
             for worktree in activeWorktrees {
