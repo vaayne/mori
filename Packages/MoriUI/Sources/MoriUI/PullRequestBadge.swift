@@ -12,7 +12,9 @@ struct PullRequestBadge: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Text("#\(info.number)")
+            // verbatim: interpolated Text goes through LocalizedStringKey, which
+            // renders Int with locale grouping ("#16,838").
+            Text(verbatim: "#\(info.number)")
                 .font(MoriTokens.Font.monoSmall)
                 .foregroundStyle(stateColor)
                 .lineLimit(1)

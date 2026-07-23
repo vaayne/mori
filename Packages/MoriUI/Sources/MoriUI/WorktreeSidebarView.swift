@@ -213,10 +213,10 @@ public struct WorktreeSidebarView: View {
     // MARK: - Worktree row
 
     /// Conductor-style row. Line 1: branch glyph (or the working agent's
-    /// breathing brand glyph) + branch name + quiet diff text. A second line
-    /// appears only for attention states (agent activity, conflicts, creating)
-    /// or a PR badge; demoted info lives in the tooltip, and the quick-jump
-    /// ⌘N chip overlays the row only while ⌘ is held.
+    /// breathing brand glyph) + branch name. A second line appears only for
+    /// attention states (agent activity, conflicts, creating) or a PR badge;
+    /// demoted info (including diff counts) lives in the tooltip, and the
+    /// quick-jump ⌘N chip overlays the row only while ⌘ is held.
     private func worktreeRow(_ worktree: Worktree) -> some View {
         let selected = worktree.id == selectedWorktreeId
         let hovered = hoveredWorktreeId == worktree.id
@@ -245,7 +245,6 @@ public struct WorktreeSidebarView: View {
                     if wins.count >= 2 {
                         windowChip(count: wins.count, expanded: expanded, selected: selected, alert: hiddenWindowAlert(wins, expanded: expanded)) { toggle(&expandedWorktrees, worktree.id) }
                     }
-                    diffBadge(worktree)
                 }
                 secondLine(worktree, title: title)
             }
@@ -261,8 +260,8 @@ public struct WorktreeSidebarView: View {
                 .fill(selected ? Color.primary.opacity(MoriTokens.Opacity.subtle) : (hovered ? Color.primary.opacity(MoriTokens.Opacity.quiet) : Color.clear))
         )
         // Quick-jump hint appears only while ⌘ is held, as an overlay chip so
-        // rows never reflow. It may briefly cover the diff text — fine for a
-        // transient modifier hold.
+        // rows never reflow. It may briefly cover the row's trailing edge —
+        // fine for a transient modifier hold.
         .overlay(alignment: .trailing) {
             if shortcutHintsVisible, let shortcut = worktreeShortcutIndices[worktree.id] {
                 Text("⌘\(shortcut)")
@@ -277,32 +276,6 @@ public struct WorktreeSidebarView: View {
         .help(rowTooltip(worktree, title: title))
         .onHover { hoveredWorktreeId = $0 ? worktree.id : nil }
         .contextMenu { WorktreeContextActions(worktree: worktree, pullRequest: pullRequests[worktree.id], onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } }) }
-    }
-
-    /// `+N -M` lines vs the project's base branch. Reference info, not an action
-    /// signal, so it renders as quiet dimmed mono text — no pill, no border.
-    @ViewBuilder
-    private func diffBadge(_ worktree: Worktree) -> some View {
-        if worktree.additions > 0 || worktree.deletions > 0 {
-            HStack(spacing: MoriTokens.Spacing.sm) {
-                if worktree.additions > 0 {
-                    Text(verbatim: "+\(compactCount(worktree.additions))")
-                        .foregroundStyle(MoriTokens.Color.success.opacity(0.75))
-                }
-                if worktree.deletions > 0 {
-                    Text(verbatim: "-\(compactCount(worktree.deletions))")
-                        .foregroundStyle(MoriTokens.Color.error.opacity(0.75))
-                }
-            }
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .lineLimit(1)
-            .fixedSize()
-        }
-    }
-
-    /// Keeps the diff badge narrow on huge branches: 65031 reads as "65k".
-    private func compactCount(_ n: Int) -> String {
-        n >= 10_000 ? "\(n / 1000)k" : "\(n)"
     }
 
     /// Appears only when the row needs attention (agent activity, conflicts,
@@ -343,11 +316,14 @@ public struct WorktreeSidebarView: View {
     }
 
     /// Hover detail for the info demoted off the row: full branch title (rows
-    /// truncate), the worktree name when it differs, merge readiness, and last
-    /// activity.
+    /// truncate), the worktree name when it differs, diff counts vs the base
+    /// branch, merge readiness, and last activity.
     private func rowTooltip(_ w: Worktree, title: String) -> String {
         var parts: [String] = [title]
         if w.name != title { parts.append(w.name) }
+        if w.additions > 0 || w.deletions > 0 {
+            parts.append("+\(w.additions) -\(w.deletions)")
+        }
         if w.hasMergeConflicts == false, w.additions + w.deletions > 0, !w.hasUncommittedChanges {
             parts.append(String.localized("Ready to merge"))
         }
