@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **macOS**: Decluttered sidebar workspace rows so attention states stand out: the status line now appears only for agent activity, merge conflicts, creating, or a PR badge — "Ready to merge" and last-activity timestamps moved into the row tooltip (along with the full branch name). Diff counts render as quiet dimmed text instead of a bordered pill, and ⌘1–9 quick-jump hints show only while ⌘ is held.
 - **macOS**: Moved the sidebar's "New workspace" and overflow ("…") actions into the project header as hover-revealed icons next to the collapse chevron, removing the separate row beneath each project. The icons stay visible for projects with no workspaces yet.
 - **macOS**: Redesigned the command palette visual treatment with a blurred Ghostty-themed container, lighter search chrome, tighter rows, clearer type labels, and stronger keyboard selection focus.
 
