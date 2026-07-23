@@ -1480,14 +1480,9 @@ final class WorkspaceManager {
             return
         }
 
-        guard let projectId = appState.uiState.selectedProjectId else {
-            showErrorAlert(title: .localized("No Project Selected"), message: .localized("Please select a project first."))
-            return
-        }
-
         do {
             _ = try await createWorktree(
-                projectId: projectId,
+                projectId: request.projectId,
                 branchName: trimmed,
                 createBranch: request.isNewBranch,
                 baseBranch: request.baseBranch,

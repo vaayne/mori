@@ -47,6 +47,8 @@
 "Failed to delete worktree files" = "删除工作树文件失败";
 "Force Delete" = "强制删除";
 "This workspace is already being deleted." = "该工作区正在删除中。";
+"PR #%d isn’t among the open pull requests — it may be closed, merged, or beyond the fetched list." = "PR #%d 不在开放的 Pull Request 列表中——可能已关闭、已合并，或超出了拉取范围。";
+"“%@” is already open as a workspace." = "“%@”已经作为工作区打开。";
 "Force deleting discards uncommitted changes and untracked files in this worktree." = "强制删除会丢弃此工作树中未提交的改动和未跟踪的文件。";
 "Failed to open %@" = "打开 %@ 失败";
 "Failed to create embedded terminal surface." = "创建嵌入式终端界面失败。";

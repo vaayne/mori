@@ -11,6 +11,10 @@ import MoriTerminal
 /// no base to choose.
 private enum PickerRow {
     case header(String)
+    /// Non-actionable explanation for a query that has no actionable rows
+    /// (a branch already backing a workspace, an unknown PR URL) — without it
+    /// those queries read as the panel being broken.
+    case hint(String)
     /// Create a new branch with the typed name off the base branch.
     case create(name: String)
     /// Check out an existing branch (a remote one checks out its local name).
@@ -21,14 +25,16 @@ private enum PickerRow {
     case issue(GitHubWorkItem)
 
     var isSelectable: Bool {
-        if case .header = self { return false }
-        return true
+        switch self {
+        case .header, .hint: return false
+        case .create, .branch, .pr, .issue: return true
+        }
     }
 
     var createsNewBranch: Bool {
         switch self {
         case .create, .issue: return true
-        case .header, .branch, .pr: return false
+        case .header, .hint, .branch, .pr: return false
         }
     }
 
@@ -684,18 +690,36 @@ final class WorktreeCreationController: NSWindowController {
         let query = branchNameField.stringValue.trimmingCharacters(in: .whitespaces)
         let q = query.lowercased()
         let referencedNumber = hashNumber(in: query)
+        let exactMatch = dataSource?.exactMatch(for: query)
         var rows: [PickerRow] = []
 
-        // A name that is neither an existing branch nor a `#123` reference can
-        // be created.
-        if !query.isEmpty, referencedNumber == nil, dataSource?.exactMatch(for: query) == nil {
+        if let (kind, number) = GitHubWorkItem.parseURL(query) {
+            // Only an unknown PR URL survives handleNameChange un-rewritten; a
+            // URL is never a valid branch name, so explain instead of offering
+            // a doomed create row.
+            if kind == .pullRequest {
+                rows.append(.hint(String(
+                    format: .localized("PR #%d isn’t among the open pull requests — it may be closed, merged, or beyond the fetched list."),
+                    number
+                )))
+            }
+        } else if !query.isEmpty, referencedNumber == nil, exactMatch == nil {
+            // A name that is neither an existing branch nor a `#123` reference
+            // can be created.
             rows.append(.create(name: query))
+        } else if let exactMatch, !exactMatch.isRemote, excludedBranches.contains(exactMatch.name) {
+            // The typed branch exists but already backs a workspace: both the
+            // create row and its branch row are suppressed, so say why.
+            rows.append(.hint(String(
+                format: .localized("“%@” is already open as a workspace."),
+                exactMatch.name
+            )))
         }
 
         var branches = dataSource?.checkoutBranches(excluding: excludedBranches, matching: query) ?? []
         // An exact match on a remote-only branch stays selectable even though
         // the list is local: typing its full name checks it out.
-        if let match = dataSource?.exactMatch(for: query), match.isRemote,
+        if let match = exactMatch, match.isRemote,
            !branches.contains(where: { $0.name == match.name }) {
             branches.insert(match, at: 0)
         }
@@ -812,14 +836,15 @@ final class WorktreeCreationController: NSWindowController {
     private func confirm() {
         guard selectedPickerRow >= 0, selectedPickerRow < pickerRows.count else { return }
         let row = pickerRows[selectedPickerRow]
-        guard row.isSelectable else { return }
+        guard row.isSelectable, let projectId = selectedProjectId else { return }
         dismiss()
 
         switch row {
-        case .header:
+        case .header, .hint:
             break
         case let .create(name):
             onCreateWorktree?(WorktreeCreationRequest(
+                projectId: projectId,
                 branchName: name,
                 isNewBranch: true,
                 baseBranch: selectedBaseBranch(),
@@ -827,6 +852,7 @@ final class WorktreeCreationController: NSWindowController {
             ))
         case let .branch(branch):
             onCreateWorktree?(WorktreeCreationRequest(
+                projectId: projectId,
                 branchName: branch.isRemote ? branch.displayName : branch.name,
                 isNewBranch: false,
                 baseBranch: nil,
@@ -837,6 +863,7 @@ final class WorktreeCreationController: NSWindowController {
             // branch from headRef (and rejects an empty one).
             let head = item.headRefName ?? ""
             onCreateWorktree?(WorktreeCreationRequest(
+                projectId: projectId,
                 branchName: head,
                 isNewBranch: false,
                 baseBranch: nil,
@@ -844,6 +871,7 @@ final class WorktreeCreationController: NSWindowController {
             ))
         case let .issue(item):
             onCreateWorktree?(WorktreeCreationRequest(
+                projectId: projectId,
                 branchName: GitHubWorkItem.issueBranchName(number: item.number, title: item.title),
                 isNewBranch: true,
                 baseBranch: selectedBaseBranch(),
@@ -931,6 +959,7 @@ extension WorktreeCreationController: NSTableViewDataSource, NSTableViewDelegate
         guard row >= 0, row < pickerRows.count else { return nil }
         switch pickerRows[row] {
         case let .header(title): return makeHeaderCell(title)
+        case let .hint(text): return makeHintCell(text)
         case let .create(name): return makeCreateCell(name)
         case let .branch(branch): return makeBranchCell(branch)
         case let .pr(item): return makePRCell(item)
@@ -1009,6 +1038,23 @@ extension WorktreeCreationController: NSTableViewDataSource, NSTableViewDelegate
             label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
             label.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -8),
             label.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -4),
+        ])
+        return cell
+    }
+
+    private func makeHintCell(_ text: String) -> NSView {
+        let cell = NSTableCellView()
+        let icon = symbolIcon("info.circle")
+        let label = primaryLabel(text)
+        label.textColor = .secondaryLabelColor
+        cell.addSubview(icon)
+        cell.addSubview(label)
+        NSLayoutConstraint.activate([
+            icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
+            icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -8),
+            label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
         ])
         return cell
     }
