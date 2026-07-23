@@ -133,6 +133,17 @@ public actor GitBackend: GitControlling {
         return GitBranchParser.parse(output, remoteNames: remoteNames.isEmpty ? ["origin"] : remoteNames)
     }
 
+    /// Count commits on HEAD that are not reachable from `baseRef`
+    /// (`git rev-list --count <baseRef>..HEAD`). Throws if `baseRef` can't be
+    /// resolved, letting callers try another base.
+    public func commitsAhead(worktreePath: String, baseRef: String) async throws -> Int {
+        let output = try await runner.run(
+            in: worktreePath,
+            ["rev-list", "--count", "\(baseRef)..HEAD"]
+        )
+        return Int(output.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+    }
+
     public func gitCommonDir(path: String) async throws -> String {
         let output = try await runner.run(
             in: path,
