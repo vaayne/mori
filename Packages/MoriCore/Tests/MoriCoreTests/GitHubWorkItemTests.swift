@@ -32,20 +32,8 @@ func testGitHubWorkItemParsePRList() {
     assertTrue(items[1].isDraft)
 }
 
-func testGitHubWorkItemParseObject() {
-    let json = """
-    {"number":42,"title":"Single PR","headRefName":"pr-head","isDraft":true}
-    """
-    let item = GitHubWorkItem.parse(objectJSON: Data(json.utf8), kind: .pullRequest)
-    assertNotNil(item)
-    assertEqual(item?.number, 42)
-    assertEqual(item?.headRefName, "pr-head")
-    assertEqual(item?.isDraft, true)
-}
-
 func testGitHubWorkItemParseInvalidReturnsEmpty() {
     assertEqual(GitHubWorkItem.parse(listJSON: Data("not json".utf8), kind: .issue).count, 0)
-    assertNil(GitHubWorkItem.parse(objectJSON: Data("not json".utf8), kind: .pullRequest))
 }
 
 // MARK: - URL parsing
@@ -109,7 +97,6 @@ func testGitHubWorkItemIssueBranchNameTrimsAtWordBoundary() {
 func runGitHubWorkItemTests() {
     testGitHubWorkItemParseIssueList()
     testGitHubWorkItemParsePRList()
-    testGitHubWorkItemParseObject()
     testGitHubWorkItemParseInvalidReturnsEmpty()
     testGitHubWorkItemParseURL()
     testGitHubWorkItemParseURLRejectsNonGitHub()

@@ -975,9 +975,11 @@ final class WorktreeCreationController: NSWindowController {
                 origin: .branch
             ))
         case let .pr(item):
+            // branchName is ignored for a PR origin — the manager takes the
+            // branch from headRef (and rejects an empty one).
             let head = item.headRefName ?? ""
             onCreateWorktree?(WorktreeCreationRequest(
-                branchName: head.isEmpty ? "pr-\(item.number)" : head,
+                branchName: head,
                 isNewBranch: false,
                 baseBranch: nil,
                 origin: .pullRequest(number: item.number, headRef: head)
@@ -1052,9 +1054,6 @@ extension WorktreeCreationController: NSTextFieldDelegate {
             case #selector(NSResponder.insertNewline(_:)):
                 confirm()
                 return true
-            case #selector(NSResponder.cancelOperation(_:)):
-                dismiss()
-                return true
             case #selector(NSResponder.insertTab(_:)):
                 window?.makeFirstResponder(baseBranchPopup)
                 return true
@@ -1073,9 +1072,6 @@ extension WorktreeCreationController: NSTextFieldDelegate {
                 return true
             case #selector(NSResponder.insertNewline(_:)):
                 confirm()
-                return true
-            case #selector(NSResponder.cancelOperation(_:)):
-                dismiss()
                 return true
             default:
                 return false

@@ -44,16 +44,6 @@ public struct GitHubWorkItem: Sendable, Equatable {
         return dtos.map { $0.workItem(kind: kind) }
     }
 
-    /// Parse a single JSON object emitted by
-    /// `gh pr view <n> --json number,title,headRefName,isDraft`.
-    /// Returns nil when the payload can't be decoded.
-    public static func parse(objectJSON: Data, kind: Kind) -> GitHubWorkItem? {
-        guard let dto = try? JSONDecoder().decode(GhWorkItemDTO.self, from: objectJSON) else {
-            return nil
-        }
-        return dto.workItem(kind: kind)
-    }
-
     // MARK: - URL parsing
 
     /// Recognize a GitHub issue/PR URL and extract its kind + number:

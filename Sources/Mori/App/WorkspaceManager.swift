@@ -1188,23 +1188,17 @@ final class WorkspaceManager {
         }
 
         // A PR origin works ON the PR's head branch rather than creating a new
-        // one. Resolve the head ref — carried from the panel, or recovered via
-        // `gh pr view` for a URL-pasted PR that wasn't in the prefetched list —
-        // so the worktree record's branch matches the PR badge/status pipeline.
+        // one. The panel carries the head ref from the prefetched `gh pr list`;
+        // the record's branch matches it so the PR badge/status pipeline lights
+        // up. A missing head ref (rare gh API gap) can't be materialized.
         var effectiveBranch = branchName
         var effectiveCreateBranch = createBranch
         var pullRequestNumber: Int?
         if case .pullRequest(let number, let headRef) = origin {
-            let resolvedHead: String
-            if !headRef.isEmpty {
-                resolvedHead = headRef
-            } else if let item = await gitHubBackend.pullRequest(number: number, directory: project.repoRootPath),
-                      let head = item.headRefName, !head.isEmpty {
-                resolvedHead = head
-            } else {
+            guard !headRef.isEmpty else {
                 throw WorkspaceError.pullRequestUnavailable(number)
             }
-            effectiveBranch = resolvedHead
+            effectiveBranch = headRef
             effectiveCreateBranch = false
             pullRequestNumber = number
         }

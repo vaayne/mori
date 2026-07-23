@@ -11,7 +11,7 @@ actor GitHubBackend {
     /// Fields requested from `gh pr view --json`. Kept in sync with `PullRequestInfo.parse`.
     private static let jsonFields = "number,title,url,state,isDraft,reviewDecision,statusCheckRollup"
 
-    /// Fields requested for the work-item picker (issue/PR list + single PR view).
+    /// Fields requested for the creation panel's issue/PR lists.
     private static let workItemFields = "number,title,headRefName,isDraft"
 
     /// Errors from write-side gh operations that must fail loudly (checkout).
@@ -87,19 +87,6 @@ actor GitHubBackend {
         )
         guard let result, result.exitCode == 0 else { return [] }
         return GitHubWorkItem.parse(listJSON: Data(result.stdout.utf8), kind: .pullRequest)
-    }
-
-    /// Resolve a single PR by number (used to recover a head branch for a
-    /// URL-pasted PR not in the prefetched list). Best-effort → nil.
-    func pullRequest(number: Int, directory: String) async -> GitHubWorkItem? {
-        guard let gh = binaryPath() else { return nil }
-        let result = await run(
-            gh,
-            ["pr", "view", "\(number)", "--json", Self.workItemFields],
-            in: directory
-        )
-        guard let result, result.exitCode == 0 else { return nil }
-        return GitHubWorkItem.parse(objectJSON: Data(result.stdout.utf8), kind: .pullRequest)
     }
 
     /// Check out PR `number` into the git repo at `directory` (`gh pr checkout`).
