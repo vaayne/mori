@@ -1,5 +1,20 @@
 import Foundation
 
+/// How a local workspace was materialized on disk.
+///
+/// Persisted as a hint only — destructive operations re-verify on disk via
+/// `CowCloner.classify(path:)` rather than trusting this field, since a
+/// workspace can change shape underneath us (e.g. a clone's `.git` is a
+/// directory while a linked git worktree's `.git` is a regular file).
+public enum WorktreeKind: String, Codable, Sendable {
+    /// Created via `git worktree add` (`.git` is a regular file/link).
+    case gitWorktree
+    /// APFS copy-on-write clone of the project directory (`.git` is a directory).
+    case cowClone
+    /// A plain recursive-copied directory for non-git projects (no `.git`).
+    case plainDirectory
+}
+
 public struct Worktree: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
     public let projectId: UUID
@@ -33,6 +48,9 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
     /// Invariant: default behavior inherits the project endpoint; writes are
     /// coordinated by `WorkspaceManager` to avoid drift between project/worktree.
     public var location: WorkspaceLocation?
+    /// How this local workspace was created. nil = legacy data; treat as `.gitWorktree`.
+    /// Only a hint — destructive operations re-verify the shape on disk.
+    public var kind: WorktreeKind?
 
     public init(
         id: UUID = UUID(),
@@ -59,7 +77,8 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
         unreadCount: Int = 0,
         agentState: AgentState = .none,
         status: WorktreeStatus = .active,
-        location: WorkspaceLocation? = nil
+        location: WorkspaceLocation? = nil,
+        kind: WorktreeKind? = nil
     ) {
         self.id = id
         self.projectId = projectId
@@ -86,6 +105,7 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
         self.agentState = agentState
         self.status = status
         self.location = location
+        self.kind = kind
     }
 
     // Custom Codable init for backwards compatibility with existing JSON
@@ -117,5 +137,6 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
         agentState = try container.decode(AgentState.self, forKey: .agentState)
         status = try container.decode(WorktreeStatus.self, forKey: .status)
         location = try container.decodeIfPresent(WorkspaceLocation.self, forKey: .location)
+        kind = try container.decodeIfPresent(WorktreeKind.self, forKey: .kind)
     }
 }

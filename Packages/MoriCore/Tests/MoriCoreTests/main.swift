@@ -134,6 +134,55 @@ func testWorktreeCodableBackwardsCompat() {
     assertTrue(decoded.hasUpstream)
 }
 
+func testWorktreeKindDefaultsNil() {
+    let wt = Worktree(projectId: UUID(), name: "main", path: "/repos/x")
+    assertNil(wt.kind)
+}
+
+func testWorktreeWithoutKindDecodesToNil() {
+    // Legacy JSON without `kind` → nil (treated as gitWorktree by callers).
+    let id = UUID()
+    let projectId = UUID()
+    let json = """
+    {
+        "id": "\(id.uuidString)",
+        "projectId": "\(projectId.uuidString)",
+        "name": "main",
+        "path": "/repos/test",
+        "isMainWorktree": true,
+        "isDetached": false,
+        "hasUncommittedChanges": false,
+        "aheadCount": 0,
+        "behindCount": 0,
+        "unreadCount": 0,
+        "agentState": "none",
+        "status": "active"
+    }
+    """
+    let decoded = try! JSONDecoder().decode(Worktree.self, from: json.data(using: .utf8)!)
+    assertNil(decoded.kind, "missing kind decodes to nil")
+}
+
+func testWorktreeKindRoundTrips() {
+    for kind: WorktreeKind in [.gitWorktree, .cowClone, .plainDirectory] {
+        let wt = Worktree(projectId: UUID(), name: "n", path: "/p", kind: kind)
+        let data = try! JSONEncoder().encode(wt)
+        let decoded = try! JSONDecoder().decode(Worktree.self, from: data)
+        assertEqual(decoded.kind, kind, "kind round-trips through JSON")
+    }
+}
+
+func testToolSettingsPreferCowClonesDefaultsTrue() {
+    let settings = ToolSettings()
+    assertTrue(settings.preferCowClones, "preferCowClones defaults to true")
+}
+
+func testToolSettingsWithoutPreferCowClonesDecodesTrue() {
+    let data = "{\"tmuxPath\":\"\",\"lazygitPath\":\"\",\"yaziPath\":\"\"}".data(using: .utf8)!
+    let decoded = try! JSONDecoder().decode(ToolSettings.self, from: data)
+    assertTrue(decoded.preferCowClones, "legacy payload without preferCowClones → true")
+}
+
 // MARK: - RuntimeWindow Tests
 
 func testRuntimeWindowIdDerivation() {
@@ -1348,6 +1397,11 @@ testProjectCodable()
 testWorktreeDefaultInit()
 testWorktreeCodable()
 testWorktreeCodableBackwardsCompat()
+testWorktreeKindDefaultsNil()
+testWorktreeWithoutKindDecodesToNil()
+testWorktreeKindRoundTrips()
+testToolSettingsPreferCowClonesDefaultsTrue()
+testToolSettingsWithoutPreferCowClonesDecodesTrue()
 
 testRuntimeWindowIdDerivation()
 testRuntimeWindowDefaults()
