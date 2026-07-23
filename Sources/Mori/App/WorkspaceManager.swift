@@ -539,17 +539,52 @@ final class WorkspaceManager {
     private var lastPullRequestFetch: [UUID: Date] = [:]
     private static let pullRequestThrottle: TimeInterval = 60
     private var pullRequestSweepInFlight = false
+    private var lastProjectPullRequestFetch: [UUID: Date] = [:]
+    /// Tighter than the per-worktree throttle: the sweep costs one `gh pr list`
+    /// per project regardless of worktree count, so it can afford to be fresh.
+    private static let projectPullRequestThrottle: TimeInterval = 20
 
-    /// Best-effort sweep over all worktrees so sidebar PR badges populate
-    /// without a selection. Runs one `gh` process at a time; the per-worktree
-    /// throttle in `refreshPullRequest` caps the rate at ~1 fetch/min each, and
-    /// the in-flight guard keeps overlapping poll ticks from stacking sweeps.
+    /// Best-effort sweep so sidebar PR badges populate and stay fresh without a
+    /// selection. One repo-wide `gh pr list` per local project (throttled),
+    /// mapped onto worktrees by head branch. A worktree whose badge says "open"
+    /// but whose branch is absent from the list just transitioned (merged or
+    /// closed) — resolve its terminal state once via the per-branch `gh pr view`
+    /// path, which sees non-open PRs. The in-flight guard keeps overlapping
+    /// poll ticks from stacking sweeps.
     private func sweepPullRequests() async {
         guard !pullRequestSweepInFlight else { return }
         pullRequestSweepInFlight = true
         defer { pullRequestSweepInFlight = false }
-        for worktreeId in appState.worktrees.map(\.id) {
-            await refreshPullRequest(for: worktreeId)
+
+        for project in appState.projects {
+            guard case .local = location(for: project), !project.repoRootPath.isEmpty else { continue }
+            let worktrees = appState.worktrees.filter {
+                $0.projectId == project.id && $0.branch != nil && $0.status != .creating
+            }
+            guard !worktrees.isEmpty else { continue }
+
+            if let last = lastProjectPullRequestFetch[project.id],
+               Date().timeIntervalSince(last) < Self.projectPullRequestThrottle { continue }
+            lastProjectPullRequestFetch[project.id] = Date()
+
+            // nil = fetch failed (gh missing, auth, network): keep whatever
+            // badges we have rather than clearing or "resolving" them.
+            guard let openByBranch = await gitHubBackend.openPullRequestsByBranch(
+                directory: project.repoRootPath
+            ) else { continue }
+
+            for worktree in worktrees {
+                guard let branch = worktree.branch else { continue }
+                if let info = openByBranch[branch] {
+                    if appState.pullRequests[worktree.id] != info {
+                        appState.pullRequests[worktree.id] = info
+                    }
+                } else if appState.pullRequests[worktree.id]?.state == .open {
+                    // Un-forced: the per-worktree throttle caps this fallback for
+                    // the rare branch gh names differently than the API head ref.
+                    await refreshPullRequest(for: worktree.id)
+                }
+            }
         }
     }
 

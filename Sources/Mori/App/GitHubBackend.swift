@@ -48,6 +48,21 @@ actor GitHubBackend {
         return PullRequestInfo.parse(jsonData: Data(result.stdout.utf8))
     }
 
+    /// All open PRs in the repo at `directory`, keyed by head branch — one
+    /// repo-wide query that covers every worktree's badge at once. Returns nil
+    /// on failure (gh missing, auth, network) so callers can distinguish "fetch
+    /// failed, keep existing badges" from "no open PRs" (empty map).
+    func openPullRequestsByBranch(directory: String) async -> [String: PullRequestInfo]? {
+        guard let gh = binaryPath() else { return nil }
+        let result = await run(
+            gh,
+            ["pr", "list", "--json", Self.jsonFields + ",headRefName", "--limit", "100"],
+            in: directory
+        )
+        guard let result, result.exitCode == 0 else { return nil }
+        return PullRequestInfo.parseListByBranch(jsonData: Data(result.stdout.utf8))
+    }
+
     /// List open issues in the repo at `directory` for the `#` picker.
     /// Best-effort: any failure (gh missing, no repo, auth) → empty array.
     func issues(directory: String) async -> [GitHubWorkItem] {
