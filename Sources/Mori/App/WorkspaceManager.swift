@@ -829,7 +829,6 @@ final class WorkspaceManager {
             knownPaths.insert(Self.normalizeWorktreePath(dismissed))
         }
 
-        let tmux = tmuxBackend(for: projectLocation)
         var imported: [Worktree] = []
 
         func register(
@@ -856,17 +855,9 @@ final class WorkspaceManager {
             )
             try? worktreeRepo.save(worktree)
             imported.append(worktree)
-
-            // tmux session is best-effort, matching createWorktree() behavior.
-            let captured = worktree
-            Task {
-                _ = try? await tmux.createSession(
-                    name: sessionName,
-                    cwd: path,
-                    environment: moriPaneEnvironment(for: captured)
-                )
-                await onSessionCreated?(tmux)
-            }
+            // No tmux session here: a bulk import (discovery can find dozens of
+            // directories) must not spawn a login shell per row. The session is
+            // created lazily by ensureTmuxSession() when the row is selected.
         }
 
         // Pass 1: registered git worktrees (works local + remote).
@@ -1991,13 +1982,27 @@ final class WorkspaceManager {
         pollingTask = nil
     }
 
+    /// Worktrees worth spawning git subprocesses for each tick: the selected
+    /// one plus any whose tmux session is alive (per the previous tick's scan).
+    /// Sessions exist only for workspaces the user actually opened, so an
+    /// imported-but-untouched row costs nothing; its git fields keep their
+    /// persisted values until it is selected.
+    private func worktreesToPoll() -> [Worktree] {
+        appState.worktrees.filter { worktree in
+            if worktree.id == appState.uiState.selectedWorktreeId { return true }
+            guard let sessionName = worktree.tmuxSessionName else { return false }
+            let sessions = latestSessionsByEndpoint[endpointKey(for: worktree)] ?? []
+            return sessions.contains { $0.name == sessionName }
+        }
+    }
+
     /// Perform a single coordinated poll: tmux scan + git status concurrently.
     func coordinatedPoll() async {
         // Run tmux scan and git status concurrently
         async let tmuxResult: [String: [TmuxSession]] = self.scanSessionsByEndpoint()
         async let gitResult: [UUID: WorktreeGitSnapshot] = {
             await self.gitStatusCoordinator.pollAll(
-                worktrees: self.appState.worktrees,
+                worktrees: self.worktreesToPoll(),
                 backendForWorktree: { worktree in
                     self.gitBackend(for: worktree)
                 },
@@ -2900,38 +2905,37 @@ final class WorkspaceManager {
 
     // MARK: - Session Death Detection
 
-    /// Called during polling to detect and recover missing sessions for active worktrees.
-    /// Returns true when any session was recreated, so caller can rescan immediately.
+    /// Called during polling to recover a missing session for the selected
+    /// worktree, whose terminal is on screen. Returns true when the session was
+    /// recreated, so caller can rescan immediately.
+    ///
+    /// Only the selected worktree: recreating sessions for every active row
+    /// would resurrect dozens of login shells after a bulk import or a tmux
+    /// server restart. Unselected rows get their session lazily on selection
+    /// via ensureTmuxSession().
     func detectAndRecoverDeadSessions(sessionsByEndpoint: [String: [TmuxSession]]) async -> Bool {
-        var recoveredAny = false
+        guard let worktree = appState.worktrees.first(where: {
+                  $0.id == appState.uiState.selectedWorktreeId && $0.status == .active
+              }),
+              let sessionName = worktree.tmuxSessionName else { return false }
 
-        for worktree in appState.worktrees where worktree.status == .active {
-            guard let sessionName = worktree.tmuxSessionName else { continue }
-            let endpointKey = endpointKey(for: worktree)
-            let sessions = sessionsByEndpoint[endpointKey] ?? []
-            let sessionAlive = sessions.contains { $0.name == sessionName }
-            guard !sessionAlive else { continue }
+        let sessions = sessionsByEndpoint[endpointKey(for: worktree)] ?? []
+        guard !sessions.contains(where: { $0.name == sessionName }) else { return false }
 
-            let tmux = tmuxBackend(for: worktree)
-            let recreated = (try? await tmux.createSession(
-                name: sessionName,
-                cwd: worktree.path,
-                environment: moriPaneEnvironment(for: worktree)
-            )) != nil
-            guard recreated else { continue }
+        let tmux = tmuxBackend(for: worktree)
+        let recreated = (try? await tmux.createSession(
+            name: sessionName,
+            cwd: worktree.path,
+            environment: moriPaneEnvironment(for: worktree)
+        )) != nil
+        guard recreated else { return false }
 
-            recoveredAny = true
-            await onSessionCreated?(tmux)
-
-            if worktree.id == appState.uiState.selectedWorktreeId {
-                // Force new terminal process; same session key can otherwise
-                // keep a dead surface cached after remote shell exit.
-                onTerminalDetach?()
-                onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
-            }
-        }
-
-        return recoveredAny
+        await onSessionCreated?(tmux)
+        // Force new terminal process; same session key can otherwise
+        // keep a dead surface cached after remote shell exit.
+        onTerminalDetach?()
+        onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
+        return true
     }
 
     // MARK: - Launch Restoration (Task 5.2)
