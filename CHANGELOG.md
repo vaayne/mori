@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-07-23
+
 ### 🎨 Design (workspace creation)
 
 - **macOS**: Redesigned the workspace creation panel as a single searchable field over one unified list. Typing filters local branches, open pull requests, and open issues live (by number, title, or branch name), offers a "Create branch" row for new names, and `#123` or a pasted GitHub URL jumps straight to that PR/issue. The **Base** picker now appears only when it applies — creating a new branch or starting from an issue — since checking out an existing branch or a PR head has no base to choose. The separate "Check Out Existing" tab is gone.
@@ -22,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🎨 Design
 
 - **macOS**: Removed the diff counts (`+N -M`) from sidebar workspace rows; they now live in the row tooltip.
+
+**Full Changelog**: [v0.6.0...v0.6.1](https://github.com/vaayne/mori/compare/v0.6.0...v0.6.1)
 
 ## [0.6.0] - 2026-07-23
 
