@@ -316,3 +316,13 @@
 /* Copy-on-write clone workspaces */
 "Prefer copy-on-write clones for new workspaces" = "新建工作区优先使用写时复制克隆";
 "Create local workspaces as instant APFS clones of the project (keeping node_modules, build artifacts, and other untracked files). Falls back to a git worktree when cloning isn't possible." = "以项目的 APFS 瞬时克隆方式创建本地工作区（保留 node_modules、构建产物等未跟踪文件）。无法克隆时回退到 git worktree。";
+
+/* Pull request badge */
+"right-click the worktree to open" = "右键工作区可打开";
+"Draft" = "草稿";
+"Merged" = "已合并";
+"Closed" = "已关闭";
+"Open" = "打开中";
+"Review required" = "待审查";
+"Approved" = "已批准";
+"Changes requested" = "需修改";

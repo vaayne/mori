@@ -529,6 +529,20 @@ final class WorkspaceManager {
     /// spawning a subprocess every tick. CI/review state moves on a minute scale.
     private var lastPullRequestFetch: [UUID: Date] = [:]
     private static let pullRequestThrottle: TimeInterval = 60
+    private var pullRequestSweepInFlight = false
+
+    /// Best-effort sweep over all worktrees so sidebar PR badges populate
+    /// without a selection. Runs one `gh` process at a time; the per-worktree
+    /// throttle in `refreshPullRequest` caps the rate at ~1 fetch/min each, and
+    /// the in-flight guard keeps overlapping poll ticks from stacking sweeps.
+    private func sweepPullRequests() async {
+        guard !pullRequestSweepInFlight else { return }
+        pullRequestSweepInFlight = true
+        defer { pullRequestSweepInFlight = false }
+        for worktreeId in appState.worktrees.map(\.id) {
+            await refreshPullRequest(for: worktreeId)
+        }
+    }
 
     /// Fetch the PR for a worktree's branch and update `appState.pullRequests`.
     /// Local worktrees only; remote (SSH) worktrees are skipped. Best-effort —
@@ -536,6 +550,7 @@ final class WorkspaceManager {
     /// `force` bypasses the throttle (used on selection for an immediate refresh).
     func refreshPullRequest(for worktreeId: UUID, force: Bool = false) async {
         guard let worktree = appState.worktrees.first(where: { $0.id == worktreeId }),
+              worktree.status != .creating,
               let branch = worktree.branch,
               case .local = location(for: worktree) else { return }
 
@@ -1925,10 +1940,13 @@ final class WorkspaceManager {
         // Update worktree fields from git status
         updateWorktreeGitStatus(gitStatuses)
 
-        // Refresh the GitHub PR strip for the selected worktree (local only).
+        // Refresh GitHub PR info: the selected worktree inline (it drives the
+        // visible strip), the rest in a background sweep so every sidebar row
+        // can show its PR badge without ever having been selected.
         if let selectedId = appState.uiState.selectedWorktreeId {
             await refreshPullRequest(for: selectedId)
         }
+        Task { await sweepPullRequests() }
 
         // Roll up unread counts and aggregate badges
         updateUnreadCounts()

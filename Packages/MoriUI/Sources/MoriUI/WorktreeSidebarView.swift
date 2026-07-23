@@ -298,7 +298,8 @@ public struct WorktreeSidebarView: View {
     private func secondLine(_ worktree: Worktree, title: String) -> some View {
         let status = statusText(worktree)
         let shortcut = worktreeShortcutIndices[worktree.id]
-        if worktree.name != title || status != nil || shortcut != nil {
+        let pullRequest = pullRequests[worktree.id]
+        if worktree.name != title || status != nil || shortcut != nil || pullRequest != nil {
             HStack(spacing: MoriTokens.Spacing.sm) {
                 if worktree.name != title {
                     Text(worktree.name).foregroundStyle(MoriTokens.Color.muted).lineLimit(1)
@@ -306,6 +307,9 @@ public struct WorktreeSidebarView: View {
                 }
                 if let status {
                     Text(status.text).foregroundStyle(status.color).lineLimit(1)
+                }
+                if let pullRequest {
+                    PullRequestBadge(info: pullRequest)
                 }
                 Spacer(minLength: 0)
                 if let shortcut {
