@@ -179,6 +179,7 @@
 "Show Cancelled (%lld)" = "Show Cancelled (%lld)";
 "Hide Cancelled" = "Hide Cancelled";
 "Creating…" = "Creating…";
+"Deleting…" = "Deleting…";
 "just now" = "just now";
 "%lldm ago" = "%lldm ago";
 "%lldh ago" = "%lldh ago";

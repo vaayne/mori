@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **macOS**: Git status polling now covers only the selected workspace and workspaces with a live tmux session, in small concurrent batches — a large imported workspace list no longer spawns dozens of git processes every 5 seconds. Unpolled rows keep their last known status until selected.
 - **macOS**: Fixed a subprocess deadlock where `git`, `tmux`, or `gh` output larger than 64KB (e.g. `gh pr list` with CI status on a busy repo) filled the pipe buffer and hung the process forever — which also silently froze sidebar PR badges.
 - **macOS**: Sidebar PR badges no longer render the PR number with locale digit grouping ("#16,838").
+- **macOS**: Removing a workspace with "Delete Files" no longer freezes the app while a multi-GB clone is deleted. The row shows "Deleting…" and deletion runs in the background; the row is only removed once the files are gone, and reappears with an error if deletion fails. When git refuses to remove a worktree (uncommitted changes, locks), the error now offers a **Force Delete** retry.
 
 ### 🎨 Design
 

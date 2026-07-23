@@ -45,6 +45,8 @@
 "Failed to close window" = "Failed to close window";
 "Failed to create window" = "Failed to create window";
 "Failed to delete worktree files" = "Failed to delete worktree files";
+"Force Delete" = "Force Delete";
+"Force deleting discards uncommitted changes and untracked files in this worktree." = "Force deleting discards uncommitted changes and untracked files in this worktree.";
 "Failed to open %@" = "Failed to open %@";
 "Failed to create embedded terminal surface." = "Failed to create embedded terminal surface.";
 "Failed to split pane" = "Failed to split pane";

@@ -253,8 +253,8 @@ public struct WorktreeSidebarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        // A creating placeholder has no session or files to select into yet.
-        .disabled(worktree.status == .creating)
+        // Creating/deleting placeholders have no session or files to select into.
+        .disabled(worktree.status == .creating || worktree.status == .deleting)
         .background(
             RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
                 .fill(selected ? Color.primary.opacity(MoriTokens.Opacity.subtle) : (hovered ? Color.primary.opacity(MoriTokens.Opacity.quiet) : Color.clear))
@@ -305,6 +305,7 @@ public struct WorktreeSidebarView: View {
     /// informational ("ready to merge", last activity) is tooltip material.
     private func statusText(_ w: Worktree) -> (text: String, color: Color)? {
         if w.status == .creating { return (String.localized("Creating…"), MoriTokens.Color.muted) }
+        if w.status == .deleting { return (String.localized("Deleting…"), MoriTokens.Color.muted) }
         switch w.agentState {
         case .running: return (String.localized("Working…"), MoriTokens.Color.success)
         case .waitingForInput: return (String.localized("Needs input"), MoriTokens.Color.attention)

@@ -490,6 +490,12 @@ final class WorkspaceManager {
     // MARK: - Select Worktree
 
     func selectWorktree(_ worktreeId: UUID) {
+        // Transient placeholders (creating/deleting) have no session to attach,
+        // and the save below would persist a status that must stay in-memory.
+        if let transient = appState.worktrees.first(where: { $0.id == worktreeId }),
+           transient.status == .creating || transient.status == .deleting {
+            return
+        }
         appState.uiState.selectedWorktreeId = worktreeId
         appState.uiState.selectedWindowId = nil
 
@@ -559,7 +565,8 @@ final class WorkspaceManager {
         for project in appState.projects {
             guard case .local = location(for: project), !project.repoRootPath.isEmpty else { continue }
             let worktrees = appState.worktrees.filter {
-                $0.projectId == project.id && $0.branch != nil && $0.status != .creating
+                $0.projectId == project.id && $0.branch != nil
+                    && $0.status != .creating && $0.status != .deleting
             }
             guard !worktrees.isEmpty else { continue }
 
@@ -594,7 +601,7 @@ final class WorkspaceManager {
     /// `force` bypasses the throttle (used on selection for an immediate refresh).
     func refreshPullRequest(for worktreeId: UUID, force: Bool = false) async {
         guard let worktree = appState.worktrees.first(where: { $0.id == worktreeId }),
-              worktree.status != .creating,
+              worktree.status != .creating, worktree.status != .deleting,
               let branch = worktree.branch,
               case .local = location(for: worktree) else { return }
 
@@ -1502,6 +1509,7 @@ final class WorkspaceManager {
     func removeWorktree(worktreeId: UUID) async {
         guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }) else { return }
         let worktree = appState.worktrees[index]
+        guard worktree.status != .deleting else { return }
 
         // Don't allow removing the main worktree
         if worktree.isMainWorktree {
@@ -1562,46 +1570,103 @@ final class WorkspaceManager {
                 )
                 return
             }
-
-            // Fire onWorktreeClose hook before cleanup
-            fireHook(event: .onWorktreeClose, worktreeId: worktree.id)
-            recordDismissedWorkspacePath(projectId: worktree.projectId, path: worktree.path)
-            softDeleteWorktree(at: index)
-
-            if useDirectDelete {
-                do {
-                    try FileManager.default.removeItem(atPath: worktree.path)
-                } catch {
-                    showErrorAlert(
-                        title: .localized("Failed to delete worktree files"),
-                        message: error.localizedDescription
-                    )
-                }
-            } else if let project = appState.projects.first(where: { $0.id == worktree.projectId }) {
-                let git = gitBackend(for: location(for: project))
-                do {
-                    try await git.removeWorktree(
-                        repoPath: project.repoRootPath,
-                        path: worktree.path,
-                        force: false
-                    )
-                } catch {
-                    showErrorAlert(
-                        title: .localized("Failed to delete worktree files"),
-                        message: error.localizedDescription
-                    )
-                }
-            }
-
-            // Kill tmux session if exists
-            if let sessionName = worktree.tmuxSessionName {
-                try? await tmuxBackend(for: worktree).killSession(id: sessionName)
-            }
+            startWorktreeDeletion(worktreeId: worktree.id, force: false)
 
         default:
             // Cancel — do nothing
             break
         }
+    }
+
+    /// Delete a workspace's files in the background while its sidebar row shows
+    /// "Deleting…". The row is deselected up front (its session dies first) but
+    /// only removed from state once the files are gone, so a failure can restore
+    /// the row and surface an error — with a Force Delete retry for linked
+    /// worktrees that git refuses to remove (uncommitted changes, locks).
+    private func startWorktreeDeletion(worktreeId: UUID, force: Bool) {
+        guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }),
+              appState.worktrees[index].status != .deleting else { return }
+        let worktree = appState.worktrees[index]
+        let previousStatus = worktree.status
+
+        fireHook(event: .onWorktreeClose, worktreeId: worktree.id)
+        appState.worktrees[index].status = .deleting
+        deselectWorktree(worktree.id)
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.performWorktreeFileDeletion(worktree, force: force)
+                self.recordDismissedWorkspacePath(projectId: worktree.projectId, path: worktree.path)
+                if let idx = self.appState.worktrees.firstIndex(where: { $0.id == worktree.id }) {
+                    self.softDeleteWorktree(at: idx)
+                }
+            } catch {
+                if let idx = self.appState.worktrees.firstIndex(where: { $0.id == worktree.id }) {
+                    self.appState.worktrees[idx].status = previousStatus
+                }
+                // Force only changes `git worktree remove`; a direct FileManager
+                // failure (permissions, mounts) would fail identically again.
+                let canForce = !force && ((try? self.requiresDirectDeletion(worktree)) == false)
+                self.presentDeletionFailure(worktreeId: worktree.id, message: error.localizedDescription, canForce: canForce)
+            }
+        }
+    }
+
+    private func presentDeletionFailure(worktreeId: UUID, message: String, canForce: Bool) {
+        guard canForce else {
+            showErrorAlert(title: .localized("Failed to delete worktree files"), message: message)
+            return
+        }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = .localized("Failed to delete worktree files")
+        alert.informativeText = message + "\n\n" + .localized("Force deleting discards uncommitted changes and untracked files in this worktree.")
+        alert.addButton(withTitle: .localized("Force Delete"))
+        alert.addButton(withTitle: .localized("Cancel"))
+        if alert.runModal() == .alertFirstButtonReturn {
+            startWorktreeDeletion(worktreeId: worktreeId, force: true)
+        }
+    }
+
+    /// True when the workspace's files must be removed directly (COW clone or
+    /// plain directory — not a registered git worktree); false for linked
+    /// worktrees, which go through `git worktree remove`. Throws when direct
+    /// deletion would be unsafe (path outside the managed workspace dir).
+    private func requiresDirectDeletion(_ worktree: Worktree) throws -> Bool {
+        let isLocal: Bool = { if case .local = location(for: worktree) { return true }; return false }()
+        let onDisk = isLocal ? CowCloner.classify(path: worktree.path) : .linkedWorktree
+        let useDirect = isLocal && (onDisk == .fullRepo || onDisk == .plainDirectory)
+        if useDirect, let reason = unsafeDirectoryDeletionReason(worktree: worktree) {
+            throw WorkspaceError.unsafeWorkspaceDeletion(reason)
+        }
+        return useDirect
+    }
+
+    /// Kill the session and remove the files. Shared by the UI and IPC deletion
+    /// paths; callers own state transitions (status, dismissal, soft delete).
+    private func performWorktreeFileDeletion(_ worktree: Worktree, force: Bool) async throws {
+        let useDirectDelete = try requiresDirectDeletion(worktree)
+
+        // Kill the session first so its processes stop holding (and writing) the tree.
+        if let sessionName = worktree.tmuxSessionName {
+            try? await tmuxBackend(for: worktree).killSession(id: sessionName)
+        }
+
+        if useDirectDelete {
+            try await Self.removeDirectoryOffMain(atPath: worktree.path)
+        } else if let project = appState.projects.first(where: { $0.id == worktree.projectId }) {
+            let git = gitBackend(for: location(for: project))
+            try await git.removeWorktree(repoPath: project.repoRootPath, path: worktree.path, force: force)
+        }
+    }
+
+    /// `FileManager.removeItem` walks the whole tree synchronously — many
+    /// seconds for a multi-GB clone — so it must not run on the main actor.
+    private nonisolated static func removeDirectoryOffMain(atPath path: String) async throws {
+        try await Task.detached(priority: .utility) {
+            try FileManager.default.removeItem(atPath: path)
+        }.value
     }
 
     /// Best-effort probe for work that would be permanently lost if a COW clone's
@@ -1733,54 +1798,54 @@ final class WorkspaceManager {
         if worktree.isMainWorktree {
             throw WorkspaceError.cannotDeleteMainWorktree
         }
+        guard worktree.status != .deleting else { return }
 
-        // Clones and plain dirs aren't registered git worktrees — delete their
-        // files directly (with the same guardrails as the UI path); linked
-        // worktrees go through `git worktree remove`. Guardrails are checked
-        // before any side effect (hook, tmux kill) so a refusal leaves the
-        // workspace fully intact.
-        let isLocal: Bool = { if case .local = location(for: worktree) { return true }; return false }()
-        let onDisk = isLocal ? CowCloner.classify(path: worktree.path) : .linkedWorktree
-        let useDirectDelete = isLocal && (onDisk == .fullRepo || onDisk == .plainDirectory)
-        if useDirectDelete, let reason = unsafeDirectoryDeletionReason(worktree: worktree) {
-            throw WorkspaceError.unsafeWorkspaceDeletion(reason)
-        }
+        // Guardrails are checked before any side effect (hook, tmux kill,
+        // status flip) so a refusal leaves the workspace fully intact.
+        _ = try requiresDirectDeletion(worktree)
 
         fireHook(event: .onWorktreeClose, worktreeId: worktree.id)
+        let previousStatus = worktree.status
+        appState.worktrees[index].status = .deleting
+        deselectWorktree(worktree.id)
 
-        if let sessionName = worktree.tmuxSessionName {
-            try? await tmuxBackend(for: worktree).killSession(id: sessionName)
-        }
-
-        if useDirectDelete {
-            try FileManager.default.removeItem(atPath: worktree.path)
-        } else if let project = appState.projects.first(where: { $0.id == worktree.projectId }) {
-            let git = gitBackend(for: worktree)
-            try await git.removeWorktree(repoPath: project.repoRootPath, path: worktree.path, force: false)
+        do {
+            try await performWorktreeFileDeletion(worktree, force: false)
+        } catch {
+            if let idx = appState.worktrees.firstIndex(where: { $0.id == worktree.id }) {
+                appState.worktrees[idx].status = previousStatus
+            }
+            throw error
         }
 
         recordDismissedWorkspacePath(projectId: worktree.projectId, path: worktree.path)
-        softDeleteWorktree(at: index)
+        if let idx = appState.worktrees.firstIndex(where: { $0.id == worktree.id }) {
+            softDeleteWorktree(at: idx)
+        }
     }
 
     private func softDeleteWorktree(at index: Int) {
         let worktree = appState.worktrees[index]
-        let wasSelected = appState.uiState.selectedWorktreeId == worktree.id
 
         // Remove from state and database
         appState.worktrees.remove(at: index)
         try? worktreeRepo.delete(id: worktree.id)
 
-        // If this was the selected worktree, clear selection
-        if wasSelected {
-            appState.uiState.selectedWorktreeId = nil
-            appState.uiState.selectedWindowId = nil
-            let active = appState.worktreesForSelectedProject.filter { $0.status == .active }
-            if let first = active.first {
-                selectWorktree(first.id)
-            }
-            saveUIState()
+        deselectWorktree(worktree.id)
+    }
+
+    /// If this worktree is selected, move selection to another active worktree
+    /// (or clear it). Used both when a row disappears and when it enters the
+    /// `.deleting` state, so the terminal never shows a dying session.
+    private func deselectWorktree(_ worktreeId: UUID) {
+        guard appState.uiState.selectedWorktreeId == worktreeId else { return }
+        appState.uiState.selectedWorktreeId = nil
+        appState.uiState.selectedWindowId = nil
+        let active = appState.worktreesForSelectedProject.filter { $0.status == .active }
+        if let first = active.first {
+            selectWorktree(first.id)
         }
+        saveUIState()
     }
 
     // MARK: - Tmux Integration
