@@ -35,6 +35,36 @@ public actor GitCommandRunner {
         }
     }
 
+    /// Reads a subprocess pipe to EOF on a background thread while the process
+    /// runs, so output larger than the 64KB pipe buffer can't block the child.
+    private final class PipeDrain: @unchecked Sendable {
+        private let group = DispatchGroup()
+        private let pipe: Pipe
+        private var data = Data()
+
+        init(_ pipe: Pipe) {
+            self.pipe = pipe
+            group.enter()
+            DispatchQueue.global(qos: .utility).async { [self] in
+                data = pipe.fileHandleForReading.readDataToEndOfFile()
+                group.leave()
+            }
+        }
+
+        /// Blocks until EOF and returns everything read. Call after the
+        /// process has terminated, when EOF is imminent.
+        func wait() -> Data {
+            group.wait()
+            return data
+        }
+
+        /// Call when the process never launched: no writer exists, so EOF
+        /// would never arrive and the reader thread would block forever.
+        func abandon() {
+            try? pipe.fileHandleForWriting.close()
+        }
+    }
+
     public init(sshConfig: GitSSHConfig? = nil) {
         self.sshConfig = sshConfig
     }
@@ -256,22 +286,28 @@ public actor GitCommandRunner {
 
             let guard_ = SendableResumeGuard(continuation: continuation)
 
-            do {
-                try process.run()
-            } catch {
-                guard_.resume(with: .failure(error))
-                return
-            }
-
-            // Use terminationHandler to avoid blocking the cooperative thread pool
-            process.terminationHandler = { _ in
-                let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-                let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
-                let stderr = String(data: stderrData, encoding: .utf8) ?? ""
+            // Drain pipes while the process runs — reading only after
+            // termination deadlocks once output exceeds the 64KB pipe buffer
+            // (the child blocks on write and never exits). terminationHandler
+            // keeps the wait off the cooperative thread pool.
+            let stdoutDrain = PipeDrain(stdoutPipe)
+            let stderrDrain = PipeDrain(stderrPipe)
+            process.terminationHandler = { process in
+                let stdout = String(data: stdoutDrain.wait(), encoding: .utf8) ?? ""
+                let stderr = String(data: stderrDrain.wait(), encoding: .utf8) ?? ""
                 // Prefer stderr for error messages, fall back to stdout
                 let output = stderr.isEmpty ? stdout : stderr
                 guard_.resume(with: .success((output, process.terminationStatus)))
+            }
+
+            do {
+                try process.run()
+            } catch {
+                process.terminationHandler = nil
+                stdoutDrain.abandon()
+                stderrDrain.abandon()
+                guard_.resume(with: .failure(error))
+                return
             }
 
             if let timeoutSeconds {

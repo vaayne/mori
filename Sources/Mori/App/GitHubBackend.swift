@@ -133,14 +133,19 @@ actor GitHubBackend {
             // Ensure gh resolves on PATH for any subprocesses it spawns.
             process.environment = BinaryResolver.synthesizedEnvironment()
 
+            let stdoutDrain = PipeDrain(stdout)
             process.terminationHandler = { proc in
-                let data = stdout.fileHandleForReading.readDataToEndOfFile()
-                continuation.resume(returning: (String(data: data, encoding: .utf8) ?? "", proc.terminationStatus))
+                continuation.resume(returning: (
+                    String(data: stdoutDrain.wait(), encoding: .utf8) ?? "",
+                    proc.terminationStatus
+                ))
             }
 
             do {
                 try process.run()
             } catch {
+                process.terminationHandler = nil
+                stdoutDrain.abandon()
                 continuation.resume(returning: nil)
             }
         }
@@ -165,12 +170,12 @@ actor GitHubBackend {
             process.standardInput = FileHandle.nullDevice
             process.environment = BinaryResolver.synthesizedEnvironment()
 
+            let stdoutDrain = PipeDrain(stdout)
+            let stderrDrain = PipeDrain(stderr)
             process.terminationHandler = { proc in
-                let outData = stdout.fileHandleForReading.readDataToEndOfFile()
-                let errData = stderr.fileHandleForReading.readDataToEndOfFile()
                 continuation.resume(returning: (
-                    String(data: outData, encoding: .utf8) ?? "",
-                    String(data: errData, encoding: .utf8) ?? "",
+                    String(data: stdoutDrain.wait(), encoding: .utf8) ?? "",
+                    String(data: stderrDrain.wait(), encoding: .utf8) ?? "",
                     proc.terminationStatus
                 ))
             }
@@ -178,8 +183,44 @@ actor GitHubBackend {
             do {
                 try process.run()
             } catch {
+                process.terminationHandler = nil
+                stdoutDrain.abandon()
+                stderrDrain.abandon()
                 continuation.resume(returning: nil)
             }
         }
+    }
+}
+
+/// Reads a subprocess pipe to EOF on a background thread while the process
+/// runs. Reading only after termination deadlocks once output exceeds the 64KB
+/// pipe buffer: the child blocks on write and never exits.
+private final class PipeDrain: @unchecked Sendable {
+    private let group = DispatchGroup()
+    private let pipe: Pipe
+    private var data = Data()
+
+    init(_ pipe: Pipe) {
+        self.pipe = pipe
+        group.enter()
+        DispatchQueue.global(qos: .utility).async { [self] in
+            data = pipe.fileHandleForReading.readDataToEndOfFile()
+            group.leave()
+        }
+    }
+
+    /// Blocks until EOF and returns everything read. Call after the process
+    /// has terminated, when EOF is imminent. The DispatchGroup orders the
+    /// write in the reader thread before the read here.
+    func wait() -> Data {
+        group.wait()
+        return data
+    }
+
+    /// Call when the process never launched: no writer exists, so EOF would
+    /// never arrive and the reader thread would block forever. Closing the
+    /// write end delivers EOF.
+    func abandon() {
+        try? pipe.fileHandleForWriting.close()
     }
 }
