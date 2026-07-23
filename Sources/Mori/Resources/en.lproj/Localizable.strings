@@ -223,3 +223,10 @@
 "Running" = "Running";
 "Waiting" = "Waiting";
 "Error" = "Error";
+
+/* Copy-on-write clone workspaces */
+"Cannot delete workspace files" = "Cannot delete workspace files";
+"Refusing to delete \"%@\": it is not inside the managed workspace directory." = "Refusing to delete \"%@\": it is not inside the managed workspace directory.";
+"This workspace is a copy-on-write clone at %@.\n\nBranch \"%@\" and its unpushed work (%d commit(s) ahead, %@) exist only in this clone. Deleting the files will permanently lose them." = "This workspace is a copy-on-write clone at %@.\n\nBranch \"%@\" and its unpushed work (%d commit(s) ahead, %@) exist only in this clone. Deleting the files will permanently lose them.";
+"uncommitted changes present" = "uncommitted changes present";
+"no uncommitted changes" = "no uncommitted changes";

@@ -311,3 +311,7 @@
 "Used when macOS is in dark appearance." = "Used when macOS is in dark appearance.";
 "Light" = "Light";
 "Dark" = "Dark";
+
+/* Copy-on-write clone workspaces */
+"Prefer copy-on-write clones for new workspaces" = "Prefer copy-on-write clones for new workspaces";
+"Create local workspaces as instant APFS clones of the project (keeping node_modules, build artifacts, and other untracked files). Falls back to a git worktree when cloning isn't possible." = "Create local workspaces as instant APFS clones of the project (keeping node_modules, build artifacts, and other untracked files). Falls back to a git worktree when cloning isn't possible.";

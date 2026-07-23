@@ -445,6 +445,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             // Start coordinated polling (tmux + git status on each 5s tick)
             manager.startPolling()
 
+            // Best-effort: discover COW clones / plain-dir workspaces created
+            // outside Mori for local projects. Non-blocking; shows no UI.
+            Task { await manager.autoImportExistingWorkspaces() }
+
             // Apply Mori tmux compatibility/defaults/theme to tmux
             self.scheduleTmuxConfigurationApply(
                 immediate: true,
