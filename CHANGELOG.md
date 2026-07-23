@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🐛 Bug Fixes
+
+- **macOS**: Importing existing workspaces no longer spawns a tmux session (and its login shell) per imported row — sessions are created lazily when a workspace is first selected. Dead-session recovery during polling is likewise limited to the selected workspace instead of resurrecting a session for every row.
+- **macOS**: Git status polling now covers only the selected workspace and workspaces with a live tmux session, in small concurrent batches — a large imported workspace list no longer spawns dozens of git processes every 5 seconds. Unpolled rows keep their last known status until selected.
+- **macOS**: Fixed a subprocess deadlock where `git`, `tmux`, or `gh` output larger than 64KB (e.g. `gh pr list` with CI status on a busy repo) filled the pipe buffer and hung the process forever — which also silently froze sidebar PR badges.
+- **macOS**: Sidebar PR badges no longer render the PR number with locale digit grouping ("#16,838").
+
+### 🎨 Design
+
+- **macOS**: Removed the diff counts (`+N -M`) from sidebar workspace rows; they now live in the row tooltip.
+
 ## [0.6.0] - 2026-07-23
 
 ### ✨ Features
