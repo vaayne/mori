@@ -1526,6 +1526,9 @@ runKeyBindingTests()
 // PullRequestInfo
 runPullRequestInfoTests()
 
+// GitHubWorkItem
+runGitHubWorkItemTests()
+
 printResults()
 
 if failCount > 0 {
