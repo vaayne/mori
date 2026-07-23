@@ -47,6 +47,9 @@ final class WorktreeCreationDataSource: Sendable {
 
     private let allBranches: [GitBranchInfo]
 
+    /// Local (non-remote) branches, computed once at init.
+    let localBranches: [GitBranchInfo]
+
     /// Local branch names, computed once at init.
     let localBranchNames: [String]
 
@@ -57,6 +60,7 @@ final class WorktreeCreationDataSource: Sendable {
         self.allBranches = branches
 
         let locals = branches.filter { !$0.isRemote }
+        self.localBranches = locals
         self.localBranchNames = locals.map(\.name)
 
         if let main = locals.first(where: { $0.name == "main" }) {
@@ -67,6 +71,18 @@ final class WorktreeCreationDataSource: Sendable {
             self.defaultBaseBranch = head.name
         } else {
             self.defaultBaseBranch = locals.first?.name ?? Self.fallbackBranch
+        }
+    }
+
+    /// Local branches available to check out: excludes any branch that already
+    /// backs a workspace in the current project, then narrows by a case-insensitive
+    /// substring query. An empty query keeps every non-excluded branch.
+    func checkoutBranches(excluding excluded: Set<String>, matching query: String) -> [GitBranchInfo] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        return localBranches.filter { branch in
+            guard !excluded.contains(branch.name) else { return false }
+            guard !q.isEmpty else { return true }
+            return branch.name.lowercased().contains(q)
         }
     }
 

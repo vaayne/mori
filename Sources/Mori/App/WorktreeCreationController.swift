@@ -3,18 +3,57 @@ import MoriCore
 import MoriGit
 import MoriTerminal
 
+// MARK: - Checkout Row Model
+
+/// A single row in the "Check Out Existing" list: an existing local branch or an
+/// open pull request (whose head branch would be checked out). PRs are just
+/// "someone else's existing branch", so both live in one flat, selectable list.
+private enum CheckoutRow: Equatable {
+    case branch(GitBranchInfo)
+    case pr(GitHubWorkItem)
+
+    /// Identity used to preserve the highlighted row across async re-renders
+    /// (a refreshed commit date or draft flag must not drop the selection).
+    func matchesIdentity(_ other: CheckoutRow) -> Bool {
+        switch (self, other) {
+        case let (.branch(a), .branch(b)): return a.name == b.name
+        case let (.pr(a), .pr(b)): return a.number == b.number
+        default: return false
+        }
+    }
+}
+
 // MARK: - Controller
 
-/// NSWindowController managing a minimal floating worktree creation panel.
+/// NSPanel driving workspace creation. The panel answers one question — which
+/// branch will the new workspace check out? — split across two tabs:
 ///
-/// Layout: 2-row panel — branch name input on top, project/base-branch dropdowns + hint below.
+/// - **New Branch**: type a name (or start from a GitHub issue) to `checkout -b`
+///   off a base branch. If the name already names an existing branch, the panel
+///   silently switches to checking it out instead of blocking.
+/// - **Check Out Existing**: pick an existing local branch or an open PR's head
+///   branch. Branches already backing a workspace are excluded.
+///
+/// The panel has a fixed frame; its two list areas scroll rather than resizing
+/// the window.
 @MainActor
 final class WorktreeCreationController: NSWindowController {
 
     // MARK: - Constants
 
     private static let fallbackBranch = "main"
-    private static let branchIconPrefix = "\u{2387} "
+
+    /// SF Symbol beats a text glyph in popup titles: the ⎇ character renders
+    /// inconsistently across fonts, and a menu-item image tints with appearance.
+    private static let branchMenuImage: NSImage? = NSImage(
+        systemSymbolName: "arrow.triangle.branch", accessibilityDescription: nil
+    )?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 11, weight: .regular))
+
+    private static let relativeDateFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter
+    }()
 
     // MARK: - Callbacks
 
@@ -24,8 +63,8 @@ final class WorktreeCreationController: NSWindowController {
     /// Called to fetch branches asynchronously.
     var fetchBranches: ((_ projectId: UUID, _ repoPath: String) async throws -> [GitBranchInfo])?
 
-    /// Called to prefetch open GitHub issues + PRs for the `#` picker.
-    /// Returns `[]` for remote/SSH projects (gh is local-only).
+    /// Called to prefetch open GitHub issues + PRs. Returns `[]` for remote/SSH
+    /// projects (gh is local-only).
     var fetchGitHubItems: ((_ projectId: UUID, _ repoPath: String) async -> [GitHubWorkItem])?
 
     /// Called when the user switches projects in the popup.
@@ -37,54 +76,100 @@ final class WorktreeCreationController: NSWindowController {
     private var projects: [Project] = []
     private var selectedProjectId: UUID?
     private var repoPath: String = ""
+
+    /// Branches already backing a workspace in the current project — excluded
+    /// from the "Check Out Existing" list (and PRs whose head is such a branch).
+    private var excludedBranches: Set<String> = []
+
     private var fetchGeneration: Int = 0
+    private var githubFetchGeneration: Int = 0
     nonisolated(unsafe) private var localEventMonitor: Any?
 
-    // GitHub `#` picker state.
+    // Prefetched GitHub issues + PRs (volatile picker data).
     private var githubItems: [GitHubWorkItem] = []
-    private var filteredItems: [GitHubWorkItem] = []
-    private var githubFetchGeneration: Int = 0
-    private var githubModeActive: Bool = false
-    private var selectedSuggestionIndex: Int = -1
+
+    // Tab 1 issue picker (open issues only).
+    private var issues: [GitHubWorkItem] = []
+    /// The name auto-filled from a picked issue and the issue's number. Cleared
+    /// once the user edits the name so it no longer matches the auto-fill.
+    private var autofilledName: String?
+    private var issueAssociation: Int?
+
+    // Tab 2 combined list + highlight (-1 == nothing selected).
+    private var checkoutRows: [CheckoutRow] = []
+    private var checkoutSelectedRow: Int = -1
+
+    private var currentTab = 0
+
+    /// Collapsed to zero while the exists-hint is hidden — `isHidden` alone
+    /// leaves dead space between the name field and the Base row.
+    private var hintTopConstraint: NSLayoutConstraint?
+    private var hintHeightConstraint: NSLayoutConstraint?
 
     // MARK: - Views
 
-    private let branchNameField = NSTextField()
-    private let toolbarContainer = NSView()
-    private let projectPopup = NSPopUpButton()
-    private let baseBranchPopup = NSPopUpButton()
-    private let createHintLabel = NSTextField(labelWithString: "")
     private let containerView = NSView()
 
-    // Suggestions list (GitHub `#` picker).
-    private let suggestionsScrollView = NSScrollView()
-    private let suggestionsTable = NSTableView()
-    private var suggestionsTopConstraint: NSLayoutConstraint!
-    private var suggestionsHeightConstraint: NSLayoutConstraint!
+    // Header.
+    private let titleLabel = NSTextField(labelWithString: "")
+    private let projectPopup = NSPopUpButton()
+    private let closeButton = NSButton()
+
+    // Tab switch.
+    private let segmentedControl = NSSegmentedControl()
+
+    // Tab 1 — New Branch.
+    private let newBranchContainer = NSView()
+    private let branchNameField = NSTextField()
+    private let existsHintLabel = NSTextField(labelWithString: "")
+    private let baseLabel = NSTextField(labelWithString: "")
+    private let baseBranchPopup = NSPopUpButton()
+    private let issueSectionLabel = NSTextField(labelWithString: "")
+    private let issuesScrollView = NSScrollView()
+    private let issuesTable = NSTableView()
+
+    // Tab 2 — Check Out Existing.
+    private let checkoutContainer = NSView()
+    private let filterField = NSTextField()
+    private let checkoutScrollView = NSScrollView()
+    private let checkoutTable = NSTableView()
+
+    // Footer.
+    private let createButton = NSButton()
 
     // MARK: - Layout Constants
 
     private enum Layout {
-        static let panelWidth: CGFloat = 480
-        static let panelPaddingH: CGFloat = 12
+        static let panelWidth: CGFloat = 520
+        static let panelHeight: CGFloat = 420
+        static let panelTopOffset: CGFloat = 80
         static let cornerRadius: CGFloat = 10
 
-        static let branchNameTopPadding: CGFloat = 12
-        static let branchNameHeight: CGFloat = 28
-        static let toolbarTopGap: CGFloat = 8
-        static let toolbarHeight: CGFloat = 24
-        static let bottomPadding: CGFloat = 10
+        static let padH: CGFloat = 16
+        static let padTop: CGFloat = 14
+        static let padBottom: CGFloat = 14
 
-        // 12 + 28 + 8 + 24 + 10 = 82
-        static let panelHeight: CGFloat = 82
+        static let headerHeight: CGFloat = 22
+        static let projectPopupWidth: CGFloat = 180
+        static let headerToSegmentGap: CGFloat = 12
+        static let segmentHeight: CGFloat = 24
+        static let segmentToContentGap: CGFloat = 12
+        static let contentToFooterGap: CGFloat = 12
+        static let footerHeight: CGFloat = 32
 
-        static let panelTopOffset: CGFloat = 80
+        static let fieldHeight: CGFloat = 28
+        static let hintTopGap: CGFloat = 6
+        static let hintHeight: CGFloat = 14
+        static let baseRowTopGap: CGFloat = 12
+        static let baseRowHeight: CGFloat = 22
+        static let sectionLabelTopGap: CGFloat = 12
+        static let sectionLabelHeight: CGFloat = 14
+        static let listTopGap: CGFloat = 6
+        static let rowHeight: CGFloat = 28
 
-        // Suggestions list.
-        static let suggestionsTopGap: CGFloat = 6
-        static let suggestionRowHeight: CGFloat = 26
-        static let maxVisibleSuggestions = 8
-        static let suggestionsBottomPadding: CGFloat = 8
+        /// Content-width priority for popups: below the required edge pins so a
+        /// long branch/project title truncates instead of driving the frame wide.
+        static let popupCompressionResistance = NSLayoutConstraint.Priority(250)
     }
 
     // MARK: - Init
@@ -106,7 +191,6 @@ final class WorktreeCreationController: NSWindowController {
         panel.hidesOnDeactivate = true
         panel.becomesKeyOnlyIfNeeded = false
 
-        // Hide traffic light buttons
         panel.standardWindowButton(.closeButton)?.isHidden = true
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
@@ -130,24 +214,21 @@ final class WorktreeCreationController: NSWindowController {
 
     // MARK: - Public
 
-    /// Show the panel for a given project, pre-loading branch data.
+    /// Show the panel for a given project, pre-loading branch and GitHub data.
     func show(
         projects: [Project],
         selectedProjectId: UUID,
         repoPath: String,
+        existingWorktreeBranches: Set<String>,
         themeInfo: GhosttyThemeInfo
     ) {
         self.projects = projects
         self.selectedProjectId = selectedProjectId
         self.repoPath = repoPath
-
-        branchNameField.stringValue = ""
-        dataSource = nil
-        exitGitHubMode()
+        self.excludedBranches = existingWorktreeBranches
 
         applyTheme(themeInfo)
-        populateProjectPopup()
-        resetBaseBranchPopup()
+        resetForShow()
 
         positionPanel()
         window?.makeKeyAndOrderFront(nil)
@@ -157,21 +238,20 @@ final class WorktreeCreationController: NSWindowController {
         fetchGitHubItemsAsync(repoPath: repoPath)
     }
 
-    /// Lightweight refresh when the user switches projects — re-fetches branches
-    /// without re-positioning or re-theming the panel.
+    /// Lightweight refresh when the user switches projects — re-fetches data
+    /// without re-positioning, re-theming, or changing the active tab.
     func refresh(
         projects: [Project],
         selectedProjectId: UUID,
-        repoPath: String
+        repoPath: String,
+        existingWorktreeBranches: Set<String>
     ) {
         self.projects = projects
         self.selectedProjectId = selectedProjectId
         self.repoPath = repoPath
+        self.excludedBranches = existingWorktreeBranches
 
-        branchNameField.stringValue = ""
-        dataSource = nil
-        exitGitHubMode()
-
+        resetInputs()
         populateProjectPopup()
         resetBaseBranchPopup()
 
@@ -213,38 +293,15 @@ final class WorktreeCreationController: NSWindowController {
             ])
         }
 
-        setupBranchNameField()
-        setupToolbarRow()
-        setupSuggestionsList()
-        layoutViews()
-    }
+        setupHeader()
+        setupSegmentedControl()
+        setupNewBranchTab()
+        setupCheckoutTab()
+        setupFooter()
+        layoutChrome()
 
-    private func setupSuggestionsList() {
-        suggestionsTable.translatesAutoresizingMaskIntoConstraints = false
-        suggestionsTable.headerView = nil
-        suggestionsTable.backgroundColor = .clear
-        suggestionsTable.rowHeight = Layout.suggestionRowHeight
-        suggestionsTable.intercellSpacing = NSSize(width: 0, height: 0)
-        suggestionsTable.selectionHighlightStyle = .regular
-        suggestionsTable.allowsEmptySelection = true
-        suggestionsTable.allowsMultipleSelection = false
-        suggestionsTable.gridStyleMask = []
-        suggestionsTable.dataSource = self
-        suggestionsTable.delegate = self
-        suggestionsTable.target = self
-        suggestionsTable.action = #selector(suggestionRowClicked(_:))
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("suggestion"))
-        column.resizingMask = .autoresizingMask
-        suggestionsTable.addTableColumn(column)
-
-        suggestionsScrollView.translatesAutoresizingMaskIntoConstraints = false
-        suggestionsScrollView.documentView = suggestionsTable
-        suggestionsScrollView.hasVerticalScroller = true
-        suggestionsScrollView.drawsBackground = false
-        suggestionsScrollView.borderType = .noBorder
-        suggestionsScrollView.automaticallyAdjustsContentInsets = false
-        suggestionsScrollView.isHidden = true
-        containerView.addSubview(suggestionsScrollView)
+        selectTab(0)
+        updateCreateButton()
     }
 
     private func setupKeyEventMonitor() {
@@ -252,142 +309,355 @@ final class WorktreeCreationController: NSWindowController {
             guard let self, let panel = self.window, panel.isVisible else { return event }
             let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
-            // Cmd+Enter from anywhere: confirm creation
+            // ⌘⏎ from anywhere: confirm.
             if event.keyCode == 36, mods.contains(.command) {
-                self.confirmInput()
+                self.confirm()
                 return nil
             }
-
-            // Esc from anywhere: dismiss
+            // Esc from anywhere: dismiss.
             if event.keyCode == 53 {
                 self.dismiss()
                 return nil
             }
-
             return event
         }
     }
 
-    // MARK: - Branch Name Field
+    // MARK: - Header
 
-    private func setupBranchNameField() {
+    private func setupHeader() {
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.stringValue = .localized("New Workspace")
+        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        titleLabel.textColor = .labelColor
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        containerView.addSubview(titleLabel)
+
+        projectPopup.translatesAutoresizingMaskIntoConstraints = false
+        projectPopup.controlSize = .small
+        projectPopup.font = .systemFont(ofSize: 12)
+        projectPopup.target = self
+        projectPopup.action = #selector(projectChanged(_:))
+        (projectPopup.cell as? NSPopUpButtonCell)?.lineBreakMode = .byTruncatingTail
+        projectPopup.setContentCompressionResistancePriority(
+            Layout.popupCompressionResistance, for: .horizontal
+        )
+        containerView.addSubview(projectPopup)
+
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        closeButton.isBordered = false
+        closeButton.imagePosition = .imageOnly
+        closeButton.image = NSImage(
+            systemSymbolName: "xmark",
+            accessibilityDescription: .localized("Close")
+        )
+        closeButton.contentTintColor = .tertiaryLabelColor
+        closeButton.target = self
+        closeButton.action = #selector(closeButtonClicked(_:))
+        containerView.addSubview(closeButton)
+    }
+
+    private func setupSegmentedControl() {
+        segmentedControl.translatesAutoresizingMaskIntoConstraints = false
+        segmentedControl.segmentCount = 2
+        segmentedControl.setLabel(.localized("New Branch"), forSegment: 0)
+        segmentedControl.setLabel(.localized("Check Out Existing"), forSegment: 1)
+        segmentedControl.segmentDistribution = .fillEqually
+        segmentedControl.trackingMode = .selectOne
+        segmentedControl.selectedSegment = 0
+        segmentedControl.target = self
+        segmentedControl.action = #selector(segmentChanged(_:))
+        containerView.addSubview(segmentedControl)
+    }
+
+    // MARK: - Tab 1 — New Branch
+
+    private func setupNewBranchTab() {
+        newBranchContainer.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(newBranchContainer)
+
         branchNameField.translatesAutoresizingMaskIntoConstraints = false
         branchNameField.placeholderString = .localized("Branch name")
-        branchNameField.font = .systemFont(ofSize: 14, weight: .regular)
+        branchNameField.font = .systemFont(ofSize: 14)
         branchNameField.isBordered = true
         branchNameField.bezelStyle = .roundedBezel
         branchNameField.focusRingType = .none
         branchNameField.delegate = self
-        branchNameField.target = self
-        branchNameField.action = #selector(branchNameAction(_:))
-        containerView.addSubview(branchNameField)
-    }
+        newBranchContainer.addSubview(branchNameField)
 
-    // MARK: - Toolbar Row
+        existsHintLabel.translatesAutoresizingMaskIntoConstraints = false
+        existsHintLabel.stringValue = .localized("Branch already exists — it will be checked out")
+        existsHintLabel.font = .systemFont(ofSize: 11)
+        existsHintLabel.textColor = .secondaryLabelColor
+        existsHintLabel.lineBreakMode = .byTruncatingTail
+        existsHintLabel.isHidden = true
+        newBranchContainer.addSubview(existsHintLabel)
 
-    private func setupToolbarRow() {
-        toolbarContainer.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(toolbarContainer)
+        baseLabel.translatesAutoresizingMaskIntoConstraints = false
+        baseLabel.stringValue = .localized("Base")
+        baseLabel.font = .systemFont(ofSize: 12)
+        baseLabel.textColor = .secondaryLabelColor
+        baseLabel.setContentHuggingPriority(.required, for: .horizontal)
+        newBranchContainer.addSubview(baseLabel)
 
-        // Project popup
-        projectPopup.translatesAutoresizingMaskIntoConstraints = false
-        projectPopup.controlSize = .small
-        projectPopup.font = .systemFont(ofSize: 12)
-        projectPopup.isBordered = false
-        projectPopup.target = self
-        projectPopup.action = #selector(projectChanged(_:))
-        toolbarContainer.addSubview(projectPopup)
-
-        // Base branch popup
         baseBranchPopup.translatesAutoresizingMaskIntoConstraints = false
-        baseBranchPopup.controlSize = .small
+        baseBranchPopup.controlSize = .regular
         baseBranchPopup.font = .systemFont(ofSize: 12)
-        baseBranchPopup.isBordered = false
-        // No target/action — selection is read at confirm time
-        toolbarContainer.addSubview(baseBranchPopup)
+        (baseBranchPopup.cell as? NSPopUpButtonCell)?.lineBreakMode = .byTruncatingTail
+        baseBranchPopup.setContentCompressionResistancePriority(
+            Layout.popupCompressionResistance, for: .horizontal
+        )
+        newBranchContainer.addSubview(baseBranchPopup)
 
-        // Create hint label
-        createHintLabel.translatesAutoresizingMaskIntoConstraints = false
-        createHintLabel.stringValue = "\u{2318}\u{23CE} " + .localized("to create")
-        createHintLabel.font = .systemFont(ofSize: 10, weight: .regular)
-        createHintLabel.textColor = .tertiaryLabelColor
-        createHintLabel.isEditable = false
-        createHintLabel.isBordered = false
-        createHintLabel.backgroundColor = .clear
-        toolbarContainer.addSubview(createHintLabel)
+        issueSectionLabel.translatesAutoresizingMaskIntoConstraints = false
+        issueSectionLabel.stringValue = String.localized("Or start from an issue").uppercased()
+        issueSectionLabel.font = .systemFont(ofSize: 10, weight: .semibold)
+        issueSectionLabel.textColor = .tertiaryLabelColor
+        issueSectionLabel.lineBreakMode = .byTruncatingTail
+        newBranchContainer.addSubview(issueSectionLabel)
 
+        configureList(issuesTable, scroll: issuesScrollView, in: newBranchContainer)
+        issuesTable.target = self
+        issuesTable.action = #selector(issueRowClicked(_:))
+
+        resetBaseBranchPopup()
+
+        let hintTop = existsHintLabel.topAnchor.constraint(equalTo: branchNameField.bottomAnchor, constant: 0)
+        let hintHeight = existsHintLabel.heightAnchor.constraint(equalToConstant: 0)
+        hintTopConstraint = hintTop
+        hintHeightConstraint = hintHeight
+
+        let padH: CGFloat = 0
         NSLayoutConstraint.activate([
-            projectPopup.leadingAnchor.constraint(equalTo: toolbarContainer.leadingAnchor, constant: Layout.panelPaddingH),
-            projectPopup.centerYAnchor.constraint(equalTo: toolbarContainer.centerYAnchor),
+            branchNameField.topAnchor.constraint(equalTo: newBranchContainer.topAnchor),
+            branchNameField.leadingAnchor.constraint(equalTo: newBranchContainer.leadingAnchor, constant: padH),
+            branchNameField.trailingAnchor.constraint(equalTo: newBranchContainer.trailingAnchor, constant: -padH),
+            branchNameField.heightAnchor.constraint(equalToConstant: Layout.fieldHeight),
 
-            baseBranchPopup.leadingAnchor.constraint(equalTo: projectPopup.trailingAnchor, constant: 8),
-            baseBranchPopup.centerYAnchor.constraint(equalTo: toolbarContainer.centerYAnchor),
+            hintTop,
+            existsHintLabel.leadingAnchor.constraint(equalTo: newBranchContainer.leadingAnchor, constant: 2),
+            existsHintLabel.trailingAnchor.constraint(equalTo: newBranchContainer.trailingAnchor),
+            hintHeight,
 
-            createHintLabel.trailingAnchor.constraint(equalTo: toolbarContainer.trailingAnchor, constant: -Layout.panelPaddingH),
-            createHintLabel.centerYAnchor.constraint(equalTo: toolbarContainer.centerYAnchor),
+            baseLabel.topAnchor.constraint(equalTo: existsHintLabel.bottomAnchor, constant: Layout.baseRowTopGap),
+            baseLabel.leadingAnchor.constraint(equalTo: newBranchContainer.leadingAnchor),
+            baseLabel.centerYAnchor.constraint(equalTo: baseBranchPopup.centerYAnchor),
+
+            baseBranchPopup.topAnchor.constraint(equalTo: existsHintLabel.bottomAnchor, constant: Layout.baseRowTopGap),
+            baseBranchPopup.leadingAnchor.constraint(equalTo: baseLabel.trailingAnchor, constant: 8),
+            baseBranchPopup.trailingAnchor.constraint(equalTo: newBranchContainer.trailingAnchor),
+            baseBranchPopup.heightAnchor.constraint(equalToConstant: Layout.baseRowHeight),
+
+            issueSectionLabel.topAnchor.constraint(equalTo: baseBranchPopup.bottomAnchor, constant: Layout.sectionLabelTopGap),
+            issueSectionLabel.leadingAnchor.constraint(equalTo: newBranchContainer.leadingAnchor, constant: 2),
+            issueSectionLabel.trailingAnchor.constraint(equalTo: newBranchContainer.trailingAnchor),
+            issueSectionLabel.heightAnchor.constraint(equalToConstant: Layout.sectionLabelHeight),
+
+            issuesScrollView.topAnchor.constraint(equalTo: issueSectionLabel.bottomAnchor, constant: Layout.listTopGap),
+            issuesScrollView.leadingAnchor.constraint(equalTo: newBranchContainer.leadingAnchor),
+            issuesScrollView.trailingAnchor.constraint(equalTo: newBranchContainer.trailingAnchor),
+            issuesScrollView.bottomAnchor.constraint(equalTo: newBranchContainer.bottomAnchor),
         ])
     }
 
-    // MARK: - Layout
+    // MARK: - Tab 2 — Check Out Existing
 
-    private func layoutViews() {
-        // The toolbar is NOT pinned to the container bottom: the panel frame has a
-        // fixed height, so pinning would fight the downward growth of the
-        // suggestions list. Vertical positions flow from the top instead.
-        suggestionsTopConstraint = suggestionsScrollView.topAnchor.constraint(
-            equalTo: toolbarContainer.bottomAnchor, constant: 0
-        )
-        suggestionsHeightConstraint = suggestionsScrollView.heightAnchor.constraint(equalToConstant: 0)
+    private func setupCheckoutTab() {
+        checkoutContainer.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(checkoutContainer)
+
+        filterField.translatesAutoresizingMaskIntoConstraints = false
+        filterField.placeholderString = .localized("Filter branches and PRs")
+        filterField.font = .systemFont(ofSize: 13)
+        filterField.isBordered = true
+        filterField.bezelStyle = .roundedBezel
+        filterField.focusRingType = .none
+        filterField.delegate = self
+        checkoutContainer.addSubview(filterField)
+
+        configureList(checkoutTable, scroll: checkoutScrollView, in: checkoutContainer)
+        checkoutTable.target = self
+        checkoutTable.action = #selector(checkoutRowClicked(_:))
+        checkoutTable.doubleAction = #selector(checkoutRowDoubleClicked(_:))
 
         NSLayoutConstraint.activate([
-            // Branch name field
-            branchNameField.topAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.branchNameTopPadding),
-            branchNameField.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.panelPaddingH),
-            branchNameField.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.panelPaddingH),
-            branchNameField.heightAnchor.constraint(equalToConstant: Layout.branchNameHeight),
+            filterField.topAnchor.constraint(equalTo: checkoutContainer.topAnchor),
+            filterField.leadingAnchor.constraint(equalTo: checkoutContainer.leadingAnchor),
+            filterField.trailingAnchor.constraint(equalTo: checkoutContainer.trailingAnchor),
+            filterField.heightAnchor.constraint(equalToConstant: Layout.fieldHeight),
 
-            // Toolbar container
-            toolbarContainer.topAnchor.constraint(equalTo: branchNameField.bottomAnchor, constant: Layout.toolbarTopGap),
-            toolbarContainer.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            toolbarContainer.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            toolbarContainer.heightAnchor.constraint(equalToConstant: Layout.toolbarHeight),
-
-            // Suggestions list (below the toolbar; height/gap toggled at runtime)
-            suggestionsTopConstraint,
-            suggestionsScrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.panelPaddingH),
-            suggestionsScrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.panelPaddingH),
-            suggestionsHeightConstraint,
+            checkoutScrollView.topAnchor.constraint(equalTo: filterField.bottomAnchor, constant: Layout.listTopGap + 2),
+            checkoutScrollView.leadingAnchor.constraint(equalTo: checkoutContainer.leadingAnchor),
+            checkoutScrollView.trailingAnchor.constraint(equalTo: checkoutContainer.trailingAnchor),
+            checkoutScrollView.bottomAnchor.constraint(equalTo: checkoutContainer.bottomAnchor),
         ])
+    }
+
+    private func configureList(_ table: NSTableView, scroll: NSScrollView, in parent: NSView) {
+        table.translatesAutoresizingMaskIntoConstraints = false
+        table.headerView = nil
+        table.backgroundColor = .clear
+        table.rowHeight = Layout.rowHeight
+        table.intercellSpacing = NSSize(width: 0, height: 0)
+        table.selectionHighlightStyle = .regular
+        table.allowsEmptySelection = true
+        table.allowsMultipleSelection = false
+        table.gridStyleMask = []
+        table.dataSource = self
+        table.delegate = self
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("main"))
+        column.resizingMask = .autoresizingMask
+        table.addTableColumn(column)
+
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.documentView = table
+        scroll.hasVerticalScroller = true
+        // Subtle rounded fill so the list reads as a contained region instead of
+        // rows floating on the panel background.
+        scroll.drawsBackground = true
+        scroll.backgroundColor = .quaternarySystemFill
+        scroll.wantsLayer = true
+        scroll.layer?.cornerRadius = 8
+        scroll.layer?.masksToBounds = true
+        scroll.borderType = .noBorder
+        scroll.automaticallyAdjustsContentInsets = false
+        scroll.contentInsets = NSEdgeInsets(top: 4, left: 0, bottom: 4, right: 0)
+        parent.addSubview(scroll)
+    }
+
+    // MARK: - Footer
+
+    private func setupFooter() {
+        // Prominent primary action. Deliberately no keyEquivalent = "\r": a default
+        // button's performKeyEquivalent would intercept Enter before the field
+        // editor, moving confirm off the delegate path. Enter and ⌘⏎ stay with the
+        // field delegate / event monitor; the button confirms via click.
+        createButton.translatesAutoresizingMaskIntoConstraints = false
+        createButton.bezelStyle = .rounded
+        createButton.controlSize = .large
+        createButton.bezelColor = .controlAccentColor
+        createButton.setButtonType(.momentaryPushIn)
+        createButton.target = self
+        createButton.action = #selector(createButtonClicked(_:))
+        createButton.setContentHuggingPriority(.required, for: .horizontal)
+        createButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        (createButton.cell as? NSButtonCell)?.lineBreakMode = .byTruncatingTail
+        createButton.attributedTitle = NSAttributedString(
+            string: .localized("Create Workspace"),
+            attributes: [
+                .foregroundColor: NSColor.alternateSelectedControlTextColor,
+                .font: NSFont.systemFont(ofSize: 13, weight: .medium),
+            ]
+        )
+        containerView.addSubview(createButton)
+    }
+
+    // MARK: - Chrome Layout
+
+    private func layoutChrome() {
+        let padH = Layout.padH
+
+        NSLayoutConstraint.activate([
+            // Header row.
+            titleLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.padTop),
+            titleLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: padH),
+            titleLabel.centerYAnchor.constraint(equalTo: projectPopup.centerYAnchor),
+
+            closeButton.centerYAnchor.constraint(equalTo: projectPopup.centerYAnchor),
+            closeButton.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -padH),
+            closeButton.widthAnchor.constraint(equalToConstant: 20),
+            closeButton.heightAnchor.constraint(equalToConstant: 20),
+
+            projectPopup.topAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.padTop),
+            projectPopup.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -8),
+            projectPopup.widthAnchor.constraint(equalToConstant: Layout.projectPopupWidth),
+            projectPopup.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 8),
+            projectPopup.heightAnchor.constraint(equalToConstant: Layout.headerHeight),
+
+            // Segmented control.
+            segmentedControl.topAnchor.constraint(equalTo: projectPopup.bottomAnchor, constant: Layout.headerToSegmentGap),
+            segmentedControl.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: padH),
+            segmentedControl.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -padH),
+            segmentedControl.heightAnchor.constraint(equalToConstant: Layout.segmentHeight),
+
+            // Footer.
+            createButton.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -padH),
+            createButton.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -Layout.padBottom),
+            createButton.heightAnchor.constraint(equalToConstant: Layout.footerHeight),
+            createButton.leadingAnchor.constraint(greaterThanOrEqualTo: containerView.leadingAnchor, constant: padH),
+        ])
+
+        // Both tab containers occupy the same content area between the segmented
+        // control and the footer; only one is visible at a time.
+        for tab in [newBranchContainer, checkoutContainer] {
+            NSLayoutConstraint.activate([
+                tab.topAnchor.constraint(equalTo: segmentedControl.bottomAnchor, constant: Layout.segmentToContentGap),
+                tab.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: padH),
+                tab.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -padH),
+                tab.bottomAnchor.constraint(equalTo: createButton.topAnchor, constant: -Layout.contentToFooterGap),
+            ])
+        }
     }
 
     // MARK: - Positioning
 
     private func positionPanel() {
         guard let panel = window else { return }
+        let size = NSSize(width: Layout.panelWidth, height: Layout.panelHeight)
 
         if let mainWindow = NSApp.mainWindow ?? NSApp.keyWindow {
             let mainFrame = mainWindow.frame
-            let x = mainFrame.midX - Layout.panelWidth / 2
-            let y = mainFrame.maxY - Layout.panelHeight - Layout.panelTopOffset
-            panel.setFrame(NSRect(x: x, y: y, width: Layout.panelWidth, height: Layout.panelHeight), display: true)
+            let x = mainFrame.midX - size.width / 2
+            let y = mainFrame.maxY - size.height - Layout.panelTopOffset
+            panel.setFrame(NSRect(origin: NSPoint(x: x, y: y), size: size), display: true)
         } else {
-            panel.setFrame(NSRect(x: 0, y: 0, width: Layout.panelWidth, height: Layout.panelHeight), display: true)
+            panel.setFrame(NSRect(origin: .zero, size: size), display: true)
             panel.center()
         }
     }
 
-    // MARK: - Branch Fetching
+    // MARK: - Reset
 
-    private func resetBaseBranchPopup() {
-        baseBranchPopup.removeAllItems()
-        baseBranchPopup.addItem(withTitle: Self.branchIconPrefix + Self.fallbackBranch)
-        baseBranchPopup.lastItem?.representedObject = Self.fallbackBranch
-        baseBranchPopup.isEnabled = true
+    private func resetForShow() {
+        segmentedControl.selectedSegment = 0
+        selectTab(0)
+        resetInputs()
+        populateProjectPopup()
+        resetBaseBranchPopup()
     }
+
+    private func resetInputs() {
+        branchNameField.stringValue = ""
+        filterField.stringValue = ""
+        autofilledName = nil
+        issueAssociation = nil
+        dataSource = nil
+        githubItems = []
+        issues = []
+        checkoutRows = []
+        checkoutSelectedRow = -1
+        updateExistsHint()
+        issuesTable.reloadData()
+        checkoutTable.reloadData()
+        updateIssueSectionVisibility()
+        updateCreateButton()
+    }
+
+    private func selectTab(_ index: Int) {
+        currentTab = index
+        newBranchContainer.isHidden = (index != 0)
+        checkoutContainer.isHidden = (index != 1)
+        let field: NSTextField = index == 0 ? branchNameField : filterField
+        window?.makeFirstResponder(field)
+        updateCreateButton()
+    }
+
+    // MARK: - Fetching
 
     private func fetchBranchesAsync(repoPath: String) {
         fetchGeneration += 1
-        let currentGeneration = fetchGeneration
+        let generation = fetchGeneration
         Task { [weak self] in
             guard let self else { return }
             let branches: [GitBranchInfo]
@@ -400,32 +670,29 @@ final class WorktreeCreationController: NSWindowController {
             } catch {
                 branches = []
             }
-            guard self.fetchGeneration == currentGeneration else { return }
+            guard self.fetchGeneration == generation else { return }
             self.dataSource = WorktreeCreationDataSource(branches: branches)
             self.populateBaseBranchPopup()
+            self.updateExistsHint()
+            self.rebuildCheckoutRows(preserveSelection: true)
         }
     }
 
-    /// Prefetch issues + PRs for the `#` picker. Uses the same generation-counter
-    /// staleness guard as branch fetching so a slow response from a previously
-    /// selected project can't clobber the current one.
     private func fetchGitHubItemsAsync(repoPath: String) {
         githubItems = []
         githubFetchGeneration += 1
-        let currentGeneration = githubFetchGeneration
+        let generation = githubFetchGeneration
         Task { [weak self] in
             guard let self, let projectId = self.selectedProjectId else { return }
             let items = await self.fetchGitHubItems?(projectId, repoPath) ?? []
-            guard self.githubFetchGeneration == currentGeneration else { return }
+            guard self.githubFetchGeneration == generation else { return }
             self.githubItems = items
-            // If the user already typed `#` before the fetch landed, re-filter.
-            if self.githubModeActive {
-                self.filterSuggestions(query: self.currentGitHubQuery())
-            }
+            self.reloadIssues()
+            self.rebuildCheckoutRows(preserveSelection: true)
         }
     }
 
-    // MARK: - Populate Popups
+    // MARK: - Popups
 
     private func populateProjectPopup() {
         projectPopup.removeAllItems()
@@ -437,58 +704,31 @@ final class WorktreeCreationController: NSWindowController {
         }
     }
 
+    private func resetBaseBranchPopup() {
+        baseBranchPopup.removeAllItems()
+        addBaseBranchItem(Self.fallbackBranch)
+    }
+
     private func populateBaseBranchPopup() {
         guard let ds = dataSource else { return }
         baseBranchPopup.removeAllItems()
-        let branchNames = ds.localBranchNames
-        if branchNames.isEmpty {
-            baseBranchPopup.addItem(withTitle: Self.branchIconPrefix + Self.fallbackBranch)
-            baseBranchPopup.lastItem?.representedObject = Self.fallbackBranch
+        let names = ds.localBranchNames
+        if names.isEmpty {
+            addBaseBranchItem(Self.fallbackBranch)
         } else {
-            for name in branchNames {
-                baseBranchPopup.addItem(withTitle: Self.branchIconPrefix + name)
-                baseBranchPopup.lastItem?.representedObject = name
+            for name in names {
+                addBaseBranchItem(name)
             }
-            if let idx = branchNames.firstIndex(of: ds.defaultBaseBranch) {
+            if let idx = names.firstIndex(of: ds.defaultBaseBranch) {
                 baseBranchPopup.selectItem(at: idx)
             }
         }
     }
 
-    // MARK: - Confirm
-
-    private func confirmInput() {
-        // In `#` picker mode, Enter/Cmd+Enter confirms the highlighted
-        // suggestion (if any) rather than creating a literal `#…` branch.
-        if githubModeActive {
-            if let item = currentSelectedItem() {
-                confirmSuggestion(item)
-            }
-            return
-        }
-
-        let branchText = branchNameField.stringValue.trimmingCharacters(in: .whitespaces)
-        guard !branchText.isEmpty else { return }
-
-        // Check if typed text exactly matches an existing branch
-        if let match = dataSource?.exactMatch(for: branchText) {
-            dismiss()
-            onCreateWorktree?(WorktreeCreationRequest(
-                branchName: match.name,
-                isNewBranch: false,
-                baseBranch: nil
-            ))
-            return
-        }
-
-        // New branch — use base branch from popup
-        let baseBranch = selectedBaseBranch()
-        dismiss()
-        onCreateWorktree?(WorktreeCreationRequest(
-            branchName: branchText,
-            isNewBranch: true,
-            baseBranch: baseBranch
-        ))
+    private func addBaseBranchItem(_ name: String) {
+        baseBranchPopup.addItem(withTitle: name)
+        baseBranchPopup.lastItem?.representedObject = name
+        baseBranchPopup.lastItem?.image = Self.branchMenuImage
     }
 
     private func selectedBaseBranch() -> String {
@@ -498,174 +738,289 @@ final class WorktreeCreationController: NSWindowController {
         return dataSource?.defaultBaseBranch ?? Self.fallbackBranch
     }
 
-    // MARK: - GitHub Picker
-
-    /// The text after the leading `#`, used to filter suggestions.
-    private func currentGitHubQuery() -> String {
-        let text = branchNameField.stringValue
-        guard text.hasPrefix("#") else { return "" }
-        return String(text.dropFirst())
+    private func setBaseRowEnabled(_ enabled: Bool) {
+        baseBranchPopup.isEnabled = enabled
+        baseBranchPopup.alphaValue = enabled ? 1 : 0.4
+        baseLabel.alphaValue = enabled ? 1 : 0.4
     }
 
-    private func currentSelectedItem() -> GitHubWorkItem? {
-        guard selectedSuggestionIndex >= 0, selectedSuggestionIndex < filteredItems.count else {
-            return nil
-        }
-        return filteredItems[selectedSuggestionIndex]
-    }
+    // MARK: - Tab 1 Logic
 
-    /// React to text changes: recognize a pasted GitHub URL, enter/leave `#`
-    /// picker mode, and filter suggestions.
-    private func handleTextChange() {
+    /// React to typing in the name field: route GitHub references (paste a URL,
+    /// or `#123`), otherwise keep the exists-hint and issue association honest.
+    private func handleNameChange() {
         let text = branchNameField.stringValue
 
         if let (kind, number) = GitHubWorkItem.parseURL(text) {
-            handleURLSelection(kind: kind, number: number)
+            routeGitHubReference(kind: kind, number: number)
+            return
+        }
+        if let number = hashNumber(in: text),
+           let item = githubItems.first(where: { $0.number == number }) {
+            route(item)
             return
         }
 
-        if text.hasPrefix("#") {
-            githubModeActive = true
-            filterSuggestions(query: currentGitHubQuery())
-        } else {
-            exitGitHubMode()
+        // A manual edit that no longer matches the auto-filled name drops the
+        // issue association so we don't tag an unrelated branch as issue-derived.
+        if let filled = autofilledName, text != filled {
+            autofilledName = nil
+            issueAssociation = nil
+            issuesTable.deselectAll(nil)
         }
+        updateExistsHint()
+        updateCreateButton()
     }
 
-    private func filterSuggestions(query: String) {
-        let q = query.lowercased()
-        filteredItems = githubItems.filter { item in
-            if q.isEmpty { return true }
-            return "\(item.number)".hasPrefix(q) || item.title.lowercased().contains(q)
-        }
-        selectedSuggestionIndex = filteredItems.isEmpty ? -1 : 0
-        suggestionsTable.reloadData()
-        applySuggestionSelection()
-        updateSuggestionsLayout()
-    }
-
-    private func exitGitHubMode() {
-        githubModeActive = false
-        filteredItems = []
-        selectedSuggestionIndex = -1
-        suggestionsTable.reloadData()
-        updateSuggestionsLayout()
-    }
-
-    /// Grow/collapse the panel to fit the visible suggestion rows, keeping the
-    /// panel's top edge fixed (AppKit frames are bottom-left origin).
-    private func updateSuggestionsLayout() {
-        let rowCount = filteredItems.count
-        let visible = min(rowCount, Layout.maxVisibleSuggestions)
-        let listHeight = githubModeActive && rowCount > 0
-            ? CGFloat(visible) * Layout.suggestionRowHeight
-            : 0
-
-        suggestionsScrollView.isHidden = (listHeight == 0)
-        suggestionsHeightConstraint.constant = listHeight
-        suggestionsTopConstraint.constant = listHeight > 0 ? Layout.suggestionsTopGap : 0
-
-        let extra = listHeight > 0
-            ? Layout.suggestionsTopGap + listHeight + Layout.suggestionsBottomPadding
-            : 0
-        setPanelHeight(Layout.panelHeight + extra)
-    }
-
-    /// Resize the panel to `height` while pinning its top edge (max Y).
-    private func setPanelHeight(_ height: CGFloat) {
-        guard let panel = window else { return }
-        let frame = panel.frame
-        guard abs(frame.height - height) > 0.5 else { return }
-        let newFrame = NSRect(
-            x: frame.origin.x,
-            y: frame.maxY - height,
-            width: frame.width,
-            height: height
-        )
-        panel.setFrame(newFrame, display: true)
-    }
-
-    private func applySuggestionSelection() {
-        guard selectedSuggestionIndex >= 0, selectedSuggestionIndex < filteredItems.count else {
-            suggestionsTable.deselectAll(nil)
-            return
-        }
-        suggestionsTable.selectRowIndexes(
-            IndexSet(integer: selectedSuggestionIndex),
-            byExtendingSelection: false
-        )
-        suggestionsTable.scrollRowToVisible(selectedSuggestionIndex)
-    }
-
-    private func moveSuggestionSelection(by delta: Int) {
-        guard !filteredItems.isEmpty else { return }
-        let count = filteredItems.count
-        var next = (selectedSuggestionIndex < 0 ? 0 : selectedSuggestionIndex) + delta
-        next = max(0, min(count - 1, next))
-        selectedSuggestionIndex = next
-        applySuggestionSelection()
-    }
-
-    /// Confirm a picked issue/PR — creates immediately (no second confirm).
-    private func confirmSuggestion(_ item: GitHubWorkItem) {
-        dismiss()
-        switch item.kind {
-        case .issue:
-            let branch = GitHubWorkItem.issueBranchName(number: item.number, title: item.title)
-            onCreateWorktree?(WorktreeCreationRequest(
-                branchName: branch,
-                isNewBranch: true,
-                baseBranch: selectedBaseBranch(),
-                origin: .issue(number: item.number)
-            ))
-        case .pullRequest:
-            let headRef = item.headRefName ?? ""
-            onCreateWorktree?(WorktreeCreationRequest(
-                branchName: headRef.isEmpty ? "pr-\(item.number)" : headRef,
-                isNewBranch: false,
-                baseBranch: nil,
-                origin: .pullRequest(number: item.number, headRef: headRef)
-            ))
-        }
-    }
-
-    /// Handle a pasted GitHub URL. Match the prefetched list first; otherwise an
-    /// issue falls back to `issue-<n>` and a PR is resolved downstream via
-    /// `gh pr view` (empty headRef signals the manager to resolve it).
-    private func handleURLSelection(kind: GitHubWorkItem.Kind, number: Int) {
+    /// Route a GitHub reference (from a pasted URL) to the right tab: issues fill
+    /// the name field in place; PRs live in "Check Out Existing".
+    private func routeGitHubReference(kind: GitHubWorkItem.Kind, number: Int) {
         if let item = githubItems.first(where: { $0.kind == kind && $0.number == number }) {
-            confirmSuggestion(item)
+            route(item)
             return
         }
-        dismiss()
         switch kind {
         case .issue:
+            fillFromIssue(number: number, title: "")
+        case .pullRequest:
+            switchToCheckout(selecting: number)
+        }
+    }
+
+    private func route(_ item: GitHubWorkItem) {
+        switch item.kind {
+        case .issue:
+            fillFromIssue(number: item.number, title: item.title)
+        case .pullRequest:
+            switchToCheckout(selecting: item.number)
+        }
+    }
+
+    private func fillFromIssue(number: Int, title: String) {
+        let name = GitHubWorkItem.issueBranchName(number: number, title: title)
+        branchNameField.stringValue = name
+        autofilledName = name
+        issueAssociation = number
+        updateExistsHint()
+        updateCreateButton()
+    }
+
+    private func switchToCheckout(selecting prNumber: Int) {
+        segmentedControl.selectedSegment = 1
+        selectTab(1)
+        if let idx = checkoutRows.firstIndex(where: {
+            if case let .pr(item) = $0 { return item.number == prNumber }
+            return false
+        }) {
+            checkoutSelectedRow = idx
+            applyCheckoutSelection()
+        }
+    }
+
+    /// Show the "already exists" hint and dim the base row when the typed name
+    /// exactly matches an existing branch — defining the "can't create" error out
+    /// of existence by silently switching to a checkout.
+    private func updateExistsHint() {
+        let trimmed = branchNameField.stringValue.trimmingCharacters(in: .whitespaces)
+        let exists = !trimmed.isEmpty && dataSource?.exactMatch(for: trimmed) != nil
+        existsHintLabel.isHidden = !exists
+        hintTopConstraint?.constant = exists ? Layout.hintTopGap : 0
+        hintHeightConstraint?.constant = exists ? Layout.hintHeight : 0
+        setBaseRowEnabled(!exists)
+    }
+
+    private func reloadIssues() {
+        issues = githubItems.filter { $0.kind == .issue }
+        issuesTable.reloadData()
+        updateIssueSectionVisibility()
+    }
+
+    private func updateIssueSectionVisibility() {
+        let hasIssues = !issues.isEmpty
+        issueSectionLabel.isHidden = !hasIssues
+        issuesScrollView.isHidden = !hasIssues
+    }
+
+    /// A bare `#123` reference (trimmed, digits only).
+    private func hashNumber(in text: String) -> Int? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("#") else { return nil }
+        let digits = trimmed.dropFirst()
+        guard !digits.isEmpty, digits.allSatisfy(\.isNumber) else { return nil }
+        return Int(digits)
+    }
+
+    // MARK: - Tab 2 Logic
+
+    private func rebuildCheckoutRows(preserveSelection: Bool) {
+        let previous: CheckoutRow? = (preserveSelection && checkoutSelectedRow >= 0 && checkoutSelectedRow < checkoutRows.count)
+            ? checkoutRows[checkoutSelectedRow] : nil
+
+        checkoutRows = buildCheckoutRows()
+        checkoutTable.reloadData()
+
+        if let previous, let idx = checkoutRows.firstIndex(where: { $0.matchesIdentity(previous) }) {
+            checkoutSelectedRow = idx
+        } else {
+            // Empty filter shows no default selection so Enter never fires on an
+            // arbitrary first row; a filter that matches nothing clears too.
+            checkoutSelectedRow = -1
+        }
+        applyCheckoutSelection()
+    }
+
+    private func buildCheckoutRows() -> [CheckoutRow] {
+        guard let ds = dataSource else { return [] }
+        let filter = filterField.stringValue
+        var rows: [CheckoutRow] = ds
+            .checkoutBranches(excluding: excludedBranches, matching: filter)
+            .map { .branch($0) }
+
+        let q = filter.trimmingCharacters(in: .whitespaces).lowercased()
+        for item in githubItems where item.kind == .pullRequest {
+            let head = item.headRefName ?? ""
+            if !head.isEmpty, excludedBranches.contains(head) { continue }
+            if !q.isEmpty {
+                let haystack = "#\(item.number) \(item.title) \(head)".lowercased()
+                guard haystack.contains(q) else { continue }
+            }
+            rows.append(.pr(item))
+        }
+        return rows
+    }
+
+    private func moveCheckoutSelection(by delta: Int) {
+        guard !checkoutRows.isEmpty else { return }
+        if checkoutSelectedRow < 0 {
+            checkoutSelectedRow = delta >= 0 ? 0 : checkoutRows.count - 1
+        } else {
+            checkoutSelectedRow = max(0, min(checkoutRows.count - 1, checkoutSelectedRow + delta))
+        }
+        applyCheckoutSelection()
+    }
+
+    private func applyCheckoutSelection() {
+        defer { updateCreateButton() }
+        guard checkoutSelectedRow >= 0, checkoutSelectedRow < checkoutRows.count else {
+            checkoutTable.deselectAll(nil)
+            return
+        }
+        checkoutTable.selectRowIndexes(IndexSet(integer: checkoutSelectedRow), byExtendingSelection: false)
+        checkoutTable.scrollRowToVisible(checkoutSelectedRow)
+    }
+
+    // MARK: - Create Button
+
+    private func updateCreateButton() {
+        let enabled: Bool
+        if currentTab == 0 {
+            enabled = !branchNameField.stringValue.trimmingCharacters(in: .whitespaces).isEmpty
+        } else {
+            enabled = checkoutSelectedRow >= 0 && checkoutSelectedRow < checkoutRows.count
+        }
+        createButton.isEnabled = enabled
+    }
+
+    // MARK: - Confirm
+
+    private func confirm() {
+        currentTab == 0 ? confirmNewBranch() : confirmCheckout()
+    }
+
+    private func confirmNewBranch() {
+        let trimmed = branchNameField.stringValue.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        dismiss()
+
+        // The name already names a branch → check it out instead of creating.
+        if let match = dataSource?.exactMatch(for: trimmed) {
+            let name = match.isRemote ? match.displayName : match.name
             onCreateWorktree?(WorktreeCreationRequest(
-                branchName: GitHubWorkItem.issueBranchName(number: number, title: ""),
+                branchName: name,
+                isNewBranch: false,
+                baseBranch: nil,
+                origin: .branch
+            ))
+            return
+        }
+
+        if let number = issueAssociation, branchNameField.stringValue == autofilledName {
+            onCreateWorktree?(WorktreeCreationRequest(
+                branchName: trimmed,
                 isNewBranch: true,
                 baseBranch: selectedBaseBranch(),
                 origin: .issue(number: number)
             ))
-        case .pullRequest:
+            return
+        }
+
+        onCreateWorktree?(WorktreeCreationRequest(
+            branchName: trimmed,
+            isNewBranch: true,
+            baseBranch: selectedBaseBranch(),
+            origin: .branch
+        ))
+    }
+
+    private func confirmCheckout() {
+        guard checkoutSelectedRow >= 0, checkoutSelectedRow < checkoutRows.count else { return }
+        let row = checkoutRows[checkoutSelectedRow]
+        dismiss()
+        switch row {
+        case let .branch(branch):
             onCreateWorktree?(WorktreeCreationRequest(
-                branchName: "pr-\(number)",
+                branchName: branch.name,
                 isNewBranch: false,
                 baseBranch: nil,
-                origin: .pullRequest(number: number, headRef: "")
+                origin: .branch
+            ))
+        case let .pr(item):
+            let head = item.headRefName ?? ""
+            onCreateWorktree?(WorktreeCreationRequest(
+                branchName: head.isEmpty ? "pr-\(item.number)" : head,
+                isNewBranch: false,
+                baseBranch: nil,
+                origin: .pullRequest(number: item.number, headRef: head)
             ))
         }
     }
 
-    @objc private func suggestionRowClicked(_ sender: NSTableView) {
-        let row = sender.clickedRow
-        guard row >= 0, row < filteredItems.count else { return }
-        confirmSuggestion(filteredItems[row])
-    }
-
     // MARK: - Actions
 
-    @objc private func branchNameAction(_ sender: NSTextField) {
-        confirmInput()
+    @objc private func segmentChanged(_ sender: NSSegmentedControl) {
+        selectTab(sender.selectedSegment)
+    }
+
+    @objc private func issueRowClicked(_ sender: NSTableView) {
+        let row = sender.clickedRow
+        guard row >= 0, row < issues.count else { return }
+        let issue = issues[row]
+        fillFromIssue(number: issue.number, title: issue.title)
+        window?.makeFirstResponder(branchNameField)
+    }
+
+    @objc private func checkoutRowClicked(_ sender: NSTableView) {
+        let row = sender.clickedRow
+        guard row >= 0, row < checkoutRows.count else { return }
+        checkoutSelectedRow = row
+        applyCheckoutSelection()
+        // Keep the field first responder so Enter still confirms via its delegate.
+        window?.makeFirstResponder(filterField)
+    }
+
+    @objc private func checkoutRowDoubleClicked(_ sender: NSTableView) {
+        let row = sender.clickedRow
+        guard row >= 0, row < checkoutRows.count else { return }
+        checkoutSelectedRow = row
+        confirmCheckout()
+    }
+
+    @objc private func createButtonClicked(_ sender: NSButton) {
+        confirm()
+    }
+
+    @objc private func closeButtonClicked(_ sender: NSButton) {
+        dismiss()
     }
 
     @objc private func projectChanged(_ sender: NSPopUpButton) {
@@ -676,7 +1031,6 @@ final class WorktreeCreationController: NSWindowController {
         selectedProjectId = newProject.id
         onProjectChanged?(newProject.id)
     }
-
 }
 
 // MARK: - NSTextFieldDelegate
@@ -684,113 +1038,202 @@ final class WorktreeCreationController: NSWindowController {
 extension WorktreeCreationController: NSTextFieldDelegate {
 
     func controlTextDidChange(_ obj: Notification) {
-        guard (obj.object as AnyObject) === branchNameField else { return }
-        handleTextChange()
+        guard let field = obj.object as? NSTextField else { return }
+        if field === branchNameField {
+            handleNameChange()
+        } else if field === filterField {
+            rebuildCheckoutRows(preserveSelection: false)
+        }
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        guard control === branchNameField else { return false }
-
-        // Arrow keys drive the suggestion selection while in `#` picker mode.
-        if githubModeActive {
-            if commandSelector == #selector(NSResponder.moveUp(_:)) {
-                moveSuggestionSelection(by: -1)
+        if control === branchNameField {
+            switch commandSelector {
+            case #selector(NSResponder.insertNewline(_:)):
+                confirm()
                 return true
-            }
-            if commandSelector == #selector(NSResponder.moveDown(_:)) {
-                moveSuggestionSelection(by: 1)
+            case #selector(NSResponder.cancelOperation(_:)):
+                dismiss()
                 return true
+            case #selector(NSResponder.insertTab(_:)):
+                window?.makeFirstResponder(baseBranchPopup)
+                return true
+            default:
+                return false
             }
         }
 
-        if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-            confirmInput()
-            return true
-        }
-        if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
-            dismiss()
-            return true
-        }
-        if commandSelector == #selector(NSResponder.insertTab(_:)) {
-            window?.makeFirstResponder(projectPopup)
-            return true
+        if control === filterField {
+            switch commandSelector {
+            case #selector(NSResponder.moveDown(_:)):
+                moveCheckoutSelection(by: 1)
+                return true
+            case #selector(NSResponder.moveUp(_:)):
+                moveCheckoutSelection(by: -1)
+                return true
+            case #selector(NSResponder.insertNewline(_:)):
+                confirm()
+                return true
+            case #selector(NSResponder.cancelOperation(_:)):
+                dismiss()
+                return true
+            default:
+                return false
+            }
         }
         return false
     }
 }
 
-// MARK: - Suggestions Table
+// MARK: - Tables
 
 extension WorktreeCreationController: NSTableViewDataSource, NSTableViewDelegate {
 
     func numberOfRows(in tableView: NSTableView) -> Int {
-        filteredItems.count
+        tableView === issuesTable ? issues.count : checkoutRows.count
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard row >= 0, row < filteredItems.count else { return nil }
-        return makeSuggestionCell(for: filteredItems[row])
-    }
-
-    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-        true
-    }
-
-    /// Keep the model's selection index in sync with mouse-driven selection.
-    func tableViewSelectionDidChange(_ notification: Notification) {
-        let row = suggestionsTable.selectedRow
-        if row >= 0, row < filteredItems.count {
-            selectedSuggestionIndex = row
+        if tableView === issuesTable {
+            guard row >= 0, row < issues.count else { return nil }
+            return makeIssueCell(issues[row])
+        }
+        guard row >= 0, row < checkoutRows.count else { return nil }
+        switch checkoutRows[row] {
+        case let .branch(branch): return makeBranchCell(branch)
+        case let .pr(item): return makePRCell(item)
         }
     }
 
-    private func makeSuggestionCell(for item: GitHubWorkItem) -> NSView {
-        let cell = NSTableCellView()
+    /// Mirror mouse-driven checkout selection back into the model so Enter and the
+    /// create button track it.
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        guard notification.object as AnyObject === checkoutTable else { return }
+        let row = checkoutTable.selectedRow
+        if row >= 0, row < checkoutRows.count {
+            checkoutSelectedRow = row
+            updateCreateButton()
+        }
+    }
 
+    // MARK: Cell Builders
+
+    private func symbolIcon(_ name: String) -> NSImageView {
         let icon = NSImageView()
         icon.translatesAutoresizingMaskIntoConstraints = false
-        let symbol = item.kind == .issue ? "smallcircle.filled.circle" : "arrow.triangle.pull"
-        icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        icon.image = NSImage(systemSymbolName: name, accessibilityDescription: nil)
         icon.contentTintColor = .secondaryLabelColor
         icon.imageScaling = .scaleProportionallyDown
+        icon.widthAnchor.constraint(equalToConstant: 14).isActive = true
+        icon.setContentHuggingPriority(.required, for: .horizontal)
+        return icon
+    }
 
-        let numberLabel = NSTextField(labelWithString: "#\(item.number)")
-        numberLabel.translatesAutoresizingMaskIntoConstraints = false
-        numberLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
-        numberLabel.textColor = .secondaryLabelColor
-        numberLabel.setContentHuggingPriority(.required, for: .horizontal)
-        numberLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+    private func primaryLabel(_ text: String) -> NSTextField {
+        let label = NSTextField(labelWithString: text)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = .systemFont(ofSize: 12)
+        label.textColor = .labelColor
+        label.lineBreakMode = .byTruncatingTail
+        label.cell?.truncatesLastVisibleLine = true
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return label
+    }
 
-        let titleLabel = NSTextField(labelWithString: item.title)
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.font = .systemFont(ofSize: 12)
-        titleLabel.textColor = .labelColor
-        titleLabel.lineBreakMode = .byTruncatingTail
-        titleLabel.cell?.truncatesLastVisibleLine = true
-        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    private func dimLabel(_ text: String, monospacedDigits: Bool = false) -> NSTextField {
+        let label = NSTextField(labelWithString: text)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = monospacedDigits
+            ? .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+            : .systemFont(ofSize: 11)
+        label.textColor = .secondaryLabelColor
+        label.lineBreakMode = .byTruncatingTail
+        label.setContentHuggingPriority(.required, for: .horizontal)
+        label.setContentCompressionResistancePriority(.required, for: .horizontal)
+        return label
+    }
 
-        let stack = NSStackView(views: [icon, numberLabel, titleLabel])
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
-        stack.spacing = 6
+    private func makeIssueCell(_ item: GitHubWorkItem) -> NSView {
+        let cell = NSTableCellView()
+        let icon = symbolIcon("smallcircle.filled.circle")
+        let number = dimLabel("#\(item.number)", monospacedDigits: true)
+        let title = primaryLabel(item.title)
 
-        if item.kind == .pullRequest, item.isDraft {
-            let draftLabel = NSTextField(labelWithString: .localized("Draft"))
-            draftLabel.font = .systemFont(ofSize: 11)
-            draftLabel.textColor = .tertiaryLabelColor
-            draftLabel.setContentHuggingPriority(.required, for: .horizontal)
-            draftLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-            stack.addArrangedSubview(draftLabel)
+        for view in [icon, number, title] { cell.addSubview(view) }
+        NSLayoutConstraint.activate([
+            icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
+            icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            number.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
+            number.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            title.leadingAnchor.constraint(equalTo: number.trailingAnchor, constant: 6),
+            title.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
+            title.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+        ])
+        return cell
+    }
+
+    private func makeBranchCell(_ branch: GitBranchInfo) -> NSView {
+        let cell = NSTableCellView()
+        let icon = symbolIcon("arrow.triangle.branch")
+        let name = primaryLabel(branch.name)
+        cell.addSubview(icon)
+        cell.addSubview(name)
+
+        var nameTrailing = cell.trailingAnchor
+        if let date = branch.commitDate {
+            let dateLabel = dimLabel(Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date()))
+            cell.addSubview(dateLabel)
+            NSLayoutConstraint.activate([
+                dateLabel.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
+                dateLabel.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            ])
+            nameTrailing = dateLabel.leadingAnchor
         }
 
-        cell.addSubview(stack)
         NSLayoutConstraint.activate([
-            icon.widthAnchor.constraint(equalToConstant: 14),
-            stack.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
-            stack.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
-            stack.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
+            icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            name.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
+            name.trailingAnchor.constraint(lessThanOrEqualTo: nameTrailing, constant: -8),
+            name.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
         ])
+        return cell
+    }
+
+    private func makePRCell(_ item: GitHubWorkItem) -> NSView {
+        let cell = NSTableCellView()
+        let icon = symbolIcon("arrow.triangle.pull")
+        let number = dimLabel("#\(item.number)", monospacedDigits: true)
+        let title = primaryLabel(item.title)
+
+        cell.addSubview(icon)
+        cell.addSubview(number)
+        cell.addSubview(title)
+
+        var constraints: [NSLayoutConstraint] = [
+            icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
+            icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            number.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
+            number.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            title.leadingAnchor.constraint(equalTo: number.trailingAnchor, constant: 6),
+            title.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+        ]
+
+        let head = item.headRefName ?? ""
+        if head.isEmpty {
+            constraints.append(title.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8))
+        } else {
+            let headLabel = dimLabel(head)
+            headLabel.lineBreakMode = .byTruncatingMiddle
+            headLabel.setContentCompressionResistancePriority(.defaultLow + 1, for: .horizontal)
+            cell.addSubview(headLabel)
+            constraints.append(contentsOf: [
+                title.trailingAnchor.constraint(lessThanOrEqualTo: headLabel.leadingAnchor, constant: -8),
+                headLabel.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
+                headLabel.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            ])
+        }
+        NSLayoutConstraint.activate(constraints)
         return cell
     }
 }

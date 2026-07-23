@@ -233,6 +233,15 @@
 
 /* Create workspace from GitHub issue / PR */
 "Draft" = "Draft";
+"New Workspace" = "New Workspace";
+"Close" = "Close";
+"New Branch" = "New Branch";
+"Check Out Existing" = "Check Out Existing";
+"Create Workspace" = "Create Workspace";
+"Base" = "Base";
+"Or start from an issue" = "Or start from an issue";
+"Branch already exists — it will be checked out" = "Branch already exists — it will be checked out";
+"Filter branches and PRs" = "Filter branches and PRs";
 "GitHub CLI (gh) was not found. Install it to work from an issue or PR." = "GitHub CLI (gh) was not found. Install it to work from an issue or PR.";
 "Failed to launch the GitHub CLI (gh)." = "Failed to launch the GitHub CLI (gh).";
 "The GitHub CLI (gh) command failed." = "The GitHub CLI (gh) command failed.";
