@@ -35,15 +35,25 @@ Projects can execute in two locations:
 
 ## UI Structure
 
-AppKit shell with SwiftUI leaf views:
+AppKit shell with SwiftUI leaf views. The main window is a hidden-titlebar,
+`.fullSizeContentView` window with no `NSToolbar`; all chrome is custom views. Each column
+reserves a 38pt top band under the (invisible) titlebar; empty band area drags the window
+via `TitleBarDragView` (double-click honors the System Settings title-bar action).
 
 ```
-NSSplitViewController (3 columns)
-  ├─ NSHostingController → ProjectRailView      (60-80pt, SwiftUI)
-  ├─ NSHostingController → WorktreeSidebarView   (200pt min, SwiftUI)
-  └─ TerminalAreaViewController                  (400pt min, AppKit)
-       └─ GhosttySurfaceView (libghostty Metal rendering)
+RootSplitViewController (hand-rolled 3 columns, custom dividers, persisted widths)
+  ├─ sidebar   TitleBarDragView strip (traffic lights overlay)
+  │            NSHostingController → WorktreeSidebarView (SwiftUI, 220-260pt)
+  │            └─ footer: Open Project · Agent Dashboard · Settings
+  ├─ center    HeaderBarView (38pt: terminal tabs · drag gap · companion toggle)
+  │            TerminalAreaViewController (AppKit)
+  │            └─ GhosttySurfaceView (libghostty Metal rendering)
+  └─ companion CompanionTabBarView (38pt: Files/Git tabs)
+               TerminalAreaViewController running yazi/lazygit (default 420pt, hidden by default)
 ```
+
+Former toolbar actions live in the app menus, keyboard shortcuts, the command palette, and
+the sidebar footer.
 
 ## Concept → tmux Mapping
 
