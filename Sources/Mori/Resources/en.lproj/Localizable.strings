@@ -144,6 +144,7 @@
 "Toggle Full Screen" = "Toggle Full Screen";
 "Toggle Pane Zoom" = "Toggle Pane Zoom";
 "Toggle Sidebar" = "Toggle Sidebar";
+"Toggle Sidebar (⌘B)" = "Toggle Sidebar (⌘B)";
 "Trigger a tmux and git status poll" = "Trigger a tmux and git status poll";
 "Undo" = "Undo";
 "Window" = "Window";

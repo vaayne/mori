@@ -35,8 +35,8 @@ class TitleBarDragView: NSView {
     }
 }
 
-/// The center column's 38pt header: terminal tabs leading, a drag-through gap, and a
-/// single companion-pane toggle trailing, over a hairline bottom border.
+/// The center column's 38pt header: sidebar toggle + terminal tabs leading, a
+/// drag-through gap, and a companion-pane toggle trailing, over a hairline bottom border.
 @MainActor
 final class HeaderBarView: TitleBarDragView, ThemedSurface {
     private static let normalLeadingInset: CGFloat = 14
@@ -47,18 +47,28 @@ final class HeaderBarView: TitleBarDragView, ThemedSurface {
     private static let tabsButtonGap: CGFloat = 8
 
     private let tabsView: TerminalTabsBarView
+    private let sidebarButton: NSButton
     private let toggleButton: NSButton
     private let hairline = NSView()
+    private let onToggleSidebar: () -> Void
     private let onToggleCompanion: () -> Void
-    private lazy var tabsLeadingConstraint = tabsView.leadingAnchor.constraint(
+    private lazy var sidebarButtonLeadingConstraint = sidebarButton.leadingAnchor.constraint(
         equalTo: leadingAnchor, constant: Self.normalLeadingInset
     )
 
     var themedWindow: NSWindow? { nil }
 
-    init(tabsView: TerminalTabsBarView, onToggleCompanion: @escaping () -> Void) {
+    init(
+        tabsView: TerminalTabsBarView,
+        onToggleSidebar: @escaping () -> Void,
+        onToggleCompanion: @escaping () -> Void
+    ) {
         self.tabsView = tabsView
+        self.onToggleSidebar = onToggleSidebar
         self.onToggleCompanion = onToggleCompanion
+        let sidebarSymbol = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: .localized("Toggle Sidebar"))?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 14, weight: .regular))
+        self.sidebarButton = NSButton(image: sidebarSymbol ?? NSImage(), target: nil, action: nil)
         let symbol = NSImage(systemSymbolName: "sidebar.right", accessibilityDescription: .localized("Toggle Companion Pane"))?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 14, weight: .regular))
         self.toggleButton = NSButton(image: symbol ?? NSImage(), target: nil, action: nil)
@@ -74,20 +84,26 @@ final class HeaderBarView: TitleBarDragView, ThemedSurface {
     private func setupView() {
         wantsLayer = true
 
-        toggleButton.translatesAutoresizingMaskIntoConstraints = false
-        toggleButton.isBordered = false
-        toggleButton.bezelStyle = .regularSquare
-        toggleButton.imagePosition = .imageOnly
-        toggleButton.imageScaling = .scaleProportionallyDown
-        toggleButton.contentTintColor = .secondaryLabelColor
-        toggleButton.target = self
-        toggleButton.action = #selector(toggleCompanion)
-        toggleButton.toolTip = .localized("Toggle Companion Pane")
-        toggleButton.setAccessibilityLabel(.localized("Toggle Companion Pane"))
+        for (button, action, label) in [
+            (sidebarButton, #selector(toggleSidebar), String.localized("Toggle Sidebar (⌘B)")),
+            (toggleButton, #selector(toggleCompanion), String.localized("Toggle Companion Pane")),
+        ] {
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.isBordered = false
+            button.bezelStyle = .regularSquare
+            button.imagePosition = .imageOnly
+            button.imageScaling = .scaleProportionallyDown
+            button.contentTintColor = .secondaryLabelColor
+            button.target = self
+            button.action = action
+            button.toolTip = label
+            button.setAccessibilityLabel(label)
+        }
 
         hairline.translatesAutoresizingMaskIntoConstraints = false
         hairline.wantsLayer = true
 
+        addSubview(sidebarButton)
         addSubview(tabsView)
         addSubview(toggleButton)
         addSubview(hairline)
@@ -95,7 +111,12 @@ final class HeaderBarView: TitleBarDragView, ThemedSurface {
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: Self.height),
 
-            tabsLeadingConstraint,
+            sidebarButtonLeadingConstraint,
+            sidebarButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            sidebarButton.widthAnchor.constraint(equalToConstant: Self.buttonSize),
+            sidebarButton.heightAnchor.constraint(equalToConstant: Self.buttonSize),
+
+            tabsView.leadingAnchor.constraint(equalTo: sidebarButton.trailingAnchor, constant: Self.tabsButtonGap),
             tabsView.centerYAnchor.constraint(equalTo: centerYAnchor),
 
             toggleButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.buttonTrailingMargin),
@@ -112,18 +133,20 @@ final class HeaderBarView: TitleBarDragView, ThemedSurface {
 
     override func layout() {
         super.layout()
-        // Hand the tab strip the width between its leading inset and the trailing button
+        // Hand the tab strip the width between the leading controls and the trailing button
         // so it caps and shrinks its tabs within the header instead of growing under them.
+        let leading = sidebarButtonLeadingConstraint.constant + Self.buttonSize + Self.tabsButtonGap
         let reserve = Self.buttonSize + Self.buttonTrailingMargin + Self.tabsButtonGap
-        let available = bounds.width - tabsLeadingConstraint.constant - reserve
+        let available = bounds.width - leading - reserve
         tabsView.setStripWidth(max(available, 0))
     }
 
-    /// Push the tabs clear of the traffic lights when the sidebar collapses under them.
+    /// Push the leading controls clear of the traffic lights when the sidebar collapses
+    /// under them.
     func setSidebarCollapsed(_ collapsed: Bool) {
         let inset = collapsed ? Self.collapsedLeadingInset : Self.normalLeadingInset
-        guard tabsLeadingConstraint.constant != inset else { return }
-        tabsLeadingConstraint.constant = inset
+        guard sidebarButtonLeadingConstraint.constant != inset else { return }
+        sidebarButtonLeadingConstraint.constant = inset
         needsLayout = true
     }
 
@@ -133,7 +156,12 @@ final class HeaderBarView: TitleBarDragView, ThemedSurface {
         // Approximates labelColor at low alpha; deterministic so split themes stay correct.
         let tint: NSColor = themeInfo.isDark ? .white : .black
         hairline.layer?.backgroundColor = tint.withAlphaComponent(0.06).cgColor
+        sidebarButton.contentTintColor = .secondaryLabelColor
         toggleButton.contentTintColor = .secondaryLabelColor
+    }
+
+    @objc private func toggleSidebar() {
+        onToggleSidebar()
     }
 
     @objc private func toggleCompanion() {

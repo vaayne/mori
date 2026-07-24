@@ -306,6 +306,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         )
         let headerBar = HeaderBarView(
             tabsView: tabsView,
+            onToggleSidebar: { [weak self] in self?.rootSplitVC?.toggleSidebar() },
             onToggleCompanion: { [weak self] in self?.toggleCompanionPane() }
         )
         themeDistributor.register(headerBar)

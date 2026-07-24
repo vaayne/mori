@@ -144,6 +144,7 @@
 "Toggle Full Screen" = "切换全屏";
 "Toggle Pane Zoom" = "切换窗格缩放";
 "Toggle Sidebar" = "切换侧栏";
+"Toggle Sidebar (⌘B)" = "切换侧栏 (⌘B)";
 "Trigger a tmux and git status poll" = "触发 tmux 和 Git 状态轮询";
 "Undo" = "撤销";
 "Window" = "窗口";
