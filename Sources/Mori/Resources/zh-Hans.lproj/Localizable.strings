@@ -71,6 +71,15 @@
 "Git" = "Git";
 "Open Files Companion Pane (⌘E)" = "打开文件工具面板 (⌘E)";
 "Open Git Companion Pane (⌘G)" = "打开 Git 工具面板 (⌘G)";
+"Open Files Pane" = "打开文件面板";
+"Open Git Pane" = "打开 Git 面板";
+"Open the Files companion pane" = "打开文件工具面板";
+"Open the Git companion pane" = "打开 Git 工具面板";
+"Show or hide the projects sidebar" = "显示或隐藏项目侧栏";
+"Split the current pane to the right" = "向右拆分当前面板";
+"Split the current pane downward" = "向下拆分当前面板";
+"Files (⌘E)" = "文件 (⌘E)";
+"Git (⌘G)" = "Git (⌘G)";
 "Split the current pane to the right" = "向右拆分当前窗格";
 "Split the current pane to the right (⌘D)" = "向右拆分当前窗格 (⌘D)";
 "Split the current pane downward" = "向下拆分当前窗格";
@@ -97,6 +106,8 @@
 "Standard Blur" = "标准模糊";
 "Command Palette" = "命令面板";
 "Command Palette (⇧⌘P)" = "命令面板 (⇧⌘P)";
+"Command Palette…" = "命令面板…";
+"Toggle Companion Pane" = "切换伴随面板";
 "Agent Dashboard" = "代理仪表板";
 "Agent Dashboard (⇧⌘A)" = "代理仪表板 (⇧⌘A)";
 "Custom Blur Radius" = "自定义模糊半径";
@@ -133,6 +144,7 @@
 "Toggle Full Screen" = "切换全屏";
 "Toggle Pane Zoom" = "切换窗格缩放";
 "Toggle Sidebar" = "切换侧栏";
+"Toggle Sidebar (⌘B)" = "切换侧栏 (⌘B)";
 "Trigger a tmux and git status poll" = "触发 tmux 和 Git 状态轮询";
 "Undo" = "撤销";
 "Window" = "窗口";

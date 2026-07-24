@@ -3,14 +3,15 @@ import Observation
 import MoriCore
 import MoriUI
 
-/// Native AppKit terminal tabs for the window titlebar toolbar.
+/// Native AppKit terminal tabs, pinned leading in the center column's header bar.
 ///
-/// This intentionally avoids SwiftUI hosting inside `NSToolbarItem`: the toolbar's
-/// flexible-space layout has repeatedly rendered hosted SwiftUI as a blank strip.
+/// This intentionally stays AppKit rather than hosting SwiftUI: the strip shares its
+/// row with a bare drag surface, and a plain view keeps hit-testing and dragging crisp.
 @MainActor
 final class TerminalTabsBarView: NSView {
     private static let defaultTabWidth: CGFloat = 160
     private static let minTabWidth: CGFloat = 60
+    private static let maxTabWidth: CGFloat = 220
     private static let tabHeight: CGFloat = 24
     private static let plusWidth: CGFloat = 26
     private static let horizontalPadding = MoriTokens.Spacing.sm
@@ -25,11 +26,10 @@ final class TerminalTabsBarView: NSView {
     private lazy var widthConstraint = widthAnchor.constraint(equalToConstant: layoutWidth)
     private lazy var heightConstraint = heightAnchor.constraint(equalToConstant: TerminalTabsBarView.tabHeight)
 
-    /// Width the controller offers the strip; `nil` until first measured so tabs start at the default.
+    /// Width the header offers the strip; `nil` until first measured so tabs start at the default.
     private var availableWidth: CGFloat?
-    /// Actual laid-out strip width (≤ availableWidth) — drives the toolbar item size so it never overflows.
+    /// Actual laid-out strip width (≤ availableWidth) — drives the intrinsic size the header lays out against.
     private var layoutWidth: CGFloat = TerminalTabsBarView.horizontalPadding * 2 + TerminalTabsBarView.plusWidth
-    var onIntrinsicContentSizeChanged: (() -> Void)?
 
     init(
         appState: AppState,
@@ -144,10 +144,11 @@ final class TerminalTabsBarView: NSView {
         applyTabLayout()
     }
 
-    /// Safari-style sizing: tabs stretch to fill the width the toolbar hands the strip, so there's no
-    /// dead gap before the trailing controls; as tabs pile up they shrink evenly toward `minTabWidth`,
-    /// keeping the strip within its allotment so it never collapses into the `»` overflow menu.
-    /// Before the controller measures the strip we fall back to `defaultTabWidth`.
+    /// Tabs share the width the header hands the strip, shrinking evenly toward `minTabWidth`
+    /// as they pile up so the strip stays within its allotment. Width is capped at `maxTabWidth`
+    /// so a lone tab reads as a tab, not a bar-spanning smear (long titles truncate instead);
+    /// the header's drag gap absorbs the slack. Before the header measures the strip we fall
+    /// back to `defaultTabWidth`.
     private func applyTabLayout() {
         let count = tabControls.count
         let gaps = CGFloat(count + 1) * Self.spacing
@@ -156,8 +157,10 @@ final class TerminalTabsBarView: NSView {
         if count == 0 {
             perTab = 0
         } else if let availableWidth {
-            // No upper cap: a lone tab spans the bar by design (fill chosen over a width ceiling).
-            perTab = max(Self.minTabWidth, (availableWidth - fixed) / CGFloat(count))
+            perTab = min(
+                Self.maxTabWidth,
+                max(Self.minTabWidth, (availableWidth - fixed) / CGFloat(count))
+            )
         } else {
             perTab = Self.defaultTabWidth
         }
@@ -168,7 +171,6 @@ final class TerminalTabsBarView: NSView {
         heightConstraint.constant = Self.tabHeight
         invalidateIntrinsicContentSize()
         needsLayout = true
-        onIntrinsicContentSizeChanged?()
     }
 }
 
@@ -183,6 +185,13 @@ private final class TerminalTabControl: NSControl {
     private let onClose: (String) -> Void
     private let closeButton: TerminalIconButton
     private var widthConstraint: NSLayoutConstraint!
+    private var isHovered = false {
+        didSet {
+            guard isHovered != oldValue else { return }
+            closeButton.isHidden = !(selected || isHovered)
+            needsDisplay = true
+        }
+    }
 
     init(
         window: RuntimeWindow,
@@ -247,6 +256,24 @@ private final class TerminalTabControl: NSControl {
         closeButton.frame = NSRect(x: bounds.maxX - MoriTokens.Spacing.md - 16, y: (bounds.height - 16) / 2, width: 16, height: 16)
     }
 
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+            owner: self
+        ))
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+    }
+
     override func mouseDown(with event: NSEvent) {
         onSelect(runtimeWindow.tmuxWindowId)
     }
@@ -254,17 +281,12 @@ private final class TerminalTabControl: NSControl {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        let pillRect = bounds
-        let path = NSBezierPath(roundedRect: pillRect, xRadius: MoriTokens.Radius.medium, yRadius: MoriTokens.Radius.medium)
-        NSColor.labelColor.withAlphaComponent(selected ? 0.11 : 0.055).setFill()
+        // Idle tabs keep a faint pill so they read as clickable, hover brightens it,
+        // and the selected tab stands clearly above both.
+        let fillAlpha: CGFloat = selected ? 0.11 : (isHovered ? 0.08 : 0.055)
+        let path = NSBezierPath(roundedRect: bounds, xRadius: MoriTokens.Radius.medium, yRadius: MoriTokens.Radius.medium)
+        NSColor.labelColor.withAlphaComponent(fillAlpha).setFill()
         path.fill()
-
-        if selected {
-            let strokePath = NSBezierPath(roundedRect: pillRect.insetBy(dx: 0.5, dy: 0.5), xRadius: MoriTokens.Radius.medium, yRadius: MoriTokens.Radius.medium)
-            strokePath.lineWidth = 1
-            NSColor.labelColor.withAlphaComponent(0.16).setStroke()
-            strokePath.stroke()
-        }
 
         drawDot()
         drawTitle()
@@ -292,7 +314,7 @@ private final class TerminalTabControl: NSControl {
             .paragraphStyle: paragraphStyle,
         ]
         let attributedTitle = NSAttributedString(string: tabTitle(for: runtimeWindow), attributes: attributes)
-        let closeWidth = selected ? 16 + MoriTokens.Spacing.sm : 0
+        let closeWidth = (selected || isHovered) ? 16 + MoriTokens.Spacing.sm : 0
         let textX = MoriTokens.Spacing.md + MoriTokens.Icon.dot + MoriTokens.Spacing.md
         let textRect = NSRect(
             x: textX,

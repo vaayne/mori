@@ -79,10 +79,11 @@ on `MoriTokens.Color` (error/success/warning/attention/info/active) go further: 
 derived from the theme's ANSI palette by `MoriThemeBridge` (a registered `ThemedSurface`)
 via `SemanticPalette.derive`, and fall back to system colors for palette-less themes.
 
-Existing examples: `SidebarHostingController`, `TerminalAreaViewController`,
-`CompanionToolPaneController`, `CommandPaletteController`, `AgentDashboardPanel`,
-`WorktreeCreationController`, and the `WindowThemedSurface` bridges for the main and
-settings windows.
+Existing examples: `HeaderBarView` (the center column's 38pt chrome header),
+`SidebarHostingController`, `TerminalAreaViewController`, `CompanionToolPaneController`
+(whose `applyTheme` also paints its Files/Git tab bar), `CommandPaletteController`,
+`AgentDashboardPanel`, `WorktreeCreationController`, and the `WindowThemedSurface` bridges
+for the main and settings windows.
 
 ## Release
 

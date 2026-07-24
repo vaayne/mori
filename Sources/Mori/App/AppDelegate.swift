@@ -119,6 +119,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             self.closeCompanionTool()
             self.terminalAreaController?.focusCurrentSurface()
         }
+        companionTool.onSelectTool = { [weak self] tool in
+            self?.selectCompanionTool(tool)
+        }
 
         // Wire ghostty keybinding actions to Mori's tmux-based implementation.
         // Ghostty maps keys to intents (new_tab, close_tab, etc.); Mori provides
@@ -206,6 +209,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             },
             onAddProject: { [weak self] in
                 self?.showAddProjectPanel()
+            },
+            onShowAgentDashboard: { [weak self] in
+                self?.toggleAgentDashboardAction()
             },
             onOpenSettings: { [weak self] in
                 self?.showSettingsWindow()
@@ -298,12 +304,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 }
             }
         )
-        windowController.installTabsView(tabsView)
+        let headerBar = HeaderBarView(
+            tabsView: tabsView,
+            onToggleSidebar: { [weak self] in self?.rootSplitVC?.toggleSidebar() },
+            onToggleCompanion: { [weak self] in self?.toggleCompanionPane() }
+        )
+        themeDistributor.register(headerBar)
 
         let splitVC = RootSplitViewController(
             sidebarController: sidebarController,
             contentController: terminalArea,
-            companionController: companionTool
+            companionController: companionTool,
+            headerBar: headerBar
         )
         self.rootSplitVC = splitVC
         companionToolState.width = splitVC.currentCompanionWidth
@@ -312,34 +324,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         splitVC.updateCompanionPane(state: companionToolState)
 
-        windowController.onToggleSidebar = { [weak splitVC] in
-            splitVC?.toggleSidebar()
-        }
-        windowController.onToggleFiles = { [weak self] in
-            self?.toggleCompanionTool(.yazi)
-        }
-        windowController.onToggleGit = { [weak self] in
-            self?.toggleCompanionTool(.lazygit)
-        }
-        windowController.onSplitRight = { [weak self] in
-            self?.splitRightMenuAction()
-        }
-        windowController.onSplitDown = { [weak self] in
-            self?.splitDownMenuAction()
-        }
-
-        windowController.onOpenProject = { [weak self] in
-            self?.showAddProjectPanel()
-        }
-        windowController.onOpenCommandPalette = { [weak self] in
-            self?.commandPaletteController?.toggle(mode: .allItems)
-        }
-        windowController.onToggleAgentDashboard = { [weak self] in
-            self?.toggleAgentDashboardAction()
-        }
-        windowController.onOpenSettings = { [weak self] in
-            self?.showSettingsWindow()
-        }
         windowController.onShowCreateWorktreePanel = { [weak self] in
             self?.showCreateWorktreePanel()
         }
@@ -1142,6 +1126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // ── Window (view + window merged) ────────────────────────────
         let windowMenuItem = NSMenuItem()
         let windowMenu = NSMenu(title: .localized("Window"))
+        windowMenu.addItem(configurableMenuItem("commandPalette.toggle", title: .localized("Command Palette…"), action: #selector(toggleCommandPaletteMenuAction)))
         windowMenu.addItem(configurableMenuItem("window.toggleSidebar", title: .localized("Toggle Sidebar"), action: #selector(toggleSidebarMenuAction)))
         // Locked: Toggle Full Screen (responder chain)
         windowMenu.addItem(menuItem(.localized("Toggle Full Screen"), action: #selector(NSWindow.toggleFullScreen(_:)), key: "f", mods: [.command, .control]))
@@ -1408,6 +1393,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         showRemoteConnectWizard()
     }
 
+    @objc private func toggleCommandPaletteMenuAction() {
+        commandPaletteController?.toggle(mode: .allItems)
+    }
+
     @objc private func toggleSidebarMenuAction() {
         rootSplitVC?.toggleSidebar()
     }
@@ -1441,6 +1430,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
+    /// Header toggle: hide the companion pane if visible, otherwise reopen it on the
+    /// last-used tool (defaulting to Files) — the pane-level counterpart to ⌘E/⌘G.
+    private func toggleCompanionPane() {
+        if companionToolState.isVisible {
+            closeCompanionTool()
+            terminalAreaController?.focusCurrentSurface()
+        } else {
+            toggleCompanionTool(companionToolState.activeTool ?? .yazi)
+        }
+    }
+
     private func toggleCompanionTool(_ tool: CompanionTool) {
         let sameToolVisible = companionToolState.activeTool == tool && companionToolState.isVisible
         let toolIsFocused = companionToolController?.isFocused(in: mainWindowController?.window) == true
@@ -1448,6 +1448,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if sameToolVisible && toolIsFocused {
             closeCompanionTool()
             terminalAreaController?.focusCurrentSurface()
+            return
+        }
+
+        guard let manager = workspaceManager,
+              let context = manager.companionToolLaunchContext() else {
+            NSSound.beep()
+            return
+        }
+
+        showCompanionTool(tool, context: context)
+    }
+
+    /// Tab-bar select: reveal `tool` in the pane, switching from the other tool if
+    /// needed. Unlike ⌘E/⌘G (`toggleCompanionTool`), selecting the already-active tool
+    /// focuses it instead of closing the pane.
+    private func selectCompanionTool(_ tool: CompanionTool) {
+        if companionToolState.activeTool == tool, companionToolState.isVisible {
+            companionToolController?.focus()
             return
         }
 
@@ -1734,6 +1752,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         case "action.check-for-updates":
             updateController?.checkForUpdates()
+
+        case "action.toggle-sidebar":
+            toggleSidebarMenuAction()
+        case "action.open-files-pane":
+            toggleCompanionTool(.yazi)
+        case "action.open-git-pane":
+            toggleCompanionTool(.lazygit)
+        case "action.split-right":
+            splitRightMenuAction()
+        case "action.split-down":
+            splitDownMenuAction()
 
         default:
             // Handle tool install hints — copy install command to clipboard

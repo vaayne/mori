@@ -27,6 +27,7 @@ public struct SidebarContainerView: View {
     private let onCloseWindow: ((String) -> Void)?
     private let onToggleCollapse: ((UUID) -> Void)?
     private let onAddProject: (() -> Void)?
+    private let onShowAgentDashboard: (() -> Void)?
     private let onOpenSettings: (() -> Void)?
     private let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     private let onSendKeys: ((String, String) -> Void)?
@@ -54,6 +55,7 @@ public struct SidebarContainerView: View {
         onCloseWindow: ((String) -> Void)? = nil,
         onToggleCollapse: ((UUID) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
+        onShowAgentDashboard: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil,
@@ -80,6 +82,7 @@ public struct SidebarContainerView: View {
         self.onCloseWindow = onCloseWindow
         self.onToggleCollapse = onToggleCollapse
         self.onAddProject = onAddProject
+        self.onShowAgentDashboard = onShowAgentDashboard
         self.onOpenSettings = onOpenSettings
         self.onRequestPaneOutput = onRequestPaneOutput
         self.onSendKeys = onSendKeys
@@ -113,6 +116,7 @@ public struct SidebarContainerView: View {
             onCloseWindow: onCloseWindow,
             onToggleCollapse: onToggleCollapse,
             onAddProject: onAddProject,
+            onShowAgentDashboard: onShowAgentDashboard,
             onOpenSettings: onOpenSettings,
             onRequestPaneOutput: onRequestPaneOutput,
             onSendKeys: onSendKeys,
