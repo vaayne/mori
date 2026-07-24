@@ -32,7 +32,6 @@ final class RootSplitViewController: NSViewController {
     /// strip of the same height so all three clear the hidden titlebar band consistently.
     private let headerBar: HeaderBarView
     private let sidebarTopStrip = TitleBarDragView()
-    private let companionTopStrip = TitleBarDragView()
 
     private var sidebarWidth: CGFloat = 236
     private var companionWidth: CGFloat = CompanionToolPaneState.defaultWidth
@@ -71,15 +70,16 @@ final class RootSplitViewController: NSViewController {
         }
         self.view = root
 
-        // Each column reserves a 38pt top strip under the hidden titlebar: the center
-        // column hosts the header bar, the flanks get bare drag strips.
+        // The sidebar and center columns reserve a 38pt top strip under the hidden
+        // titlebar: the center column hosts the header bar, the sidebar a bare drag
+        // strip. The companion controller owns its full column height (its own tab
+        // bar is the 38pt drag strip), so it embeds from the container top.
         pinTopStrip(sidebarTopStrip, in: sidebarContainer)
         pinTopStrip(headerBar, in: contentContainer)
-        pinTopStrip(companionTopStrip, in: companionContainer)
 
         embed(sidebarController, in: sidebarContainer, below: sidebarTopStrip)
         embed(contentController, in: contentContainer, below: headerBar)
-        embed(companionController, in: companionContainer, below: companionTopStrip)
+        embed(companionController, in: companionContainer)
 
         let savedSidebar = CGFloat(UserDefaults.standard.double(forKey: Self.sidebarWidthKey))
         if savedSidebar > 0 {
@@ -263,11 +263,21 @@ final class RootSplitViewController: NSViewController {
     }
 
     private func embed(_ vc: NSViewController, in container: NSView, below topView: NSView) {
+        embed(vc, in: container, topAnchor: topView.bottomAnchor)
+    }
+
+    /// Embed `vc` filling `container` from its top (for controllers that own their
+    /// own top strip).
+    private func embed(_ vc: NSViewController, in container: NSView) {
+        embed(vc, in: container, topAnchor: container.topAnchor)
+    }
+
+    private func embed(_ vc: NSViewController, in container: NSView, topAnchor: NSLayoutYAxisAnchor) {
         addChild(vc)
         vc.view.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(vc.view)
         NSLayoutConstraint.activate([
-            vc.view.topAnchor.constraint(equalTo: topView.bottomAnchor),
+            vc.view.topAnchor.constraint(equalTo: topAnchor),
             vc.view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             vc.view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             vc.view.trailingAnchor.constraint(equalTo: container.trailingAnchor),

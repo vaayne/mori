@@ -71,6 +71,8 @@
 "Git" = "Git";
 "Open Files Companion Pane (⌘E)" = "打开文件工具面板 (⌘E)";
 "Open Git Companion Pane (⌘G)" = "打开 Git 工具面板 (⌘G)";
+"Files (⌘E)" = "文件 (⌘E)";
+"Git (⌘G)" = "Git (⌘G)";
 "Split the current pane to the right" = "向右拆分当前窗格";
 "Split the current pane to the right (⌘D)" = "向右拆分当前窗格 (⌘D)";
 "Split the current pane downward" = "向下拆分当前窗格";

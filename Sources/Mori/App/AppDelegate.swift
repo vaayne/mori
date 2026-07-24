@@ -119,6 +119,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             self.closeCompanionTool()
             self.terminalAreaController?.focusCurrentSurface()
         }
+        companionTool.onSelectTool = { [weak self] tool in
+            self?.selectCompanionTool(tool)
+        }
 
         // Wire ghostty keybinding actions to Mori's tmux-based implementation.
         // Ghostty maps keys to intents (new_tab, close_tab, etc.); Mori provides
@@ -1441,6 +1444,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if sameToolVisible && toolIsFocused {
             closeCompanionTool()
             terminalAreaController?.focusCurrentSurface()
+            return
+        }
+
+        guard let manager = workspaceManager,
+              let context = manager.companionToolLaunchContext() else {
+            NSSound.beep()
+            return
+        }
+
+        showCompanionTool(tool, context: context)
+    }
+
+    /// Tab-bar select: reveal `tool` in the pane, switching from the other tool if
+    /// needed. Unlike ⌘E/⌘G (`toggleCompanionTool`), selecting the already-active tool
+    /// focuses it instead of closing the pane.
+    private func selectCompanionTool(_ tool: CompanionTool) {
+        if companionToolState.activeTool == tool, companionToolState.isVisible {
+            companionToolController?.focus()
             return
         }
 
