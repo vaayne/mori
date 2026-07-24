@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🐛 Bug Fixes
+
+- **macOS**: Sidebar and companion-pane dividers are actually draggable again. The resize hit zone used to be swallowed by the neighboring views (you had to grab a 1-pixel line), and the sidebar was clamped to a 220–260pt range. Each divider now has a dedicated 8pt grab area that shows an accent-colored highlight on hover and while dragging, and the sidebar can grow up to 400pt.
+
 ## [0.6.2] - 2026-07-24
 
 ### 🎨 Design

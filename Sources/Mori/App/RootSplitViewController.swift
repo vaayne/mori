@@ -1,12 +1,66 @@
 import AppKit
 
+/// Transparent, topmost drag handle straddling a 1pt divider. The flanking
+/// content views (SwiftUI sidebar, terminal surface) consume mouse events, so
+/// divider drags must be caught by an overlay above them, not the responder chain.
+@MainActor
+private final class DividerHandleView: NSView {
+
+    /// Reports the drag location's x in the superview's coordinate space.
+    var onDrag: ((CGFloat) -> Void)?
+    var onDragEnded: (() -> Void)?
+
+    private var isHovered = false { didSet { needsDisplay = true } }
+    private var isDragging = false { didSet { needsDisplay = true } }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self
+        ))
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .resizeLeftRight)
+    }
+
+    override func mouseEntered(with event: NSEvent) { isHovered = true }
+    override func mouseExited(with event: NSEvent) { isHovered = false }
+
+    override func mouseDown(with event: NSEvent) {
+        isDragging = true
+        NSCursor.resizeLeftRight.push()
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard isDragging, let superview else { return }
+        onDrag?(superview.convert(event.locationInWindow, from: nil).x)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard isDragging else {
+            super.mouseUp(with: event)
+            return
+        }
+        isDragging = false
+        NSCursor.pop()
+        onDragEnded?()
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard isHovered || isDragging else { return }
+        let barWidth: CGFloat = 3
+        let bar = NSRect(x: (bounds.width - barWidth) / 2, y: 0, width: barWidth, height: bounds.height)
+        NSColor.controlAccentColor.withAlphaComponent(isDragging ? 0.9 : 0.5).setFill()
+        NSBezierPath(roundedRect: bar, xRadius: barWidth / 2, yRadius: barWidth / 2).fill()
+    }
+}
+
 @MainActor
 final class RootSplitViewController: NSViewController {
-
-    private enum DividerDragTarget {
-        case sidebar
-        case companion
-    }
 
     private(set) var sidebarController: NSViewController
     private(set) var contentController: NSViewController
@@ -18,7 +72,7 @@ final class RootSplitViewController: NSViewController {
     private static let sidebarCollapsedWidth: CGFloat = 0
     private static let companionWidthKey = "MoriCompanionToolPaneWidth"
     private static let sidebarMinWidth: CGFloat = 220
-    private static let sidebarMaxWidth: CGFloat = 260
+    private static let sidebarMaxWidth: CGFloat = 400
     private static let companionMinWidth: CGFloat = 320
     private static let dividerHitWidth: CGFloat = 8
 
@@ -27,6 +81,8 @@ final class RootSplitViewController: NSViewController {
     private let contentContainer = NSView()
     private let companionDividerView = NSView()
     private let companionContainer = NSView()
+    private let sidebarDragHandle = DividerHandleView()
+    private let companionDragHandle = DividerHandleView()
 
     /// Center column's 38pt header; the sidebar and companion columns get a plain drag
     /// strip of the same height so all three clear the hidden titlebar band consistently.
@@ -35,7 +91,6 @@ final class RootSplitViewController: NSViewController {
 
     private var sidebarWidth: CGFloat = 236
     private var companionWidth: CGFloat = CompanionToolPaneState.defaultWidth
-    private var dragTarget: DividerDragTarget?
     private var collapsed = false
     private var toolPaneState = CompanionToolPaneState()
 
@@ -65,10 +120,39 @@ final class RootSplitViewController: NSViewController {
         companionDividerView.wantsLayer = true
         companionDividerView.layer?.backgroundColor = NSColor.separatorColor.cgColor
 
-        for subview in [sidebarContainer, sidebarDividerView, contentContainer, companionDividerView, companionContainer] {
+        // Drag handles are added last so they sit above the content columns,
+        // whose views would otherwise swallow clicks near the dividers.
+        for subview in [
+            sidebarContainer, sidebarDividerView, contentContainer,
+            companionDividerView, companionContainer,
+            sidebarDragHandle, companionDragHandle,
+        ] {
             root.addSubview(subview)
         }
         self.view = root
+
+        sidebarDragHandle.onDrag = { [weak self] x in
+            guard let self else { return }
+            sidebarWidth = x.clamped(to: Self.sidebarMinWidth, Self.sidebarMaxWidth)
+            updateLayout()
+        }
+        sidebarDragHandle.onDragEnded = { [weak self] in
+            self?.saveSidebarWidth()
+        }
+
+        companionDragHandle.onDrag = { [weak self] x in
+            guard let self else { return }
+            let availableWidth = view.bounds.width - sidebarVisibleWidth - sidebarDividerVisibleWidth
+            let rawWidth = view.bounds.width - x - 1
+            let maxAllowed = max(0, availableWidth - 1)
+            companionWidth = rawWidth.clamped(to: Self.companionMinWidth, maxAllowed)
+            toolPaneState.width = companionWidth
+            onCompanionWidthChanged?(companionWidth)
+            updateLayout()
+        }
+        companionDragHandle.onDragEnded = { [weak self] in
+            self?.saveCompanionWidth()
+        }
 
         // The sidebar and center columns reserve a 38pt top strip under the hidden
         // titlebar: the center column hosts the header bar, the sidebar a bare drag
@@ -139,83 +223,21 @@ final class RootSplitViewController: NSViewController {
         companionContainer.isHidden = !companionVisible
         companionDividerView.isHidden = !companionVisible
 
-        view.discardCursorRects()
-        if !collapsed {
-            let sidebarCenter = sidebarWidth + sidebarDividerWidth / 2
-            let sidebarRect = NSRect(
-                x: sidebarCenter - Self.dividerHitWidth / 2,
-                y: 0,
-                width: Self.dividerHitWidth,
-                height: bounds.height
-            )
-            view.addCursorRect(sidebarRect, cursor: .resizeLeftRight)
-        }
+        sidebarDragHandle.frame = NSRect(
+            x: sidebarWidth + sidebarDividerWidth / 2 - Self.dividerHitWidth / 2,
+            y: 0,
+            width: Self.dividerHitWidth,
+            height: bounds.height
+        )
+        sidebarDragHandle.isHidden = collapsed
 
-        if companionVisible {
-            let companionCenter = sidebarWidth + sidebarDividerWidth + contentWidth + companionDividerWidth / 2
-            let companionRect = NSRect(
-                x: companionCenter - Self.dividerHitWidth / 2,
-                y: 0,
-                width: Self.dividerHitWidth,
-                height: bounds.height
-            )
-            view.addCursorRect(companionRect, cursor: .resizeLeftRight)
-        }
-    }
-
-    private func hitDragTarget(_ event: NSEvent) -> DividerDragTarget? {
-        let x = view.convert(event.locationInWindow, from: nil).x
-        if !collapsed, abs(x - sidebarWidth) <= Self.dividerHitWidth / 2 {
-            return .sidebar
-        }
-
-        guard toolPaneState.isVisible else { return nil }
-        let companionDividerX = companionContainer.frame.minX
-        if abs(x - companionDividerX) <= Self.dividerHitWidth / 2 {
-            return .companion
-        }
-        return nil
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        if let target = hitDragTarget(event) {
-            dragTarget = target
-            NSCursor.resizeLeftRight.push()
-        } else {
-            super.mouseDown(with: event)
-        }
-    }
-
-    override func mouseDragged(with event: NSEvent) {
-        guard let dragTarget else {
-            super.mouseDragged(with: event)
-            return
-        }
-
-        let x = view.convert(event.locationInWindow, from: nil).x
-        switch dragTarget {
-        case .sidebar:
-            sidebarWidth = x.clamped(to: Self.sidebarMinWidth, Self.sidebarMaxWidth)
-        case .companion:
-            let availableWidth = view.bounds.width - sidebarVisibleWidth - sidebarDividerVisibleWidth
-            let rawWidth = view.bounds.width - x - 1
-            let maxAllowed = max(0, availableWidth - 1)
-            companionWidth = rawWidth.clamped(to: Self.companionMinWidth, maxAllowed)
-            toolPaneState.width = companionWidth
-            onCompanionWidthChanged?(companionWidth)
-        }
-        updateLayout()
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        guard dragTarget != nil else {
-            super.mouseUp(with: event)
-            return
-        }
-        dragTarget = nil
-        NSCursor.pop()
-        saveSidebarWidth()
-        saveCompanionWidth()
+        companionDragHandle.frame = NSRect(
+            x: sidebarWidth + sidebarDividerWidth + contentWidth + companionDividerWidth / 2 - Self.dividerHitWidth / 2,
+            y: 0,
+            width: Self.dividerHitWidth,
+            height: bounds.height
+        )
+        companionDragHandle.isHidden = !companionVisible
     }
 
     var currentCompanionWidth: CGFloat { companionWidth }
