@@ -88,6 +88,10 @@ final class MainWindowController: NSWindowController {
     private var cachedRightInset: CGFloat?
     /// Breathing room between the tab strip and the trailing toolbar group (mirrors the leading spacer).
     private static let tabsTrailingMargin: CGFloat = 14
+    /// Width assumed for the trailing toolbar group while it sits in the » overflow menu and
+    /// can't be measured: 5 items at ~44pt each (unifiedCompact on Tahoe), deliberately generous
+    /// so the strip frees enough room for every item to return.
+    private static let overflowedTrailingReserve: CGFloat = 220
 
     // MARK: - Shortcut Hints
 
@@ -213,6 +217,12 @@ final class MainWindowController: NSWindowController {
             if rightMin > 0, rightMin < window.frame.width {
                 cachedRightInset = window.frame.width - rightMin
             }
+        } else {
+            // The trailing group collapsed into the » overflow menu, so its live geometry is
+            // gone and the cached inset may be stale-narrow — which would keep the strip wide
+            // and the group overflowed forever. Reserve enough room for the whole group so the
+            // toolbar can bring it back; once visible again, the real measurement takes over.
+            cachedRightInset = max(cachedRightInset ?? 0, Self.overflowedTrailingReserve)
         }
 
         guard let originX = cachedStripOriginX, let rightInset = cachedRightInset else { return }
