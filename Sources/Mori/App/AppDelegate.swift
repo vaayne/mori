@@ -18,13 +18,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var appState: AppState?
     private var terminalAreaController: TerminalAreaViewController?
     private var companionToolController: CompanionToolPaneController?
-    private var commandPaletteController: CommandPaletteController?
+    private var commandPanelController: CommandPanelController?
     private var rootSplitVC: RootSplitViewController?
     private var keyMonitor: Any?
     private var sidebarController: SidebarHostingController?
     private var ipcServer: IPCServer?
     private var ipcHandler: IPCHandler?
-    private var worktreeCreationController: WorktreeCreationController?
+    private var workspaceCreationPage: WorkspaceCreationPage?
     private let sidebarPaneOutputCache = PaneOutputCache()
     private var settingsWindowController: NSWindowController?
     private var configFile: GhosttyConfigFile?
@@ -412,7 +412,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         setupMainMenu()
 
         // Set up command palette (Cmd+Shift+P)
-        setupCommandPalette(appState: state, manager: manager)
+        setupCommandPanel(appState: state, manager: manager)
 
         // Start IPC server for mori CLI communication
         startIPCServer(manager: manager)
@@ -737,45 +737,75 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return
         }
 
-        if worktreeCreationController == nil {
-            let controller = WorktreeCreationController()
-
-            controller.fetchBranches = { [weak manager] projectId, repoPath in
-                guard let manager else { return [] }
-                return try await manager.listBranches(projectId: projectId, repoPathHint: repoPath)
-            }
-
-            controller.fetchGitHubItems = { [weak manager] projectId, repoPath in
-                guard let manager else { return [] }
-                return await manager.fetchGitHubWorkItems(projectId: projectId, repoPath: repoPath)
-            }
-
-            controller.onCreateWorktree = { [weak manager] request in
-                guard let manager else { return }
-                Task { @MainActor in
-                    await manager.handleCreateWorktreeFromPanel(request)
-                }
-            }
-
-            controller.onProjectChanged = { [weak self] newProjectId in
-                guard let self else { return }
-                self.appState?.uiState.selectedProjectId = newProjectId
-                self.workspaceManager?.selectProject(newProjectId)
-                self.refreshCreateWorktreePanel(for: newProjectId)
-            }
-
-            worktreeCreationController = controller
-            themeDistributor.register(controller)
-        }
-
-        let controller = worktreeCreationController!
-
-        controller.show(
+        let page = ensureWorkspaceCreationPage(manager: manager)
+        page.configure(
             projects: state.projects,
             selectedProjectId: projectId,
             repoPath: project.repoRootPath,
-            existingWorktreeBranches: existingWorktreeBranches(for: projectId, in: state)
+            excludedBranches: existingWorktreeBranches(for: projectId, in: state)
         )
+
+        guard let panel = commandPanelController else { return }
+        // Entry transition table: already frontmost → no-op; panel visible on
+        // another page → push (Esc goes back); hidden → open directly (Esc closes).
+        if panel.isShowing(page) { return }
+        if panel.isVisible {
+            panel.push(page)
+        } else {
+            panel.open(with: page)
+        }
+    }
+
+    private func ensureWorkspaceCreationPage(manager: WorkspaceManager) -> WorkspaceCreationPage {
+        if let page = workspaceCreationPage { return page }
+
+        let page = WorkspaceCreationPage()
+
+        page.fetchBranches = { [weak manager] projectId, repoPath in
+            guard let manager else { return [] }
+            return try await manager.listBranches(projectId: projectId, repoPathHint: repoPath)
+        }
+
+        page.fetchGitHubItems = { [weak manager] projectId, repoPath in
+            guard let manager else { return [] }
+            return await manager.fetchGitHubWorkItems(projectId: projectId, repoPath: repoPath)
+        }
+
+        page.onCreateWorktree = { [weak manager] request in
+            guard let manager else { return }
+            Task { @MainActor in
+                await manager.handleCreateWorktreeFromPanel(request)
+            }
+        }
+
+        page.onProjectChanged = { [weak self] newProjectId in
+            guard let self else { return }
+            self.appState?.uiState.selectedProjectId = newProjectId
+            self.workspaceManager?.selectProject(newProjectId)
+            self.refreshCreateWorktreePanel(for: newProjectId)
+        }
+
+        workspaceCreationPage = page
+        return page
+    }
+
+    /// The workspace page for an in-panel push, configured for the currently
+    /// selected project — or nil when none is selected, so the caller can fall
+    /// back to the dismiss path (which surfaces the existing alert).
+    private func configuredWorkspacePageForPush() -> CommandPanelPage? {
+        guard let manager = workspaceManager, let state = appState,
+              let projectId = state.uiState.selectedProjectId,
+              let project = state.projects.first(where: { $0.id == projectId }) else {
+            return nil
+        }
+        let page = ensureWorkspaceCreationPage(manager: manager)
+        page.configure(
+            projects: state.projects,
+            selectedProjectId: projectId,
+            repoPath: project.repoRootPath,
+            excludedBranches: existingWorktreeBranches(for: projectId, in: state)
+        )
+        return page
     }
 
     /// Branches that already back a workspace in `projectId` — excluded from the
@@ -788,15 +818,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     /// re-fetches branches for the new project without re-wiring callbacks or
     /// re-positioning the panel.
     private func refreshCreateWorktreePanel(for projectId: UUID) {
-        guard let controller = worktreeCreationController,
+        guard let page = workspaceCreationPage,
               let state = appState,
               let project = state.projects.first(where: { $0.id == projectId }) else { return }
-        controller.refresh(
+        page.configure(
             projects: state.projects,
             selectedProjectId: projectId,
             repoPath: project.repoRootPath,
-            existingWorktreeBranches: existingWorktreeBranches(for: projectId, in: state)
+            excludedBranches: existingWorktreeBranches(for: projectId, in: state)
         )
+        page.refreshData()
     }
     // MARK: - Settings Window
 
@@ -1394,7 +1425,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     @objc private func toggleCommandPaletteMenuAction() {
-        commandPaletteController?.toggle(mode: .allItems)
+        commandPanelController?.toggle()
     }
 
     @objc private func toggleSidebarMenuAction() {
@@ -1621,17 +1652,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         alert.runModal()
     }
 
-    // MARK: - Command Palette (Task 2.6.5)
+    // MARK: - Command Panel
 
-    private func setupCommandPalette(appState: AppState, manager: WorkspaceManager) {
-        let palette = CommandPaletteController(appState: appState)
-        self.commandPaletteController = palette
-        themeDistributor.register(palette)
+    private func setupCommandPanel(appState: AppState, manager: WorkspaceManager) {
+        let rootPage = RootSearchPage(appState: appState)
+        let panel = CommandPanelController(rootPage: rootPage)
+        self.commandPanelController = panel
+        themeDistributor.register(panel)
 
         // Wire item selection to WorkspaceManager navigation and actions
-        palette.onSelectItem = { [weak self, weak manager] item in
+        rootPage.onSelectItem = { [weak self, weak manager] item in
             guard let self, let manager else { return }
             self.handlePaletteSelection(item, manager: manager)
+        }
+
+        // "Create Worktree" pushes the workspace page inside the panel.
+        rootPage.makeWorkspacePage = { [weak self] in
+            self?.configuredWorkspacePageForPush()
         }
 
         // Build action map: binding IDs → closures that execute the action.
@@ -1646,7 +1683,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
 
         keyMonitorActionMap = [
-            "commandPalette.toggle": { [weak palette] in palette?.toggle(mode: .allItems) },
+            "commandPalette.toggle": { [weak panel] in panel?.toggle() },
             "worktrees.create": { [weak self] in self?.showCreateWorktreePanel() },
             "worktrees.cycleNext": { [weak self] in self?.workspaceManager?.cycleWorktree(forward: true) },
             "worktrees.cyclePrevious": { [weak self] in self?.workspaceManager?.cycleWorktree(forward: false) },
@@ -1686,7 +1723,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             "other.openProject": { [weak self] in self?.showAddProjectPanel() },
             "other.agentDashboard": { [weak self] in self?.toggleAgentDashboardAction() },
             // Backward-compatible alias for users who still have the old project switcher binding.
-            "other.projectSwitcher": { [weak self] in self?.commandPaletteController?.toggle(mode: .allItems) },
+            "other.projectSwitcher": { [weak self] in self?.commandPanelController?.toggle() },
         ]
 
         // Register key monitor that dispatches via the key binding store
