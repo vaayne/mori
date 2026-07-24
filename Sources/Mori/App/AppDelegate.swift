@@ -18,7 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var appState: AppState?
     private var terminalAreaController: TerminalAreaViewController?
     private var companionToolController: CompanionToolPaneController?
-    private var commandPaletteController: CommandPaletteController?
+    private var commandPanelController: CommandPanelController?
     private var rootSplitVC: RootSplitViewController?
     private var keyMonitor: Any?
     private var sidebarController: SidebarHostingController?
@@ -412,7 +412,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         setupMainMenu()
 
         // Set up command palette (Cmd+Shift+P)
-        setupCommandPalette(appState: state, manager: manager)
+        setupCommandPanel(appState: state, manager: manager)
 
         // Start IPC server for mori CLI communication
         startIPCServer(manager: manager)
@@ -1394,7 +1394,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     @objc private func toggleCommandPaletteMenuAction() {
-        commandPaletteController?.toggle(mode: .allItems)
+        commandPanelController?.toggle()
     }
 
     @objc private func toggleSidebarMenuAction() {
@@ -1621,15 +1621,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         alert.runModal()
     }
 
-    // MARK: - Command Palette (Task 2.6.5)
+    // MARK: - Command Panel
 
-    private func setupCommandPalette(appState: AppState, manager: WorkspaceManager) {
-        let palette = CommandPaletteController(appState: appState)
-        self.commandPaletteController = palette
-        themeDistributor.register(palette)
+    private func setupCommandPanel(appState: AppState, manager: WorkspaceManager) {
+        let rootPage = RootSearchPage(appState: appState)
+        let panel = CommandPanelController(rootPage: rootPage)
+        self.commandPanelController = panel
+        themeDistributor.register(panel)
 
         // Wire item selection to WorkspaceManager navigation and actions
-        palette.onSelectItem = { [weak self, weak manager] item in
+        rootPage.onSelectItem = { [weak self, weak manager] item in
             guard let self, let manager else { return }
             self.handlePaletteSelection(item, manager: manager)
         }
@@ -1646,7 +1647,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
 
         keyMonitorActionMap = [
-            "commandPalette.toggle": { [weak palette] in palette?.toggle(mode: .allItems) },
+            "commandPalette.toggle": { [weak panel] in panel?.toggle() },
             "worktrees.create": { [weak self] in self?.showCreateWorktreePanel() },
             "worktrees.cycleNext": { [weak self] in self?.workspaceManager?.cycleWorktree(forward: true) },
             "worktrees.cyclePrevious": { [weak self] in self?.workspaceManager?.cycleWorktree(forward: false) },
@@ -1686,7 +1687,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             "other.openProject": { [weak self] in self?.showAddProjectPanel() },
             "other.agentDashboard": { [weak self] in self?.toggleAgentDashboardAction() },
             // Backward-compatible alias for users who still have the old project switcher binding.
-            "other.projectSwitcher": { [weak self] in self?.commandPaletteController?.toggle(mode: .allItems) },
+            "other.projectSwitcher": { [weak self] in self?.commandPanelController?.toggle() },
         ]
 
         // Register key monitor that dispatches via the key binding store
