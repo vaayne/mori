@@ -14,6 +14,7 @@ mise run test:git        # MoriGit tests only
 mise run test:persistence # MoriPersistence tests only
 mise run test:tmux       # MoriTmux tests only
 mise run test:ipc        # MoriIPC tests only
+mise run test:ui         # MoriUI tests only
 mise run clean           # Remove .build and .derived-data
 ```
 
