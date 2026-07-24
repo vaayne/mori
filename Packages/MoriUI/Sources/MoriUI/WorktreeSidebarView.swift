@@ -117,7 +117,7 @@ public struct WorktreeSidebarView: View {
         .buttonStyle(.plain)
         .background(
             RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
-                .fill(selected ? Color.primary.opacity(MoriTokens.Opacity.subtle) : Color.clear)
+                .fill(selected ? Color.primary.opacity(MoriTokens.Opacity.light) : Color.clear)
         )
         .padding(.horizontal, MoriTokens.Spacing.md)
         .padding(.top, MoriTokens.Spacing.sm)
@@ -249,7 +249,7 @@ public struct WorktreeSidebarView: View {
                 secondLine(worktree, title: title)
             }
             .padding(.horizontal, MoriTokens.Spacing.md)
-            .padding(.vertical, 6)
+            .padding(.vertical, 8)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -257,7 +257,7 @@ public struct WorktreeSidebarView: View {
         .disabled(worktree.status.isTransient)
         .background(
             RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
-                .fill(selected ? Color.primary.opacity(MoriTokens.Opacity.subtle) : (hovered ? Color.primary.opacity(MoriTokens.Opacity.quiet) : Color.clear))
+                .fill(selected ? Color.primary.opacity(MoriTokens.Opacity.light) : (hovered ? Color.primary.opacity(MoriTokens.Opacity.quiet) : Color.clear))
         )
         // Quick-jump hint appears only while ⌘ is held, as an overlay chip so
         // rows never reflow. It may briefly cover the row's trailing edge —

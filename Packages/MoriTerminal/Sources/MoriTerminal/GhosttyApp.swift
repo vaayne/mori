@@ -141,7 +141,8 @@ final class GhosttyApp {
 
     // MARK: - Config
 
-    /// Build a ghostty config: load user's config first, then apply Mori overrides.
+    /// Build a ghostty config: Mori defaults first (user-overridable), then the
+    /// user's config, then Mori overrides (which must win).
     ///
     /// - Parameter forcingTheme: when non-nil, a single theme name appended last so it
     ///   overrides the user's `theme`. Used to resolve split light/dark themes before
@@ -149,17 +150,22 @@ final class GhosttyApp {
     func buildConfig(forcingTheme: String? = nil) -> ghostty_config_t? {
         guard let config = ghostty_config_new() else { return nil }
 
-        // 1. Load user's ghostty config (standard path)
+        // 1. Mori defaults (window padding, etc.) — loaded first so the user's
+        // config can override any of them.
+        let defaultsPath = GhosttyConfigWriter.writeDefaults(appSupportDirectory: MoriPaths.appSupportDirectory)
+        ghostty_config_load_file(config, defaultsPath)
+
+        // 2. Load user's ghostty config (standard path)
         let userConfig = NSHomeDirectory() + "/.config/ghostty/config"
         if FileManager.default.fileExists(atPath: userConfig) {
             ghostty_config_load_file(config, userConfig)
         }
 
-        // 2. Apply Mori embedding overrides (window-decoration, etc.)
+        // 3. Apply Mori embedding overrides (window-decoration, etc.)
         let overridePath = GhosttyConfigWriter.write(appSupportDirectory: MoriPaths.appSupportDirectory)
         ghostty_config_load_file(config, overridePath)
 
-        // 3. Optionally force a single resolved theme (split-theme extraction or
+        // 4. Optionally force a single resolved theme (split-theme extraction or
         // runtime split-theme resolution).
         if let forcingTheme {
             let themePath = GhosttyConfigWriter.writeThemeOverride(
