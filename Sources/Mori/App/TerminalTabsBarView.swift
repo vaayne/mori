@@ -3,10 +3,10 @@ import Observation
 import MoriCore
 import MoriUI
 
-/// Native AppKit terminal tabs for the window titlebar toolbar.
+/// Native AppKit terminal tabs, pinned leading in the center column's header bar.
 ///
-/// This intentionally avoids SwiftUI hosting inside `NSToolbarItem`: the toolbar's
-/// flexible-space layout has repeatedly rendered hosted SwiftUI as a blank strip.
+/// This intentionally stays AppKit rather than hosting SwiftUI: the strip shares its
+/// row with a bare drag surface, and a plain view keeps hit-testing and dragging crisp.
 @MainActor
 final class TerminalTabsBarView: NSView {
     private static let defaultTabWidth: CGFloat = 160
@@ -26,11 +26,10 @@ final class TerminalTabsBarView: NSView {
     private lazy var widthConstraint = widthAnchor.constraint(equalToConstant: layoutWidth)
     private lazy var heightConstraint = heightAnchor.constraint(equalToConstant: TerminalTabsBarView.tabHeight)
 
-    /// Width the controller offers the strip; `nil` until first measured so tabs start at the default.
+    /// Width the header offers the strip; `nil` until first measured so tabs start at the default.
     private var availableWidth: CGFloat?
-    /// Actual laid-out strip width (≤ availableWidth) — drives the toolbar item size so it never overflows.
+    /// Actual laid-out strip width (≤ availableWidth) — drives the intrinsic size the header lays out against.
     private var layoutWidth: CGFloat = TerminalTabsBarView.horizontalPadding * 2 + TerminalTabsBarView.plusWidth
-    var onIntrinsicContentSizeChanged: (() -> Void)?
 
     init(
         appState: AppState,
@@ -145,11 +144,11 @@ final class TerminalTabsBarView: NSView {
         applyTabLayout()
     }
 
-    /// Tabs share the width the toolbar hands the strip, shrinking evenly toward `minTabWidth`
+    /// Tabs share the width the header hands the strip, shrinking evenly toward `minTabWidth`
     /// as they pile up so the strip stays within its allotment. Width is capped at `maxTabWidth`
     /// so a lone tab reads as a tab, not a bar-spanning smear (long titles truncate instead);
-    /// the toolbar's flexible space absorbs the slack. Before the controller measures the strip
-    /// we fall back to `defaultTabWidth`.
+    /// the header's drag gap absorbs the slack. Before the header measures the strip we fall
+    /// back to `defaultTabWidth`.
     private func applyTabLayout() {
         let count = tabControls.count
         let gaps = CGFloat(count + 1) * Self.spacing
@@ -172,7 +171,6 @@ final class TerminalTabsBarView: NSView {
         heightConstraint.constant = Self.tabHeight
         invalidateIntrinsicContentSize()
         needsLayout = true
-        onIntrinsicContentSizeChanged?()
     }
 }
 

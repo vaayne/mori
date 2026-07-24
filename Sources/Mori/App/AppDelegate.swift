@@ -298,12 +298,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 }
             }
         )
-        windowController.installTabsView(tabsView)
+        let headerBar = HeaderBarView(
+            tabsView: tabsView,
+            onToggleCompanion: { [weak self] in self?.toggleCompanionPane() }
+        )
+        themeDistributor.register(headerBar)
 
         let splitVC = RootSplitViewController(
             sidebarController: sidebarController,
             contentController: terminalArea,
-            companionController: companionTool
+            companionController: companionTool,
+            headerBar: headerBar
         )
         self.rootSplitVC = splitVC
         companionToolState.width = splitVC.currentCompanionWidth
@@ -312,34 +317,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         splitVC.updateCompanionPane(state: companionToolState)
 
-        windowController.onToggleSidebar = { [weak splitVC] in
-            splitVC?.toggleSidebar()
-        }
-        windowController.onToggleFiles = { [weak self] in
-            self?.toggleCompanionTool(.yazi)
-        }
-        windowController.onToggleGit = { [weak self] in
-            self?.toggleCompanionTool(.lazygit)
-        }
-        windowController.onSplitRight = { [weak self] in
-            self?.splitRightMenuAction()
-        }
-        windowController.onSplitDown = { [weak self] in
-            self?.splitDownMenuAction()
-        }
-
-        windowController.onOpenProject = { [weak self] in
-            self?.showAddProjectPanel()
-        }
-        windowController.onOpenCommandPalette = { [weak self] in
-            self?.commandPaletteController?.toggle(mode: .allItems)
-        }
-        windowController.onToggleAgentDashboard = { [weak self] in
-            self?.toggleAgentDashboardAction()
-        }
-        windowController.onOpenSettings = { [weak self] in
-            self?.showSettingsWindow()
-        }
         windowController.onShowCreateWorktreePanel = { [weak self] in
             self?.showCreateWorktreePanel()
         }
@@ -1142,6 +1119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // ── Window (view + window merged) ────────────────────────────
         let windowMenuItem = NSMenuItem()
         let windowMenu = NSMenu(title: .localized("Window"))
+        windowMenu.addItem(configurableMenuItem("commandPalette.toggle", title: .localized("Command Palette…"), action: #selector(toggleCommandPaletteMenuAction)))
         windowMenu.addItem(configurableMenuItem("window.toggleSidebar", title: .localized("Toggle Sidebar"), action: #selector(toggleSidebarMenuAction)))
         // Locked: Toggle Full Screen (responder chain)
         windowMenu.addItem(menuItem(.localized("Toggle Full Screen"), action: #selector(NSWindow.toggleFullScreen(_:)), key: "f", mods: [.command, .control]))
@@ -1408,6 +1386,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         showRemoteConnectWizard()
     }
 
+    @objc private func toggleCommandPaletteMenuAction() {
+        commandPaletteController?.toggle(mode: .allItems)
+    }
+
     @objc private func toggleSidebarMenuAction() {
         rootSplitVC?.toggleSidebar()
     }
@@ -1438,6 +1420,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // with the current theme now and on every later change.
         if let panel = agentDashboardPanel {
             themeDistributor.register(panel)
+        }
+    }
+
+    /// Header toggle: hide the companion pane if visible, otherwise reopen it on the
+    /// last-used tool (defaulting to Files) — the pane-level counterpart to ⌘E/⌘G.
+    private func toggleCompanionPane() {
+        if companionToolState.isVisible {
+            closeCompanionTool()
+            terminalAreaController?.focusCurrentSurface()
+        } else {
+            toggleCompanionTool(companionToolState.activeTool ?? .yazi)
         }
     }
 

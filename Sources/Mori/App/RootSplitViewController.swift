@@ -28,6 +28,12 @@ final class RootSplitViewController: NSViewController {
     private let companionDividerView = NSView()
     private let companionContainer = NSView()
 
+    /// Center column's 38pt header; the sidebar and companion columns get a plain drag
+    /// strip of the same height so all three clear the hidden titlebar band consistently.
+    private let headerBar: HeaderBarView
+    private let sidebarTopStrip = TitleBarDragView()
+    private let companionTopStrip = TitleBarDragView()
+
     private var sidebarWidth: CGFloat = 236
     private var companionWidth: CGFloat = CompanionToolPaneState.defaultWidth
     private var dragTarget: DividerDragTarget?
@@ -39,11 +45,13 @@ final class RootSplitViewController: NSViewController {
     init(
         sidebarController: NSViewController,
         contentController: NSViewController,
-        companionController: NSViewController
+        companionController: NSViewController,
+        headerBar: HeaderBarView
     ) {
         self.sidebarController = sidebarController
         self.contentController = contentController
         self.companionController = companionController
+        self.headerBar = headerBar
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -63,9 +71,15 @@ final class RootSplitViewController: NSViewController {
         }
         self.view = root
 
-        embed(sidebarController, in: sidebarContainer)
-        embed(contentController, in: contentContainer)
-        embed(companionController, in: companionContainer)
+        // Each column reserves a 38pt top strip under the hidden titlebar: the center
+        // column hosts the header bar, the flanks get bare drag strips.
+        pinTopStrip(sidebarTopStrip, in: sidebarContainer)
+        pinTopStrip(headerBar, in: contentContainer)
+        pinTopStrip(companionTopStrip, in: companionContainer)
+
+        embed(sidebarController, in: sidebarContainer, below: sidebarTopStrip)
+        embed(contentController, in: contentContainer, below: headerBar)
+        embed(companionController, in: companionContainer, below: companionTopStrip)
 
         let savedSidebar = CGFloat(UserDefaults.standard.double(forKey: Self.sidebarWidthKey))
         if savedSidebar > 0 {
@@ -211,6 +225,7 @@ final class RootSplitViewController: NSViewController {
             ctx.duration = 0.2
             ctx.allowsImplicitAnimation = true
             collapsed.toggle()
+            headerBar.setSidebarCollapsed(collapsed)
             updateLayout()
         }
     }
@@ -235,7 +250,7 @@ final class RootSplitViewController: NSViewController {
         contentController.view.removeFromSuperview()
         contentController.removeFromParent()
         contentController = controller
-        embed(controller, in: contentContainer)
+        embed(controller, in: contentContainer, below: headerBar)
         updateLayout()
     }
 
@@ -247,15 +262,26 @@ final class RootSplitViewController: NSViewController {
         1
     }
 
-    private func embed(_ vc: NSViewController, in container: NSView) {
+    private func embed(_ vc: NSViewController, in container: NSView, below topView: NSView) {
         addChild(vc)
         vc.view.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(vc.view)
         NSLayoutConstraint.activate([
-            vc.view.topAnchor.constraint(equalTo: container.topAnchor),
+            vc.view.topAnchor.constraint(equalTo: topView.bottomAnchor),
             vc.view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             vc.view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             vc.view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+        ])
+    }
+
+    private func pinTopStrip(_ strip: NSView, in container: NSView) {
+        strip.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(strip)
+        NSLayoutConstraint.activate([
+            strip.topAnchor.constraint(equalTo: container.topAnchor),
+            strip.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            strip.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            strip.heightAnchor.constraint(equalToConstant: TitleBarDragView.height),
         ])
     }
 }

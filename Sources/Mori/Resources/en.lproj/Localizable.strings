@@ -97,6 +97,8 @@
 "Standard Blur" = "Standard Blur";
 "Command Palette" = "Command Palette";
 "Command Palette (⇧⌘P)" = "Command Palette (⇧⌘P)";
+"Command Palette…" = "Command Palette…";
+"Toggle Companion Pane" = "Toggle Companion Pane";
 "Agent Dashboard" = "Agent Dashboard";
 "Agent Dashboard (⇧⌘A)" = "Agent Dashboard (⇧⌘A)";
 "Custom Blur Radius" = "Custom Blur Radius";

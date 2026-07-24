@@ -97,6 +97,8 @@
 "Standard Blur" = "标准模糊";
 "Command Palette" = "命令面板";
 "Command Palette (⇧⌘P)" = "命令面板 (⇧⌘P)";
+"Command Palette…" = "命令面板…";
+"Toggle Companion Pane" = "切换伴随面板";
 "Agent Dashboard" = "代理仪表板";
 "Agent Dashboard (⇧⌘A)" = "代理仪表板 (⇧⌘A)";
 "Custom Blur Radius" = "自定义模糊半径";

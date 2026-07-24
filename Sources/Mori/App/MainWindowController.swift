@@ -1,111 +1,21 @@
 import AppKit
-import Combine
 import SwiftUI
 import MoriTerminal
 import MoriUI
 
 final class MainWindowController: NSWindowController {
     var onWindowAppearanceInvalidated: (() -> Void)?
-
-    // MARK: - Toolbar
-
-    private enum ToolbarID {
-        static let main = NSToolbar.Identifier("MoriMainToolbar")
-        static let toggleSidebar = NSToolbarItem.Identifier("toggleSidebar")
-        static let openProject = NSToolbarItem.Identifier("openProject")
-        static let commandPalette = NSToolbarItem.Identifier("commandPalette")
-        static let agentDashboard = NSToolbarItem.Identifier("agentDashboard")
-        static let settings = NSToolbarItem.Identifier("settings")
-        static let files = NSToolbarItem.Identifier("openFiles")
-        static let git = NSToolbarItem.Identifier("openGit")
-        static let splitRight = NSToolbarItem.Identifier("splitRight")
-        static let splitDown = NSToolbarItem.Identifier("splitDown")
-        static let tabsLeadingSpacer = NSToolbarItem.Identifier("terminalTabsLeadingSpacer")
-        static let tabs = NSToolbarItem.Identifier("terminalTabs")
-    }
-
-    private struct ToolbarItemDef {
-        let id: NSToolbarItem.Identifier
-        let label: String
-        let toolTip: String
-        let symbol: String
-        let hint: String
-        let callback: KeyPath<MainWindowController, (() -> Void)?>
-    }
-
-    private static let toolbarItemDefs: [ToolbarItemDef] = [
-        ToolbarItemDef(id: ToolbarID.toggleSidebar, label: .localized("Toggle Sidebar"),
-                       toolTip: .localized("Show or hide the sidebar (⌘B)"),
-                       symbol: "sidebar.left", hint: "⌘B", callback: \.onToggleSidebar),
-        ToolbarItemDef(id: ToolbarID.openProject, label: .localized("Open Project"),
-                       toolTip: .localized("Open Project (⇧⌘O)"),
-                       symbol: "plus", hint: "⇧⌘O", callback: \.onOpenProject),
-        ToolbarItemDef(id: ToolbarID.commandPalette, label: .localized("Command Palette"),
-                       toolTip: .localized("Command Palette (⇧⌘P)"),
-                       symbol: "magnifyingglass", hint: "⇧⌘P", callback: \.onOpenCommandPalette),
-        ToolbarItemDef(id: ToolbarID.agentDashboard, label: .localized("Agent Dashboard"),
-                       toolTip: .localized("Agent Dashboard (⇧⌘A)"),
-                       symbol: "square.grid.2x2", hint: "⇧⌘A", callback: \.onToggleAgentDashboard),
-        ToolbarItemDef(id: ToolbarID.settings, label: .localized("Settings"),
-                       toolTip: .localized("Settings (⌘,)"),
-                       symbol: "gearshape", hint: "⌘,", callback: \.onOpenSettings),
-        ToolbarItemDef(id: ToolbarID.files, label: .localized("Files"),
-                       toolTip: .localized("Open Files Companion Pane (⌘E)"),
-                       symbol: "folder", hint: "⌘E", callback: \.onToggleFiles),
-        ToolbarItemDef(id: ToolbarID.git, label: .localized("Git"),
-                       toolTip: .localized("Open Git Companion Pane (⌘G)"),
-                       symbol: "arrow.triangle.branch", hint: "⌘G", callback: \.onToggleGit),
-        ToolbarItemDef(id: ToolbarID.splitRight, label: .localized("Split Right"),
-                       toolTip: .localized("Split the current pane to the right (⌘D)"),
-                       symbol: "rectangle.split.2x1", hint: "⌘D", callback: \.onSplitRight),
-        ToolbarItemDef(id: ToolbarID.splitDown, label: .localized("Split Down"),
-                       toolTip: .localized("Split the current pane downward (⇧⌘D)"),
-                       symbol: "rectangle.split.1x2", hint: "⇧⌘D", callback: \.onSplitDown),
-    ]
-
-    var onToggleSidebar: (() -> Void)?
-    var onOpenProject: (() -> Void)?
-    var onOpenCommandPalette: (() -> Void)?
-    var onToggleAgentDashboard: (() -> Void)?
-    var onOpenSettings: (() -> Void)?
-    var onToggleFiles: (() -> Void)?
-    var onToggleGit: (() -> Void)?
-    var onSplitRight: (() -> Void)?
-    var onSplitDown: (() -> Void)?
     var onShowCreateWorktreePanel: (() -> Void)?
 
-    /// The hosting view for the update pill, overlaid on the titlebar.
+    /// The hosting view for the update pill, overlaid on the window's top-right corner.
     private var updateOverlay: NSView?
-
-    /// Native AppKit terminal tabs strip, shown as a toolbar item in the titlebar.
-    /// Created by `installTabsView(_:)` once AppState/callbacks are available; the
-    /// toolbar is built afterwards so the item has a real size.
-    private var tabsView: TerminalTabsBarView?
-    /// Cached titlebar geometry, refreshed whenever the anchor items are on-screen and reused while
-    /// they're in the `»` overflow menu — so a transient overflow can't strand the strip at a stale
-    /// width (which would keep it overflowed forever, since the anchors would never reappear).
-    private var cachedStripOriginX: CGFloat?
-    private var cachedRightInset: CGFloat?
-    /// Breathing room between the tab strip and the trailing toolbar group (mirrors the leading spacer).
-    private static let tabsTrailingMargin: CGFloat = 14
-    /// Width assumed for the trailing toolbar group while it sits in the » overflow menu and
-    /// can't be measured: 5 items at ~44pt each (unifiedCompact on Tahoe), deliberately generous
-    /// so the strip frees enough room for every item to return.
-    private static let overflowedTrailingReserve: CGFloat = 220
-
-    // MARK: - Shortcut Hints
-
-    private let shortcutHintMonitor = ShortcutHintModifierMonitor()
-    private var shortcutHintCancellable: AnyCancellable?
-    private var shortcutHintOverlays: [NSView] = []
-    private var toolbarButtonViews: [NSToolbarItem.Identifier: NSView] = [:]
 
     // MARK: - Init
 
     init(themeInfo: GhosttyThemeInfo = .fallback) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -120,7 +30,6 @@ final class MainWindowController: NSWindowController {
         super.init(window: window)
 
         window.delegate = self
-        startShortcutHintMonitor()
     }
 
     @available(*, unavailable)
@@ -149,16 +58,6 @@ final class MainWindowController: NSWindowController {
         onShowCreateWorktreePanel?()
     }
 
-    /// Install the terminal tabs strip into the titlebar and build the toolbar.
-    /// The tabs view reports an intrinsic content size that tracks the tab count,
-    /// so the toolbar item grows and shrinks with the tabs. The toolbar is
-    /// configured here (not in init) so the item already has a real size when
-    /// AppKit first measures it — otherwise it gets shoved into the overflow menu.
-    func installTabsView(_ rootView: TerminalTabsBarView) {
-        tabsView = rootView
-        configureToolbar()
-    }
-
     func addUpdateAccessory(viewModel: UpdateViewModel) {
         guard let window else { return }
         guard let themeFrame = window.contentView?.superview else { return }
@@ -167,9 +66,11 @@ final class MainWindowController: NSWindowController {
         hostingView.translatesAutoresizingMaskIntoConstraints = false
         themeFrame.addSubview(hostingView)
 
+        // Clear the header's trailing companion toggle (24pt button + 14pt margin) so the
+        // pill never lands on top of it when an update is available.
         NSLayoutConstraint.activate([
             hostingView.topAnchor.constraint(equalTo: themeFrame.topAnchor, constant: 5),
-            hostingView.trailingAnchor.constraint(equalTo: themeFrame.trailingAnchor, constant: -10),
+            hostingView.trailingAnchor.constraint(equalTo: themeFrame.trailingAnchor, constant: -48),
         ])
 
         self.updateOverlay = hostingView
@@ -181,154 +82,6 @@ final class MainWindowController: NSWindowController {
         if let projectName { parts.append(projectName) }
         parts.append("Mori")
         window?.title = parts.joined(separator: " — ")
-    }
-
-    // MARK: - Toolbar
-
-    private func configureToolbar() {
-        let toolbar = NSToolbar(identifier: ToolbarID.main)
-        toolbar.delegate = self
-        toolbar.displayMode = .iconOnly
-        toolbar.showsBaselineSeparator = false
-        window?.toolbar = toolbar
-        window?.toolbarStyle = .unifiedCompact
-        DispatchQueue.main.async { [weak self] in
-            self?.updateTabsStripWidth()
-        }
-    }
-
-    /// Size the tab strip to the gap between the leading and trailing toolbar groups.
-    ///
-    /// Deliberately computed from `window.frame.width` plus cached geometry rather than the live
-    /// frames of the neighbouring toolbar items: once the window narrows enough for NSToolbar to push
-    /// those items into the `»` overflow menu, their views vanish, and any measurement that depends on
-    /// them stalls — leaving the strip stuck at its old (now-too-wide) size and permanently overflowed.
-    private func updateTabsStripWidth() {
-        guard let window, let tabsView else { return }
-        window.contentView?.superview?.layoutSubtreeIfNeeded()
-
-        // Refresh the caches only while the anchors are genuinely on-screen.
-        let tabsFrame = tabsView.convert(tabsView.bounds, to: nil)
-        if visibleToolbarView(for: ToolbarID.agentDashboard) != nil, tabsFrame.width > 0 {
-            cachedStripOriginX = tabsFrame.minX
-        }
-        if let rightAnchor = visibleToolbarView(for: ToolbarID.files), rightAnchor.window === window {
-            let rightMin = rightAnchor.convert(rightAnchor.bounds, to: nil).minX
-            if rightMin > 0, rightMin < window.frame.width {
-                cachedRightInset = window.frame.width - rightMin
-            }
-        } else {
-            // The trailing group collapsed into the » overflow menu, so its live geometry is
-            // gone and the cached inset may be stale-narrow — which would keep the strip wide
-            // and the group overflowed forever. Reserve enough room for the whole group so the
-            // toolbar can bring it back; once visible again, the real measurement takes over.
-            cachedRightInset = max(cachedRightInset ?? 0, Self.overflowedTrailingReserve)
-        }
-
-        guard let originX = cachedStripOriginX, let rightInset = cachedRightInset else { return }
-        let available = window.frame.width - rightInset - originX - Self.tabsTrailingMargin
-        tabsView.setStripWidth(max(available, 0))
-    }
-
-    private func visibleToolbarView(for id: NSToolbarItem.Identifier) -> NSView? {
-        let visibleItems = window?.toolbar?.visibleItems ?? []
-        return visibleItems.first(where: { $0.itemIdentifier == id })?.view
-    }
-
-    private static let symbolConfig = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
-
-    private func makeToolbarItem(for def: ToolbarItemDef) -> NSToolbarItem {
-        let item = NSToolbarItem(itemIdentifier: def.id)
-        item.label = def.label
-        item.paletteLabel = def.label
-        item.toolTip = def.toolTip
-
-        let image = NSImage(systemSymbolName: def.symbol, accessibilityDescription: def.label)?
-            .withSymbolConfiguration(Self.symbolConfig) ?? NSImage()
-
-        let button = NSButton(image: image, target: self, action: #selector(toolbarAction(_:)))
-        button.bezelStyle = NSButton.BezelStyle.toolbar
-        button.imagePosition = NSControl.ImagePosition.imageOnly
-        button.setAccessibilityLabel(def.label)
-        button.identifier = NSUserInterfaceItemIdentifier(def.id.rawValue)
-
-        item.view = button
-        toolbarButtonViews[def.id] = button
-        return item
-    }
-
-    @objc private func toolbarAction(_ sender: NSButton) {
-        guard let senderId = sender.identifier?.rawValue,
-              let def = Self.toolbarItemDefs.first(where: { $0.id.rawValue == senderId }) else { return }
-        self[keyPath: def.callback]?()
-    }
-
-    // MARK: - Shortcut Hint Overlays
-
-    private func startShortcutHintMonitor() {
-        shortcutHintMonitor.start()
-        shortcutHintCancellable = shortcutHintMonitor.$areHintsVisible
-            .removeDuplicates()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] visible in
-                if visible {
-                    self?.showToolbarShortcutHints()
-                } else {
-                    self?.hideToolbarShortcutHints()
-                }
-            }
-    }
-
-    private func showToolbarShortcutHints() {
-        hideToolbarShortcutHints()
-        guard let themeFrame = window?.contentView?.superview else { return }
-        themeFrame.layoutSubtreeIfNeeded()
-
-        for def in Self.toolbarItemDefs {
-            guard let anchor = toolbarButtonViews[def.id], anchor.window != nil else { continue }
-
-            let anchorRect = anchor.convert(anchor.bounds, to: themeFrame)
-            let pill = NSHostingView(rootView: ShortcutHintPill(def.hint))
-            let pillSize = pill.fittingSize
-
-            pill.frame = NSRect(
-                x: anchorRect.midX - pillSize.width / 2,
-                y: anchorRect.maxY + 2,
-                width: pillSize.width,
-                height: pillSize.height
-            )
-            pill.alphaValue = 0
-            themeFrame.addSubview(pill)
-            shortcutHintOverlays.append(pill)
-        }
-
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.14
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            for overlay in self.shortcutHintOverlays {
-                overlay.animator().alphaValue = 1
-            }
-        }
-    }
-
-    private func hideToolbarShortcutHints() {
-        let overlays = shortcutHintOverlays
-        shortcutHintOverlays.removeAll()
-        guard !overlays.isEmpty else { return }
-
-        NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.14
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            for overlay in overlays {
-                overlay.animator().alphaValue = 0
-            }
-        }, completionHandler: {
-            Task { @MainActor in
-                for overlay in overlays {
-                    overlay.removeFromSuperview()
-                }
-            }
-        })
     }
 }
 
@@ -349,71 +102,5 @@ extension MainWindowController: NSWindowDelegate {
 
     func windowDidResignKey(_ notification: Notification) {
         onWindowAppearanceInvalidated?()
-    }
-
-    func windowDidResize(_ notification: Notification) {
-        updateTabsStripWidth()
-    }
-}
-
-// MARK: - NSToolbarDelegate
-
-extension MainWindowController: NSToolbarDelegate {
-
-    private static let defaultItemIds: [NSToolbarItem.Identifier] = [
-        ToolbarID.toggleSidebar,
-        ToolbarID.openProject,
-        ToolbarID.commandPalette,
-        ToolbarID.agentDashboard,
-        ToolbarID.tabsLeadingSpacer,
-        ToolbarID.tabs,
-        .flexibleSpace,
-        ToolbarID.files,
-        ToolbarID.git,
-        ToolbarID.splitRight,
-        ToolbarID.splitDown,
-        ToolbarID.settings,
-    ]
-
-    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        Self.defaultItemIds
-    }
-
-    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        Self.defaultItemIds
-    }
-
-    func toolbar(
-        _ toolbar: NSToolbar,
-        itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
-        willBeInsertedIntoToolbar flag: Bool
-    ) -> NSToolbarItem? {
-        if itemIdentifier == ToolbarID.tabsLeadingSpacer {
-            let item = NSToolbarItem(itemIdentifier: ToolbarID.tabsLeadingSpacer)
-            let spacer = NSView(frame: NSRect(x: 0, y: 0, width: 14, height: 24))
-            spacer.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([
-                spacer.widthAnchor.constraint(equalToConstant: 14),
-                spacer.heightAnchor.constraint(equalToConstant: 24),
-            ])
-            item.view = spacer
-            return item
-        }
-        if itemIdentifier == ToolbarID.tabs {
-            let item = NSToolbarItem(itemIdentifier: ToolbarID.tabs)
-            item.label = .localized("Tabs")
-            item.paletteLabel = .localized("Tabs")
-            item.visibilityPriority = .high
-            item.view = tabsView
-            tabsView?.onIntrinsicContentSizeChanged = { [weak self, weak toolbar] in
-                toolbar?.validateVisibleItems()
-                DispatchQueue.main.async { self?.updateTabsStripWidth() }
-            }
-            return item
-        }
-        guard let def = Self.toolbarItemDefs.first(where: { $0.id == itemIdentifier }) else {
-            return nil
-        }
-        return makeToolbarItem(for: def)
     }
 }
