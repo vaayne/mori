@@ -81,8 +81,9 @@ via `SemanticPalette.derive`, and fall back to system colors for palette-less th
 
 Existing examples: `HeaderBarView` (the center column's 38pt chrome header),
 `SidebarHostingController`, `TerminalAreaViewController`, `CompanionToolPaneController`
-(whose `applyTheme` also paints its Files/Git tab bar), `CommandPaletteController`,
-`AgentDashboardPanel`, `WorktreeCreationController`, and the `WindowThemedSurface` bridges
+(whose `applyTheme` also paints its Files/Git tab bar), `CommandPanelController` (the
+page-stack command panel hosting the palette and workspace-creation pages),
+`AgentDashboardPanel`, and the `WindowThemedSurface` bridges
 for the main and settings windows.
 
 ## Release
