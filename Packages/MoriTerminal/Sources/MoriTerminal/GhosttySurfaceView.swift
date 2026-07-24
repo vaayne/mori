@@ -72,6 +72,13 @@ public final class GhosttySurfaceView: NSView {
     /// Track mouse position for mouse events.
     private var trackingArea: NSTrackingArea?
 
+    /// Pasteboard types accepted when content is dropped on the terminal.
+    private static let dropTypes: Set<NSPasteboard.PasteboardType> = [
+        .string,
+        .fileURL,
+        .URL,
+    ]
+
     override init(frame: NSRect) {
         // Use a non-zero initial frame so ghostty's renderer can initialize.
         // Ghostty requires non-zero layer bounds to set up Metal rendering.
@@ -81,6 +88,7 @@ public final class GhosttySurfaceView: NSView {
         super.init(frame: initialFrame)
         wantsLayer = true
         layer?.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
+        registerForDraggedTypes(Array(Self.dropTypes))
     }
 
     @available(*, unavailable)
@@ -451,6 +459,35 @@ public final class GhosttySurfaceView: NSView {
         return ghostty_input_mods_e(rawValue: mods)
     }
 
+}
+
+// MARK: - Drag and Drop
+
+extension GhosttySurfaceView {
+    public override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        guard let types = sender.draggingPasteboard.types,
+              !Set(types).isDisjoint(with: Self.dropTypes) else {
+            return []
+        }
+
+        return .copy
+    }
+
+    public override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        guard let content = sender.draggingPasteboard.moriTerminalStringContents() else {
+            return false
+        }
+
+        // Defer insertion until AppKit finishes the drag session, matching
+        // Ghostty's native macOS surface implementation.
+        DispatchQueue.main.async { [weak self] in
+            self?.insertText(
+                content,
+                replacementRange: NSRange(location: 0, length: 0)
+            )
+        }
+        return true
+    }
 }
 
 // MARK: - NSTextInputClient

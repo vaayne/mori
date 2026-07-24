@@ -21,6 +21,7 @@ Mori 是给同时跑多个 git 分支的开发者做的 macOS 终端。不用再
 - **分支真正隔离** — 每个工作树有独立目录和 tmux 会话，`main` 和 `feat/auth` 同时跑互不影响
 - **本地和 SSH 都支持** — 本地目录或远程服务器都能连，Mac 原生界面
 - **GPU 渲染** — 用 Ghostty 的 libghostty 引擎，Metal 加速
+- **终端拖放** — 拖入文件、URL 或文本，自动插入适用于 shell 的路径和内容
 - **CLI + 适合 Agent** — `mori` 命令行通过 Unix socket 控制一切，脚本和 AI Agent 工作流都好用
 - **MoriRemote** — 不在 Mac 旁边时，用 iPhone/iPad 通过 SSH 连进来
 

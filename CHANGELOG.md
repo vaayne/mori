@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- **macOS**: Added Ghostty-compatible terminal drag-and-drop for local files, URLs, and text. Dropped files are inserted as shell-escaped absolute paths.
+
 ### Changed
 
 - **macOS**: Redesigned the command palette visual treatment with a blurred Ghostty-themed container, lighter search chrome, tighter rows, clearer type labels, and stronger keyboard selection focus.
