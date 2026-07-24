@@ -40,6 +40,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var keyMonitorActionMap: [String: () -> Void] = [:]
     private let tmuxConfigurationDebounceNanoseconds: UInt64 = 250_000_000
     private var companionToolState = CompanionToolPaneState()
+    private let themeDistributor = ThemeDistributor()
+    private var mainWindowSurface: WindowThemedSurface?
+    private var settingsWindowSurface: WindowThemedSurface?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -102,9 +105,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             }
         }
         self.terminalAreaController = terminalArea
+        themeDistributor.register(terminalArea)
 
         let companionTool = CompanionToolPaneController()
         self.companionToolController = companionTool
+        themeDistributor.register(companionTool)
         companionTool.onToolExited = { [weak self] in
             guard let self else { return }
             self.closeCompanionTool()
@@ -267,7 +272,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         )
 
         self.sidebarController = sidebarController
-        sidebarController.updateAppearance(themeInfo: themeInfo)
+        themeDistributor.register(sidebarController)
 
         let tabsView = TerminalTabsBarView(
             appState: state,
@@ -334,12 +339,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         windowController.onShowCreateWorktreePanel = { [weak self] in
             self?.showCreateWorktreePanel()
         }
-        windowController.onWindowAppearanceInvalidated = { [weak self, weak terminalArea, weak windowController] in
+        windowController.onWindowAppearanceInvalidated = { [weak self, weak terminalArea] in
             guard let self,
-                  let adapter = terminalArea?.terminalHost as? GhosttyAdapter,
-                  let window = windowController?.window else { return }
-            adapter.syncWorkspaceWindowAppearance(window)
-            self.refreshGhosttyThemeBackgrounds(themeInfo: adapter.themeInfo)
+                  let adapter = terminalArea?.terminalHost as? GhosttyAdapter else { return }
+            // Key-window and full-screen changes alter window transparency/blur and
+            // glass tint, so re-apply the current theme to repaint those surfaces.
+            self.themeDistributor.broadcast(adapter.themeInfo)
         }
 
         // Track system dark/light changes so split themes (theme = light:…,dark:…)
@@ -353,11 +358,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         windowController.contentViewController = splitVC
         windowController.showWindow(nil)
-        if let adapter = terminalArea.terminalHost as? GhosttyAdapter,
-           let window = windowController.window {
-            adapter.syncWorkspaceWindowAppearance(window)
+        if let adapter = terminalArea.terminalHost as? GhosttyAdapter {
+            let surface = WindowThemedSurface { [weak windowController, weak adapter] _ in
+                guard let window = windowController?.window, let adapter else { return }
+                adapter.syncWorkspaceWindowAppearance(window)
+            }
+            mainWindowSurface = surface
+            themeDistributor.register(surface)
         }
-        companionTool.updateAppearance(themeInfo: themeInfo, isKeyWindow: windowController.window?.isKeyWindow ?? true)
+        // Paint every eager surface at once; lazily-created panels theme themselves on register.
+        themeDistributor.broadcast(themeInfo)
         // Restore saved frame after all layout is complete
         windowController.restoreSavedFrame()
         NSApp.activate(ignoringOtherApps: true)
@@ -767,17 +777,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             }
 
             worktreeCreationController = controller
+            themeDistributor.register(controller)
         }
 
         let controller = worktreeCreationController!
 
-        let themeInfo = terminalAreaController?.themeInfo ?? .fallback
         controller.show(
             projects: state.projects,
             selectedProjectId: projectId,
             repoPath: project.repoRootPath,
-            existingWorktreeBranches: existingWorktreeBranches(for: projectId, in: state),
-            themeInfo: themeInfo
+            existingWorktreeBranches: existingWorktreeBranches(for: projectId, in: state)
         )
     }
 
@@ -815,7 +824,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         let themes = GhosttyConfigFile.availableThemes()
         let ghosttyDefaults = GhosttyConfigFile.defaultKeybinds()
-        let themeInfo = terminalAreaController?.themeInfo ?? .fallback
 
         let store = self.keyBindingStore!
         let settingsView = SettingsWindowContent(
@@ -904,18 +912,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         let hostingController = NSHostingController(rootView: settingsView)
         hostingController.view.wantsLayer = true
-        hostingController.view.layer?.backgroundColor = themeInfo.background.cgColor
         let window = NSWindow(contentViewController: hostingController)
         window.title = .localized("Settings")
         window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        if let adapter = terminalAreaController?.terminalHost as? GhosttyAdapter {
-            adapter.syncThemedWindowAppearance(window)
-        } else {
-            window.backgroundColor = themeInfo.background
-            window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        let adapter = terminalAreaController?.terminalHost as? GhosttyAdapter
+        let surface = WindowThemedSurface { [weak window, weak adapter] themeInfo in
+            guard let window else { return }
+            if let adapter {
+                adapter.syncThemedWindowAppearance(window)
+            } else {
+                window.backgroundColor = themeInfo.background
+                window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+            }
+            window.contentViewController?.view.wantsLayer = true
+            window.contentViewController?.view.layer?.backgroundColor = themeInfo.background.cgColor
         }
+        settingsWindowSurface = surface
+        themeDistributor.register(surface)
         window.center()
         window.setFrameAutosaveName("MoriSettings")
 
@@ -995,20 +1010,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         propagateGhosttyTheme(adapter: adapter)
     }
 
-    /// Sync the current ghostty theme colors to the window, sidebar, panels, and tmux.
+    /// Sync the current ghostty theme colors to every registered surface, then tmux.
+    ///
+    /// tmux stays outside the broadcast registry on purpose: it must re-apply only on
+    /// genuine theme changes, not on the window key/full-screen changes that also drive
+    /// a repaint (`onWindowAppearanceInvalidated`), so folding it in would thrash the
+    /// tmux config on every focus flip.
     private func propagateGhosttyTheme(adapter: GhosttyAdapter) {
-        let themeInfo = adapter.themeInfo
-        if let window = mainWindowController?.window {
-            adapter.syncWorkspaceWindowAppearance(window)
-        }
-        refreshGhosttyThemeBackgrounds(themeInfo: themeInfo)
-
-        refreshSettingsWindowAppearance(adapter: adapter, themeInfo: themeInfo)
-
-        // Update agent dashboard appearance
-        agentDashboardPanel?.updateAppearance(themeInfo: themeInfo)
-
-        // Sync to tmux
+        themeDistributor.broadcast(adapter.themeInfo)
         if let manager = workspaceManager {
             scheduleTmuxConfigurationApply(
                 immediate: false,
@@ -1043,20 +1052,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
-    private func refreshGhosttyThemeBackgrounds(themeInfo: GhosttyThemeInfo) {
-        let isKeyWindow = mainWindowController?.window?.isKeyWindow ?? true
-        sidebarController?.updateAppearance(themeInfo: themeInfo)
-        terminalAreaController?.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
-        companionToolController?.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
-        commandPaletteController?.updateAppearance(themeInfo: themeInfo)
-    }
-
-    private func refreshSettingsWindowAppearance(adapter: GhosttyAdapter, themeInfo: GhosttyThemeInfo) {
-        guard let settingsWindow = settingsWindowController?.window else { return }
-        adapter.syncThemedWindowAppearance(settingsWindow)
-        settingsWindow.contentViewController?.view.wantsLayer = true
-        settingsWindow.contentViewController?.view.layer?.backgroundColor = themeInfo.background.cgColor
-    }
 
     // MARK: - Proxy
 
@@ -1435,9 +1430,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             )
         }
         agentDashboardPanel?.toggle()
-        // Sync appearance with Ghostty terminal theme
-        let themeInfo = terminalAreaController?.themeInfo ?? .fallback
-        agentDashboardPanel?.updateAppearance(themeInfo: themeInfo)
+        // Register after toggle so the panel's window exists; the distributor paints it
+        // with the current theme now and on every later change.
+        if let panel = agentDashboardPanel {
+            themeDistributor.register(panel)
+        }
     }
 
     private func toggleCompanionTool(_ tool: CompanionTool) {
@@ -1606,10 +1603,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     private func setupCommandPalette(appState: AppState, manager: WorkspaceManager) {
         let palette = CommandPaletteController(appState: appState)
-        if let themeInfo = terminalAreaController?.themeInfo {
-            palette.updateAppearance(themeInfo: themeInfo)
-        }
         self.commandPaletteController = palette
+        themeDistributor.register(palette)
 
         // Wire item selection to WorkspaceManager navigation and actions
         palette.onSelectItem = { [weak self, weak manager] item in

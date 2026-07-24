@@ -5,7 +5,9 @@ import MoriTerminal
 /// NSWindowController managing a floating command palette panel.
 /// Contains an NSTextField for search and an NSTableView for results.
 @MainActor
-final class CommandPaletteController: NSWindowController {
+final class CommandPaletteController: NSWindowController, ThemedSurface {
+
+    var themedWindow: NSWindow? { nil }
 
     // MARK: - Callbacks
 
@@ -117,7 +119,7 @@ final class CommandPaletteController: NSWindowController {
     func show(mode requestedMode: Mode = .allItems) {
         mode = requestedMode
         searchField.placeholderString = requestedMode.placeholder
-        updateAppearance(themeInfo: themeInfo)
+        applyTheme(themeInfo)
         presentPalette()
     }
 
@@ -125,7 +127,7 @@ final class CommandPaletteController: NSWindowController {
         window?.orderOut(nil)
     }
 
-    func updateAppearance(themeInfo: GhosttyThemeInfo) {
+    func applyTheme(_ themeInfo: GhosttyThemeInfo) {
         self.themeInfo = themeInfo
         let appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
         window?.appearance = appearance

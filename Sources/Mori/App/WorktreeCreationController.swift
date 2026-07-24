@@ -68,7 +68,9 @@ private enum PickerRow {
 /// The panel has a fixed frame; the list scrolls rather than resizing the
 /// window.
 @MainActor
-final class WorktreeCreationController: NSWindowController {
+final class WorktreeCreationController: NSWindowController, ThemedSurface {
+
+    var themedWindow: NSWindow? { nil }
 
     // MARK: - Constants
 
@@ -225,15 +227,13 @@ final class WorktreeCreationController: NSWindowController {
         projects: [Project],
         selectedProjectId: UUID,
         repoPath: String,
-        existingWorktreeBranches: Set<String>,
-        themeInfo: GhosttyThemeInfo
+        existingWorktreeBranches: Set<String>
     ) {
         self.projects = projects
         self.selectedProjectId = selectedProjectId
         self.repoPath = repoPath
         self.excludedBranches = existingWorktreeBranches
 
-        applyTheme(themeInfo)
         resetForShow()
 
         positionPanel()
@@ -271,7 +271,7 @@ final class WorktreeCreationController: NSWindowController {
 
     // MARK: - Theme
 
-    private func applyTheme(_ themeInfo: GhosttyThemeInfo) {
+    func applyTheme(_ themeInfo: GhosttyThemeInfo) {
         guard let panel = window as? NSPanel else { return }
         panel.backgroundColor = themeInfo.background
         panel.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
