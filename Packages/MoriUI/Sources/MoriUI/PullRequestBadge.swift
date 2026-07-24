@@ -16,21 +16,23 @@ struct PullRequestBadge: View {
             // renders Int with locale grouping ("#16,838").
             Text(verbatim: "#\(info.number)")
                 .font(MoriTokens.Font.monoSmall)
-                .foregroundStyle(stateColor)
+                .foregroundStyle(numberColor)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
             checksGlyph
         }
         .padding(.horizontal, 5)
         .padding(.vertical, 1)
-        .background(Capsule().fill(stateColor.opacity(0.14)))
+        .background(Capsule().fill(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle)))
         .help("\(stateLabel) · #\(info.number) — \(String.localized("right-click the worktree to open"))\n\(info.url)")
     }
 
+    /// Passing is the quiet state and stays gray; only failing/pending checks
+    /// earn a color, mirroring the sidebar's attention-only color rule.
     @ViewBuilder
     private var checksGlyph: some View {
         switch info.checks {
-        case .passing: glyph("checkmark", MoriTokens.Color.success)
+        case .passing: glyph("checkmark", MoriTokens.Color.muted)
         case .failing: glyph("xmark", MoriTokens.Color.error)
         case .pending: glyph("clock", MoriTokens.Color.warning)
         case .none: EmptyView()
@@ -77,13 +79,12 @@ struct PullRequestBadge: View {
         }
     }
 
-    private var stateColor: Color {
+    /// Gray unless the PR needs the user (closed / changes requested); the full
+    /// state stays one hover away in the tooltip.
+    private var numberColor: Color {
         switch displayState {
-        case .draft: return MoriTokens.Color.muted
-        case .merged: return MoriTokens.Color.active
         case .closed, .changesRequested: return MoriTokens.Color.error
-        case .open, .approved: return MoriTokens.Color.success
-        case .reviewRequired: return MoriTokens.Color.info
+        case .draft, .merged, .open, .approved, .reviewRequired: return MoriTokens.Color.muted
         }
     }
 }
