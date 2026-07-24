@@ -1529,6 +1529,9 @@ runPullRequestInfoTests()
 // GitHubWorkItem
 runGitHubWorkItemTests()
 
+// WorkspacePickerModel
+runWorkspacePickerModelTests()
+
 printResults()
 
 if failCount > 0 {

@@ -60,6 +60,12 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
     private let tintView = PanelTintView()
     private let searchIconView = NSImageView()
     private let separatorView = PanelSeparatorView()
+    private let breadcrumbButton = NSButton()
+    private let footerContainer = NSView()
+    private let footerSeparator = PanelSeparatorView()
+    private var footerHeightConstraint: NSLayoutConstraint?
+    private var iconLeadingDefault: NSLayoutConstraint?
+    private var iconLeadingAfterBreadcrumb: NSLayoutConstraint?
 
     // MARK: - Layout Constants
 
@@ -85,6 +91,7 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
         static let trailingFontSize: CGFloat = 11
         static let searchFontSize: CGFloat = 16
         static let panelTopOffset: CGFloat = 80
+        static let footerHeight: CGFloat = 44
     }
 
     // MARK: - Init
@@ -171,6 +178,7 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
         }
         currentPage?.deactivate()
         currentPage?.onRowsChanged = nil
+        currentPage?.onConfirmRequested = nil
         pageStack.append(page)
         bindCurrentPage()
         page.activate()
@@ -186,13 +194,60 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
             guard let self, let page, self.currentPage === page else { return }
             self.reloadRows(preserveSelection: true)
         }
+        page.onConfirmRequested = { [weak self, weak page] in
+            guard let self, let page, self.currentPage === page else { return }
+            self.confirmSelection()
+        }
         searchField.placeholderString = page.placeholder
+        updateBreadcrumb(for: page)
+        installFooter(for: page)
         applyTheme(themeInfo)
+    }
+
+    private func updateBreadcrumb(for page: CommandPanelPage) {
+        if let title = page.breadcrumbTitle {
+            breadcrumbButton.isHidden = false
+            breadcrumbButton.attributedTitle = NSAttributedString(
+                string: "‹ \(title)",
+                attributes: [
+                    .foregroundColor: themeInfo.foreground.withAlphaComponent(0.7),
+                    .font: NSFont.systemFont(ofSize: 13, weight: .medium),
+                ]
+            )
+            iconLeadingDefault?.isActive = false
+            iconLeadingAfterBreadcrumb?.isActive = true
+        } else {
+            breadcrumbButton.isHidden = true
+            iconLeadingAfterBreadcrumb?.isActive = false
+            iconLeadingDefault?.isActive = true
+        }
+    }
+
+    private func installFooter(for page: CommandPanelPage) {
+        for subview in footerContainer.subviews where subview !== footerSeparator {
+            subview.removeFromSuperview()
+        }
+        if let footer = page.footerView {
+            footer.translatesAutoresizingMaskIntoConstraints = false
+            footerContainer.addSubview(footer)
+            NSLayoutConstraint.activate([
+                footer.topAnchor.constraint(equalTo: footerSeparator.bottomAnchor),
+                footer.leadingAnchor.constraint(equalTo: footerContainer.leadingAnchor),
+                footer.trailingAnchor.constraint(equalTo: footerContainer.trailingAnchor),
+                footer.bottomAnchor.constraint(equalTo: footerContainer.bottomAnchor),
+            ])
+            footerContainer.isHidden = false
+            footerHeightConstraint?.constant = Layout.footerHeight
+        } else {
+            footerContainer.isHidden = true
+            footerHeightConstraint?.constant = 0
+        }
     }
 
     private func tearDownStack() {
         for page in pageStack {
             page.onRowsChanged = nil
+            page.onConfirmRequested = nil
             page.deactivate()
         }
         pageStack = []
@@ -209,6 +264,7 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
     private func pop() {
         guard pageStack.count > 1, let leaving = pageStack.popLast() else { return }
         leaving.onRowsChanged = nil
+        leaving.onConfirmRequested = nil
         leaving.deactivate()
         bindCurrentPage()
         currentPage?.activate()
@@ -333,6 +389,11 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
         tableView.backgroundColor = .clear
         scrollView.backgroundColor = .clear
         scrollView.scrollerStyle = .overlay
+        footerSeparator.themeInfo = themeInfo
+        footerContainer.appearance = appearance
+        if let page = currentPage {
+            updateBreadcrumb(for: page)
+        }
         tableView.reloadData()
     }
 
@@ -352,6 +413,16 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
 
         tintView.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(tintView)
+
+        breadcrumbButton.translatesAutoresizingMaskIntoConstraints = false
+        breadcrumbButton.isBordered = false
+        breadcrumbButton.setButtonType(.momentaryChange)
+        breadcrumbButton.target = self
+        breadcrumbButton.action = #selector(breadcrumbClicked)
+        breadcrumbButton.isHidden = true
+        breadcrumbButton.setContentHuggingPriority(.required, for: .horizontal)
+        breadcrumbButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        containerView.addSubview(breadcrumbButton)
 
         searchIconView.translatesAutoresizingMaskIntoConstraints = false
         searchIconView.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)
@@ -389,6 +460,41 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
         scrollView.borderType = .noBorder
         containerView.addSubview(scrollView)
 
+        footerContainer.translatesAutoresizingMaskIntoConstraints = false
+        footerContainer.isHidden = true
+        containerView.addSubview(footerContainer)
+
+        footerSeparator.translatesAutoresizingMaskIntoConstraints = false
+        footerContainer.addSubview(footerSeparator)
+
+        let footerHeight = footerContainer.heightAnchor.constraint(equalToConstant: 0)
+        footerHeightConstraint = footerHeight
+
+        let iconDefault = searchIconView.leadingAnchor.constraint(
+            equalTo: containerView.leadingAnchor, constant: Layout.searchIconLeading
+        )
+        let iconAfterBreadcrumb = searchIconView.leadingAnchor.constraint(
+            equalTo: breadcrumbButton.trailingAnchor, constant: 10
+        )
+        iconLeadingDefault = iconDefault
+        iconLeadingAfterBreadcrumb = iconAfterBreadcrumb
+        iconDefault.isActive = true
+
+        NSLayoutConstraint.activate([
+            breadcrumbButton.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 16),
+            breadcrumbButton.centerYAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.searchAreaHeight / 2),
+
+            footerHeight,
+            footerContainer.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            footerContainer.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            footerContainer.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+
+            footerSeparator.topAnchor.constraint(equalTo: footerContainer.topAnchor),
+            footerSeparator.leadingAnchor.constraint(equalTo: footerContainer.leadingAnchor),
+            footerSeparator.trailingAnchor.constraint(equalTo: footerContainer.trailingAnchor),
+            footerSeparator.heightAnchor.constraint(equalToConstant: Layout.separatorHeight),
+        ])
+
         NSLayoutConstraint.activate([
             blurView.topAnchor.constraint(equalTo: containerView.topAnchor),
             blurView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
@@ -417,7 +523,7 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
             scrollView.topAnchor.constraint(equalTo: separatorView.bottomAnchor, constant: Layout.listTopPadding),
             scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.listHorizontalInset),
             scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Layout.listHorizontalInset),
-            scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -Layout.listBottomInset),
+            scrollView.bottomAnchor.constraint(equalTo: footerContainer.topAnchor, constant: -Layout.listBottomInset),
         ])
     }
 
@@ -432,8 +538,9 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
         case .fixed(let height):
             listHeight = height
         }
+        let footerHeight: CGFloat = currentPage?.footerView == nil ? 0 : Layout.footerHeight
         return Layout.searchAreaHeight + Layout.separatorHeight + Layout.listTopPadding
-            + listHeight + Layout.listBottomInset
+            + listHeight + Layout.listBottomInset + footerHeight
     }
 
     /// Row count weighted by height so section headers don't inflate the panel.
@@ -471,6 +578,10 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
 
     // MARK: - Actions
 
+    @objc private func breadcrumbClicked() {
+        handleEscape()
+    }
+
     @objc private func tableDoubleClicked() {
         let row = tableView.clickedRow
         guard row >= 0, row < rows.count, rows[row].isSelectable else { return }
@@ -484,7 +595,17 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
 extension CommandPanelController: NSTextFieldDelegate {
 
     func controlTextDidChange(_ notification: Notification) {
-        _ = currentQuery(from: notification)
+        let typed = currentQuery(from: notification)
+        // Pages may rewrite the query (pasted GitHub URL → "#123"); pushing the
+        // rewrite back into the field keeps what the user sees and what filters
+        // the list identical.
+        if let rewritten = currentPage?.normalizeQuery(typed), rewritten != typed {
+            searchField.stringValue = rewritten
+            if let editor = searchField.currentEditor() {
+                editor.string = rewritten
+                editor.selectedRange = NSRange(location: rewritten.count, length: 0)
+            }
+        }
         reloadRows(preserveSelection: false)
     }
 

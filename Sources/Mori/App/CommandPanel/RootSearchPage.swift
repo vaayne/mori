@@ -10,6 +10,12 @@ final class RootSearchPage: CommandPanelPage {
     /// Called after the panel dismisses. The caller routes to WorkspaceManager.
     var onSelectItem: ((CommandPaletteItem) -> Void)?
 
+    /// Supplies a configured workspace-creation page for the "Create Worktree"
+    /// action so it pushes in place instead of dismissing. nil (e.g. no project
+    /// selected) falls back to the dismiss-then-route path, which surfaces the
+    /// existing alert.
+    var makeWorkspacePage: (() -> CommandPanelPage?)?
+
     private let dataSource: CommandPaletteDataSource
     private var resultsById: [String: CommandPaletteItem] = [:]
     private var orderedIds: [String] = []
@@ -23,6 +29,7 @@ final class RootSearchPage: CommandPanelPage {
     var placeholder: String { .localized("Search projects, worktrees, windows, actions...") }
     var heightPolicy: CommandPanelHeightPolicy { .fitsRows(maxVisibleRows: 10) }
     var onRowsChanged: (() -> Void)?
+    var onConfirmRequested: (() -> Void)?
 
     func rows(for query: String) -> [CommandPanelRow] {
         let items = dataSource.search(query: query)
@@ -49,6 +56,10 @@ final class RootSearchPage: CommandPanelPage {
 
     func confirm(rowId: String) -> CommandPanelConfirmResult {
         guard let item = resultsById[rowId] else { return .stay }
+        if case .action(let actionId, _, _) = item, actionId == "action.create-worktree",
+           let workspacePage = makeWorkspacePage?() {
+            return .push(workspacePage)
+        }
         return .dismiss(then: { [onSelectItem] in
             onSelectItem?(item)
         })

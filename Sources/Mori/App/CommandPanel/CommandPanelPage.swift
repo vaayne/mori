@@ -86,6 +86,18 @@ protocol CommandPanelPage: AnyObject {
     /// The container ignores notifications from non-current pages.
     var onRowsChanged: (() -> Void)? { get set }
 
+    /// Set by the container when the page becomes current. Footer controls
+    /// call it to confirm the currently selected row (e.g. the action hint).
+    var onConfirmRequested: (() -> Void)? { get set }
+
+    /// Page-owned accessory bar hosted by the container below the list
+    /// (project switcher, base branch, confirm hint). nil = no footer.
+    var footerView: NSView? { get }
+
+    /// Rewrite the typed query before filtering (e.g. a pasted GitHub URL
+    /// becomes `#123`). Return nil to leave the text unchanged.
+    func normalizeQuery(_ query: String) -> String?
+
     /// Current page came on screen: reset transient state, start fetches.
     func activate()
     /// Page left the screen (popped, dismissed, or hidden): invalidate
@@ -112,8 +124,10 @@ protocol CommandPanelPage: AnyObject {
 
 extension CommandPanelPage {
     var breadcrumbTitle: String? { nil }
+    var footerView: NSView? { nil }
     func activate() {}
     func deactivate() {}
     func selectionDidChange(rowId: String?) {}
     func handleTab() -> Bool { false }
+    func normalizeQuery(_ query: String) -> String? { nil }
 }
