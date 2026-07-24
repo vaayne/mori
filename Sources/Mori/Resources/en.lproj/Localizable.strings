@@ -71,6 +71,13 @@
 "Git" = "Git";
 "Open Files Companion Pane (⌘E)" = "Open Files Companion Pane (⌘E)";
 "Open Git Companion Pane (⌘G)" = "Open Git Companion Pane (⌘G)";
+"Open Files Pane" = "Open Files Pane";
+"Open Git Pane" = "Open Git Pane";
+"Open the Files companion pane" = "Open the Files companion pane";
+"Open the Git companion pane" = "Open the Git companion pane";
+"Show or hide the projects sidebar" = "Show or hide the projects sidebar";
+"Split the current pane to the right" = "Split the current pane to the right";
+"Split the current pane downward" = "Split the current pane downward";
 "Files (⌘E)" = "Files (⌘E)";
 "Git (⌘G)" = "Git (⌘G)";
 "Split the current pane to the right" = "Split the current pane to the right";

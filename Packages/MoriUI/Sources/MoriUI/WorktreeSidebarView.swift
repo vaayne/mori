@@ -26,6 +26,7 @@ public struct WorktreeSidebarView: View {
     private let onCloseWindow: ((String) -> Void)?
     private let onToggleCollapse: ((UUID) -> Void)?
     private let onAddProject: (() -> Void)?
+    private let onShowAgentDashboard: (() -> Void)?
     private let onOpenSettings: (() -> Void)?
     private let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     private let onSendKeys: ((String, String) -> Void)?
@@ -46,9 +47,9 @@ public struct WorktreeSidebarView: View {
     @State private var expandedWorktrees: Set<UUID> = []
 
     public init(
-        projects: [Project] = [], selectedProjectId: UUID? = nil, worktrees: [Worktree], windows: [RuntimeWindow], panes: [RuntimePane] = [], selectedWorktreeId: UUID?, selectedWindowId: String?, shortcutHintsVisible: Bool = false, onSelectProject: ((UUID) -> Void)? = nil, onSelectWorktree: @escaping (UUID) -> Void, onSelectWindow: @escaping (String) -> Void, onSelectPane: ((String) -> Void)? = nil, onShowCreatePanel: (() -> Void)? = nil, onRemoveWorktree: ((UUID) -> Void)? = nil, onRemoveProject: ((UUID) -> Void)? = nil, onImportWorktrees: ((UUID) -> Void)? = nil, onEditRemoteProject: ((UUID) -> Void)? = nil, onCloseWindow: ((String) -> Void)? = nil, onToggleCollapse: ((UUID) -> Void)? = nil, onAddProject: (() -> Void)? = nil, onOpenSettings: (() -> Void)? = nil, onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil, onSendKeys: ((String, String) -> Void)? = nil, onUpdateProject: ((Project) -> Void)? = nil, onReorderProjects: (([UUID]) -> Void)? = nil, pullRequests: [UUID: PullRequestInfo] = [:]
+        projects: [Project] = [], selectedProjectId: UUID? = nil, worktrees: [Worktree], windows: [RuntimeWindow], panes: [RuntimePane] = [], selectedWorktreeId: UUID?, selectedWindowId: String?, shortcutHintsVisible: Bool = false, onSelectProject: ((UUID) -> Void)? = nil, onSelectWorktree: @escaping (UUID) -> Void, onSelectWindow: @escaping (String) -> Void, onSelectPane: ((String) -> Void)? = nil, onShowCreatePanel: (() -> Void)? = nil, onRemoveWorktree: ((UUID) -> Void)? = nil, onRemoveProject: ((UUID) -> Void)? = nil, onImportWorktrees: ((UUID) -> Void)? = nil, onEditRemoteProject: ((UUID) -> Void)? = nil, onCloseWindow: ((String) -> Void)? = nil, onToggleCollapse: ((UUID) -> Void)? = nil, onAddProject: (() -> Void)? = nil, onShowAgentDashboard: (() -> Void)? = nil, onOpenSettings: (() -> Void)? = nil, onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil, onSendKeys: ((String, String) -> Void)? = nil, onUpdateProject: ((Project) -> Void)? = nil, onReorderProjects: (([UUID]) -> Void)? = nil, pullRequests: [UUID: PullRequestInfo] = [:]
     ) {
-        self.projects = projects; self.selectedProjectId = selectedProjectId; self.worktrees = worktrees; self.windows = windows; self.panes = panes; self.selectedWorktreeId = selectedWorktreeId; self.selectedWindowId = selectedWindowId; self.onSelectProject = onSelectProject; self.onSelectWorktree = onSelectWorktree; self.onSelectWindow = onSelectWindow; self.onSelectPane = onSelectPane; self.onShowCreatePanel = onShowCreatePanel; self.onRemoveWorktree = onRemoveWorktree; self.onRemoveProject = onRemoveProject; self.onImportWorktrees = onImportWorktrees; self.onEditRemoteProject = onEditRemoteProject; self.onCloseWindow = onCloseWindow; self.onToggleCollapse = onToggleCollapse; self.onAddProject = onAddProject; self.onOpenSettings = onOpenSettings; self.onRequestPaneOutput = onRequestPaneOutput; self.onSendKeys = onSendKeys; self.onUpdateProject = onUpdateProject; self.onReorderProjects = onReorderProjects; self.pullRequests = pullRequests; self.shortcutHintsVisible = shortcutHintsVisible
+        self.projects = projects; self.selectedProjectId = selectedProjectId; self.worktrees = worktrees; self.windows = windows; self.panes = panes; self.selectedWorktreeId = selectedWorktreeId; self.selectedWindowId = selectedWindowId; self.onSelectProject = onSelectProject; self.onSelectWorktree = onSelectWorktree; self.onSelectWindow = onSelectWindow; self.onSelectPane = onSelectPane; self.onShowCreatePanel = onShowCreatePanel; self.onRemoveWorktree = onRemoveWorktree; self.onRemoveProject = onRemoveProject; self.onImportWorktrees = onImportWorktrees; self.onEditRemoteProject = onEditRemoteProject; self.onCloseWindow = onCloseWindow; self.onToggleCollapse = onToggleCollapse; self.onAddProject = onAddProject; self.onShowAgentDashboard = onShowAgentDashboard; self.onOpenSettings = onOpenSettings; self.onRequestPaneOutput = onRequestPaneOutput; self.onSendKeys = onSendKeys; self.onUpdateProject = onUpdateProject; self.onReorderProjects = onReorderProjects; self.pullRequests = pullRequests; self.shortcutHintsVisible = shortcutHintsVisible
     }
 
     public var body: some View {
@@ -462,39 +463,38 @@ public struct WorktreeSidebarView: View {
         return projectOrder.flatMap { visibleWorktrees(for: $0) }
     }
 
+    /// Persistent app-level actions: Open Project leading, Agent Dashboard + Settings
+    /// trailing. Quiet secondary icons that brighten on hover; tooltips carry the
+    /// keyboard shortcut so the palette/menu bindings stay discoverable.
     private var sidebarFooter: some View {
         HStack(spacing: MoriTokens.Spacing.md) {
             if let onAddProject {
-                Button(action: onAddProject) {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "folder.badge.plus").font(.system(size: 12, weight: .medium))
-                            Text("Add repository").font(.system(size: 12.5)).lineLimit(1)
-                        }
-                        Image(systemName: "folder.badge.plus").font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundStyle(MoriTokens.Color.muted)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(String.localized("Add Project"))
+                SidebarFooterButton(
+                    systemName: "plus",
+                    title: String.localized("Open Project"),
+                    tooltip: String.localized("Open Project (⇧⌘O)"),
+                    action: onAddProject
+                )
             }
             Spacer()
+            if let onShowAgentDashboard {
+                SidebarFooterButton(
+                    systemName: "square.grid.2x2",
+                    tooltip: String.localized("Agent Dashboard (⇧⌘A)"),
+                    action: onShowAgentDashboard
+                )
+            }
             if let onOpenSettings {
-                Button(action: onOpenSettings) {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 13))
-                        .foregroundStyle(MoriTokens.Color.muted)
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(String.localized("Settings"))
+                SidebarFooterButton(
+                    systemName: "gearshape",
+                    tooltip: String.localized("Settings (⌘,)"),
+                    action: onOpenSettings
+                )
             }
         }
+        .frame(height: 34)
         .padding(.horizontal, MoriTokens.Spacing.xl)
-        .padding(.vertical, MoriTokens.Spacing.lg)
-        .overlay(alignment: .top) { Rectangle().fill(Color.primary.opacity(MoriTokens.Opacity.subtle)).frame(height: 1) }
+        .overlay(alignment: .top) { Rectangle().fill(Color.primary.opacity(0.06)).frame(height: 1) }
     }
 
     // MARK: - Derived data
@@ -545,6 +545,44 @@ public struct WorktreeSidebarView: View {
         if let onImportWorktrees, project.gitCommonDir != project.repoRootPath { Button { onImportWorktrees(project.id) } label: { Label("Import Existing Worktrees", systemImage: "square.and.arrow.down") } }
         if case .ssh = (project.location ?? .local), let onEditRemoteProject { Button { onEditRemoteProject(project.id) } label: { Label("Update Remote Credentials…", systemImage: "key") } }
         if let onRemoveProject { Divider(); Button(role: .destructive) { onRemoveProject(project.id) } label: { Label("Remove Project…", systemImage: "trash") } }
+    }
+}
+
+/// A quiet footer control: secondary-tinted, brightening to primary on hover.
+/// Icon-only by default; pass `title` for the leading labelled button (which
+/// collapses to its glyph when the sidebar is too narrow for the text).
+private struct SidebarFooterButton: View {
+    let systemName: String
+    var title: String?
+    let tooltip: String
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Group {
+                if let title {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 6) {
+                            Image(systemName: systemName).font(.system(size: 12, weight: .medium))
+                            Text(verbatim: title).font(.system(size: 12.5)).lineLimit(1)
+                        }
+                        Image(systemName: systemName).font(.system(size: 12, weight: .medium))
+                    }
+                    .frame(minWidth: 24, minHeight: 24, alignment: .leading)
+                } else {
+                    Image(systemName: systemName)
+                        .font(.system(size: 13))
+                        .frame(width: 24, height: 24)
+                }
+            }
+            .foregroundStyle(hovering ? Color.primary : MoriTokens.Color.muted)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(tooltip)
     }
 }
 

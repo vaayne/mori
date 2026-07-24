@@ -71,6 +71,13 @@
 "Git" = "Git";
 "Open Files Companion Pane (⌘E)" = "打开文件工具面板 (⌘E)";
 "Open Git Companion Pane (⌘G)" = "打开 Git 工具面板 (⌘G)";
+"Open Files Pane" = "打开文件面板";
+"Open Git Pane" = "打开 Git 面板";
+"Open the Files companion pane" = "打开文件工具面板";
+"Open the Git companion pane" = "打开 Git 工具面板";
+"Show or hide the projects sidebar" = "显示或隐藏项目侧栏";
+"Split the current pane to the right" = "向右拆分当前面板";
+"Split the current pane downward" = "向下拆分当前面板";
 "Files (⌘E)" = "文件 (⌘E)";
 "Git (⌘G)" = "Git (⌘G)";
 "Split the current pane to the right" = "向右拆分当前窗格";

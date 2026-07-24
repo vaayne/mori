@@ -210,6 +210,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             onAddProject: { [weak self] in
                 self?.showAddProjectPanel()
             },
+            onShowAgentDashboard: { [weak self] in
+                self?.toggleAgentDashboardAction()
+            },
             onOpenSettings: { [weak self] in
                 self?.showSettingsWindow()
             },
@@ -1748,6 +1751,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         case "action.check-for-updates":
             updateController?.checkForUpdates()
+
+        case "action.toggle-sidebar":
+            toggleSidebarMenuAction()
+        case "action.open-files-pane":
+            toggleCompanionTool(.yazi)
+        case "action.open-git-pane":
+            toggleCompanionTool(.lazygit)
+        case "action.split-right":
+            splitRightMenuAction()
+        case "action.split-down":
+            splitDownMenuAction()
 
         default:
             // Handle tool install hints — copy install command to clipboard
