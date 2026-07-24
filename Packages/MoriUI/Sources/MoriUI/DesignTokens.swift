@@ -7,12 +7,17 @@ public enum MoriTokens {
     // MARK: - Colors
 
     public enum Color {
-        public static let error = SwiftUI.Color.red
-        public static let success = SwiftUI.Color.green
-        public static let warning = SwiftUI.Color.orange
-        public static let attention = SwiftUI.Color.yellow
-        public static let info = SwiftUI.Color.blue
-        public static let active = SwiftUI.Color.accentColor
+        // The six semantic slots forward to `MoriTheme.shared` so a theme-derived
+        // palette can override them at runtime. Reads happen inside SwiftUI `body`
+        // (MainActor), so Observation re-renders those views when a slot changes;
+        // the `@MainActor` annotation matches the store's isolation. `inactive`
+        // and `muted` are theme-independent system colors and stay static `let`.
+        @MainActor public static var error: SwiftUI.Color { MoriTheme.shared.error }
+        @MainActor public static var success: SwiftUI.Color { MoriTheme.shared.success }
+        @MainActor public static var warning: SwiftUI.Color { MoriTheme.shared.warning }
+        @MainActor public static var attention: SwiftUI.Color { MoriTheme.shared.attention }
+        @MainActor public static var info: SwiftUI.Color { MoriTheme.shared.info }
+        @MainActor public static var active: SwiftUI.Color { MoriTheme.shared.active }
         public static let inactive = SwiftUI.Color.gray
         public static let muted = SwiftUI.Color.secondary
     }

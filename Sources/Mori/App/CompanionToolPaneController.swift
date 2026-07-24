@@ -51,7 +51,9 @@ struct CompanionToolLaunchContext {
 }
 
 @MainActor
-final class CompanionToolPaneController: NSViewController {
+final class CompanionToolPaneController: NSViewController, ThemedSurface {
+    var themedWindow: NSWindow? { nil }
+
     private let headerView = NSView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let dividerView = NSView()
@@ -147,13 +149,13 @@ final class CompanionToolPaneController: NSViewController {
         return responder.isDescendant(of: view)
     }
 
-    func updateAppearance(themeInfo: GhosttyThemeInfo, isKeyWindow: Bool) {
+    func applyTheme(_ themeInfo: GhosttyThemeInfo) {
         view.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
         view.layer?.backgroundColor = themeInfo.effectiveBackground.cgColor
         headerView.layer?.backgroundColor = headerBackgroundColor(for: themeInfo).cgColor
         dividerView.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.45).cgColor
         titleLabel.textColor = .secondaryLabelColor
-        terminalController.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
+        terminalController.applyTheme(themeInfo)
     }
 
     private func headerBackgroundColor(for themeInfo: GhosttyThemeInfo) -> NSColor {

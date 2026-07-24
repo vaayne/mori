@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🎨 Design
 
+- **macOS**: Sidebar status colors (agent states, git indicators, PR badges, selection accent) now derive from your Ghostty theme's ANSI palette instead of fixed system colors, so Mori's chrome matches whatever theme the terminal wears — the selection accent is the same blue as tmux's active-pane border. Colors that would sink into the theme background are automatically nudged toward the foreground until they stay legible; themes without a palette keep the previous system colors.
 - **macOS**: The terminal now has comfortable default padding (16px horizontal, 12px vertical) instead of text rendering flush against the window edges. Set `window-padding-x` / `window-padding-y` in your own Ghostty config to override it.
 - **macOS**: Quieter sidebar. PR badges are now gray unless the PR needs you (closed or changes requested keep the red number; failing/pending checks keep their color, passing checks go gray). The selected row highlight is stronger, and workspace rows breathe a little more.
 

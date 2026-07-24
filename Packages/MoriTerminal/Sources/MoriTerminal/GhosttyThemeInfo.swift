@@ -49,7 +49,9 @@ public struct GhosttyThemeInfo: Sendable {
 
     public let background: NSColor
     public let foreground: NSColor
-    /// ANSI palette (16 standard colors, indices 0-15).
+    /// ANSI palette (16 standard colors, indices 0-15), or empty when the config
+    /// exposed no palette. Empty (not 16 grays) so downstream consumers can tell
+    /// "no palette" apart from a theme whose colors genuinely are gray.
     public let palette: [NSColor]
     public let isDark: Bool
     public let backgroundOpacity: Double
@@ -68,7 +70,7 @@ public struct GhosttyThemeInfo: Sendable {
     public static let fallback = GhosttyThemeInfo(
         background: .black,
         foreground: .white,
-        palette: (0..<16).map { _ in .gray },
+        palette: [],
         isDark: true,
         backgroundOpacity: 1,
         backgroundOpacityCells: false,
@@ -107,9 +109,8 @@ public struct GhosttyThemeInfo: Sendable {
                     }
                 }
             }
-        } else {
-            palette = (0..<16).map { _ in .gray }
         }
+        // Leave `palette` empty when the config had none — see the property doc.
 
         // Determine dark/light from background luminance
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
