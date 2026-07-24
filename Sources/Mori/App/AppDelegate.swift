@@ -41,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private let tmuxConfigurationDebounceNanoseconds: UInt64 = 250_000_000
     private var companionToolState = CompanionToolPaneState()
     private let themeDistributor = ThemeDistributor()
+    private let moriThemeBridge = MoriThemeBridge()
     private var mainWindowSurface: WindowThemedSurface?
     private var settingsWindowSurface: WindowThemedSurface?
 
@@ -105,6 +106,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             }
         }
         self.terminalAreaController = terminalArea
+        // The token store bridge registers first so MoriTokens' semantic colors
+        // are already theme-derived when the SwiftUI surfaces below first render.
+        themeDistributor.register(moriThemeBridge)
         themeDistributor.register(terminalArea)
 
         let companionTool = CompanionToolPaneController()

@@ -73,8 +73,11 @@ tmux is deliberately **not** a `ThemedSurface` — it re-applies only on real th
 (in `propagateGhosttyTheme`), never on the window key/full-screen repaints that also broadcast.
 
 SwiftUI views inside `NSHostingView` automatically inherit the window's `NSAppearance`,
-so semantic colors like `Color.primary`, `Color(nsColor: .controlBackgroundColor)`, and
-`MoriTokens.Color.*` adapt correctly — no manual dark/light branching needed in SwiftUI.
+so semantic colors like `Color.primary` and `Color(nsColor: .controlBackgroundColor)`
+adapt correctly — no manual dark/light branching needed in SwiftUI. The semantic slots
+on `MoriTokens.Color` (error/success/warning/attention/info/active) go further: they are
+derived from the theme's ANSI palette by `MoriThemeBridge` (a registered `ThemedSurface`)
+via `SemanticPalette.derive`, and fall back to system colors for palette-less themes.
 
 Existing examples: `SidebarHostingController`, `TerminalAreaViewController`,
 `CompanionToolPaneController`, `CommandPaletteController`, `AgentDashboardPanel`,

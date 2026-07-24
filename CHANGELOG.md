@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🎨 Design
+
+- **macOS**: Sidebar status colors (agent states, git indicators, PR badges, selection accent) now derive from your Ghostty theme's ANSI palette instead of fixed system colors, so Mori's chrome matches whatever theme the terminal wears — the selection accent is the same blue as tmux's active-pane border. Colors that would sink into the theme background are automatically nudged toward the foreground until they stay legible; themes without a palette keep the previous system colors.
+
 ## [0.6.1] - 2026-07-23
 
 ### 🎨 Design (workspace creation)
