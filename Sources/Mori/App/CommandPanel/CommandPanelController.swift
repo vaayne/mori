@@ -56,8 +56,6 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
     private let containerView = NSView()
-    private let blurView = PanelBlurView()
-    private let tintView = PanelTintView()
     private let searchIconView = NSImageView()
     private let separatorView = PanelSeparatorView()
     private let breadcrumbButton = NSButton()
@@ -72,15 +70,15 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
     enum Layout {
         static let panelWidth: CGFloat = 520
         static let cornerRadius: CGFloat = 12
-        static let searchAreaHeight: CGFloat = 48
-        static let searchIconSize: CGFloat = 15
-        static let searchIconLeading: CGFloat = 20
+        static let searchAreaHeight: CGFloat = 44
+        static let searchIconSize: CGFloat = 14
+        static let searchIconLeading: CGFloat = 18
         static let searchTextSpacing: CGFloat = 9
         static let separatorHeight: CGFloat = 0.5
-        static let listTopPadding: CGFloat = 4
+        static let listTopPadding: CGFloat = 6
         static let listHorizontalInset: CGFloat = 8
         static let listBottomInset: CGFloat = 8
-        static let itemRowHeight: CGFloat = 32
+        static let itemRowHeight: CGFloat = 30
         static let sectionHeaderRowHeight: CGFloat = 24
         static let cellIconSize: CGFloat = 16
         static let cellLeadingPadding: CGFloat = 12
@@ -89,7 +87,7 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
         static let titleFontSize: CGFloat = 13
         static let subtitleFontSize: CGFloat = 11
         static let trailingFontSize: CGFloat = 11
-        static let searchFontSize: CGFloat = 16
+        static let searchFontSize: CGFloat = 15
         static let panelTopOffset: CGFloat = 80
         static let footerHeight: CGFloat = 44
     }
@@ -123,6 +121,7 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
 
         panel.onEscape = { [weak self] in self?.handleEscape() }
         panel.onCommandReturn = { [weak self] in self?.confirmSelection() }
+        panel.delegate = self
         setupUI()
     }
 
@@ -207,11 +206,17 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
     private func updateBreadcrumb(for page: CommandPanelPage) {
         if let title = page.breadcrumbTitle {
             breadcrumbButton.isHidden = false
+            breadcrumbButton.wantsLayer = true
+            breadcrumbButton.layer?.cornerRadius = 5
+            breadcrumbButton.layer?.backgroundColor =
+                themeInfo.foreground.withAlphaComponent(0.09).cgColor
+            // Leading/trailing spaces stand in for content insets — NSButton
+            // has no padding API worth reaching for at this size.
             breadcrumbButton.attributedTitle = NSAttributedString(
-                string: "‹ \(title)",
+                string: "  ‹ \(title)  ",
                 attributes: [
-                    .foregroundColor: themeInfo.foreground.withAlphaComponent(0.7),
-                    .font: NSFont.systemFont(ofSize: 13, weight: .medium),
+                    .foregroundColor: themeInfo.foreground.withAlphaComponent(0.75),
+                    .font: NSFont.systemFont(ofSize: 12, weight: .medium),
                 ]
             )
             iconLeadingDefault?.isActive = false
@@ -373,7 +378,16 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
         let appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
         window?.appearance = appearance
         window?.backgroundColor = .clear
-        tintView.themeInfo = themeInfo
+        // List surface = theme background lifted slightly toward the
+        // foreground; the footer band stays on the raw background so it
+        // reads as a recessed strip.
+        let surface = themeInfo.background.blended(withFraction: 0.04, of: themeInfo.foreground)
+            ?? themeInfo.background
+        containerView.layer?.backgroundColor = surface.cgColor
+        containerView.layer?.borderColor = themeInfo.foreground
+            .withAlphaComponent(themeInfo.isDark ? 0.14 : 0.10).cgColor
+        footerContainer.layer?.backgroundColor = themeInfo.background.cgColor
+        window?.invalidateShadow()
         separatorView.themeInfo = themeInfo
         searchIconView.contentTintColor = themeInfo.foreground.withAlphaComponent(0.35)
         searchField.textColor = themeInfo.foreground
@@ -403,16 +417,16 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
         guard let panel = window else { return }
 
         containerView.translatesAutoresizingMaskIntoConstraints = false
+        // Fully opaque surface: behind-window translucency mixes desktop
+        // brightness into arbitrary theme backgrounds and reads as muddy gray,
+        // so the panel is a solid theme-derived color instead.
+        containerView.wantsLayer = true
+        containerView.layer?.cornerRadius = Layout.cornerRadius
+        containerView.layer?.masksToBounds = true
+        containerView.layer?.borderWidth = 1
         panel.contentView = containerView
 
-        blurView.translatesAutoresizingMaskIntoConstraints = false
-        blurView.blendingMode = .behindWindow
-        blurView.material = .popover
-        blurView.state = .active
-        containerView.addSubview(blurView)
-
-        tintView.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(tintView)
+        footerContainer.wantsLayer = true
 
         breadcrumbButton.translatesAutoresizingMaskIntoConstraints = false
         breadcrumbButton.isBordered = false
@@ -442,7 +456,17 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("rows"))
         column.width = Layout.panelWidth - Layout.listHorizontalInset * 2
+        // Track the clip width: with "always show scroll bars" a legacy
+        // scroller narrows the clip view, and a fixed column would leave cells
+        // wider than visible — hard-clipping the trailing text with no ellipsis.
+        column.resizingMask = .autoresizingMask
         tableView.addTableColumn(column)
+        tableView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        // The default .automatic style resolves to .inset (macOS 11+), which
+        // offsets row content by ~10pt and pushes fixed-width cells past the
+        // clip's right edge — hard-clipping the trailing text. We own all
+        // insets, so take the full width.
+        tableView.style = .fullWidth
         tableView.headerView = nil
         tableView.delegate = self
         tableView.dataSource = self
@@ -458,6 +482,10 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.borderType = .noBorder
+        // Transient palette: overlay scrollers regardless of the system
+        // "always show scroll bars" preference, like Spotlight.
+        scrollView.scrollerStyle = .overlay
+        scrollView.autohidesScrollers = true
         containerView.addSubview(scrollView)
 
         footerContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -496,17 +524,6 @@ final class CommandPanelController: NSWindowController, ThemedSurface {
         ])
 
         NSLayoutConstraint.activate([
-            blurView.topAnchor.constraint(equalTo: containerView.topAnchor),
-            blurView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            blurView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            blurView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
-
-            tintView.topAnchor.constraint(equalTo: containerView.topAnchor),
-            tintView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            tintView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            tintView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
-
-            searchIconView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Layout.searchIconLeading),
             searchIconView.centerYAnchor.constraint(equalTo: containerView.topAnchor, constant: Layout.searchAreaHeight / 2),
             searchIconView.widthAnchor.constraint(equalToConstant: Layout.searchIconSize),
             searchIconView.heightAnchor.constraint(equalToConstant: Layout.searchIconSize),
@@ -696,42 +713,21 @@ extension CommandPanelController: NSTableViewDataSource, NSTableViewDelegate {
     }
 }
 
+// MARK: - NSWindowDelegate
+
+extension CommandPanelController: NSWindowDelegate {
+    /// Transient palette: losing key focus (clicking the main window, another
+    /// app, …) dismisses the panel, like Spotlight. Otherwise it lingers
+    /// floating and unreachable — Esc goes to whichever window took focus.
+    func windowDidResignKey(_ notification: Notification) {
+        guard window?.isVisible == true else { return }
+        dismiss()
+    }
+}
+
 // MARK: - Chrome views
 
 private final class PanelSearchField: NSTextField {}
-
-private final class PanelBlurView: NSVisualEffectView {
-    override func layout() {
-        super.layout()
-        // The mask clips the blur to the rounded shape — without it the
-        // visual effect bleeds past the corners of the transparent window.
-        maskImage = NSImage.commandPanelRoundedMask(
-            size: bounds.size, radius: CommandPanelController.Layout.cornerRadius
-        )
-    }
-}
-
-private final class PanelTintView: NSView {
-    var themeInfo: GhosttyThemeInfo = .fallback {
-        didSet { needsDisplay = true }
-    }
-
-    override var wantsUpdateLayer: Bool { false }
-
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-        let inset = bounds.insetBy(dx: 0.5, dy: 0.5)
-        let radius = CommandPanelController.Layout.cornerRadius
-        let path = NSBezierPath(roundedRect: inset, xRadius: radius, yRadius: radius)
-        // Near-opaque over the blur: enough bleed-through for depth, no muddy
-        // gray mix in light themes.
-        themeInfo.background.withAlphaComponent(themeInfo.isDark ? 0.7 : 0.85).setFill()
-        path.fill()
-        themeInfo.foreground.withAlphaComponent(themeInfo.isDark ? 0.14 : 0.10).setStroke()
-        path.lineWidth = 1
-        path.stroke()
-    }
-}
 
 private final class PanelSeparatorView: NSView {
     var themeInfo: GhosttyThemeInfo = .fallback {
@@ -826,7 +822,7 @@ private final class PanelItemCellView: NSTableCellView {
 
         if let iconName = row.iconName {
             iconView.image = NSImage(systemSymbolName: iconName, accessibilityDescription: nil)
-            iconView.contentTintColor = fg.withAlphaComponent(isSelected ? 0.9 : 0.65)
+            iconView.contentTintColor = fg.withAlphaComponent(isSelected ? 0.85 : 0.55)
         } else {
             iconView.image = nil
         }
@@ -856,9 +852,9 @@ private final class PanelItemCellView: NSTableCellView {
     override func draw(_ dirtyRect: NSRect) {
         if isSelectedRow {
             let selectionRect = bounds.insetBy(dx: 0, dy: 2)
-            let path = NSBezierPath(roundedRect: selectionRect, xRadius: 8, yRadius: 8)
+            let path = NSBezierPath(roundedRect: selectionRect, xRadius: 6, yRadius: 6)
             let accent = NSColor.controlAccentColor.usingColorSpace(.sRGB) ?? .controlAccentColor
-            accent.withAlphaComponent(themeInfo.isDark ? 0.5 : 0.35).setFill()
+            accent.withAlphaComponent(themeInfo.isDark ? 0.25 : 0.3).setFill()
             path.fill()
         }
         super.draw(dirtyRect)
@@ -891,20 +887,13 @@ private final class PanelSectionHeaderCellView: NSTableCellView {
     }
 
     func configure(title: String, themeInfo: GhosttyThemeInfo) {
-        label.stringValue = title.uppercased()
-        label.textColor = themeInfo.foreground.withAlphaComponent(0.45)
-    }
-}
-
-private extension NSImage {
-    static func commandPanelRoundedMask(size: NSSize, radius: CGFloat) -> NSImage {
-        let image = NSImage(size: size)
-        image.lockFocus()
-        NSColor.black.setFill()
-        NSBezierPath(roundedRect: NSRect(origin: .zero, size: size), xRadius: radius, yRadius: radius).fill()
-        image.unlockFocus()
-        image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
-        image.resizingMode = .stretch
-        return image
+        label.attributedStringValue = NSAttributedString(
+            string: title.uppercased(),
+            attributes: [
+                .foregroundColor: themeInfo.foreground.withAlphaComponent(0.4),
+                .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
+                .kern: 0.6,
+            ]
+        )
     }
 }

@@ -88,7 +88,9 @@ final class WorkspaceCreationPage: CommandPanelPage {
 
     var placeholder: String { .localized("Branch name, or search branches, PRs, issues") }
     var breadcrumbTitle: String? { .localized("New Workspace") }
-    var heightPolicy: CommandPanelHeightPolicy { .fixed(300) }
+    // Row-aligned: section header 24 + 8 item rows of 30 — an unaligned
+    // height leaves a clipped sliver of the ninth row.
+    var heightPolicy: CommandPanelHeightPolicy { .fixed(264) }
     var footerView: NSView? { footer }
     var onRowsChanged: (() -> Void)?
     var onConfirmRequested: (() -> Void)?
@@ -278,6 +280,7 @@ final class WorkspaceCreationPage: CommandPanelPage {
     private func buildFooter() {
         projectPopup.translatesAutoresizingMaskIntoConstraints = false
         projectPopup.controlSize = .small
+        projectPopup.isBordered = false
         projectPopup.font = .systemFont(ofSize: 12)
         projectPopup.target = self
         projectPopup.action = #selector(projectChanged(_:))
@@ -294,6 +297,7 @@ final class WorkspaceCreationPage: CommandPanelPage {
 
         baseBranchPopup.translatesAutoresizingMaskIntoConstraints = false
         baseBranchPopup.controlSize = .small
+        baseBranchPopup.isBordered = false
         baseBranchPopup.font = .systemFont(ofSize: 12)
         (baseBranchPopup.cell as? NSPopUpButtonCell)?.lineBreakMode = .byTruncatingTail
         baseBranchPopup.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(250), for: .horizontal)

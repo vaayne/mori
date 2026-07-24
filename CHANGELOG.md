@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🎨 Design
 
 - **macOS**: Command Palette and the New Workspace panel are now one Command Panel — a single floating panel with shared material, rounded corners, search field, and list styling that follows your Ghostty theme. Picking **Create Worktree** in the palette switches to the workspace picker in place (with a "‹ New Workspace" breadcrumb; Esc goes back) instead of opening a separate dialog. The picker keeps all its behaviors — live filtering of branches/PRs/issues, `#123` and GitHub URL jumps, the conditional Base picker (now in a footer bar) — and your typed query now survives switching projects.
-- **macOS**: Command panel visual fixes: the light-theme material is no longer a muddy translucent gray, right-aligned type labels no longer truncate ("Projec"), and the selection highlight stays clearly visible while arrowing through results.
+- **macOS**: Command panel visual fixes: the panel is now a solid theme-derived surface (behind-window translucency used to mix desktop brightness into the theme background and read as muddy gray), right-aligned labels no longer clip at the panel edge, and the selection highlight is a quieter accent pill. The panel also dismisses when it loses focus, like Spotlight — no more unreachable floating panel that ignores Esc.
 
 ### 🐛 Bug Fixes
 
