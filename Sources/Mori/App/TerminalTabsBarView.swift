@@ -281,14 +281,12 @@ private final class TerminalTabControl: NSControl {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        // Quiet chrome: only the selected tab carries a fill, hover gets a hint,
-        // idle tabs are just dot + title.
-        let fillAlpha: CGFloat = selected ? 0.09 : (isHovered ? 0.04 : 0)
-        if fillAlpha > 0 {
-            let path = NSBezierPath(roundedRect: bounds, xRadius: MoriTokens.Radius.medium, yRadius: MoriTokens.Radius.medium)
-            NSColor.labelColor.withAlphaComponent(fillAlpha).setFill()
-            path.fill()
-        }
+        // Idle tabs keep a faint pill so they read as clickable, hover brightens it,
+        // and the selected tab stands clearly above both.
+        let fillAlpha: CGFloat = selected ? 0.11 : (isHovered ? 0.08 : 0.055)
+        let path = NSBezierPath(roundedRect: bounds, xRadius: MoriTokens.Radius.medium, yRadius: MoriTokens.Radius.medium)
+        NSColor.labelColor.withAlphaComponent(fillAlpha).setFill()
+        path.fill()
 
         drawDot()
         drawTitle()
