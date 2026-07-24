@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🎨 Design
+
+- **macOS**: The terminal now has comfortable default padding (16px horizontal, 12px vertical) instead of text rendering flush against the window edges. Set `window-padding-x` / `window-padding-y` in your own Ghostty config to override it.
+
 ## [0.6.1] - 2026-07-23
 
 ### 🎨 Design (workspace creation)
