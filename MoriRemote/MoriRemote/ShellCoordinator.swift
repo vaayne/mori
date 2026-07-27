@@ -365,19 +365,19 @@ final class ShellCoordinator {
         tmuxPollTask?.cancel()
         tmuxPollTask = Task { [weak self] in
             guard let self else { return }
-            guard await self.isCurrentConnection(generation) else { return }
+            guard self.isCurrentConnection(generation) else { return }
 
             // Give the attach a moment to settle, then resolve our client tty.
             try? await Task.sleep(nanoseconds: 1_500_000_000)
-            guard !Task.isCancelled, await self.isCurrentConnection(generation) else { return }
+            guard !Task.isCancelled, self.isCurrentConnection(generation) else { return }
             await self.resolveClientTTY(generation: generation)
-            guard !Task.isCancelled, await self.isCurrentConnection(generation) else { return }
+            guard !Task.isCancelled, self.isCurrentConnection(generation) else { return }
             await self.pollTmuxState(generation: generation)
 
             // Poll every 5 seconds using NoPTY exec channels
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
-                guard !Task.isCancelled, await self.isCurrentConnection(generation) else { return }
+                guard !Task.isCancelled, self.isCurrentConnection(generation) else { return }
                 await self.pollTmuxState(generation: generation)
             }
         }
@@ -595,7 +595,7 @@ final class ShellCoordinator {
     func refreshTmuxState() {
         let generation = connectionGeneration
         Task { [weak self] in
-            guard let self, await self.isCurrentConnection(generation) else { return }
+            guard let self, self.isCurrentConnection(generation) else { return }
             await self.pollTmuxState(generation: generation)
         }
     }
@@ -620,7 +620,7 @@ final class ShellCoordinator {
                 log.error("Tmux exec failed: \(error)")
             }
             try? await Task.sleep(nanoseconds: 300_000_000)
-            guard let self, await self.isCurrentConnection(generation) else { return }
+            guard let self, self.isCurrentConnection(generation) else { return }
             await self.pollTmuxState(generation: generation)
         }
     }
@@ -638,7 +638,7 @@ final class ShellCoordinator {
         sendInput(Data(sequence.utf8))
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 500_000_000)
-            guard let self, await self.isCurrentConnection(generation) else { return }
+            guard let self, self.isCurrentConnection(generation) else { return }
             await self.pollTmuxState(generation: generation)
         }
     }
