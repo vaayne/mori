@@ -136,10 +136,40 @@ struct WorkspaceView: View {
     let onDismiss: (() -> Void)?
     let onRefresh: () -> Void
 
+    @State private var filterQuery = ""
+
+    private var trimmedQuery: String {
+        filterQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Sessions matching the filter. A hit on the session name (which contains
+    /// project and branch) keeps the whole session; otherwise only matching
+    /// windows survive, and windowless sessions drop out.
+    private var filteredSessions: [TmuxSession] {
+        let query = trimmedQuery
+        guard !query.isEmpty else { return sessions }
+        return sessions.compactMap { session in
+            if Self.matches(query, session.name) { return session }
+            let windows = session.windows.filter { window in
+                Self.matches(query, window.workspaceTitle)
+                    || Self.matches(query, window.name)
+                    || Self.matches(query, window.path)
+            }
+            guard !windows.isEmpty else { return nil }
+            var filtered = session
+            filtered.windows = windows
+            return filtered
+        }
+    }
+
+    private static func matches(_ query: String, _ haystack: String) -> Bool {
+        haystack.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+    }
+
     private var projectGroups: [WorkspaceProjectGroup] {
         var order: [String] = []
         var map: [String: [TmuxSession]] = [:]
-        for session in sessions {
+        for session in filteredSessions {
             let project = Self.projectName(for: session.name)
             if map[project] == nil { order.append(project) }
             map[project, default: []].append(session)
@@ -163,6 +193,8 @@ struct WorkspaceView: View {
                 LazyVStack(alignment: .leading, spacing: 20) {
                     if sessions.isEmpty {
                         WorkspaceEmptyState(onNewSession: onNewSession)
+                    } else if projectGroups.isEmpty {
+                        WorkspaceNoMatchesState(query: trimmedQuery)
                     } else {
                         ForEach(projectGroups) { group in
                             WorkspaceProjectSection(
@@ -185,6 +217,11 @@ struct WorkspaceView: View {
                 .padding(.bottom, 28)
             }
             .refreshable { onRefresh() }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !sessions.isEmpty {
+                    WorkspaceFilterBar(text: $filterQuery)
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.sidebarBg)
@@ -575,6 +612,69 @@ struct AgentStatusChip: View {
 
     private var chipColor: Color {
         status?.color ?? Theme.textTertiary
+    }
+}
+
+/// Bottom-anchored quick filter, cmd+p style: thumb-reachable, rides above the
+/// keyboard via the safe-area inset.
+private struct WorkspaceFilterBar: View {
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+
+            TextField(String(localized: "Filter sessions"), text: $text)
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.textPrimary)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.done)
+
+            if !text.isEmpty {
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Theme.mutedSurface, in: RoundedRectangle(cornerRadius: Theme.rowRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.rowRadius)
+                .strokeBorder(Theme.cardBorder, lineWidth: 1)
+        )
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+        .background(Theme.sidebarBg)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Theme.divider).frame(height: 1)
+        }
+    }
+}
+
+private struct WorkspaceNoMatchesState: View {
+    let query: String
+
+    var body: some View {
+        VStack(alignment: .center, spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+
+            Text(String(localized: "No matches for “\(query)”"))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 34)
     }
 }
 

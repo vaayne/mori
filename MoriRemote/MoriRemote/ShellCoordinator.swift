@@ -527,25 +527,36 @@ final class ShellCoordinator {
         iosClientTTY.map { "-c '\($0)' " } ?? ""
     }
 
+    /// tmux args (joined after a switch with `\;`) that leave copy-mode on the
+    /// target pane. A pane scrolled into copy-mode stays there across window
+    /// switches, where stray digits hit the default `(repeat)` command-prompt
+    /// binding and swallow input — cancel it so the pane is typeable on
+    /// arrival. `copy-mode -q` (tmux 3.2+) is a no-op outside copy-mode; on
+    /// older tmux it errors harmlessly after the switch has already happened.
+    private func cancelCopyModeArgs(target: String) -> String {
+        "copy-mode -q -t '\(target)'"
+    }
+
     /// Switch to a specific tmux window by index in the given session.
     /// `switch-client -t 'session:index'` moves our client to that session AND
     /// selects the window in one step; the attached client repaints to it.
     func selectTmuxWindow(session: String, windowIndex: Int) {
         iosCurrentSession = session
-        runTmuxCommand(tmuxCmd("switch-client \(clientFlag)-t '\(session):\(windowIndex)'"))
+        let target = "\(session):\(windowIndex)"
+        runTmuxCommand(tmuxCmd("switch-client \(clientFlag)-t '\(target)' \\; \(cancelCopyModeArgs(target: target))"))
     }
 
     /// Switch to a different tmux session.
     func switchTmuxSession(_ sessionName: String) {
         iosCurrentSession = sessionName
-        runTmuxCommand(tmuxCmd("switch-client \(clientFlag)-t '\(sessionName)'"))
+        runTmuxCommand(tmuxCmd("switch-client \(clientFlag)-t '\(sessionName)' \\; \(cancelCopyModeArgs(target: sessionName))"))
     }
 
     /// Switch to a specific pane: move our client to the owning window, then
     /// select the pane (pane ids like `%5` are unique across the server).
     func selectTmuxPane(session: String, windowIndex: Int, paneId: String) {
         iosCurrentSession = session
-        runTmuxCommand(tmuxCmd("switch-client \(clientFlag)-t '\(session):\(windowIndex)' \\; select-pane -t '\(paneId)'"))
+        runTmuxCommand(tmuxCmd("switch-client \(clientFlag)-t '\(session):\(windowIndex)' \\; select-pane -t '\(paneId)' \\; \(cancelCopyModeArgs(target: paneId))"))
     }
 
     /// Close (kill) a tmux window.

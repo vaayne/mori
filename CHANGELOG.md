@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🎨 Design
+
+- **iOS (MoriRemote)**: The workspace sidebar gains a bottom quick-filter field (cmd+p style) — type to narrow projects, sessions, branches, and windows by name, title, or path. Matching a session keeps its whole group; otherwise only matching windows are shown. Thumb-reachable at the bottom edge, and it rides above the keyboard.
+- **iOS (MoriRemote)**: The keyboard-dismiss button is now pinned at the far left of the accessory key bar, outside the scrollable key row — it used to sit at the row's right end, forcing a swipe to the very end just to put the keyboard away.
+
+### 🐛 Bug Fixes
+
+- **iOS (MoriRemote)**: Switching to a tmux window no longer lands you in a stuck pane showing `(repeat) N` at the bottom. Panes that had been scrolled stay in tmux copy-mode across window switches, where digit keys hit tmux's default `(repeat)` command-prompt binding and swallow input; sidebar switches now cancel copy-mode on the target pane so it's immediately typeable.
+
 ## [0.6.3] - 2026-07-24
 
 ### 🎨 Design

@@ -64,6 +64,18 @@ final class KeyBarView: UIView {
     private func setup() {
         backgroundColor = barBg
 
+        // The dismiss-keyboard button lives outside the scroll view, pinned at
+        // the far left so it stays one tap away at any scroll position —
+        // previously it sat at the scrollable row's right end, forcing a swipe
+        // to the very end just to put the keyboard away.
+        let dismissButton = makeKeyboardDismissButton()
+        addSubview(dismissButton)
+
+        let dismissDivider = UIView()
+        dismissDivider.backgroundColor = dividerColor
+        dismissDivider.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(dismissDivider)
+
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.alwaysBounceHorizontal = true
         scrollView.delaysContentTouches = false
@@ -87,8 +99,16 @@ final class KeyBarView: UIView {
         addSubview(fadeView)
 
         NSLayoutConstraint.activate([
+            dismissButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+            dismissButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+
+            dismissDivider.leadingAnchor.constraint(equalTo: dismissButton.trailingAnchor, constant: 6),
+            dismissDivider.centerYAnchor.constraint(equalTo: centerYAnchor),
+            dismissDivider.widthAnchor.constraint(equalToConstant: 1),
+            dismissDivider.heightAnchor.constraint(equalToConstant: 20),
+
             scrollView.topAnchor.constraint(equalTo: topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: dismissDivider.trailingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
@@ -164,10 +184,6 @@ final class KeyBarView: UIView {
         stackView.addArrangedSubview(selectionButton)
         keyButtons.append(selectionButton)
         self.selectionButton = selectionButton
-
-        let keyboardButton = makeKeyboardDismissButton()
-        stackView.addArrangedSubview(keyboardButton)
-        keyButtons.append(keyboardButton)
     }
 
     private func makeDivider() -> UIView {
@@ -417,7 +433,6 @@ final class KeyBarView: UIView {
 
     private func makeKeyboardDismissButton() -> UIButton {
         let button = KeyBarButton()
-        configurePanScrolling(button)
         let config = UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
         button.setImage(UIImage(systemName: "keyboard.chevron.compact.down", withConfiguration: config), for: .normal)
         button.tintColor = textDim
