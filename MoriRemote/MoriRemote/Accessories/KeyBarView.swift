@@ -220,12 +220,11 @@ final class KeyBarView: UIView {
         button.layer.borderWidth = 1
         button.layer.borderColor = keyBorder.cgColor
         button.clipsToBounds = true
-        button.adjustsImageWhenHighlighted = false
 
         let isArrow = action.iconName != nil
         let minWidth: CGFloat = isArrow ? 28 : 34
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 7, bottom: 0, right: 7)
+        button.horizontalContentPadding = 7
         NSLayoutConstraint.activate([
             button.heightAnchor.constraint(equalToConstant: 30),
             button.widthAnchor.constraint(greaterThanOrEqualToConstant: minWidth),
@@ -233,7 +232,11 @@ final class KeyBarView: UIView {
 
         if let iconName = action.iconName {
             let config = UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
-            button.setImage(UIImage(systemName: iconName, withConfiguration: config), for: .normal)
+            let image = UIImage(systemName: iconName, withConfiguration: config)
+            button.setImage(image, for: .normal)
+            // Same image for .highlighted so UIKit doesn't dim the icon on
+            // touch (touchDown already applies the active style).
+            button.setImage(image, for: .highlighted)
             button.tintColor = textColor
         } else {
             button.setTitle(action.label, for: .normal)
@@ -376,7 +379,7 @@ final class KeyBarView: UIView {
         button.layer.borderWidth = 1
         button.layer.borderColor = tmuxBorder.cgColor
         button.clipsToBounds = true
-        button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 9, bottom: 0, right: 9)
+        button.horizontalContentPadding = 9
         button.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             button.heightAnchor.constraint(equalToConstant: 30),
@@ -452,7 +455,7 @@ final class KeyBarView: UIView {
 
     @objc private func keyboardDismissTapped() {
         UIDevice.current.playInputClick()
-        terminalView?.resignFirstResponder()
+        _ = terminalView?.resignFirstResponder()
     }
 
     private func dismissKeyboardForDeferredUITransition() {
@@ -579,6 +582,20 @@ extension KeyBarView: UIScrollViewDelegate {
 final class KeyBarButton: UIButton {
     var onHorizontalPan: ((CGFloat) -> Void)?
     var onPanBegan: ((UIButton) -> Void)?
+
+    /// Horizontal padding added around centered content, replacing the
+    /// deprecated `contentEdgeInsets` (these buttons never adopt
+    /// UIButtonConfiguration).
+    var horizontalContentPadding: CGFloat = 0 {
+        didSet { invalidateIntrinsicContentSize() }
+    }
+
+    override var intrinsicContentSize: CGSize {
+        var size = super.intrinsicContentSize
+        size.width += horizontalContentPadding * 2
+        return size
+    }
+
     private var beganPoint: CGPoint = .zero
     private let panThreshold: CGFloat = 6.0
     private var didCancelForPan = false

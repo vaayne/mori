@@ -165,16 +165,14 @@ final class ShellCoordinator {
                 do {
                     for try await chunk in channel.inbound {
                         guard let self else { return }
-                        guard await self.isCurrentConnection(generation) else { return }
-                        await MainActor.run {
-                            self.renderer?.feedBytes(chunk)
-                        }
+                        guard self.isCurrentConnection(generation) else { return }
+                        self.renderer?.feedBytes(chunk)
                     }
                 } catch {
                     log.error("Shell inbound error: \(error)")
                 }
                 guard let self, !Task.isCancelled else { return }
-                guard await self.isCurrentConnection(generation) else { return }
+                guard self.isCurrentConnection(generation) else { return }
                 await self.handleShellClosed(generation: generation)
             }
 
