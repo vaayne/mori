@@ -31,6 +31,11 @@ let package = Package(
                 .linkedLibrary("c++", .when(platforms: [.macOS])),
             ]
         ),
+        .executableTarget(
+            name: "MoriTerminalTests",
+            dependencies: ["MoriTerminal"],
+            path: "Tests/MoriTerminalTests"
+        ),
         .binaryTarget(
             name: "GhosttyKit",
             path: "../../Frameworks/GhosttyKit.xcframework"

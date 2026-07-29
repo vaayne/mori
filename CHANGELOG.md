@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- **macOS**: Added Ghostty-compatible terminal drag-and-drop for local files, URLs, and text. Dropped files are inserted as shell-escaped absolute paths.
+
 ### 🎨 Design
 
 - **iOS (MoriRemote)**: The workspace sidebar gains a bottom quick-filter field (cmd+p style) — type to narrow projects, sessions, branches, and windows by name, title, or path. Matching a session keeps its whole group; otherwise only matching windows are shown. Thumb-reachable at the bottom edge, and it rides above the keyboard.

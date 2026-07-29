@@ -21,6 +21,7 @@ Mori is a macOS terminal built for developers who work across multiple git branc
 - **True branch isolation** — each worktree gets its own directory and tmux session; run `main` and `feat/auth` side-by-side without interference
 - **Local + SSH** — connect local repos or remote servers; the native Mac UI works either way
 - **GPU-rendered terminal** — Ghostty's libghostty engine with Metal acceleration
+- **Terminal drag-and-drop** — drop files, URLs, or text to insert shell-ready paths and content
 - **CLI + agent-ready** — `mori` CLI exposes everything over a Unix socket; built for scripting and AI agent workflows
 - **MoriRemote** — iPhone/iPad companion for SSH/tmux access when away from your Mac
 
