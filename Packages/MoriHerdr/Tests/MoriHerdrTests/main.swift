@@ -332,6 +332,10 @@ testReportedStateMapsMoriVocabulary()
 testModelsIgnoreUnknownFields()
 testJSONValueRoundTrip()
 testUnreachableSocketFailsFast()
+testConfigRendersTheKeysHerdrActuallyAccepts()
+testConfigWriterOnlyRewritesOnChange()
+testEnvironmentBindsProcessesToMorisSession()
+runAsync { await testControllerReportsAMissingBinary() }
 
 do {
     let server = try HerdrTestServer()
@@ -353,6 +357,11 @@ do {
         await testInvalidSubscriptionIsReportedNotSwallowed(
             backend, HerdrSubscription(type: "pane.agent_status_changed"), "agent status without a pane"
         )
+    }
+
+    let herdrBinary = server.binaryPath
+    runAsync {
+        await testControllerStartsAndRestartsTheServer(herdrBinary)
     }
 
     server.stop()

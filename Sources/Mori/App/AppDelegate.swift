@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var keyMonitor: Any?
     private var sidebarController: SidebarHostingController?
     private var ipcServer: IPCServer?
+    private var herdrRuntime: HerdrRuntime?
     private var ipcHandler: IPCHandler?
     private var workspaceCreationPage: WorkspaceCreationPage?
     private let sidebarPaneOutputCache = PaneOutputCache()
@@ -420,8 +421,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Update window title from current project
         updateWindowTitle()
 
-        // Check tmux availability and start coordinated polling
+        // Bring up herdr, then check tmux and start coordinated polling.
+        // During the migration both are required: herdr owns the session tree, tmux still
+        // renders the terminal until the rendering swap lands.
         Task {
+            guard await self.startHerdr() else { return }
+
             let tmuxAvailable = await manager.checkTmuxAvailability()
             if !tmuxAvailable {
                 showTmuxMissingAlert()
@@ -483,6 +488,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         // Persist UI state before exit
         workspaceManager?.saveUIStateOnTerminate()
+
+        // Stop watching herdr. The server keeps running on purpose — quitting Mori must
+        // not kill the user's shells.
+        herdrRuntime?.shutdown()
 
         // Clean up terminal surfaces
         terminalAreaController?.removeAllSurfaces()
@@ -1639,6 +1648,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         case .toggleFullscreen:
             mainWindowController?.window?.toggleFullScreen(nil)
         }
+    }
+
+    // MARK: - Herdr
+
+    /// Brings up Mori's herdr server before anything needs it.
+    ///
+    /// Failure is fatal to startup for the same reason a missing tmux was: without a
+    /// multiplexer there are no terminals to show. The alert says exactly how to fix it.
+    private func startHerdr() async -> Bool {
+        guard let runtime = HerdrRuntime() else {
+            showHerdrMissingAlert()
+            return false
+        }
+        herdrRuntime = runtime
+        do {
+            let info = try await runtime.start()
+            print("[Mori] herdr \(info.version) (protocol \(info.protocol)) on \(runtime.environment.socketPath)")
+        } catch {
+            showHerdrUnavailableAlert(reason: "\(error)")
+            return false
+        }
+        runtime.observeServerState { state in
+            if case .restarting(let reason) = state {
+                print("[Mori] herdr server restarting: \(reason)")
+            }
+        }
+        return true
+    }
+
+    private func showHerdrMissingAlert() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = .localized("herdr not found")
+        alert.informativeText = .localized("Mori requires herdr to manage terminal sessions. Please install herdr and relaunch the app.\n\nInstall via Homebrew:\n  brew install herdr")
+        alert.addButton(withTitle: .localized("OK"))
+        alert.runModal()
+    }
+
+    private func showHerdrUnavailableAlert(reason: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = .localized("herdr server could not start")
+        alert.informativeText = .localized("Mori could not start its herdr server.") + "\n\n" + reason
+        alert.addButton(withTitle: .localized("OK"))
+        alert.runModal()
     }
 
     // MARK: - Tmux Missing Alert (Task 5.3)

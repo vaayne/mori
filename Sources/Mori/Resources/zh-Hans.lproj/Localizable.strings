@@ -151,6 +151,10 @@
 "Window (%@)" = "窗口(%@)";
 "Worktree" = "工作树";
 "Zoom" = "缩放";
+"herdr not found" = "未找到 herdr";
+"Mori requires herdr to manage terminal sessions. Please install herdr and relaunch the app.\n\nInstall via Homebrew:\n  brew install herdr" = "Mori 需要 herdr 来管理终端会话。请安装 herdr 后重新启动应用。\n\n通过 Homebrew 安装：\n  brew install herdr";
+"herdr server could not start" = "herdr 服务未能启动";
+"Mori could not start its herdr server." = "Mori 无法启动它的 herdr 服务。";
 "tmux not found" = "未找到 tmux";
 "tmux session \"%@\" was not found on the remote host." = "远端主机上未找到 tmux 会话"%@"。";
 "tmux session \"%@\" is already attached to another workspace. Choose a different session or create a new one." = "tmux 会话"%@"已绑定到另一个工作区。请选择其他会话或创建新会话。";

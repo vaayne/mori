@@ -10,14 +10,14 @@ final class HerdrTestServer {
     let session: String
     let socketPath: String
     let configPath: String
-    private let binary: String
+    let binaryPath: String
     private let process = Process()
 
     init() throws {
         session = "mori-test-\(ProcessInfo.processInfo.processIdentifier)"
         socketPath = HerdrSocketPath.resolve(session: session)
         configPath = NSTemporaryDirectory() + "herdr-test-\(ProcessInfo.processInfo.processIdentifier)/config.toml"
-        binary = try Self.locateBinary()
+        binaryPath = try Self.locateBinary()
     }
 
     /// Where `herdr` lives. mise installs it outside the default PATH for non-login shells,
@@ -63,7 +63,7 @@ final class HerdrTestServer {
         )
         try "".write(toFile: configPath, atomically: true, encoding: .utf8)
 
-        process.executableURL = URL(fileURLWithPath: binary)
+        process.executableURL = URL(fileURLWithPath: binaryPath)
         process.arguments = ["server"]
         process.environment = environment
         let log = Pipe()
@@ -85,7 +85,7 @@ final class HerdrTestServer {
 
     func stop() {
         let stopper = Process()
-        stopper.executableURL = URL(fileURLWithPath: binary)
+        stopper.executableURL = URL(fileURLWithPath: binaryPath)
         stopper.arguments = ["server", "stop"]
         stopper.environment = environment
         stopper.standardOutput = Pipe()

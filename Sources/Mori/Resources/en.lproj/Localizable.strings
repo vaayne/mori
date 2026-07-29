@@ -151,6 +151,10 @@
 "Window (%@)" = "Window (%@)";
 "Worktree" = "Worktree";
 "Zoom" = "Zoom";
+"herdr not found" = "herdr not found";
+"Mori requires herdr to manage terminal sessions. Please install herdr and relaunch the app.\n\nInstall via Homebrew:\n  brew install herdr" = "Mori requires herdr to manage terminal sessions. Please install herdr and relaunch the app.\n\nInstall via Homebrew:\n  brew install herdr";
+"herdr server could not start" = "herdr server could not start";
+"Mori could not start its herdr server." = "Mori could not start its herdr server.";
 "tmux not found" = "tmux not found";
 "tmux session \"%@\" was not found on the remote host." = "tmux session \"%@\" was not found on the remote host.";
 "tmux session \"%@\" is already attached to another workspace. Choose a different session or create a new one." = "tmux session \"%@\" is already attached to another workspace. Choose a different session or create a new one.";
