@@ -94,6 +94,11 @@ final class TerminalAreaViewController: NSViewController, ThemedSurface {
     private var isAutoReconnecting = false
     var tmuxBinaryPath: String = TmuxCommandRunner.preferredBinaryPath() ?? "tmux"
 
+    /// The shell command that launches herdr's client for Mori's session, set once the
+    /// server is up. Local terminals render through this; SSH endpoints still use tmux
+    /// until remote endpoints move over.
+    var herdrClientCommand: String?
+
     /// Callback invoked when the user clicks the empty-state button.
     /// If a worktree is selected (dead session), this should recreate the session.
     /// If no worktree exists, this should open the add-project panel.
@@ -217,21 +222,31 @@ final class TerminalAreaViewController: NSViewController, ThemedSurface {
 
     // MARK: - Public API
 
-    /// Attach to a tmux session. Creates or reuses a cached terminal surface.
+    /// Show the terminal for a worktree, creating or reusing a cached surface.
+    ///
+    /// Local endpoints share one surface holding herdr's client — the caller has already
+    /// focused the right workspace on the server, so there is nothing to swap. SSH endpoints
+    /// still get one tmux surface per session until remote endpoints move to herdr.
     /// - Parameters:
-    ///   - sessionName: The tmux session name (e.g., "mori/main")
+    ///   - sessionName: Mori's session identity (e.g., "mori/main"), also the herdr label
     ///   - workingDirectory: The worktree path for the terminal's CWD
     ///   - location: Local or SSH remote endpoint.
     func attachToSession(sessionName: String, workingDirectory: String, location: WorkspaceLocation = .local) {
         let sessionKey = sessionIdentityKey(sessionName: sessionName, location: location)
         let escaped = shellEscape(sessionName)
-        let escapedTmux = shellEscape(tmuxBinaryPath)
 
         switch location {
         case .local:
-            let escapedCwd = shellEscape(workingDirectory)
-            let command = "\(localEnvironmentExports())\(escapedTmux) new-session -A -s \(escaped) -c \(escapedCwd)"
-            attachSurface(identity: sessionKey, command: command, workingDirectory: workingDirectory)
+            // Local terminals are herdr's now: one surface per endpoint, holding herdr's
+            // client, with worktree switching done by `workspace.focus` on the server rather
+            // than by swapping surfaces. `herdrClientCommand` is nil only in the window
+            // between the app starting and herdr coming up.
+            guard let herdrClientCommand else { return }
+            attachSurface(
+                identity: location.endpointKey,
+                command: "\(localEnvironmentExports())\(herdrClientCommand)",
+                workingDirectory: workingDirectory
+            )
         case .ssh(let ssh):
             let termProgram = ProcessInfo.processInfo.environment["TERM_PROGRAM"] ?? "ghostty"
             let remoteCwd = shellEscape(workingDirectory)

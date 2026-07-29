@@ -57,6 +57,36 @@ final class HerdrRuntime {
         return info
     }
 
+    /// The shell command that runs herdr's client for Mori's session.
+    ///
+    /// Mori hosts the *full* client rather than `herdr terminal attach`: only the foreground
+    /// client gets mouse reporting and kitty graphics, and a direct-attach client is never
+    /// the foreground one. The chrome that comes with it is turned off in `HerdrConfig`.
+    var clientCommand: String {
+        (environment.shellExports.map { $0 + ";" } + ["exec \(shellQuoted(binaryPath))"]).joined(separator: " ")
+    }
+
+    /// Makes the worktree's workspace the focused one, creating it the first time.
+    ///
+    /// This is how selecting a worktree works now: one surface per endpoint, and switching
+    /// is a `workspace.focus` on the server rather than swapping terminal surfaces. herdr
+    /// addresses workspaces by opaque id, so Mori's `<project>/<branch>` identity lives in
+    /// the label and is resolved on every switch.
+    @discardableResult
+    func revealWorkspace(label: String, cwd: String) async throws -> HerdrWorkspace {
+        if let existing = try await backend.workspace(labeled: label) {
+            if !existing.focused {
+                try await backend.focusWorkspace(id: existing.workspaceID)
+            }
+            return existing
+        }
+        return try await backend.createWorkspace(cwd: cwd, label: label, focus: true).workspace
+    }
+
+    private func shellQuoted(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: #"'\''"#) + "'"
+    }
+
     /// Runs `body` whenever the server's health changes, so the terminal surface can reattach
     /// after a restart.
     func observeServerState(_ body: @escaping @MainActor (HerdrServerState) -> Void) {

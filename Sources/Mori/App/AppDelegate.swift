@@ -367,13 +367,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         update.startUpdater()
         windowController.addUpdateAccessory(viewModel: update.viewModel)
 
-        // Wire terminal switch: when worktree selection changes, attach terminal
-        manager.onTerminalSwitch = { [weak terminalArea] sessionName, workingDirectory, location in
-            terminalArea?.attachToSession(
-                sessionName: sessionName,
-                workingDirectory: workingDirectory,
-                location: location
-            )
+        // Wire terminal switch: when worktree selection changes, show its terminal.
+        //
+        // Local worktrees share one surface per endpoint; switching is a `workspace.focus`
+        // on the herdr server, not a surface swap. The focus lands before the attach so a
+        // surface being created for the first time already opens on the right workspace.
+        manager.onTerminalSwitch = { [weak self, weak terminalArea] sessionName, workingDirectory, location in
+            guard case .local = location, let runtime = self?.herdrRuntime else {
+                terminalArea?.attachToSession(
+                    sessionName: sessionName,
+                    workingDirectory: workingDirectory,
+                    location: location
+                )
+                return
+            }
+            Task { @MainActor in
+                do {
+                    try await runtime.revealWorkspace(label: sessionName, cwd: workingDirectory)
+                } catch {
+                    print("[Mori] could not reveal herdr workspace \(sessionName): \(error)")
+                }
+                terminalArea?.attachToSession(
+                    sessionName: sessionName,
+                    workingDirectory: workingDirectory,
+                    location: location
+                )
+            }
         }
 
         // Wire terminal detach: when session is killed, show empty state
@@ -1665,6 +1684,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         do {
             let info = try await runtime.start()
             print("[Mori] herdr \(info.version) (protocol \(info.protocol)) on \(runtime.environment.socketPath)")
+            terminalAreaController?.herdrClientCommand = runtime.clientCommand
         } catch {
             showHerdrUnavailableAlert(reason: "\(error)")
             return false
