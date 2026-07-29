@@ -2,10 +2,10 @@ import SwiftUI
 import AppKit
 import MoriCore
 
-/// Conductor-style sidebar: full-width repo sections separated by hairlines,
-/// each expanding into a "+ New workspace" row and two-line workspace rows
-/// (branch + diff badge, then worktree name · status + ⌘N). A bottom bar holds
-/// "Add repository" and settings.
+/// Conductor-style sidebar: full-width repo sections separated by hairlines.
+/// Each header carries hover-revealed new-workspace / overflow accessories and
+/// expands into two-line workspace rows (branch + diff badge, then worktree
+/// name · status + ⌘N). A bottom bar holds "Add repository" and settings.
 public struct WorktreeSidebarView: View {
     private let projects: [Project]
     private let selectedProjectId: UUID?
@@ -26,6 +26,7 @@ public struct WorktreeSidebarView: View {
     private let onCloseWindow: ((String) -> Void)?
     private let onToggleCollapse: ((UUID) -> Void)?
     private let onAddProject: (() -> Void)?
+    private let onShowAgentDashboard: (() -> Void)?
     private let onOpenSettings: (() -> Void)?
     private let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     private let onSendKeys: ((String, String) -> Void)?
@@ -46,9 +47,9 @@ public struct WorktreeSidebarView: View {
     @State private var expandedWorktrees: Set<UUID> = []
 
     public init(
-        projects: [Project] = [], selectedProjectId: UUID? = nil, worktrees: [Worktree], windows: [RuntimeWindow], panes: [RuntimePane] = [], selectedWorktreeId: UUID?, selectedWindowId: String?, shortcutHintsVisible: Bool = false, onSelectProject: ((UUID) -> Void)? = nil, onSelectWorktree: @escaping (UUID) -> Void, onSelectWindow: @escaping (String) -> Void, onSelectPane: ((String) -> Void)? = nil, onShowCreatePanel: (() -> Void)? = nil, onRemoveWorktree: ((UUID) -> Void)? = nil, onRemoveProject: ((UUID) -> Void)? = nil, onImportWorktrees: ((UUID) -> Void)? = nil, onEditRemoteProject: ((UUID) -> Void)? = nil, onCloseWindow: ((String) -> Void)? = nil, onToggleCollapse: ((UUID) -> Void)? = nil, onAddProject: (() -> Void)? = nil, onOpenSettings: (() -> Void)? = nil, onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil, onSendKeys: ((String, String) -> Void)? = nil, onUpdateProject: ((Project) -> Void)? = nil, onReorderProjects: (([UUID]) -> Void)? = nil, pullRequests: [UUID: PullRequestInfo] = [:]
+        projects: [Project] = [], selectedProjectId: UUID? = nil, worktrees: [Worktree], windows: [RuntimeWindow], panes: [RuntimePane] = [], selectedWorktreeId: UUID?, selectedWindowId: String?, shortcutHintsVisible: Bool = false, onSelectProject: ((UUID) -> Void)? = nil, onSelectWorktree: @escaping (UUID) -> Void, onSelectWindow: @escaping (String) -> Void, onSelectPane: ((String) -> Void)? = nil, onShowCreatePanel: (() -> Void)? = nil, onRemoveWorktree: ((UUID) -> Void)? = nil, onRemoveProject: ((UUID) -> Void)? = nil, onImportWorktrees: ((UUID) -> Void)? = nil, onEditRemoteProject: ((UUID) -> Void)? = nil, onCloseWindow: ((String) -> Void)? = nil, onToggleCollapse: ((UUID) -> Void)? = nil, onAddProject: (() -> Void)? = nil, onShowAgentDashboard: (() -> Void)? = nil, onOpenSettings: (() -> Void)? = nil, onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil, onSendKeys: ((String, String) -> Void)? = nil, onUpdateProject: ((Project) -> Void)? = nil, onReorderProjects: (([UUID]) -> Void)? = nil, pullRequests: [UUID: PullRequestInfo] = [:]
     ) {
-        self.projects = projects; self.selectedProjectId = selectedProjectId; self.worktrees = worktrees; self.windows = windows; self.panes = panes; self.selectedWorktreeId = selectedWorktreeId; self.selectedWindowId = selectedWindowId; self.onSelectProject = onSelectProject; self.onSelectWorktree = onSelectWorktree; self.onSelectWindow = onSelectWindow; self.onSelectPane = onSelectPane; self.onShowCreatePanel = onShowCreatePanel; self.onRemoveWorktree = onRemoveWorktree; self.onRemoveProject = onRemoveProject; self.onImportWorktrees = onImportWorktrees; self.onEditRemoteProject = onEditRemoteProject; self.onCloseWindow = onCloseWindow; self.onToggleCollapse = onToggleCollapse; self.onAddProject = onAddProject; self.onOpenSettings = onOpenSettings; self.onRequestPaneOutput = onRequestPaneOutput; self.onSendKeys = onSendKeys; self.onUpdateProject = onUpdateProject; self.onReorderProjects = onReorderProjects; self.pullRequests = pullRequests; self.shortcutHintsVisible = shortcutHintsVisible
+        self.projects = projects; self.selectedProjectId = selectedProjectId; self.worktrees = worktrees; self.windows = windows; self.panes = panes; self.selectedWorktreeId = selectedWorktreeId; self.selectedWindowId = selectedWindowId; self.onSelectProject = onSelectProject; self.onSelectWorktree = onSelectWorktree; self.onSelectWindow = onSelectWindow; self.onSelectPane = onSelectPane; self.onShowCreatePanel = onShowCreatePanel; self.onRemoveWorktree = onRemoveWorktree; self.onRemoveProject = onRemoveProject; self.onImportWorktrees = onImportWorktrees; self.onEditRemoteProject = onEditRemoteProject; self.onCloseWindow = onCloseWindow; self.onToggleCollapse = onToggleCollapse; self.onAddProject = onAddProject; self.onShowAgentDashboard = onShowAgentDashboard; self.onOpenSettings = onOpenSettings; self.onRequestPaneOutput = onRequestPaneOutput; self.onSendKeys = onSendKeys; self.onUpdateProject = onUpdateProject; self.onReorderProjects = onReorderProjects; self.pullRequests = pullRequests; self.shortcutHintsVisible = shortcutHintsVisible
     }
 
     public var body: some View {
@@ -117,7 +118,7 @@ public struct WorktreeSidebarView: View {
         .buttonStyle(.plain)
         .background(
             RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
-                .fill(selected ? Color.primary.opacity(MoriTokens.Opacity.subtle) : Color.clear)
+                .fill(selected ? Color.primary.opacity(MoriTokens.Opacity.light) : Color.clear)
         )
         .padding(.horizontal, MoriTokens.Spacing.md)
         .padding(.top, MoriTokens.Spacing.sm)
@@ -133,7 +134,6 @@ public struct WorktreeSidebarView: View {
             }
             projectHeader(project)
             if !project.isCollapsed {
-                newWorkspaceRow(project)
                 worktreesGroup(project)
                     .padding(.bottom, MoriTokens.Spacing.md)
             }
@@ -145,10 +145,16 @@ public struct WorktreeSidebarView: View {
         .contextMenu { projectActions(project) }
     }
 
-    /// Repo name with a trailing chevron, Conductor-style. Tap toggles the
-    /// section open/closed; an aggregate dot flags attention while collapsed.
+    /// Repo name with hover-revealed accessories (new workspace, overflow menu)
+    /// and a trailing chevron, Conductor-style. Tap toggles the section
+    /// open/closed; an aggregate dot flags attention while collapsed.
+    ///
+    /// Accessories fade via opacity (not conditional insertion) so the chevron
+    /// never shifts; they stay visible for a project with no workspaces, where
+    /// hover-only would make the create entry point undiscoverable.
     private func projectHeader(_ project: Project) -> some View {
         let agg = aggregateState(for: project)
+        let revealAccessories = hoveredProjectId == project.id || visibleWorktrees(for: project).isEmpty
         return HStack(spacing: MoriTokens.Spacing.md) {
             Text(project.name)
                 .font(.system(size: 13.5, weight: .semibold))
@@ -159,6 +165,24 @@ public struct WorktreeSidebarView: View {
             if project.isCollapsed, agg == .waiting || agg == .error {
                 Circle().fill(agg == .error ? MoriTokens.Color.error : MoriTokens.Color.attention).frame(width: 7, height: 7)
             }
+            if onShowCreatePanel != nil {
+                Button { onSelectProject?(project.id); onShowCreatePanel?() } label: {
+                    Image(systemName: "plus")
+                        .font(MoriTokens.Font.sidebarAccessory)
+                        .foregroundStyle(MoriTokens.Color.muted)
+                        .frame(width: MoriTokens.Size.sidebarAccessory)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(String.localized("New Workspace"))
+                .opacity(revealAccessories ? 1 : 0)
+            }
+            Menu { projectActions(project) } label: {
+                Image(systemName: "ellipsis").font(MoriTokens.Font.sidebarAccessory).foregroundStyle(MoriTokens.Color.muted)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden)
+            .frame(width: MoriTokens.Size.sidebarAccessory)
+            .opacity(revealAccessories ? 1 : 0)
             Image(systemName: project.isCollapsed ? "chevron.right" : "chevron.down")
                 .font(MoriTokens.Font.sidebarChevron)
                 .foregroundStyle(MoriTokens.Color.muted)
@@ -168,32 +192,6 @@ public struct WorktreeSidebarView: View {
         .padding(.bottom, MoriTokens.Spacing.lg)
         .contentShape(Rectangle())
         .onTapGesture { onToggleCollapse?(project.id); onSelectProject?(project.id) }
-    }
-
-    /// "+ New workspace" with a trailing overflow menu carrying project actions.
-    @ViewBuilder
-    private func newWorkspaceRow(_ project: Project) -> some View {
-        if onShowCreatePanel != nil {
-            HStack(spacing: MoriTokens.Spacing.md) {
-                Button { onSelectProject?(project.id); onShowCreatePanel?() } label: {
-                    HStack(spacing: MoriTokens.Spacing.md) {
-                        Image(systemName: "plus").font(.system(size: 11, weight: .medium)).frame(width: 15)
-                        Text("New workspace").font(.system(size: 13))
-                        Spacer(minLength: 0)
-                    }
-                    .foregroundStyle(MoriTokens.Color.muted)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                Menu { projectActions(project) } label: {
-                    Image(systemName: "ellipsis").font(MoriTokens.Font.sidebarAccessory).foregroundStyle(MoriTokens.Color.muted)
-                }
-                .menuStyle(.borderlessButton).menuIndicator(.hidden)
-                .frame(width: MoriTokens.Size.sidebarAccessory)
-            }
-            .padding(.horizontal, MoriTokens.Spacing.xl)
-            .padding(.vertical, MoriTokens.Spacing.sm)
-        }
     }
 
     @ViewBuilder
@@ -215,9 +213,11 @@ public struct WorktreeSidebarView: View {
 
     // MARK: - Worktree row
 
-    /// Two-line Conductor-style row. Line 1: branch glyph (or the working
-    /// agent's breathing brand glyph) + branch name + diff badge. Line 2:
-    /// worktree name · status + quick-jump ⌘N.
+    /// Conductor-style row. Line 1: branch glyph (or the working agent's
+    /// breathing brand glyph) + branch name. A second line appears only for
+    /// attention states (agent activity, conflicts, creating) or a PR badge;
+    /// demoted info (including diff counts) lives in the tooltip, and the
+    /// quick-jump ⌘N chip overlays the row only while ⌘ is held.
     private func worktreeRow(_ worktree: Worktree) -> some View {
         let selected = worktree.id == selectedWorktreeId
         let hovered = hoveredWorktreeId == worktree.id
@@ -246,81 +246,67 @@ public struct WorktreeSidebarView: View {
                     if wins.count >= 2 {
                         windowChip(count: wins.count, expanded: expanded, selected: selected, alert: hiddenWindowAlert(wins, expanded: expanded)) { toggle(&expandedWorktrees, worktree.id) }
                     }
-                    diffBadge(worktree)
                 }
                 secondLine(worktree, title: title)
             }
             .padding(.horizontal, MoriTokens.Spacing.md)
-            .padding(.vertical, 6)
+            .padding(.vertical, 8)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // Transient placeholders have no session or files to select into.
+        .disabled(worktree.status.isTransient)
         .background(
             RoundedRectangle(cornerRadius: MoriTokens.Radius.small)
-                .fill(selected ? Color.primary.opacity(MoriTokens.Opacity.subtle) : (hovered ? Color.primary.opacity(MoriTokens.Opacity.quiet) : Color.clear))
+                .fill(selected ? Color.primary.opacity(MoriTokens.Opacity.light) : (hovered ? Color.primary.opacity(MoriTokens.Opacity.quiet) : Color.clear))
         )
+        // Quick-jump hint appears only while ⌘ is held, as an overlay chip so
+        // rows never reflow. It may briefly cover the row's trailing edge —
+        // fine for a transient modifier hold.
+        .overlay(alignment: .trailing) {
+            if shortcutHintsVisible, let shortcut = worktreeShortcutIndices[worktree.id] {
+                Text("⌘\(shortcut)")
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(Color.primary.opacity(0.85))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.light)))
+                    .padding(.trailing, MoriTokens.Spacing.md)
+            }
+        }
+        .help(rowTooltip(worktree, title: title))
         .onHover { hoveredWorktreeId = $0 ? worktree.id : nil }
         .contextMenu { WorktreeContextActions(worktree: worktree, pullRequest: pullRequests[worktree.id], onRemove: onRemoveWorktree.map { remove in { remove(worktree.id) } }) }
     }
 
-    /// `+N -M` lines vs the project's base branch, in a quiet bordered pill.
-    @ViewBuilder
-    private func diffBadge(_ worktree: Worktree) -> some View {
-        if worktree.additions > 0 || worktree.deletions > 0 {
-            HStack(spacing: MoriTokens.Spacing.sm) {
-                if worktree.additions > 0 {
-                    Text(verbatim: "+\(compactCount(worktree.additions))").foregroundStyle(MoriTokens.Color.success)
-                }
-                if worktree.deletions > 0 {
-                    Text(verbatim: "-\(compactCount(worktree.deletions))").foregroundStyle(MoriTokens.Color.error)
-                }
-            }
-            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-            .lineLimit(1)
-            .fixedSize()
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1.5)
-            .background(
-                RoundedRectangle(cornerRadius: MoriTokens.Radius.badge + 1)
-                    .stroke(Color.primary.opacity(MoriTokens.Opacity.light), lineWidth: 1)
-            )
-        }
-    }
-
-    /// Keeps the diff badge narrow on huge branches: 65031 reads as "65k".
-    private func compactCount(_ n: Int) -> String {
-        n >= 10_000 ? "\(n / 1000)k" : "\(n)"
-    }
-
-    /// Worktree name (when it differs from the branch title) · status, with the
-    /// quick-jump shortcut on the right. The status word is the row's one loud
-    /// element: agent activity first, then merge readiness, then quiet time.
+    /// Appears only when the row needs attention (agent activity, conflicts,
+    /// creating) or has a PR badge — quiet rows stay single-line so the loud
+    /// ones stand out. Demoted info (worktree name, merge readiness, last
+    /// activity) lives in the row tooltip instead.
     @ViewBuilder
     private func secondLine(_ worktree: Worktree, title: String) -> some View {
         let status = statusText(worktree)
-        let shortcut = worktreeShortcutIndices[worktree.id]
-        if worktree.name != title || status != nil || shortcut != nil {
+        let pullRequest = pullRequests[worktree.id]
+        if status != nil || pullRequest != nil {
             HStack(spacing: MoriTokens.Spacing.sm) {
-                if worktree.name != title {
-                    Text(worktree.name).foregroundStyle(MoriTokens.Color.muted).lineLimit(1)
-                    if status != nil { Text("·").foregroundStyle(MoriTokens.Color.muted) }
-                }
                 if let status {
                     Text(status.text).foregroundStyle(status.color).lineLimit(1)
                 }
-                Spacer(minLength: 0)
-                if let shortcut {
-                    Text("⌘\(shortcut)")
-                        .font(.system(size: 10.5, design: .monospaced))
-                        .foregroundStyle(shortcutHintsVisible ? Color.primary.opacity(0.8) : MoriTokens.Color.inactive)
+                if let pullRequest {
+                    PullRequestBadge(info: pullRequest)
                 }
+                Spacer(minLength: 0)
             }
             .font(.system(size: 11.5))
             .padding(.leading, 15 + MoriTokens.Spacing.md)
         }
     }
 
+    /// Only states that need the user's attention earn a status line; anything
+    /// informational ("ready to merge", last activity) is tooltip material.
     private func statusText(_ w: Worktree) -> (text: String, color: Color)? {
+        if w.status == .creating { return (String.localized("Creating…"), MoriTokens.Color.muted) }
+        if w.status == .deleting { return (String.localized("Deleting…"), MoriTokens.Color.muted) }
         switch w.agentState {
         case .running: return (String.localized("Working…"), MoriTokens.Color.success)
         case .waitingForInput: return (String.localized("Needs input"), MoriTokens.Color.attention)
@@ -328,11 +314,23 @@ public struct WorktreeSidebarView: View {
         case .completed, .none: break
         }
         if w.hasMergeConflicts == true { return (String.localized("Merge conflicts"), MoriTokens.Color.warning) }
-        if w.hasMergeConflicts == false, w.additions + w.deletions > 0, !w.hasUncommittedChanges {
-            return (String.localized("Ready to merge"), MoriTokens.Color.success)
-        }
-        if let time = relativeTime(w.lastActiveAt) { return (time, MoriTokens.Color.inactive) }
         return nil
+    }
+
+    /// Hover detail for the info demoted off the row: full branch title (rows
+    /// truncate), the worktree name when it differs, diff counts vs the base
+    /// branch, merge readiness, and last activity.
+    private func rowTooltip(_ w: Worktree, title: String) -> String {
+        var parts: [String] = [title]
+        if w.name != title { parts.append(w.name) }
+        if w.additions > 0 || w.deletions > 0 {
+            parts.append("+\(w.additions) -\(w.deletions)")
+        }
+        if w.hasMergeConflicts == false, w.additions + w.deletions > 0, !w.hasUncommittedChanges {
+            parts.append(String.localized("Ready to merge"))
+        }
+        if let time = relativeTime(w.lastActiveAt) { parts.append(time) }
+        return parts.joined(separator: " · ")
     }
 
     /// The main/master checkout and linked worktrees read as different shapes; a
@@ -465,39 +463,38 @@ public struct WorktreeSidebarView: View {
         return projectOrder.flatMap { visibleWorktrees(for: $0) }
     }
 
+    /// Persistent app-level actions: Open Project leading, Agent Dashboard + Settings
+    /// trailing. Quiet secondary icons that brighten on hover; tooltips carry the
+    /// keyboard shortcut so the palette/menu bindings stay discoverable.
     private var sidebarFooter: some View {
         HStack(spacing: MoriTokens.Spacing.md) {
             if let onAddProject {
-                Button(action: onAddProject) {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "folder.badge.plus").font(.system(size: 12, weight: .medium))
-                            Text("Add repository").font(.system(size: 12.5)).lineLimit(1)
-                        }
-                        Image(systemName: "folder.badge.plus").font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundStyle(MoriTokens.Color.muted)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(String.localized("Add Project"))
+                SidebarFooterButton(
+                    systemName: "plus",
+                    title: String.localized("Open Project"),
+                    tooltip: String.localized("Open Project (⇧⌘O)"),
+                    action: onAddProject
+                )
             }
             Spacer()
+            if let onShowAgentDashboard {
+                SidebarFooterButton(
+                    systemName: "square.grid.2x2",
+                    tooltip: String.localized("Agent Dashboard (⇧⌘A)"),
+                    action: onShowAgentDashboard
+                )
+            }
             if let onOpenSettings {
-                Button(action: onOpenSettings) {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 13))
-                        .foregroundStyle(MoriTokens.Color.muted)
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(String.localized("Settings"))
+                SidebarFooterButton(
+                    systemName: "gearshape",
+                    tooltip: String.localized("Settings (⌘,)"),
+                    action: onOpenSettings
+                )
             }
         }
+        .frame(height: 34)
         .padding(.horizontal, MoriTokens.Spacing.xl)
-        .padding(.vertical, MoriTokens.Spacing.lg)
-        .overlay(alignment: .top) { Rectangle().fill(Color.primary.opacity(MoriTokens.Opacity.subtle)).frame(height: 1) }
+        .overlay(alignment: .top) { Rectangle().fill(Color.primary.opacity(0.06)).frame(height: 1) }
     }
 
     // MARK: - Derived data
@@ -540,7 +537,7 @@ public struct WorktreeSidebarView: View {
     private func reorder(dragged: String?, before project: Project) -> Bool { guard let s = dragged, let draggedId = UUID(uuidString: s), draggedId != project.id else { dropTargetProjectId = nil; return false }; if var draggedProject = projects.first(where: { $0.id == draggedId }), draggedProject.isFavorite != project.isFavorite { draggedProject.isFavorite = project.isFavorite; onUpdateProject?(draggedProject) }; var ids = projects.map(\.id); guard let from = ids.firstIndex(of: draggedId), let to = ids.firstIndex(of: project.id) else { return false }; ids.remove(at: from); ids.insert(draggedId, at: to); onReorderProjects?(ids); dropTargetProjectId = nil; draggingProjectId = nil; return true }
 
     @ViewBuilder private func projectActions(_ project: Project, allowNewWorkspace: Bool = true) -> some View {
-        if allowNewWorkspace, !project.isCollapsed, onShowCreatePanel != nil { Button { onSelectProject?(project.id); onShowCreatePanel?() } label: { Label("New Workspace…", systemImage: "plus") } }
+        if allowNewWorkspace, onShowCreatePanel != nil { Button { onSelectProject?(project.id); onShowCreatePanel?() } label: { Label("New Workspace…", systemImage: "plus") } }
         let editors = EditorLauncher.installed; if !editors.isEmpty { Divider(); ForEach(editors) { editor in Button { editor.open(path: project.repoRootPath) } label: { Label("Open in \(editor.name)", systemImage: editor.icon) } } }
         Divider(); Button { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.repoRootPath) } label: { Label("Reveal in Finder", systemImage: "folder") }
         Divider(); Button { renameText = project.name; renamingProjectId = project.id } label: { Label("Rename Project…", systemImage: "pencil") }
@@ -548,6 +545,44 @@ public struct WorktreeSidebarView: View {
         if let onImportWorktrees, project.gitCommonDir != project.repoRootPath { Button { onImportWorktrees(project.id) } label: { Label("Import Existing Worktrees", systemImage: "square.and.arrow.down") } }
         if case .ssh = (project.location ?? .local), let onEditRemoteProject { Button { onEditRemoteProject(project.id) } label: { Label("Update Remote Credentials…", systemImage: "key") } }
         if let onRemoveProject { Divider(); Button(role: .destructive) { onRemoveProject(project.id) } label: { Label("Remove Project…", systemImage: "trash") } }
+    }
+}
+
+/// A quiet footer control: secondary-tinted, brightening to primary on hover.
+/// Icon-only by default; pass `title` for the leading labelled button (which
+/// collapses to its glyph when the sidebar is too narrow for the text).
+private struct SidebarFooterButton: View {
+    let systemName: String
+    var title: String?
+    let tooltip: String
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Group {
+                if let title {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 6) {
+                            Image(systemName: systemName).font(.system(size: 12, weight: .medium))
+                            Text(verbatim: title).font(.system(size: 12.5)).lineLimit(1)
+                        }
+                        Image(systemName: systemName).font(.system(size: 12, weight: .medium))
+                    }
+                    .frame(minWidth: 24, minHeight: 24, alignment: .leading)
+                } else {
+                    Image(systemName: systemName)
+                        .font(.system(size: 13))
+                        .frame(width: 24, height: 24)
+                }
+            }
+            .foregroundStyle(hovering ? Color.primary : MoriTokens.Color.muted)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(tooltip)
     }
 }
 

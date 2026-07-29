@@ -9,11 +9,12 @@ import MoriCore
 /// target inside the selection row, where a stray click would fire it.
 struct PullRequestBadge: View {
     let info: PullRequestInfo
-    let isSelected: Bool
 
     var body: some View {
         HStack(spacing: 3) {
-            Text("#\(info.number)")
+            // verbatim: interpolated Text goes through LocalizedStringKey, which
+            // renders Int with locale grouping ("#16,838").
+            Text(verbatim: "#\(info.number)")
                 .font(MoriTokens.Font.monoSmall)
                 .foregroundStyle(numberColor)
                 .lineLimit(1)
@@ -22,22 +23,16 @@ struct PullRequestBadge: View {
         }
         .padding(.horizontal, 5)
         .padding(.vertical, 1)
-        .background(
-            Capsule().fill(isSelected
-                ? Color.white.opacity(0.18)
-                : stateColor.opacity(0.14))
-        )
-        .help("\(stateLabel) · #\(info.number) — right-click the worktree to open\n\(info.url)")
+        .background(Capsule().fill(MoriTokens.Color.muted.opacity(MoriTokens.Opacity.subtle)))
+        .help("\(stateLabel) · #\(info.number) — \(String.localized("right-click the worktree to open"))\n\(info.url)")
     }
 
-    private var numberColor: Color {
-        isSelected ? Color.white.opacity(0.9) : stateColor
-    }
-
+    /// Passing is the quiet state and stays gray; only failing/pending checks
+    /// earn a color, mirroring the sidebar's attention-only color rule.
     @ViewBuilder
     private var checksGlyph: some View {
         switch info.checks {
-        case .passing: glyph("checkmark", MoriTokens.Color.success)
+        case .passing: glyph("checkmark", MoriTokens.Color.muted)
         case .failing: glyph("xmark", MoriTokens.Color.error)
         case .pending: glyph("clock", MoriTokens.Color.warning)
         case .none: EmptyView()
@@ -47,7 +42,7 @@ struct PullRequestBadge: View {
     private func glyph(_ name: String, _ color: Color) -> some View {
         Image(systemName: name)
             .font(.system(size: 8, weight: .bold))
-            .foregroundStyle(isSelected ? Color.white.opacity(0.85) : color)
+            .foregroundStyle(color)
     }
 
     /// The PR's display state, derived once (draft wins, then merged/closed, then
@@ -74,23 +69,22 @@ struct PullRequestBadge: View {
     /// Short state used in the tooltip.
     private var stateLabel: String {
         switch displayState {
-        case .draft: return "Draft"
-        case .merged: return "Merged"
-        case .closed: return "Closed"
-        case .open: return "Open"
-        case .reviewRequired: return "Review required"
-        case .approved: return "Approved"
-        case .changesRequested: return "Changes requested"
+        case .draft: return String.localized("Draft")
+        case .merged: return String.localized("Merged")
+        case .closed: return String.localized("Closed")
+        case .open: return String.localized("Open")
+        case .reviewRequired: return String.localized("Review required")
+        case .approved: return String.localized("Approved")
+        case .changesRequested: return String.localized("Changes requested")
         }
     }
 
-    private var stateColor: Color {
+    /// Gray unless the PR needs the user (closed / changes requested); the full
+    /// state stays one hover away in the tooltip.
+    private var numberColor: Color {
         switch displayState {
-        case .draft: return MoriTokens.Color.muted
-        case .merged: return MoriTokens.Color.active
         case .closed, .changesRequested: return MoriTokens.Color.error
-        case .open, .approved: return MoriTokens.Color.success
-        case .reviewRequired: return MoriTokens.Color.info
+        case .draft, .merged, .open, .approved, .reviewRequired: return MoriTokens.Color.muted
         }
     }
 }

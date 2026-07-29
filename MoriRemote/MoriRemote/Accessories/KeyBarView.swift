@@ -64,6 +64,18 @@ final class KeyBarView: UIView {
     private func setup() {
         backgroundColor = barBg
 
+        // The dismiss-keyboard button lives outside the scroll view, pinned at
+        // the far left so it stays one tap away at any scroll position —
+        // previously it sat at the scrollable row's right end, forcing a swipe
+        // to the very end just to put the keyboard away.
+        let dismissButton = makeKeyboardDismissButton()
+        addSubview(dismissButton)
+
+        let dismissDivider = UIView()
+        dismissDivider.backgroundColor = dividerColor
+        dismissDivider.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(dismissDivider)
+
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.alwaysBounceHorizontal = true
         scrollView.delaysContentTouches = false
@@ -87,8 +99,16 @@ final class KeyBarView: UIView {
         addSubview(fadeView)
 
         NSLayoutConstraint.activate([
+            dismissButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+            dismissButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+
+            dismissDivider.leadingAnchor.constraint(equalTo: dismissButton.trailingAnchor, constant: 6),
+            dismissDivider.centerYAnchor.constraint(equalTo: centerYAnchor),
+            dismissDivider.widthAnchor.constraint(equalToConstant: 1),
+            dismissDivider.heightAnchor.constraint(equalToConstant: 20),
+
             scrollView.topAnchor.constraint(equalTo: topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: dismissDivider.trailingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
@@ -164,10 +184,6 @@ final class KeyBarView: UIView {
         stackView.addArrangedSubview(selectionButton)
         keyButtons.append(selectionButton)
         self.selectionButton = selectionButton
-
-        let keyboardButton = makeKeyboardDismissButton()
-        stackView.addArrangedSubview(keyboardButton)
-        keyButtons.append(keyboardButton)
     }
 
     private func makeDivider() -> UIView {
@@ -204,12 +220,11 @@ final class KeyBarView: UIView {
         button.layer.borderWidth = 1
         button.layer.borderColor = keyBorder.cgColor
         button.clipsToBounds = true
-        button.adjustsImageWhenHighlighted = false
 
         let isArrow = action.iconName != nil
         let minWidth: CGFloat = isArrow ? 28 : 34
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 7, bottom: 0, right: 7)
+        button.horizontalContentPadding = 7
         NSLayoutConstraint.activate([
             button.heightAnchor.constraint(equalToConstant: 30),
             button.widthAnchor.constraint(greaterThanOrEqualToConstant: minWidth),
@@ -217,7 +232,11 @@ final class KeyBarView: UIView {
 
         if let iconName = action.iconName {
             let config = UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
-            button.setImage(UIImage(systemName: iconName, withConfiguration: config), for: .normal)
+            let image = UIImage(systemName: iconName, withConfiguration: config)
+            button.setImage(image, for: .normal)
+            // Same image for .highlighted so UIKit doesn't dim the icon on
+            // touch (touchDown already applies the active style).
+            button.setImage(image, for: .highlighted)
             button.tintColor = textColor
         } else {
             button.setTitle(action.label, for: .normal)
@@ -360,7 +379,7 @@ final class KeyBarView: UIView {
         button.layer.borderWidth = 1
         button.layer.borderColor = tmuxBorder.cgColor
         button.clipsToBounds = true
-        button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 9, bottom: 0, right: 9)
+        button.horizontalContentPadding = 9
         button.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             button.heightAnchor.constraint(equalToConstant: 30),
@@ -417,7 +436,6 @@ final class KeyBarView: UIView {
 
     private func makeKeyboardDismissButton() -> UIButton {
         let button = KeyBarButton()
-        configurePanScrolling(button)
         let config = UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
         button.setImage(UIImage(systemName: "keyboard.chevron.compact.down", withConfiguration: config), for: .normal)
         button.tintColor = textDim
@@ -437,7 +455,7 @@ final class KeyBarView: UIView {
 
     @objc private func keyboardDismissTapped() {
         UIDevice.current.playInputClick()
-        terminalView?.resignFirstResponder()
+        _ = terminalView?.resignFirstResponder()
     }
 
     private func dismissKeyboardForDeferredUITransition() {
@@ -564,6 +582,20 @@ extension KeyBarView: UIScrollViewDelegate {
 final class KeyBarButton: UIButton {
     var onHorizontalPan: ((CGFloat) -> Void)?
     var onPanBegan: ((UIButton) -> Void)?
+
+    /// Horizontal padding added around centered content, replacing the
+    /// deprecated `contentEdgeInsets` (these buttons never adopt
+    /// UIButtonConfiguration).
+    var horizontalContentPadding: CGFloat = 0 {
+        didSet { invalidateIntrinsicContentSize() }
+    }
+
+    override var intrinsicContentSize: CGSize {
+        var size = super.intrinsicContentSize
+        size.width += horizontalContentPadding * 2
+        return size
+    }
+
     private var beganPoint: CGPoint = .zero
     private let panThreshold: CGFloat = 6.0
     private var didCancelForPan = false

@@ -18,13 +18,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var appState: AppState?
     private var terminalAreaController: TerminalAreaViewController?
     private var companionToolController: CompanionToolPaneController?
-    private var commandPaletteController: CommandPaletteController?
+    private var commandPanelController: CommandPanelController?
     private var rootSplitVC: RootSplitViewController?
     private var keyMonitor: Any?
     private var sidebarController: SidebarHostingController?
     private var ipcServer: IPCServer?
     private var ipcHandler: IPCHandler?
-    private var worktreeCreationController: WorktreeCreationController?
+    private var workspaceCreationPage: WorkspaceCreationPage?
     private let sidebarPaneOutputCache = PaneOutputCache()
     private var settingsWindowController: NSWindowController?
     private var configFile: GhosttyConfigFile?
@@ -40,6 +40,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var keyMonitorActionMap: [String: () -> Void] = [:]
     private let tmuxConfigurationDebounceNanoseconds: UInt64 = 250_000_000
     private var companionToolState = CompanionToolPaneState()
+    private let themeDistributor = ThemeDistributor()
+    private let moriThemeBridge = MoriThemeBridge()
+    private var mainWindowSurface: WindowThemedSurface?
+    private var settingsWindowSurface: WindowThemedSurface?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Task 3.8: Single instance check
@@ -102,13 +106,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             }
         }
         self.terminalAreaController = terminalArea
+        // The token store bridge registers first so MoriTokens' semantic colors
+        // are already theme-derived when the SwiftUI surfaces below first render.
+        themeDistributor.register(moriThemeBridge)
+        themeDistributor.register(terminalArea)
 
         let companionTool = CompanionToolPaneController()
         self.companionToolController = companionTool
+        themeDistributor.register(companionTool)
         companionTool.onToolExited = { [weak self] in
             guard let self else { return }
             self.closeCompanionTool()
             self.terminalAreaController?.focusCurrentSurface()
+        }
+        companionTool.onSelectTool = { [weak self] tool in
+            self?.selectCompanionTool(tool)
         }
 
         // Wire ghostty keybinding actions to Mori's tmux-based implementation.
@@ -198,6 +210,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             onAddProject: { [weak self] in
                 self?.showAddProjectPanel()
             },
+            onShowAgentDashboard: { [weak self] in
+                self?.toggleAgentDashboardAction()
+            },
             onOpenSettings: { [weak self] in
                 self?.showSettingsWindow()
             },
@@ -267,7 +282,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         )
 
         self.sidebarController = sidebarController
-        sidebarController.updateAppearance(themeInfo: themeInfo)
+        themeDistributor.register(sidebarController)
 
         let tabsView = TerminalTabsBarView(
             appState: state,
@@ -289,12 +304,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 }
             }
         )
-        windowController.installTabsView(tabsView)
+        let headerBar = HeaderBarView(
+            tabsView: tabsView,
+            onToggleSidebar: { [weak self] in self?.rootSplitVC?.toggleSidebar() },
+            onToggleCompanion: { [weak self] in self?.toggleCompanionPane() }
+        )
+        themeDistributor.register(headerBar)
 
         let splitVC = RootSplitViewController(
             sidebarController: sidebarController,
             contentController: terminalArea,
-            companionController: companionTool
+            companionController: companionTool,
+            headerBar: headerBar
         )
         self.rootSplitVC = splitVC
         companionToolState.width = splitVC.currentCompanionWidth
@@ -303,43 +324,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         splitVC.updateCompanionPane(state: companionToolState)
 
-        windowController.onToggleSidebar = { [weak splitVC] in
-            splitVC?.toggleSidebar()
-        }
-        windowController.onToggleFiles = { [weak self] in
-            self?.toggleCompanionTool(.yazi)
-        }
-        windowController.onToggleGit = { [weak self] in
-            self?.toggleCompanionTool(.lazygit)
-        }
-        windowController.onSplitRight = { [weak self] in
-            self?.splitRightMenuAction()
-        }
-        windowController.onSplitDown = { [weak self] in
-            self?.splitDownMenuAction()
-        }
-
-        windowController.onOpenProject = { [weak self] in
-            self?.showAddProjectPanel()
-        }
-        windowController.onOpenCommandPalette = { [weak self] in
-            self?.commandPaletteController?.toggle(mode: .allItems)
-        }
-        windowController.onToggleAgentDashboard = { [weak self] in
-            self?.toggleAgentDashboardAction()
-        }
-        windowController.onOpenSettings = { [weak self] in
-            self?.showSettingsWindow()
-        }
         windowController.onShowCreateWorktreePanel = { [weak self] in
             self?.showCreateWorktreePanel()
         }
-        windowController.onWindowAppearanceInvalidated = { [weak self, weak terminalArea, weak windowController] in
+        windowController.onWindowAppearanceInvalidated = { [weak self, weak terminalArea] in
             guard let self,
-                  let adapter = terminalArea?.terminalHost as? GhosttyAdapter,
-                  let window = windowController?.window else { return }
-            adapter.syncWorkspaceWindowAppearance(window)
-            self.refreshGhosttyThemeBackgrounds(themeInfo: adapter.themeInfo)
+                  let adapter = terminalArea?.terminalHost as? GhosttyAdapter else { return }
+            // Key-window and full-screen changes alter window transparency/blur and
+            // glass tint, so re-apply the current theme to repaint those surfaces.
+            self.themeDistributor.broadcast(adapter.themeInfo)
         }
 
         // Track system dark/light changes so split themes (theme = light:…,dark:…)
@@ -353,11 +346,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         windowController.contentViewController = splitVC
         windowController.showWindow(nil)
-        if let adapter = terminalArea.terminalHost as? GhosttyAdapter,
-           let window = windowController.window {
-            adapter.syncWorkspaceWindowAppearance(window)
+        if let adapter = terminalArea.terminalHost as? GhosttyAdapter {
+            let surface = WindowThemedSurface { [weak windowController, weak adapter] _ in
+                guard let window = windowController?.window, let adapter else { return }
+                adapter.syncWorkspaceWindowAppearance(window)
+            }
+            mainWindowSurface = surface
+            themeDistributor.register(surface)
         }
-        companionTool.updateAppearance(themeInfo: themeInfo, isKeyWindow: windowController.window?.isKeyWindow ?? true)
+        // Paint every eager surface at once; lazily-created panels theme themselves on register.
+        themeDistributor.broadcast(themeInfo)
         // Restore saved frame after all layout is complete
         windowController.restoreSavedFrame()
         NSApp.activate(ignoringOtherApps: true)
@@ -414,7 +412,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         setupMainMenu()
 
         // Set up command palette (Cmd+Shift+P)
-        setupCommandPalette(appState: state, manager: manager)
+        setupCommandPanel(appState: state, manager: manager)
 
         // Start IPC server for mori CLI communication
         startIPCServer(manager: manager)
@@ -444,6 +442,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
             // Start coordinated polling (tmux + git status on each 5s tick)
             manager.startPolling()
+
+            // Best-effort: discover COW clones / plain-dir workspaces created
+            // outside Mori for local projects. Non-blocking; shows no UI.
+            Task { await manager.autoImportExistingWorkspaces() }
 
             // Apply Mori tmux compatibility/defaults/theme to tmux
             self.scheduleTmuxConfigurationApply(
@@ -735,54 +737,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return
         }
 
-        if worktreeCreationController == nil {
-            let controller = WorktreeCreationController()
-
-            controller.fetchBranches = { [weak manager] projectId, repoPath in
-                guard let manager else { return [] }
-                return try await manager.listBranches(projectId: projectId, repoPathHint: repoPath)
-            }
-
-            controller.onCreateWorktree = { [weak manager] request in
-                guard let manager else { return }
-                Task { @MainActor in
-                    await manager.handleCreateWorktreeFromPanel(request)
-                }
-            }
-
-            controller.onProjectChanged = { [weak self] newProjectId in
-                guard let self else { return }
-                self.appState?.uiState.selectedProjectId = newProjectId
-                self.workspaceManager?.selectProject(newProjectId)
-                self.refreshCreateWorktreePanel(for: newProjectId)
-            }
-
-            worktreeCreationController = controller
-        }
-
-        let controller = worktreeCreationController!
-
-        let themeInfo = terminalAreaController?.themeInfo ?? .fallback
-        controller.show(
+        let page = ensureWorkspaceCreationPage(manager: manager)
+        page.configure(
             projects: state.projects,
             selectedProjectId: projectId,
             repoPath: project.repoRootPath,
-            themeInfo: themeInfo
+            excludedBranches: existingWorktreeBranches(for: projectId, in: state)
         )
+
+        guard let panel = commandPanelController else { return }
+        // Entry transition table: already frontmost → no-op; panel visible on
+        // another page → push (Esc goes back); hidden → open directly (Esc closes).
+        if panel.isShowing(page) { return }
+        if panel.isVisible {
+            panel.push(page)
+        } else {
+            panel.open(with: page)
+        }
+    }
+
+    private func ensureWorkspaceCreationPage(manager: WorkspaceManager) -> WorkspaceCreationPage {
+        if let page = workspaceCreationPage { return page }
+
+        let page = WorkspaceCreationPage()
+
+        page.fetchBranches = { [weak manager] projectId, repoPath in
+            guard let manager else { return [] }
+            return try await manager.listBranches(projectId: projectId, repoPathHint: repoPath)
+        }
+
+        page.fetchGitHubItems = { [weak manager] projectId, repoPath in
+            guard let manager else { return [] }
+            return await manager.fetchGitHubWorkItems(projectId: projectId, repoPath: repoPath)
+        }
+
+        page.onCreateWorktree = { [weak manager] request in
+            guard let manager else { return }
+            Task { @MainActor in
+                await manager.handleCreateWorktreeFromPanel(request)
+            }
+        }
+
+        page.onProjectChanged = { [weak self] newProjectId in
+            guard let self else { return }
+            self.appState?.uiState.selectedProjectId = newProjectId
+            self.workspaceManager?.selectProject(newProjectId)
+            self.refreshCreateWorktreePanel(for: newProjectId)
+        }
+
+        workspaceCreationPage = page
+        return page
+    }
+
+    /// The workspace page for an in-panel push, configured for the currently
+    /// selected project — or nil when none is selected, so the caller can fall
+    /// back to the dismiss path (which surfaces the existing alert).
+    private func configuredWorkspacePageForPush() -> CommandPanelPage? {
+        guard let manager = workspaceManager, let state = appState,
+              let projectId = state.uiState.selectedProjectId,
+              let project = state.projects.first(where: { $0.id == projectId }) else {
+            return nil
+        }
+        let page = ensureWorkspaceCreationPage(manager: manager)
+        page.configure(
+            projects: state.projects,
+            selectedProjectId: projectId,
+            repoPath: project.repoRootPath,
+            excludedBranches: existingWorktreeBranches(for: projectId, in: state)
+        )
+        return page
+    }
+
+    /// Branches that already back a workspace in `projectId` — excluded from the
+    /// creation panel's checkout list so the same branch isn't opened twice.
+    private func existingWorktreeBranches(for projectId: UUID, in state: AppState) -> Set<String> {
+        Set(state.worktrees.filter { $0.projectId == projectId }.compactMap(\.branch))
     }
 
     /// Lightweight refresh when the user changes the project dropdown — only
     /// re-fetches branches for the new project without re-wiring callbacks or
     /// re-positioning the panel.
     private func refreshCreateWorktreePanel(for projectId: UUID) {
-        guard let controller = worktreeCreationController,
+        guard let page = workspaceCreationPage,
               let state = appState,
               let project = state.projects.first(where: { $0.id == projectId }) else { return }
-        controller.refresh(
+        page.configure(
             projects: state.projects,
             selectedProjectId: projectId,
-            repoPath: project.repoRootPath
+            repoPath: project.repoRootPath,
+            excludedBranches: existingWorktreeBranches(for: projectId, in: state)
         )
+        page.refreshData()
     }
     // MARK: - Settings Window
 
@@ -798,7 +843,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         let themes = GhosttyConfigFile.availableThemes()
         let ghosttyDefaults = GhosttyConfigFile.defaultKeybinds()
-        let themeInfo = terminalAreaController?.themeInfo ?? .fallback
 
         let store = self.keyBindingStore!
         let settingsView = SettingsWindowContent(
@@ -887,18 +931,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         let hostingController = NSHostingController(rootView: settingsView)
         hostingController.view.wantsLayer = true
-        hostingController.view.layer?.backgroundColor = themeInfo.background.cgColor
         let window = NSWindow(contentViewController: hostingController)
         window.title = .localized("Settings")
         window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        if let adapter = terminalAreaController?.terminalHost as? GhosttyAdapter {
-            adapter.syncThemedWindowAppearance(window)
-        } else {
-            window.backgroundColor = themeInfo.background
-            window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+        let adapter = terminalAreaController?.terminalHost as? GhosttyAdapter
+        let surface = WindowThemedSurface { [weak window, weak adapter] themeInfo in
+            guard let window else { return }
+            if let adapter {
+                adapter.syncThemedWindowAppearance(window)
+            } else {
+                window.backgroundColor = themeInfo.background
+                window.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
+            }
+            window.contentViewController?.view.wantsLayer = true
+            window.contentViewController?.view.layer?.backgroundColor = themeInfo.background.cgColor
         }
+        settingsWindowSurface = surface
+        themeDistributor.register(surface)
         window.center()
         window.setFrameAutosaveName("MoriSettings")
 
@@ -978,20 +1029,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         propagateGhosttyTheme(adapter: adapter)
     }
 
-    /// Sync the current ghostty theme colors to the window, sidebar, panels, and tmux.
+    /// Sync the current ghostty theme colors to every registered surface, then tmux.
+    ///
+    /// tmux stays outside the broadcast registry on purpose: it must re-apply only on
+    /// genuine theme changes, not on the window key/full-screen changes that also drive
+    /// a repaint (`onWindowAppearanceInvalidated`), so folding it in would thrash the
+    /// tmux config on every focus flip.
     private func propagateGhosttyTheme(adapter: GhosttyAdapter) {
-        let themeInfo = adapter.themeInfo
-        if let window = mainWindowController?.window {
-            adapter.syncWorkspaceWindowAppearance(window)
-        }
-        refreshGhosttyThemeBackgrounds(themeInfo: themeInfo)
-
-        refreshSettingsWindowAppearance(adapter: adapter, themeInfo: themeInfo)
-
-        // Update agent dashboard appearance
-        agentDashboardPanel?.updateAppearance(themeInfo: themeInfo)
-
-        // Sync to tmux
+        themeDistributor.broadcast(adapter.themeInfo)
         if let manager = workspaceManager {
             scheduleTmuxConfigurationApply(
                 immediate: false,
@@ -1026,20 +1071,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
-    private func refreshGhosttyThemeBackgrounds(themeInfo: GhosttyThemeInfo) {
-        let isKeyWindow = mainWindowController?.window?.isKeyWindow ?? true
-        sidebarController?.updateAppearance(themeInfo: themeInfo)
-        terminalAreaController?.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
-        companionToolController?.updateAppearance(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
-        commandPaletteController?.updateAppearance(themeInfo: themeInfo)
-    }
-
-    private func refreshSettingsWindowAppearance(adapter: GhosttyAdapter, themeInfo: GhosttyThemeInfo) {
-        guard let settingsWindow = settingsWindowController?.window else { return }
-        adapter.syncThemedWindowAppearance(settingsWindow)
-        settingsWindow.contentViewController?.view.wantsLayer = true
-        settingsWindow.contentViewController?.view.layer?.backgroundColor = themeInfo.background.cgColor
-    }
 
     // MARK: - Proxy
 
@@ -1126,6 +1157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // ── Window (view + window merged) ────────────────────────────
         let windowMenuItem = NSMenuItem()
         let windowMenu = NSMenu(title: .localized("Window"))
+        windowMenu.addItem(configurableMenuItem("commandPalette.toggle", title: .localized("Command Palette…"), action: #selector(toggleCommandPaletteMenuAction)))
         windowMenu.addItem(configurableMenuItem("window.toggleSidebar", title: .localized("Toggle Sidebar"), action: #selector(toggleSidebarMenuAction)))
         // Locked: Toggle Full Screen (responder chain)
         windowMenu.addItem(menuItem(.localized("Toggle Full Screen"), action: #selector(NSWindow.toggleFullScreen(_:)), key: "f", mods: [.command, .control]))
@@ -1392,6 +1424,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         showRemoteConnectWizard()
     }
 
+    @objc private func toggleCommandPaletteMenuAction() {
+        commandPanelController?.toggle()
+    }
+
     @objc private func toggleSidebarMenuAction() {
         rootSplitVC?.toggleSidebar()
     }
@@ -1418,9 +1454,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             )
         }
         agentDashboardPanel?.toggle()
-        // Sync appearance with Ghostty terminal theme
-        let themeInfo = terminalAreaController?.themeInfo ?? .fallback
-        agentDashboardPanel?.updateAppearance(themeInfo: themeInfo)
+        // Register after toggle so the panel's window exists; the distributor paints it
+        // with the current theme now and on every later change.
+        if let panel = agentDashboardPanel {
+            themeDistributor.register(panel)
+        }
+    }
+
+    /// Header toggle: hide the companion pane if visible, otherwise reopen it on the
+    /// last-used tool (defaulting to Files) — the pane-level counterpart to ⌘E/⌘G.
+    private func toggleCompanionPane() {
+        if companionToolState.isVisible {
+            closeCompanionTool()
+            terminalAreaController?.focusCurrentSurface()
+        } else {
+            toggleCompanionTool(companionToolState.activeTool ?? .yazi)
+        }
     }
 
     private func toggleCompanionTool(_ tool: CompanionTool) {
@@ -1430,6 +1479,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if sameToolVisible && toolIsFocused {
             closeCompanionTool()
             terminalAreaController?.focusCurrentSurface()
+            return
+        }
+
+        guard let manager = workspaceManager,
+              let context = manager.companionToolLaunchContext() else {
+            NSSound.beep()
+            return
+        }
+
+        showCompanionTool(tool, context: context)
+    }
+
+    /// Tab-bar select: reveal `tool` in the pane, switching from the other tool if
+    /// needed. Unlike ⌘E/⌘G (`toggleCompanionTool`), selecting the already-active tool
+    /// focuses it instead of closing the pane.
+    private func selectCompanionTool(_ tool: CompanionTool) {
+        if companionToolState.activeTool == tool, companionToolState.isVisible {
+            companionToolController?.focus()
             return
         }
 
@@ -1585,19 +1652,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         alert.runModal()
     }
 
-    // MARK: - Command Palette (Task 2.6.5)
+    // MARK: - Command Panel
 
-    private func setupCommandPalette(appState: AppState, manager: WorkspaceManager) {
-        let palette = CommandPaletteController(appState: appState)
-        if let themeInfo = terminalAreaController?.themeInfo {
-            palette.updateAppearance(themeInfo: themeInfo)
-        }
-        self.commandPaletteController = palette
+    private func setupCommandPanel(appState: AppState, manager: WorkspaceManager) {
+        let rootPage = RootSearchPage(appState: appState)
+        let panel = CommandPanelController(rootPage: rootPage)
+        self.commandPanelController = panel
+        themeDistributor.register(panel)
 
         // Wire item selection to WorkspaceManager navigation and actions
-        palette.onSelectItem = { [weak self, weak manager] item in
+        rootPage.onSelectItem = { [weak self, weak manager] item in
             guard let self, let manager else { return }
             self.handlePaletteSelection(item, manager: manager)
+        }
+
+        // "Create Worktree" pushes the workspace page inside the panel.
+        rootPage.makeWorkspacePage = { [weak self] in
+            self?.configuredWorkspacePageForPush()
         }
 
         // Build action map: binding IDs → closures that execute the action.
@@ -1612,7 +1683,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
 
         keyMonitorActionMap = [
-            "commandPalette.toggle": { [weak palette] in palette?.toggle(mode: .allItems) },
+            "commandPalette.toggle": { [weak panel] in panel?.toggle() },
             "worktrees.create": { [weak self] in self?.showCreateWorktreePanel() },
             "worktrees.cycleNext": { [weak self] in self?.workspaceManager?.cycleWorktree(forward: true) },
             "worktrees.cyclePrevious": { [weak self] in self?.workspaceManager?.cycleWorktree(forward: false) },
@@ -1652,7 +1723,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             "other.openProject": { [weak self] in self?.showAddProjectPanel() },
             "other.agentDashboard": { [weak self] in self?.toggleAgentDashboardAction() },
             // Backward-compatible alias for users who still have the old project switcher binding.
-            "other.projectSwitcher": { [weak self] in self?.commandPaletteController?.toggle(mode: .allItems) },
+            "other.projectSwitcher": { [weak self] in self?.commandPanelController?.toggle() },
         ]
 
         // Register key monitor that dispatches via the key binding store
@@ -1718,6 +1789,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         case "action.check-for-updates":
             updateController?.checkForUpdates()
+
+        case "action.toggle-sidebar":
+            toggleSidebarMenuAction()
+        case "action.open-files-pane":
+            toggleCompanionTool(.yazi)
+        case "action.open-git-pane":
+            toggleCompanionTool(.lazygit)
+        case "action.split-right":
+            splitRightMenuAction()
+        case "action.split-down":
+            splitDownMenuAction()
 
         default:
             // Handle tool install hints — copy install command to clipboard

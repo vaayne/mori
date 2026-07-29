@@ -39,7 +39,7 @@ This writes the base64-encoded private key to a file. **Do not commit this value
 
 1. On app launch, `UpdateController` starts Sparkle's `SPUUpdater`.
 2. Sparkle periodically checks the appcast feed at `https://raw.githubusercontent.com/vaayne/homebrew-tap/main/mori-appcast.xml`.
-3. If a newer version is found, an update badge appears in the titlebar.
+3. If a newer version is found, an update pill appears at the window's top-right corner, overlaid on the header band.
 4. The user can click the badge to view release notes and install the update.
 5. Sparkle downloads, verifies the EdDSA signature, extracts, and relaunches.
 

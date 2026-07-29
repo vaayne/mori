@@ -21,6 +21,10 @@ enum WorkspaceError: Error, LocalizedError {
     case remoteSessionNameEmpty
     case remoteSessionNotFound(String)
     case remoteSessionAlreadyAttached(String)
+    case unsafeWorkspaceDeletion(String)
+    case deletionInProgress
+    case pullRequestUnavailable(Int)
+    case pullRequestRequiresGitRepo
 
     var errorDescription: String? {
         switch self {
@@ -58,6 +62,17 @@ enum WorkspaceError: Error, LocalizedError {
                 format: .localized("tmux session \"%@\" is already attached to another workspace. Choose a different session or create a new one."),
                 name
             )
+        case .unsafeWorkspaceDeletion(let reason):
+            return reason
+        case .deletionInProgress:
+            return .localized("This workspace is already being deleted.")
+        case .pullRequestUnavailable(let number):
+            return String(
+                format: .localized("Could not resolve pull request #%d. Check that gh is installed, authenticated, and the PR exists."),
+                number
+            )
+        case .pullRequestRequiresGitRepo:
+            return .localized("Creating a workspace from a pull request requires a git repository.")
         }
     }
 }
@@ -149,6 +164,13 @@ final class WorkspaceManager {
         for project in appState.projects {
             let wts = try worktreeRepo.fetchAll(forProject: project.id)
             allWorktrees.append(contentsOf: wts)
+        }
+        // Self-heal: a transient status in the store means a create/delete was
+        // interrupted (or an older build persisted one). Left as-is the row
+        // would be permanently unselectable and undeletable.
+        for i in allWorktrees.indices where allWorktrees[i].status.isTransient {
+            allWorktrees[i].status = .active
+            try? worktreeRepo.save(allWorktrees[i])
         }
         appState.worktrees = allWorktrees
         appState.uiState = try uiStateRepo.fetch()
@@ -478,6 +500,11 @@ final class WorkspaceManager {
     // MARK: - Select Worktree
 
     func selectWorktree(_ worktreeId: UUID) {
+        // Transient placeholders (creating/deleting) have no session to attach.
+        if let transient = appState.worktrees.first(where: { $0.id == worktreeId }),
+           transient.status.isTransient {
+            return
+        }
         appState.uiState.selectedWorktreeId = worktreeId
         appState.uiState.selectedWindowId = nil
 
@@ -526,6 +553,55 @@ final class WorkspaceManager {
     /// spawning a subprocess every tick. CI/review state moves on a minute scale.
     private var lastPullRequestFetch: [UUID: Date] = [:]
     private static let pullRequestThrottle: TimeInterval = 60
+    private var pullRequestSweepInFlight = false
+    private var lastProjectPullRequestFetch: [UUID: Date] = [:]
+    /// Tighter than the per-worktree throttle: the sweep costs one `gh pr list`
+    /// per project regardless of worktree count, so it can afford to be fresh.
+    private static let projectPullRequestThrottle: TimeInterval = 20
+
+    /// Best-effort sweep so sidebar PR badges populate and stay fresh without a
+    /// selection. One repo-wide `gh pr list` per local project (throttled),
+    /// mapped onto worktrees by head branch. A worktree whose badge says "open"
+    /// but whose branch is absent from the list just transitioned (merged or
+    /// closed) — resolve its terminal state once via the per-branch `gh pr view`
+    /// path, which sees non-open PRs. The in-flight guard keeps overlapping
+    /// poll ticks from stacking sweeps.
+    private func sweepPullRequests() async {
+        guard !pullRequestSweepInFlight else { return }
+        pullRequestSweepInFlight = true
+        defer { pullRequestSweepInFlight = false }
+
+        for project in appState.projects {
+            guard case .local = location(for: project), !project.repoRootPath.isEmpty else { continue }
+            let worktrees = appState.worktrees.filter {
+                $0.projectId == project.id && $0.branch != nil && !$0.status.isTransient
+            }
+            guard !worktrees.isEmpty else { continue }
+
+            if let last = lastProjectPullRequestFetch[project.id],
+               Date().timeIntervalSince(last) < Self.projectPullRequestThrottle { continue }
+            lastProjectPullRequestFetch[project.id] = Date()
+
+            // nil = fetch failed (gh missing, auth, network): keep whatever
+            // badges we have rather than clearing or "resolving" them.
+            guard let openByBranch = await gitHubBackend.openPullRequestsByBranch(
+                directory: project.repoRootPath
+            ) else { continue }
+
+            for worktree in worktrees {
+                guard let branch = worktree.branch else { continue }
+                if let info = openByBranch[branch] {
+                    if appState.pullRequests[worktree.id] != info {
+                        appState.pullRequests[worktree.id] = info
+                    }
+                } else if appState.pullRequests[worktree.id]?.state == .open {
+                    // Un-forced: the per-worktree throttle caps this fallback for
+                    // the rare branch gh names differently than the API head ref.
+                    await refreshPullRequest(for: worktree.id)
+                }
+            }
+        }
+    }
 
     /// Fetch the PR for a worktree's branch and update `appState.pullRequests`.
     /// Local worktrees only; remote (SSH) worktrees are skipped. Best-effort —
@@ -533,6 +609,7 @@ final class WorkspaceManager {
     /// `force` bypasses the throttle (used on selection for an immediate refresh).
     func refreshPullRequest(for worktreeId: UUID, force: Bool = false) async {
         guard let worktree = appState.worktrees.first(where: { $0.id == worktreeId }),
+              !worktree.status.isTransient,
               let branch = worktree.branch,
               case .local = location(for: worktree) else { return }
 
@@ -728,11 +805,11 @@ final class WorkspaceManager {
         // Refresh state
         try loadAll()
 
-        // Pull in any worktrees that already exist on disk for this repo, so a
-        // freshly added project shows all of its branches, not just the root.
-        if try await git.isGitRepo(path: path) {
-            _ = try? await importExistingWorktrees(projectId: project.id)
-        }
+        // Pull in any worktrees/clones that already exist on disk for this
+        // project, so a freshly added project shows all of its branches, not just
+        // the root. Self-gates: git-worktree discovery needs a repo, clone/plain
+        // discovery runs for any local project.
+        _ = try? await importExistingWorktrees(projectId: project.id)
 
         // Select the new project
         selectProject(project.id)
@@ -752,51 +829,126 @@ final class WorkspaceManager {
         }
         let projectLocation = location(for: project)
         let git = gitBackend(for: projectLocation)
-        guard try await git.isGitRepo(path: project.repoRootPath) else { return 0 }
+        let isRepo = try await git.isGitRepo(path: project.repoRootPath)
+        let isLocal: Bool = { if case .local = projectLocation { return true }; return false }()
 
-        let infos = try await git.listWorktrees(repoPath: project.repoRootPath)
-        let knownPaths = Set(
+        // Everything already tracked, or explicitly dismissed by the user, must
+        // not be re-imported. Paths imported earlier in this run are merged in as
+        // we go so the two discovery passes don't double-import.
+        var knownPaths = Set(
             appState.worktrees
                 .filter { $0.projectId == projectId }
                 .map { Self.normalizeWorktreePath($0.path) }
         )
+        for dismissed in project.dismissedWorktreePaths ?? [] {
+            knownPaths.insert(Self.normalizeWorktreePath(dismissed))
+        }
 
-        let tmux = tmuxBackend(for: projectLocation)
         var imported: [Worktree] = []
-        for info in infos where !info.isBare {
-            if knownPaths.contains(Self.normalizeWorktreePath(info.path)) { continue }
 
-            let name = info.branchName ?? (info.path as NSString).lastPathComponent
+        func register(
+            path: String,
+            branch: String?,
+            headSHA: String?,
+            isDetached: Bool,
+            kind: WorktreeKind
+        ) {
+            let name = branch ?? (path as NSString).lastPathComponent
             let sessionName = SessionNaming.sessionName(projectShortName: project.shortName, worktree: name)
             let worktree = Worktree(
                 projectId: projectId,
                 name: name,
-                path: info.path,
-                branch: info.branchName,
-                headSHA: info.head,
+                path: path,
+                branch: branch,
+                headSHA: headSHA,
                 isMainWorktree: false,
-                isDetached: info.isDetached,
+                isDetached: isDetached,
                 tmuxSessionName: sessionName,
                 status: .active,
-                location: projectLocation
+                location: projectLocation,
+                kind: kind
             )
-            try worktreeRepo.save(worktree)
+            try? worktreeRepo.save(worktree)
             imported.append(worktree)
+            // No tmux session here: a bulk import (discovery can find dozens of
+            // directories) must not spawn a login shell per row. The session is
+            // created lazily by ensureTmuxSession() when the row is selected.
+        }
 
-            // tmux session is best-effort, matching createWorktree() behavior.
-            let captured = worktree
-            Task {
-                _ = try? await tmux.createSession(
-                    name: sessionName,
-                    cwd: info.path,
-                    environment: moriPaneEnvironment(for: captured)
+        // Pass 1: registered git worktrees (works local + remote).
+        if isRepo {
+            let infos = try await git.listWorktrees(repoPath: project.repoRootPath)
+            for info in infos where !info.isBare {
+                let norm = Self.normalizeWorktreePath(info.path)
+                guard knownPaths.insert(norm).inserted else { continue }
+                register(
+                    path: info.path,
+                    branch: info.branchName,
+                    headSHA: info.head,
+                    isDetached: info.isDetached,
+                    kind: .gitWorktree
                 )
-                await onSessionCreated?(tmux)
+            }
+        }
+
+        // Pass 2: COW clones / plain dirs under the discovery directory (local only).
+        if isLocal {
+            let baseDir = ToolSettings.load().resolvedWorktreeBaseDir()
+            let projectSlug = SessionNaming.slugify(project.name)
+            let discoveryDir = (baseDir as NSString).appendingPathComponent(projectSlug)
+            let entries = (try? FileManager.default.contentsOfDirectory(atPath: discoveryDir)) ?? []
+            for entry in entries {
+                let fullPath = (discoveryDir as NSString).appendingPathComponent(entry)
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir),
+                      isDir.boolValue else { continue }
+                let norm = Self.normalizeWorktreePath(fullPath)
+                guard knownPaths.insert(norm).inserted else { continue }
+
+                switch CowCloner.classify(path: fullPath) {
+                case .fullRepo:
+                    let branch = try? await git.status(worktreePath: fullPath).branch
+                    register(
+                        path: fullPath,
+                        branch: branch,
+                        headSHA: nil,
+                        isDetached: false,
+                        kind: .cowClone
+                    )
+                case .plainDirectory:
+                    register(
+                        path: fullPath,
+                        branch: nil,
+                        headSHA: nil,
+                        isDetached: false,
+                        kind: .plainDirectory
+                    )
+                case .linkedWorktree:
+                    // A registered worktree would have been caught by pass 1; an
+                    // unregistered one is an orphan we don't manage — skip it.
+                    continue
+                }
             }
         }
 
         appState.worktrees.append(contentsOf: imported)
         return imported.count
+    }
+
+    /// Best-effort background discovery of workspaces created outside Mori
+    /// (e.g. COW clones on disk) for every local project. Called at launch;
+    /// swallows errors and shows no UI.
+    func autoImportExistingWorkspaces() async {
+        var didImport = false
+        for project in appState.projects {
+            guard case .local = location(for: project) else { continue }
+            if let count = try? await importExistingWorktrees(projectId: project.id), count > 0 {
+                didImport = true
+            }
+        }
+        if didImport {
+            await refreshRuntimeState()
+        }
     }
 
     /// Normalize a worktree path for set membership: expand `~`, collapse `..`,
@@ -868,6 +1020,21 @@ final class WorkspaceManager {
         let git = gitBackend(for: location(for: project))
         let repoPath = project.repoRootPath.isEmpty ? (repoPathHint ?? "") : project.repoRootPath
         return try await git.listBranches(repoPath: repoPath)
+    }
+
+    /// Prefetch open issues + PRs for the creation panel's `#` picker. Local
+    /// projects only — `gh` is a local-only tool, so remote/SSH projects (and a
+    /// missing gh) return an empty list, which keeps the panel's GitHub mode inert.
+    func fetchGitHubWorkItems(projectId: UUID, repoPath: String) async -> [GitHubWorkItem] {
+        guard let project = appState.projects.first(where: { $0.id == projectId }),
+              case .local = location(for: project) else {
+            return []
+        }
+        let dir = project.repoRootPath.isEmpty ? repoPath : project.repoRootPath
+        guard !dir.isEmpty else { return [] }
+        async let issues = gitHubBackend.issues(directory: dir)
+        async let prs = gitHubBackend.openPullRequests(directory: dir)
+        return await issues + prs
     }
 
     /// Update authentication settings for an existing remote project.
@@ -1012,15 +1179,38 @@ final class WorkspaceManager {
     ///   - branchName: The branch name (existing or new).
     ///   - createBranch: Whether to create a new branch (`true`) or use an existing one (`false`).
     ///   - baseBranch: Base branch for new branch creation (only used when `createBranch` is `true`).
+    ///   - origin: Where the request came from — a plain branch, a GitHub issue,
+    ///     or a GitHub PR (which is checked out onto its head branch).
     @discardableResult
     func createWorktree(
         projectId: UUID,
         branchName: String,
         createBranch: Bool = true,
-        baseBranch: String? = nil
+        baseBranch: String? = nil,
+        origin: CreationOrigin = .branch
     ) async throws -> Worktree {
+        guard let project = appState.projects.first(where: { $0.id == projectId }) else {
+            throw WorkspaceError.projectNotFound
+        }
+
+        // A PR origin works ON the PR's head branch rather than creating a new
+        // one. The panel carries the head ref from the prefetched `gh pr list`;
+        // the record's branch matches it so the PR badge/status pipeline lights
+        // up. A missing head ref (rare gh API gap) can't be materialized.
+        var effectiveBranch = branchName
+        var effectiveCreateBranch = createBranch
+        var pullRequestNumber: Int?
+        if case .pullRequest(let number, let headRef) = origin {
+            guard !headRef.isEmpty else {
+                throw WorkspaceError.pullRequestUnavailable(number)
+            }
+            effectiveBranch = headRef
+            effectiveCreateBranch = false
+            pullRequestNumber = number
+        }
+
         // Validate inputs
-        let trimmed = branchName.trimmingCharacters(in: .whitespaces)
+        let trimmed = effectiveBranch.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else {
             throw WorkspaceError.branchNameEmpty
         }
@@ -1031,9 +1221,6 @@ final class WorkspaceManager {
             throw WorkspaceError.branchNameInvalid(trimmed)
         }
 
-        guard let project = appState.projects.first(where: { $0.id == projectId }) else {
-            throw WorkspaceError.projectNotFound
-        }
         let projectLocation = location(for: project)
         let git = gitBackend(for: projectLocation)
         let tmux = tmuxBackend(for: projectLocation)
@@ -1062,45 +1249,76 @@ final class WorkspaceManager {
         // has not been created yet.
         try await git.ensureDirectory(path: projectDir)
 
-        // Git repos use `git worktree add`; non-git projects fall back to creating
-        // a plain directory so remote/local "workspace" creation still works.
         let isGitRepo = try await git.isGitRepo(path: project.repoRootPath)
-        if isGitRepo {
-            do {
-                try await git.addWorktree(
-                    repoPath: project.repoRootPath,
-                    path: worktreePath,
-                    branch: trimmed,
-                    createBranch: createBranch,
-                    baseBranch: baseBranch
-                )
-            } catch let gitError as GitError where createBranch && isBranchAlreadyExistsError(gitError, branch: trimmed) {
-                // User typed an existing branch but branch metadata was stale/unavailable.
-                // Retry as "use existing branch" to keep worksheet creation smooth.
-                try await git.addWorktree(
-                    repoPath: project.repoRootPath,
-                    path: worktreePath,
-                    branch: trimmed,
-                    createBranch: false,
-                    baseBranch: nil
-                )
-            }
-        } else {
-            try await git.ensureDirectory(path: worktreePath)
-        }
+        let preferCow = ToolSettings.load().preferCowClones
 
-        // Step 2: Create Worktree model and save to DB
+        // Optimistic placeholder: the row appears in the sidebar immediately
+        // with a "Creating…" status while materialization runs. In-memory only —
+        // it is persisted after promotion to .active, so a crash mid-create
+        // can't leave a stale record pointing at a half-built directory.
         let sessionName = SessionNaming.sessionName(projectShortName: project.shortName, worktree: trimmed)
-        let worktree = Worktree(
+        var worktree = Worktree(
             projectId: projectId,
             name: trimmed,
             path: worktreePath,
             branch: trimmed,
             isMainWorktree: false,
             tmuxSessionName: sessionName,
-            status: .active,
+            status: .creating,
             location: projectLocation
         )
+        appState.worktrees.append(worktree)
+
+        // Materialize the workspace on disk and record how it was made.
+        let kind: WorktreeKind
+        do {
+            if case .local = projectLocation, preferCow {
+                kind = try await materializeLocalWorkspace(
+                    repoRootPath: project.repoRootPath,
+                    worktreePath: worktreePath,
+                    branch: trimmed,
+                    createBranch: effectiveCreateBranch,
+                    baseBranch: baseBranch,
+                    isGitRepo: isGitRepo,
+                    git: git,
+                    pullRequestNumber: pullRequestNumber
+                )
+            } else if isGitRepo {
+                // SSH projects, or local with clones disabled: existing git worktree path.
+                try await addGitWorktreeWithRetry(
+                    git: git,
+                    repoPath: project.repoRootPath,
+                    path: worktreePath,
+                    branch: trimmed,
+                    createBranch: effectiveCreateBranch,
+                    baseBranch: baseBranch,
+                    pullRequestNumber: pullRequestNumber
+                )
+                kind = .gitWorktree
+            } else {
+                // Non-git plain-copy path can't check out a PR.
+                if pullRequestNumber != nil {
+                    throw WorkspaceError.pullRequestRequiresGitRepo
+                }
+                try await git.ensureDirectory(path: worktreePath)
+                kind = .plainDirectory
+            }
+        } catch {
+            // Roll back the placeholder so the sidebar doesn't show a ghost row.
+            appState.worktrees.removeAll { $0.id == worktree.id }
+            throw error
+        }
+
+        // A previously-removed workspace at this exact path is being recreated;
+        // clear the dismissal so auto-discovery treats it as tracked again.
+        clearDismissedWorkspacePath(projectId: projectId, path: worktreePath)
+
+        // Step 2: Promote the placeholder and persist.
+        worktree.status = .active
+        worktree.kind = kind
+        if let idx = appState.worktrees.firstIndex(where: { $0.id == worktree.id }) {
+            appState.worktrees[idx] = worktree
+        }
         try worktreeRepo.save(worktree)
 
         // Step 3: Create tmux session (partial failure tolerant)
@@ -1115,14 +1333,132 @@ final class WorkspaceManager {
             // tmux failure is non-fatal — session will be created on next select
         }
 
-        // Step 4: Update app state
-        appState.worktrees.append(worktree)
+        // Step 4: Select (the row is already in appState from the placeholder)
         selectWorktree(worktree.id)
 
         // Fire onWorktreeCreate hook
         fireHook(event: .onWorktreeCreate, worktreeId: worktree.id)
 
         return worktree
+    }
+
+    /// Create a local workspace by APFS copy-on-write clone, falling back to
+    /// `git worktree add` (git repos) or a plain recursive copy (non-git) when
+    /// cloning isn't possible (cross-volume / non-APFS). Returns the resulting
+    /// `WorktreeKind`. Runs the blocking clone off the main actor.
+    private func materializeLocalWorkspace(
+        repoRootPath: String,
+        worktreePath: String,
+        branch: String,
+        createBranch: Bool,
+        baseBranch: String?,
+        isGitRepo: Bool,
+        git: GitBackend,
+        pullRequestNumber: Int?
+    ) async throws -> WorktreeKind {
+        // A PR checkout needs a git repo; reject before cloning so a non-git
+        // project never silently produces a plain copy with no PR checked out.
+        // (Thrown here, outside the do/catch, so the plain-copy fallback can't
+        // swallow it.)
+        if pullRequestNumber != nil, !isGitRepo {
+            throw WorkspaceError.pullRequestRequiresGitRepo
+        }
+        do {
+            try await Task.detached(priority: .userInitiated) {
+                try CowCloner.clone(from: repoRootPath, to: worktreePath)
+            }.value
+
+            switch CowCloner.classify(path: worktreePath) {
+            case .fullRepo:
+                if let pullRequestNumber {
+                    // PR flow: reset the clone (drop inherited dirty tracked state
+                    // and stale worktree links) then let gh check out the PR head
+                    // branch, replacing gitFixup's branch checkout.
+                    try await CowCloner.resetForPullRequestCheckout(clonePath: worktreePath)
+                    try await gitHubBackend.checkoutPullRequest(number: pullRequestNumber, directory: worktreePath)
+                } else {
+                    try await CowCloner.gitFixup(
+                        clonePath: worktreePath,
+                        branch: branch,
+                        createBranch: createBranch,
+                        baseBranch: baseBranch
+                    )
+                }
+                return .cowClone
+            case .plainDirectory:
+                // Non-git project cloned successfully — a deliberate feature.
+                return .plainDirectory
+            case .linkedWorktree:
+                // Source is itself a linked worktree; a clone of it is untrustworthy.
+                // Drop it and fall back to the git worktree path below.
+                try? FileManager.default.removeItem(atPath: worktreePath)
+                throw CowCloner.CowCloneError.cloneUnsupported(
+                    errno: 0,
+                    message: "source is a linked git worktree"
+                )
+            }
+        } catch {
+            // Clone failed or was unsuitable — clean up any partial dest and fall back.
+            try? FileManager.default.removeItem(atPath: worktreePath)
+            if isGitRepo {
+                try await addGitWorktreeWithRetry(
+                    git: git,
+                    repoPath: repoRootPath,
+                    path: worktreePath,
+                    branch: branch,
+                    createBranch: createBranch,
+                    baseBranch: baseBranch,
+                    pullRequestNumber: pullRequestNumber
+                )
+                return .gitWorktree
+            } else {
+                // Non-git fallback: a plain recursive copy preserves the project
+                // contents (unlike the previous empty-directory behavior). Off the
+                // main actor — a physical copy of a large tree can take a while.
+                try await Task.detached(priority: .userInitiated) {
+                    try FileManager.default.copyItem(atPath: repoRootPath, toPath: worktreePath)
+                }.value
+                return .plainDirectory
+            }
+        }
+    }
+
+    /// `git worktree add` with the "branch already exists" retry preserved.
+    /// For a PR origin, adds a detached worktree (on `baseBranch` when given)
+    /// and lets `gh pr checkout` create/switch to the PR's head branch inside it.
+    private func addGitWorktreeWithRetry(
+        git: GitBackend,
+        repoPath: String,
+        path: String,
+        branch: String,
+        createBranch: Bool,
+        baseBranch: String?,
+        pullRequestNumber: Int? = nil
+    ) async throws {
+        if let pullRequestNumber {
+            try await git.addWorktreeDetached(repoPath: repoPath, path: path, ref: baseBranch)
+            try await gitHubBackend.checkoutPullRequest(number: pullRequestNumber, directory: path)
+            return
+        }
+        do {
+            try await git.addWorktree(
+                repoPath: repoPath,
+                path: path,
+                branch: branch,
+                createBranch: createBranch,
+                baseBranch: baseBranch
+            )
+        } catch let gitError as GitError where createBranch && isBranchAlreadyExistsError(gitError, branch: branch) {
+            // User typed an existing branch but branch metadata was stale/unavailable.
+            // Retry as "use existing branch" to keep workspace creation smooth.
+            try await git.addWorktree(
+                repoPath: repoPath,
+                path: path,
+                branch: branch,
+                createBranch: false,
+                baseBranch: nil
+            )
+        }
     }
 
     private func isBranchAlreadyExistsError(_ error: GitError, branch: String) -> Bool {
@@ -1144,17 +1480,13 @@ final class WorkspaceManager {
             return
         }
 
-        guard let projectId = appState.uiState.selectedProjectId else {
-            showErrorAlert(title: .localized("No Project Selected"), message: .localized("Please select a project first."))
-            return
-        }
-
         do {
             _ = try await createWorktree(
-                projectId: projectId,
+                projectId: request.projectId,
                 branchName: trimmed,
                 createBranch: request.isNewBranch,
-                baseBranch: request.baseBranch
+                baseBranch: request.baseBranch,
+                origin: request.origin
             )
             await refreshRuntimeState()
         } catch {
@@ -1180,6 +1512,7 @@ final class WorkspaceManager {
     func removeWorktree(worktreeId: UUID) async {
         guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }) else { return }
         let worktree = appState.worktrees[index]
+        guard !worktree.status.isTransient else { return }
 
         // Don't allow removing the main worktree
         if worktree.isMainWorktree {
@@ -1192,10 +1525,28 @@ final class WorkspaceManager {
             return
         }
 
+        // Decide, from on-disk truth, how "Delete Files" would remove this
+        // workspace, and whether we must warn about irrecoverable local commits.
+        let isLocal: Bool = { if case .local = location(for: worktree) { return true }; return false }()
+        let onDisk = isLocal ? CowCloner.classify(path: worktree.path) : .linkedWorktree
+        // A COW clone owns its branch/commits; a linked worktree's branch lives
+        // in the main repo, so only clones risk data loss on file deletion.
+        let isCowClone = isLocal && onDisk == .fullRepo
+
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = .localized("Remove worktree \"\(worktree.name)\"?")
-        alert.informativeText = .localized("This worktree is at \(worktree.path)")
+        if isCowClone, let (ahead, dirty) = await unpushedWork(for: worktree), ahead > 0 || dirty {
+            alert.informativeText = String(
+                format: .localized("This workspace is a copy-on-write clone at %@.\n\nBranch \"%@\" and its unpushed work (%d commit(s) ahead, %@) exist only in this clone. Deleting the files will permanently lose them."),
+                worktree.path,
+                worktree.branch ?? worktree.name,
+                ahead,
+                dirty ? String.localized("uncommitted changes present") : String.localized("no uncommitted changes")
+            )
+        } else {
+            alert.informativeText = .localized("This worktree is at \(worktree.path)")
+        }
         alert.addButton(withTitle: .localized("Remove from Mori"))
         alert.addButton(withTitle: .localized("Remove from Mori and Delete Files"))
         alert.addButton(withTitle: .localized("Cancel"))
@@ -1204,43 +1555,198 @@ final class WorkspaceManager {
 
         switch response {
         case .alertFirstButtonReturn:
+            // Re-find by id: the awaits and modal above suspend the main actor,
+            // and a background deletion finishing meanwhile shifts the array —
+            // the entry index would remove the wrong row or trap.
+            guard let idx = appState.worktrees.firstIndex(where: { $0.id == worktree.id }),
+                  !appState.worktrees[idx].status.isTransient else { return }
             // Fire onWorktreeClose hook before cleanup
             fireHook(event: .onWorktreeClose, worktreeId: worktree.id)
-            // Soft delete — mark unavailable
-            softDeleteWorktree(at: index)
+            // Soft delete — remove from Mori but leave files on disk.
+            recordDismissedWorkspacePath(projectId: worktree.projectId, path: worktree.path)
+            softDeleteWorktree(at: idx)
 
         case .alertSecondButtonReturn:
-            // Fire onWorktreeClose hook before cleanup
-            fireHook(event: .onWorktreeClose, worktreeId: worktree.id)
-            // Hard delete — git worktree remove + soft delete
-            softDeleteWorktree(at: index)
-            if let project = appState.projects.first(where: { $0.id == worktree.projectId }) {
-                let git = gitBackend(for: location(for: project))
-                do {
-                    try await git.removeWorktree(
-                        repoPath: project.repoRootPath,
-                        path: worktree.path,
-                        force: false
-                    )
-                } catch {
-                    let errorAlert = NSAlert()
-                    errorAlert.alertStyle = .warning
-                    errorAlert.messageText = .localized("Failed to delete worktree files")
-                    errorAlert.informativeText = error.localizedDescription
-                    errorAlert.addButton(withTitle: .localized("OK"))
-                    errorAlert.runModal()
-                }
+            // Delete files. Clones/plain dirs are removed directly (they are not
+            // registered git worktrees); linked worktrees use `git worktree remove`.
+            let useDirectDelete = isLocal && (onDisk == .fullRepo || onDisk == .plainDirectory)
+            if useDirectDelete, let reason = unsafeDirectoryDeletionReason(worktree: worktree) {
+                // Guardrails failed — abort entirely (do not remove from Mori).
+                showErrorAlert(
+                    title: .localized("Cannot delete workspace files"),
+                    message: reason
+                )
+                return
             }
-
-            // Kill tmux session if exists
-            if let sessionName = worktree.tmuxSessionName {
-                try? await tmuxBackend(for: worktree).killSession(id: sessionName)
-            }
+            startWorktreeDeletion(worktreeId: worktree.id, force: false)
 
         default:
             // Cancel — do nothing
             break
         }
+    }
+
+    /// Delete a workspace's files in the background while its sidebar row shows
+    /// "Deleting…". The row is deselected up front (its session dies first) but
+    /// only removed from state once the files are gone, so a failure can restore
+    /// the row and surface an error — with a Force Delete retry for linked
+    /// worktrees that git refuses to remove (uncommitted changes, locks).
+    private func startWorktreeDeletion(worktreeId: UUID, force: Bool) {
+        guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }),
+              appState.worktrees[index].status != .deleting else { return }
+        let worktree = appState.worktrees[index]
+        let previousStatus = worktree.status
+
+        appState.worktrees[index].status = .deleting
+        deselectWorktree(worktree.id)
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.performWorktreeFileDeletion(worktree, force: force)
+                // Fire only once the deletion is irreversible: a failed attempt
+                // restores the row, and close hooks must not see false or
+                // duplicate (Force Delete retry) close events.
+                self.fireHook(event: .onWorktreeClose, worktreeId: worktree.id)
+                self.recordDismissedWorkspacePath(projectId: worktree.projectId, path: worktree.path)
+                if let idx = self.appState.worktrees.firstIndex(where: { $0.id == worktree.id }) {
+                    self.softDeleteWorktree(at: idx)
+                }
+            } catch {
+                if let idx = self.appState.worktrees.firstIndex(where: { $0.id == worktree.id }) {
+                    self.appState.worktrees[idx].status = previousStatus
+                }
+                // Force only changes `git worktree remove`; a direct FileManager
+                // failure (permissions, mounts) would fail identically again.
+                let canForce = !force && ((try? self.requiresDirectDeletion(worktree)) == false)
+                self.presentDeletionFailure(worktreeId: worktree.id, message: error.localizedDescription, canForce: canForce)
+            }
+        }
+    }
+
+    private func presentDeletionFailure(worktreeId: UUID, message: String, canForce: Bool) {
+        guard canForce else {
+            showErrorAlert(title: .localized("Failed to delete worktree files"), message: message)
+            return
+        }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = .localized("Failed to delete worktree files")
+        alert.informativeText = message + "\n\n" + .localized("Force deleting discards uncommitted changes and untracked files in this worktree.")
+        alert.addButton(withTitle: .localized("Force Delete"))
+        alert.addButton(withTitle: .localized("Cancel"))
+        if alert.runModal() == .alertFirstButtonReturn {
+            startWorktreeDeletion(worktreeId: worktreeId, force: true)
+        }
+    }
+
+    /// True when the workspace's files must be removed directly (COW clone or
+    /// plain directory — not a registered git worktree); false for linked
+    /// worktrees, which go through `git worktree remove`. Throws when direct
+    /// deletion would be unsafe (path outside the managed workspace dir).
+    private func requiresDirectDeletion(_ worktree: Worktree) throws -> Bool {
+        let isLocal: Bool = { if case .local = location(for: worktree) { return true }; return false }()
+        let onDisk = isLocal ? CowCloner.classify(path: worktree.path) : .linkedWorktree
+        let useDirect = isLocal && (onDisk == .fullRepo || onDisk == .plainDirectory)
+        if useDirect, let reason = unsafeDirectoryDeletionReason(worktree: worktree) {
+            throw WorkspaceError.unsafeWorkspaceDeletion(reason)
+        }
+        return useDirect
+    }
+
+    /// Kill the session and remove the files. Shared by the UI and IPC deletion
+    /// paths; callers own state transitions (status, dismissal, soft delete).
+    private func performWorktreeFileDeletion(_ worktree: Worktree, force: Bool) async throws {
+        let useDirectDelete = try requiresDirectDeletion(worktree)
+
+        // Kill the session first so its processes stop holding (and writing) the tree.
+        if let sessionName = worktree.tmuxSessionName {
+            try? await tmuxBackend(for: worktree).killSession(id: sessionName)
+        }
+
+        if useDirectDelete {
+            try await Self.removeDirectoryOffMain(atPath: worktree.path)
+        } else if let project = appState.projects.first(where: { $0.id == worktree.projectId }) {
+            let git = gitBackend(for: location(for: project))
+            try await git.removeWorktree(repoPath: project.repoRootPath, path: worktree.path, force: force)
+        }
+    }
+
+    /// `FileManager.removeItem` walks the whole tree synchronously — many
+    /// seconds for a multi-GB clone — so it must not run on the main actor.
+    private nonisolated static func removeDirectoryOffMain(atPath path: String) async throws {
+        try await Task.detached(priority: .utility) {
+            try FileManager.default.removeItem(atPath: path)
+        }.value
+    }
+
+    /// Best-effort probe for work that would be permanently lost if a COW clone's
+    /// files are deleted: commits ahead of upstream (or, lacking an upstream,
+    /// ahead of the default/base branch) plus any uncommitted changes.
+    /// Returns nil when git status can't be read.
+    private func unpushedWork(for worktree: Worktree) async -> (ahead: Int, dirty: Bool)? {
+        let git = gitBackend(for: worktree)
+        guard let status = try? await git.status(worktreePath: worktree.path) else { return nil }
+        let dirty = status.isDirty
+        if status.upstream != nil {
+            return (status.ahead, dirty)
+        }
+        // No upstream: count commits not reachable from a plausible base ref.
+        for base in ["origin/HEAD", "main", "master"] {
+            if let ahead = try? await git.commitsAhead(worktreePath: worktree.path, baseRef: base) {
+                return (ahead, dirty)
+            }
+        }
+        return (0, dirty)
+    }
+
+    /// Validate that a workspace path is safe to delete via `FileManager`.
+    /// Returns a localized reason string when unsafe, nil when safe. All checks
+    /// must pass: strictly under the worktree base dir, not the repo root, not
+    /// the home directory, and not a suspiciously shallow path.
+    private func unsafeDirectoryDeletionReason(worktree: Worktree) -> String? {
+        let std = (worktree.path as NSString).standardizingPath
+        let baseDir = (ToolSettings.load().resolvedWorktreeBaseDir() as NSString).standardizingPath
+        let home = (NSHomeDirectory() as NSString).standardizingPath
+
+        let genericUnsafe = String(
+            format: .localized("Refusing to delete \"%@\": it is not inside the managed workspace directory."),
+            std
+        )
+
+        guard std.hasPrefix(baseDir + "/") else { return genericUnsafe }
+        if std == home { return genericUnsafe }
+        if let project = appState.projects.first(where: { $0.id == worktree.projectId }),
+           (project.repoRootPath as NSString).standardizingPath == std {
+            return genericUnsafe
+        }
+        // Depth sanity: never "/" or a top-level directory.
+        let components = std.split(separator: "/", omittingEmptySubsequences: true)
+        if components.count < 2 { return genericUnsafe }
+        return nil
+    }
+
+    /// Record that the user removed a workspace whose files may remain on disk,
+    /// so auto-discovery won't resurrect it. Paths are normalized for comparison.
+    private func recordDismissedWorkspacePath(projectId: UUID, path: String) {
+        guard let idx = appState.projects.firstIndex(where: { $0.id == projectId }) else { return }
+        let norm = Self.normalizeWorktreePath(path)
+        var dismissed = appState.projects[idx].dismissedWorktreePaths ?? []
+        guard !dismissed.contains(norm) else { return }
+        dismissed.append(norm)
+        appState.projects[idx].dismissedWorktreePaths = dismissed
+        try? projectRepo.save(appState.projects[idx])
+    }
+
+    /// Undo a prior dismissal (e.g. the user recreates a workspace at that path).
+    private func clearDismissedWorkspacePath(projectId: UUID, path: String) {
+        guard let idx = appState.projects.firstIndex(where: { $0.id == projectId }) else { return }
+        let norm = Self.normalizeWorktreePath(path)
+        guard var dismissed = appState.projects[idx].dismissedWorktreePaths,
+              dismissed.contains(norm) else { return }
+        dismissed.removeAll { $0 == norm }
+        appState.projects[idx].dismissedWorktreePaths = dismissed.isEmpty ? nil : dismissed
+        try? projectRepo.save(appState.projects[idx])
     }
 
     /// Remove a project and all its worktrees with confirmation dialog.
@@ -1303,53 +1809,72 @@ final class WorkspaceManager {
         if worktree.isMainWorktree {
             throw WorkspaceError.cannotDeleteMainWorktree
         }
+        guard worktree.status != .deleting else { throw WorkspaceError.deletionInProgress }
 
+        // Guardrails are checked before any side effect (tmux kill, status
+        // flip) so a refusal leaves the workspace fully intact.
+        _ = try requiresDirectDeletion(worktree)
+
+        let previousStatus = worktree.status
+        appState.worktrees[index].status = .deleting
+        deselectWorktree(worktree.id)
+
+        do {
+            try await performWorktreeFileDeletion(worktree, force: false)
+        } catch {
+            if let idx = appState.worktrees.firstIndex(where: { $0.id == worktree.id }) {
+                appState.worktrees[idx].status = previousStatus
+            }
+            throw error
+        }
+
+        // As in the UI path: only a completed deletion is a close event.
         fireHook(event: .onWorktreeClose, worktreeId: worktree.id)
-
-        if let sessionName = worktree.tmuxSessionName {
-            try? await tmuxBackend(for: worktree).killSession(id: sessionName)
+        recordDismissedWorkspacePath(projectId: worktree.projectId, path: worktree.path)
+        if let idx = appState.worktrees.firstIndex(where: { $0.id == worktree.id }) {
+            softDeleteWorktree(at: idx)
         }
-
-        if let project = appState.projects.first(where: { $0.id == worktree.projectId }) {
-            let git = gitBackend(for: worktree)
-            try await git.removeWorktree(repoPath: project.repoRootPath, path: worktree.path, force: false)
-        }
-
-        softDeleteWorktree(at: index)
     }
 
     private func softDeleteWorktree(at index: Int) {
         let worktree = appState.worktrees[index]
-        let wasSelected = appState.uiState.selectedWorktreeId == worktree.id
 
         // Remove from state and database
         appState.worktrees.remove(at: index)
         try? worktreeRepo.delete(id: worktree.id)
 
-        // If this was the selected worktree, clear selection
-        if wasSelected {
-            appState.uiState.selectedWorktreeId = nil
-            appState.uiState.selectedWindowId = nil
-            let active = appState.worktreesForSelectedProject.filter { $0.status == .active }
-            if let first = active.first {
-                selectWorktree(first.id)
-            }
-            saveUIState()
+        deselectWorktree(worktree.id)
+    }
+
+    /// If this worktree is selected, move selection to another active worktree
+    /// (or clear it). Used both when a row disappears and when it enters the
+    /// `.deleting` state, so the terminal never shows a dying session.
+    private func deselectWorktree(_ worktreeId: UUID) {
+        guard appState.uiState.selectedWorktreeId == worktreeId else { return }
+        appState.uiState.selectedWorktreeId = nil
+        appState.uiState.selectedWindowId = nil
+        let active = appState.worktreesForSelectedProject.filter { $0.status == .active }
+        if let first = active.first {
+            selectWorktree(first.id)
         }
+        saveUIState()
     }
 
     // MARK: - Tmux Integration
 
     /// Check the actual git branch for a worktree and update if it changed.
     private func refreshWorktreeBranch(worktreeId: UUID) async {
-        guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }) else { return }
-        let worktree = appState.worktrees[index]
+        guard let worktree = appState.worktrees.first(where: { $0.id == worktreeId }) else { return }
 
         let git = gitBackend(for: worktree)
         guard let gitStatus = try? await git.status(worktreePath: worktree.path),
               let branch = gitStatus.branch,
               branch != worktree.branch else { return }
 
+        // Re-find by id: the array can shift during the await (a background
+        // deletion completing), and the row may have turned transient.
+        guard let index = appState.worktrees.firstIndex(where: { $0.id == worktreeId }),
+              !appState.worktrees[index].status.isTransient else { return }
         appState.worktrees[index].branch = branch
         appState.worktrees[index].name = branch
         try? worktreeRepo.save(appState.worktrees[index])
@@ -1392,7 +1917,10 @@ final class WorkspaceManager {
     /// Ensure a tmux session exists for the given worktree, creating one if needed.
     /// Returns false if session scan/create failed.
     @discardableResult
-    private func ensureTmuxSession(for worktree: Worktree, showErrors: Bool = false) async -> Bool {
+    // Internal (not private): IPC entry points that need a live session
+    // (window new) must be able to create it — sessions are lazy since rows
+    // imported but never selected have none.
+    func ensureTmuxSession(for worktree: Worktree, showErrors: Bool = false) async -> Bool {
         guard let sessionName = worktree.tmuxSessionName else { return false }
         let tmux = tmuxBackend(for: worktree)
 
@@ -1537,13 +2065,27 @@ final class WorkspaceManager {
         pollingTask = nil
     }
 
+    /// Worktrees worth spawning git subprocesses for each tick: the selected
+    /// one plus any whose tmux session is alive (per the previous tick's scan).
+    /// Sessions exist only for workspaces the user actually opened, so an
+    /// imported-but-untouched row costs nothing; its git fields keep their
+    /// persisted values until it is selected.
+    private func worktreesToPoll() -> [Worktree] {
+        appState.worktrees.filter { worktree in
+            if worktree.id == appState.uiState.selectedWorktreeId { return true }
+            guard let sessionName = worktree.tmuxSessionName else { return false }
+            let sessions = latestSessionsByEndpoint[endpointKey(for: worktree)] ?? []
+            return sessions.contains { $0.name == sessionName }
+        }
+    }
+
     /// Perform a single coordinated poll: tmux scan + git status concurrently.
     func coordinatedPoll() async {
         // Run tmux scan and git status concurrently
         async let tmuxResult: [String: [TmuxSession]] = self.scanSessionsByEndpoint()
         async let gitResult: [UUID: WorktreeGitSnapshot] = {
             await self.gitStatusCoordinator.pollAll(
-                worktrees: self.appState.worktrees,
+                worktrees: self.worktreesToPoll(),
                 backendForWorktree: { worktree in
                     self.gitBackend(for: worktree)
                 },
@@ -1597,10 +2139,13 @@ final class WorkspaceManager {
         // Update worktree fields from git status
         updateWorktreeGitStatus(gitStatuses)
 
-        // Refresh the GitHub PR strip for the selected worktree (local only).
+        // Refresh GitHub PR info: the selected worktree inline (it drives the
+        // visible strip), the rest in a background sweep so every sidebar row
+        // can show its PR badge without ever having been selected.
         if let selectedId = appState.uiState.selectedWorktreeId {
             await refreshPullRequest(for: selectedId)
         }
+        Task { await sweepPullRequests() }
 
         // Roll up unread counts and aggregate badges
         updateUnreadCounts()
@@ -1876,6 +2421,10 @@ final class WorkspaceManager {
     private func updateWorktreeGitStatus(_ snapshots: [UUID: WorktreeGitSnapshot]) {
         for i in appState.worktrees.indices {
             guard let snapshot = snapshots[appState.worktrees[i].id] else { continue }
+            // The poll snapshot predates several awaits; the row may have
+            // flipped to a transient status (deletion started) since. Its git
+            // fields are about to be meaningless — don't touch or save them.
+            guard !appState.worktrees[i].status.isTransient else { continue }
             let status = snapshot.status
             let wt = appState.worktrees[i]
             let diff = snapshot.diff
@@ -2428,8 +2977,10 @@ final class WorkspaceManager {
     /// Cycle to the next or previous worktree (Ctrl+Tab / Ctrl+Shift+Tab).
     func cycleWorktree(forward: Bool) {
         guard let projectId = appState.uiState.selectedProjectId else { return }
+        // Skip transient rows: selectWorktree refuses them, so landing on one
+        // would leave the cycle stuck for as long as a deletion runs.
         let projectWorktrees = appState.worktrees
-            .filter { $0.projectId == projectId }
+            .filter { $0.projectId == projectId && !$0.status.isTransient }
         guard !projectWorktrees.isEmpty else { return }
 
         let currentIndex = projectWorktrees.firstIndex(where: {
@@ -2443,38 +2994,37 @@ final class WorkspaceManager {
 
     // MARK: - Session Death Detection
 
-    /// Called during polling to detect and recover missing sessions for active worktrees.
-    /// Returns true when any session was recreated, so caller can rescan immediately.
+    /// Called during polling to recover a missing session for the selected
+    /// worktree, whose terminal is on screen. Returns true when the session was
+    /// recreated, so caller can rescan immediately.
+    ///
+    /// Only the selected worktree: recreating sessions for every active row
+    /// would resurrect dozens of login shells after a bulk import or a tmux
+    /// server restart. Unselected rows get their session lazily on selection
+    /// via ensureTmuxSession().
     func detectAndRecoverDeadSessions(sessionsByEndpoint: [String: [TmuxSession]]) async -> Bool {
-        var recoveredAny = false
+        guard let worktree = appState.worktrees.first(where: {
+                  $0.id == appState.uiState.selectedWorktreeId && $0.status == .active
+              }),
+              let sessionName = worktree.tmuxSessionName else { return false }
 
-        for worktree in appState.worktrees where worktree.status == .active {
-            guard let sessionName = worktree.tmuxSessionName else { continue }
-            let endpointKey = endpointKey(for: worktree)
-            let sessions = sessionsByEndpoint[endpointKey] ?? []
-            let sessionAlive = sessions.contains { $0.name == sessionName }
-            guard !sessionAlive else { continue }
+        let sessions = sessionsByEndpoint[endpointKey(for: worktree)] ?? []
+        guard !sessions.contains(where: { $0.name == sessionName }) else { return false }
 
-            let tmux = tmuxBackend(for: worktree)
-            let recreated = (try? await tmux.createSession(
-                name: sessionName,
-                cwd: worktree.path,
-                environment: moriPaneEnvironment(for: worktree)
-            )) != nil
-            guard recreated else { continue }
+        let tmux = tmuxBackend(for: worktree)
+        let recreated = (try? await tmux.createSession(
+            name: sessionName,
+            cwd: worktree.path,
+            environment: moriPaneEnvironment(for: worktree)
+        )) != nil
+        guard recreated else { return false }
 
-            recoveredAny = true
-            await onSessionCreated?(tmux)
-
-            if worktree.id == appState.uiState.selectedWorktreeId {
-                // Force new terminal process; same session key can otherwise
-                // keep a dead surface cached after remote shell exit.
-                onTerminalDetach?()
-                onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
-            }
-        }
-
-        return recoveredAny
+        await onSessionCreated?(tmux)
+        // Force new terminal process; same session key can otherwise
+        // keep a dead surface cached after remote shell exit.
+        onTerminalDetach?()
+        onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
+        return true
     }
 
     // MARK: - Launch Restoration (Task 5.2)

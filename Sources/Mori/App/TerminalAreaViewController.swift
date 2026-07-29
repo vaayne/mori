@@ -75,7 +75,9 @@ private final class WorkspaceGlassBackgroundView: NSView {
 /// When a worktree is selected, it shows the corresponding terminal surface
 /// running `tmux new-session -A -s <session-name>` to attach-or-create.
 @MainActor
-final class TerminalAreaViewController: NSViewController {
+final class TerminalAreaViewController: NSViewController, ThemedSurface {
+    var themedWindow: NSWindow? { nil }
+
     private var glassBackgroundView: NSView?
 
     // MARK: - Dependencies
@@ -136,7 +138,7 @@ final class TerminalAreaViewController: NSViewController {
         let container = NSView()
         container.wantsLayer = true
         self.view = container
-        updateAppearance(themeInfo: themeInfo, isKeyWindow: true)
+        applyTheme(themeInfo)
         showEmptyState()
     }
 
@@ -148,7 +150,10 @@ final class TerminalAreaViewController: NSViewController {
         }
     }
 
-    func updateAppearance(themeInfo: GhosttyThemeInfo, isKeyWindow: Bool) {
+    /// isKeyWindow is an orthogonal concern owned here: the glass tint dims when the
+    /// window loses key, so read the live state rather than threading it through the pipeline.
+    func applyTheme(_ themeInfo: GhosttyThemeInfo) {
+        let isKeyWindow = view.window?.isKeyWindow ?? true
         view.layer?.backgroundColor = backgroundColor(for: themeInfo).cgColor
         updateGlassEffectIfNeeded(themeInfo: themeInfo, isKeyWindow: isKeyWindow)
     }

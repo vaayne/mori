@@ -8,9 +8,11 @@ import MoriUI
 
 /// Wraps SidebarContainerView in an NSHostingController, observing AppState.
 @MainActor
-final class SidebarHostingController: NSHostingController<SidebarContentView> {
+final class SidebarHostingController: NSHostingController<SidebarContentView>, ThemedSurface {
 
     private let appState: AppState
+
+    var themedWindow: NSWindow? { nil }
 
     init(
         appState: AppState,
@@ -26,6 +28,7 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
         onCloseWindow: ((String) -> Void)? = nil,
         onToggleCollapse: ((UUID) -> Void)? = nil,
         onAddProject: (() -> Void)? = nil,
+        onShowAgentDashboard: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
         onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)? = nil,
         onSendKeys: ((String, String) -> Void)? = nil,
@@ -47,6 +50,7 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
             onCloseWindow: onCloseWindow,
             onToggleCollapse: onToggleCollapse,
             onAddProject: onAddProject,
+            onShowAgentDashboard: onShowAgentDashboard,
             onOpenSettings: onOpenSettings,
             onRequestPaneOutput: onRequestPaneOutput,
             onSendKeys: onSendKeys,
@@ -73,7 +77,7 @@ final class SidebarHostingController: NSHostingController<SidebarContentView> {
     /// terminal canvas — darkened in dark themes, gently darkened in light themes —
     /// so the chrome reads as its own plane (matching Finder/Mail/Xcode), instead
     /// of dissolving into the terminal when both use Ghostty's background colour.
-    func updateAppearance(themeInfo: GhosttyThemeInfo) {
+    func applyTheme(_ themeInfo: GhosttyThemeInfo) {
         view.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
         let base = themeInfo.effectiveBackground
         let fraction: CGFloat = themeInfo.isDark ? 0.22 : 0.06
@@ -99,6 +103,7 @@ struct SidebarContentView: View {
     let onCloseWindow: ((String) -> Void)?
     let onToggleCollapse: ((UUID) -> Void)?
     let onAddProject: (() -> Void)?
+    let onShowAgentDashboard: (() -> Void)?
     let onOpenSettings: (() -> Void)?
     let onRequestPaneOutput: ((String, @escaping (String?) -> Void) -> Void)?
     let onSendKeys: ((String, String) -> Void)?
@@ -126,6 +131,7 @@ struct SidebarContentView: View {
             onCloseWindow: onCloseWindow,
             onToggleCollapse: onToggleCollapse,
             onAddProject: onAddProject,
+            onShowAgentDashboard: onShowAgentDashboard,
             onOpenSettings: onOpenSettings,
             onRequestPaneOutput: onRequestPaneOutput,
             onSendKeys: onSendKeys,

@@ -11,9 +11,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **macOS**: Added Ghostty-compatible terminal drag-and-drop for local files, URLs, and text. Dropped files are inserted as shell-escaped absolute paths.
 
-### Changed
+### 🎨 Design
 
+- **iOS (MoriRemote)**: The workspace sidebar gains a bottom quick-filter field (cmd+p style) — type to narrow projects, sessions, branches, and windows by name, title, or path. Matching a session keeps its whole group; otherwise only matching windows are shown. Thumb-reachable at the bottom edge, and it rides above the keyboard.
+- **iOS (MoriRemote)**: The keyboard-dismiss button is now pinned at the far left of the accessory key bar, outside the scrollable key row — it used to sit at the row's right end, forcing a swipe to the very end just to put the keyboard away.
+
+### 🐛 Bug Fixes
+
+- **iOS (MoriRemote)**: Switching to a tmux window no longer lands you in a stuck pane showing `(repeat) N` at the bottom. Panes that had been scrolled stay in tmux copy-mode across window switches, where digit keys hit tmux's default `(repeat)` command-prompt binding and swallow input; sidebar switches now cancel copy-mode on the target pane so it's immediately typeable.
+
+## [0.6.3] - 2026-07-24
+
+### 🎨 Design
+
+- **macOS**: Command Palette and the New Workspace panel are now one Command Panel — a single floating panel with shared material, rounded corners, search field, and list styling that follows your Ghostty theme. Picking **Create Worktree** in the palette switches to the workspace picker in place (with a "‹ New Workspace" breadcrumb; Esc goes back) instead of opening a separate dialog. The picker keeps all its behaviors — live filtering of branches/PRs/issues, `#123` and GitHub URL jumps, the conditional Base picker (now in a footer bar) — and your typed query now survives switching projects. ([#105](https://github.com/vaayne/mori/pull/105))
+- **macOS**: Command panel visual fixes: the panel is now a solid theme-derived surface (behind-window translucency used to mix desktop brightness into the theme background and read as muddy gray), right-aligned labels no longer clip at the panel edge, and the selection highlight is a quieter accent pill. The panel also dismisses when it loses focus, like Spotlight — no more unreachable floating panel that ignores Esc. ([#105](https://github.com/vaayne/mori/pull/105))
+
+### 🐛 Bug Fixes
+
+- **macOS**: Sidebar and companion-pane dividers are actually draggable again. The resize hit zone used to be swallowed by the neighboring views (you had to grab a 1-pixel line), and the sidebar was clamped to a 220–260pt range. Each divider now has a dedicated 8pt grab area that shows an accent-colored highlight on hover and while dragging, and the sidebar can grow up to 400pt.
+
+**Full Changelog**: [v0.6.2...v0.6.3](https://github.com/vaayne/mori/compare/v0.6.2...v0.6.3)
+
+## [0.6.2] - 2026-07-24
+
+### 🎨 Design
+
+- **macOS**: The window chrome has been rebuilt. The titlebar toolbar (and its macOS 26 glass-capsule buttons) is gone; each column now carries a slim 38pt header band instead — sidebar toggle, terminal tabs, and a companion-pane toggle above the terminal, a **Files/Git tab bar** above the companion pane, and the traffic lights over the sidebar. Any empty header area drags the window, and double-click follows your System Settings title-bar action. Terminal tabs are capped at 220pt with truncating titles; unselected tabs are quiet (status dot + title) and reveal their close button on hover. Clicking Files/Git tabs switches tools in place; ⌘E/⌘G keep their open/close toggle behavior. ([#104](https://github.com/vaayne/mori/pull/104))
+- **macOS**: With the toolbar buttons retired, their actions stay reachable everywhere else: all menu items and shortcuts are unchanged, **Command Palette gains a real menu item** (Window ▸ Command Palette…, ⇧⌘P), the sidebar footer now hosts **Open Project, Agent Dashboard, and Settings**, and the palette adds Toggle Sidebar, Open Files Pane, Open Git Pane, Split Right, and Split Down. ([#104](https://github.com/vaayne/mori/pull/104))
+- **macOS**: Sidebar status colors (agent states, git indicators, PR badges, selection accent) now derive from your Ghostty theme's ANSI palette instead of fixed system colors, so Mori's chrome matches whatever theme the terminal wears — the selection accent is the same blue as tmux's active-pane border. Colors that would sink into the theme background are automatically nudged toward the foreground until they stay legible; themes without a palette keep the previous system colors. ([#103](https://github.com/vaayne/mori/pull/103))
+- **macOS**: The terminal now has comfortable default padding (16px horizontal, 12px vertical) instead of text rendering flush against the window edges. Set `window-padding-x` / `window-padding-y` in your own Ghostty config to override it. ([#102](https://github.com/vaayne/mori/pull/102))
+- **macOS**: Quieter sidebar. PR badges are now gray unless the PR needs you (closed or changes requested keep the red number; failing/pending checks keep their color, passing checks go gray). The selected row highlight is stronger, and workspace rows breathe a little more. ([#102](https://github.com/vaayne/mori/pull/102))
+
+**Full Changelog**: [v0.6.1...v0.6.2](https://github.com/vaayne/mori/compare/v0.6.1...v0.6.2)
+
+## [0.6.1] - 2026-07-23
+
+### 🎨 Design (workspace creation)
+
+- **macOS**: Redesigned the workspace creation panel as a single searchable field over one unified list. Typing filters local branches, open pull requests, and open issues live (by number, title, or branch name), offers a "Create branch" row for new names, and `#123` or a pasted GitHub URL jumps straight to that PR/issue. The **Base** picker now appears only when it applies — creating a new branch or starting from an issue — since checking out an existing branch or a PR head has no base to choose. The separate "Check Out Existing" tab is gone.
+
+### 🐛 Bug Fixes
+
+- **macOS**: Importing existing workspaces no longer spawns a tmux session (and its login shell) per imported row — sessions are created lazily when a workspace is first selected. Dead-session recovery during polling is likewise limited to the selected workspace instead of resurrecting a session for every row.
+- **macOS**: Git status polling now covers only the selected workspace and workspaces with a live tmux session, in small concurrent batches — a large imported workspace list no longer spawns dozens of git processes every 5 seconds. Unpolled rows keep their last known status until selected.
+- **macOS**: Fixed a subprocess deadlock where `git`, `tmux`, or `gh` output larger than 64KB (e.g. `gh pr list` with CI status on a busy repo) filled the pipe buffer and hung the process forever — which also silently froze sidebar PR badges.
+- **macOS**: Sidebar PR badges no longer render the PR number with locale digit grouping ("#16,838").
+- **macOS**: Removing a workspace with "Delete Files" no longer freezes the app while a multi-GB clone is deleted. The row shows "Deleting…" and deletion runs in the background; the row is only removed once the files are gone, and reappears with an error if deletion fails. When git refuses to remove a worktree (uncommitted changes, locks), the error now offers a **Force Delete** retry.
+
+### 🎨 Design
+
+- **macOS**: Removed the diff counts (`+N -M`) from sidebar workspace rows; they now live in the row tooltip.
+
+**Full Changelog**: [v0.6.0...v0.6.1](https://github.com/vaayne/mori/compare/v0.6.0...v0.6.1)
+
+## [0.6.0] - 2026-07-23
+
+### ✨ Features
+
+- **macOS**: Redesigned the workspace creation panel as a two-tab dialog that answers one question — which branch the new workspace checks out. **New Branch** types a name to `checkout -b` off a chosen **Base**, or picks an open GitHub issue to start from (auto-named `issue-<number>-<title-slug>`); if the name already matches an existing branch, the panel says so and checks it out instead of blocking. **Check Out Existing** is one filterable list of local branches and open pull requests (a PR checks out its head branch, lighting up its badge and CI status), excluding any branch that already backs a workspace. A constant **Create Workspace** button confirms; Enter / ⌘⏎ / click work, Esc closes. Pasting a GitHub issue/PR URL — or typing `#123` — jumps to the right tab and selects it. ([#100](https://github.com/vaayne/mori/pull/100))
+- **macOS**: Sidebar workspace rows now show a pull request badge (`#number` plus CI status) next to the status line, with the PR state and title in the tooltip. PR info refreshes in the background for all local workspaces — one repo-wide query per project every ~20s — not just the selected one. ([#100](https://github.com/vaayne/mori/pull/100))
+- **macOS**: New local workspaces are now created as APFS copy-on-write clones of the project directory, so `node_modules`, build artifacts, and other untracked files are available instantly (a single `clonefile` syscall — seconds even for multi-GB repos). The new workspace appears in the sidebar immediately with a "Creating…" status while it materializes. Falls back to `git worktree` (git repos) or a plain copy (non-git) on non-APFS/cross-volume targets. A new setting under Worktree location — "Prefer copy-on-write clones for new workspaces" — toggles the behavior (on by default). Clones on disk are auto-discovered at launch, and deleting a clone warns before destroying unpushed local commits. ([#99](https://github.com/vaayne/mori/pull/99))
+
+### 🎨 Design
+
+- **macOS**: Decluttered sidebar workspace rows so attention states stand out: the status line now appears only for agent activity, merge conflicts, creating, or a PR badge — "Ready to merge" and last-activity timestamps moved into the row tooltip (along with the full branch name). Diff counts render as quiet dimmed text instead of a bordered pill, and ⌘1–9 quick-jump hints show only while ⌘ is held. ([#100](https://github.com/vaayne/mori/pull/100))
+- **macOS**: Moved the sidebar's "New workspace" and overflow ("…") actions into the project header as hover-revealed icons next to the collapse chevron, removing the separate row beneath each project. The icons stay visible for projects with no workspaces yet.
 - **macOS**: Redesigned the command palette visual treatment with a blurred Ghostty-themed container, lighter search chrome, tighter rows, clearer type labels, and stronger keyboard selection focus.
+
+**Full Changelog**: [v0.5.7...v0.6.0](https://github.com/vaayne/mori/compare/v0.5.7...v0.6.0)
 
 ## [0.5.7] - 2026-07-06
 

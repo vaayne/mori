@@ -66,6 +66,31 @@ final class CommandPaletteDataSource {
             title: .localized("Check for Updates"),
             subtitle: .localized("Check for available Mori updates")
         ))
+        items.append(.action(
+            id: "action.toggle-sidebar",
+            title: .localized("Toggle Sidebar"),
+            subtitle: .localized("Show or hide the projects sidebar")
+        ))
+        items.append(.action(
+            id: "action.open-files-pane",
+            title: .localized("Open Files Pane"),
+            subtitle: .localized("Open the Files companion pane")
+        ))
+        items.append(.action(
+            id: "action.open-git-pane",
+            title: .localized("Open Git Pane"),
+            subtitle: .localized("Open the Git companion pane")
+        ))
+        items.append(.action(
+            id: "action.split-right",
+            title: .localized("Split Right"),
+            subtitle: .localized("Split the current pane to the right")
+        ))
+        items.append(.action(
+            id: "action.split-down",
+            title: .localized("Split Down"),
+            subtitle: .localized("Split the current pane downward")
+        ))
 
         // Agent windows — searchable by agent name
         for window in appState.runtimeWindows where window.detectedAgent != nil {

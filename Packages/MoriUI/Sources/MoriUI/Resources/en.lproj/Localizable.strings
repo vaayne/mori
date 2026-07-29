@@ -4,6 +4,8 @@
 "Active window" = "Active window";
 "Add Project" = "Add Project";
 "Open Project (⇧⌘O)" = "Open Project (⇧⌘O)";
+"Agent Dashboard (⇧⌘A)" = "Agent Dashboard (⇧⌘A)";
+"Settings (⌘,)" = "Settings (⌘,)";
 "Adds a notify entry to ~/.codex/config.toml for agent turn completion events." = "Adds a notify entry to ~/.codex/config.toml for agent turn completion events.";
 "Adds hooks to ~/.claude/settings.json for prompt submit, tool use, stop, and notification events." = "Adds hooks to ~/.claude/settings.json for prompt submit, tool use, stop, and notification events.";
 "Agent" = "Agent";
@@ -178,6 +180,8 @@
 "Cancelled" = "Cancelled";
 "Show Cancelled (%lld)" = "Show Cancelled (%lld)";
 "Hide Cancelled" = "Hide Cancelled";
+"Creating…" = "Creating…";
+"Deleting…" = "Deleting…";
 "just now" = "just now";
 "%lldm ago" = "%lldm ago";
 "%lldh ago" = "%lldh ago";
@@ -311,3 +315,17 @@
 "Used when macOS is in dark appearance." = "Used when macOS is in dark appearance.";
 "Light" = "Light";
 "Dark" = "Dark";
+
+/* Copy-on-write clone workspaces */
+"Prefer copy-on-write clones for new workspaces" = "Prefer copy-on-write clones for new workspaces";
+"Create local workspaces as instant APFS clones of the project (keeping node_modules, build artifacts, and other untracked files). Falls back to a git worktree when cloning isn't possible." = "Create local workspaces as instant APFS clones of the project (keeping node_modules, build artifacts, and other untracked files). Falls back to a git worktree when cloning isn't possible.";
+
+/* Pull request badge */
+"right-click the worktree to open" = "right-click the worktree to open";
+"Draft" = "Draft";
+"Merged" = "Merged";
+"Closed" = "Closed";
+"Open" = "Open";
+"Review required" = "Review required";
+"Approved" = "Approved";
+"Changes requested" = "Changes requested";

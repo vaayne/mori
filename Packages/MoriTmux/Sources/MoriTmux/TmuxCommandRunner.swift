@@ -43,6 +43,36 @@ private final class SendableResumeGuard<T>: @unchecked Sendable {
     }
 }
 
+/// Reads a subprocess pipe to EOF on a background thread while the process
+/// runs, so output larger than the 64KB pipe buffer can't block the child.
+private final class PipeDrain: @unchecked Sendable {
+    private let group = DispatchGroup()
+    private let pipe: Pipe
+    private var data = Data()
+
+    init(_ pipe: Pipe) {
+        self.pipe = pipe
+        group.enter()
+        DispatchQueue.global(qos: .utility).async { [self] in
+            data = pipe.fileHandleForReading.readDataToEndOfFile()
+            group.leave()
+        }
+    }
+
+    /// Blocks until EOF and returns everything read. Call after the process
+    /// has terminated, when EOF is imminent.
+    func wait() -> Data {
+        group.wait()
+        return data
+    }
+
+    /// Call when the process never launched: no writer exists, so EOF would
+    /// never arrive and the reader thread would block forever.
+    func abandon() {
+        try? pipe.fileHandleForWriting.close()
+    }
+}
+
 /// Runs tmux commands via `Process` (Foundation).
 /// Resolves the tmux binary path via PATH lookup with common fallback locations.
 /// Loads the user's login shell environment on first use so that tools installed
@@ -343,20 +373,26 @@ public actor TmuxCommandRunner {
 
             let guard_ = SendableResumeGuard(continuation: continuation)
 
+            // Drain pipes while the process runs — reading only after
+            // termination deadlocks once output exceeds the 64KB pipe buffer
+            // (the child blocks on write and never exits). terminationHandler
+            // keeps the wait off the cooperative thread pool.
+            let stdoutDrain = PipeDrain(stdoutPipe)
+            let stderrDrain = PipeDrain(stderrPipe)
+            process.terminationHandler = { process in
+                let output = String(data: stdoutDrain.wait(), encoding: .utf8) ?? ""
+                let stderr = String(data: stderrDrain.wait(), encoding: .utf8) ?? ""
+                guard_.resume(with: .success((output, stderr, process.terminationStatus)))
+            }
+
             do {
                 try process.run()
             } catch {
+                process.terminationHandler = nil
+                stdoutDrain.abandon()
+                stderrDrain.abandon()
                 guard_.resume(with: .failure(error))
                 return
-            }
-
-            // Use terminationHandler to avoid blocking the cooperative thread pool
-            process.terminationHandler = { _ in
-                let outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: outData, encoding: .utf8) ?? ""
-                let stderr = String(data: errData, encoding: .utf8) ?? ""
-                guard_.resume(with: .success((output, stderr, process.terminationStatus)))
             }
 
             // Kill the process if it exceeds the timeout.

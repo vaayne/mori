@@ -23,5 +23,10 @@ let package = Package(
                 .process("Resources"),
             ]
         ),
+        .executableTarget(
+            name: "MoriUITests",
+            dependencies: ["MoriUI"],
+            path: "Tests/MoriUITests"
+        ),
     ]
 )

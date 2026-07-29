@@ -9,19 +9,24 @@ public struct ToolSettings: Codable, Equatable, Sendable {
     public var applyMoriTmuxDefaults: Bool
     /// Custom base directory for new local worktrees. Empty means use the default `~/.mori`.
     public var worktreeBasePath: String
+    /// Prefer APFS copy-on-write clones (with git worktree fallback) for new local
+    /// workspaces. Default true. Falls back automatically on non-APFS/cross-volume.
+    public var preferCowClones: Bool
 
     public init(
         tmuxPath: String = "",
         lazygitPath: String = "",
         yaziPath: String = "",
         applyMoriTmuxDefaults: Bool = true,
-        worktreeBasePath: String = ""
+        worktreeBasePath: String = "",
+        preferCowClones: Bool = true
     ) {
         self.tmuxPath = tmuxPath
         self.lazygitPath = lazygitPath
         self.yaziPath = yaziPath
         self.applyMoriTmuxDefaults = applyMoriTmuxDefaults
         self.worktreeBasePath = worktreeBasePath
+        self.preferCowClones = preferCowClones
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -30,6 +35,7 @@ public struct ToolSettings: Codable, Equatable, Sendable {
         case yaziPath
         case applyMoriTmuxDefaults
         case worktreeBasePath
+        case preferCowClones
     }
 
     private static let defaultsKey = "toolSettings"
@@ -54,6 +60,7 @@ public struct ToolSettings: Codable, Equatable, Sendable {
         yaziPath = try container.decodeIfPresent(String.self, forKey: .yaziPath) ?? ""
         applyMoriTmuxDefaults = try container.decodeIfPresent(Bool.self, forKey: .applyMoriTmuxDefaults) ?? true
         worktreeBasePath = try container.decodeIfPresent(String.self, forKey: .worktreeBasePath) ?? ""
+        preferCowClones = try container.decodeIfPresent(Bool.self, forKey: .preferCowClones) ?? true
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -63,6 +70,7 @@ public struct ToolSettings: Codable, Equatable, Sendable {
         try container.encode(yaziPath, forKey: .yaziPath)
         try container.encode(applyMoriTmuxDefaults, forKey: .applyMoriTmuxDefaults)
         try container.encode(worktreeBasePath, forKey: .worktreeBasePath)
+        try container.encode(preferCowClones, forKey: .preferCowClones)
     }
 
     /// Resolved base directory for new local worktrees, expanding `~` and falling

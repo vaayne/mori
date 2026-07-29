@@ -7,7 +7,7 @@ import MoriUI
 /// Floating NSPanel hosting the multi-pane agent dashboard.
 /// Non-modal, utility window style, toggleable independently of the main window.
 @MainActor
-final class AgentDashboardPanel: NSObject, NSWindowDelegate {
+final class AgentDashboardPanel: NSObject, NSWindowDelegate, ThemedSurface {
     private var panel: NSPanel?
     private var refreshTimer: Timer?
     private weak var workspaceManager: WorkspaceManager?
@@ -19,12 +19,8 @@ final class AgentDashboardPanel: NSObject, NSWindowDelegate {
         self.paneOutputCache = paneOutputCache
     }
 
-    /// Sync panel appearance with the Ghostty terminal theme.
-    func updateAppearance(themeInfo: GhosttyThemeInfo) {
-        guard let panel else { return }
-        panel.appearance = NSAppearance(named: themeInfo.isDark ? .darkAqua : .aqua)
-        panel.backgroundColor = themeInfo.background
-    }
+    /// The dashboard is opaque chrome; the default `ThemedSurface.applyTheme` paints it.
+    var themedWindow: NSWindow? { panel }
 
     var isVisible: Bool {
         panel?.isVisible ?? false

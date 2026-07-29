@@ -7,6 +7,28 @@ import Foundation
 @MainActor
 enum GhosttyConfigWriter {
 
+    /// Write Mori's default preferences, loaded *before* the user's config so any
+    /// value the user sets in ~/.config/ghostty/config wins (ghostty keeps the
+    /// last value it reads). Overrides that must beat the user's config belong
+    /// in `write(appSupportDirectory:)` instead.
+    @discardableResult
+    static func writeDefaults(appSupportDirectory: URL) -> String {
+        let configFilePath = appSupportDirectory.appendingPathComponent("ghostty-mori-defaults.conf")
+
+        let lines: [String] = [
+            "# Mori default preferences — do not edit manually.",
+            "# Loaded before ~/.config/ghostty/config, so your own config overrides these.",
+            "window-padding-x = 16",
+            "window-padding-y = 12",
+            "window-padding-color = extend",
+        ]
+
+        let content = lines.joined(separator: "\n") + "\n"
+        try? FileManager.default.createDirectory(at: appSupportDirectory, withIntermediateDirectories: true)
+        try? content.write(to: configFilePath, atomically: true, encoding: .utf8)
+        return configFilePath.path
+    }
+
     /// Write Mori-specific embedding overrides. Returns the file path.
     /// - Parameter appSupportDirectory: The directory where the config file should be written.
     /// - Returns: The path to the written config file.

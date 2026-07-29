@@ -70,6 +70,11 @@ enum CommandPaletteItem: Sendable {
             switch id {
             case "action.refresh": return "⌘R"
             case "action.open-project": return "⌘O"
+            case "action.toggle-sidebar": return "⌘B"
+            case "action.open-files-pane": return "⌘E"
+            case "action.open-git-pane": return "⌘G"
+            case "action.split-right": return "⌘D"
+            case "action.split-down": return "⇧⌘D"
             default: return nil
             }
         default:
@@ -105,6 +110,16 @@ enum CommandPaletteItem: Sendable {
                 return "network"
             case "action.check-for-updates":
                 return "arrow.triangle.2.circlepath"
+            case "action.toggle-sidebar":
+                return "sidebar.left"
+            case "action.open-files-pane":
+                return "folder"
+            case "action.open-git-pane":
+                return "arrow.triangle.branch"
+            case "action.split-right":
+                return "rectangle.split.2x1"
+            case "action.split-down":
+                return "rectangle.split.1x2"
             default:
                 return "command"
             }
