@@ -25,6 +25,7 @@
 "Edit" = "Edit";
 "Edit Server" = "Edit Server";
 "Enter text" = "Enter text";
+"Filter sessions" = "Filter sessions";
 "Host" = "Host";
 "hostname or IP" = "hostname or IP";
 "LABEL" = "LABEL";
@@ -37,6 +38,7 @@
 "New Session" = "New Session";
 "New Window" = "New Window";
 "No Servers" = "No Servers";
+"No matches for “%@”" = "No matches for “%@”";
 "No tmux sessions" = "No tmux sessions";
 "Not Connected" = "Not Connected";
 "Offline" = "Offline";

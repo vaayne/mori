@@ -165,16 +165,14 @@ final class ShellCoordinator {
                 do {
                     for try await chunk in channel.inbound {
                         guard let self else { return }
-                        guard await self.isCurrentConnection(generation) else { return }
-                        await MainActor.run {
-                            self.renderer?.feedBytes(chunk)
-                        }
+                        guard self.isCurrentConnection(generation) else { return }
+                        self.renderer?.feedBytes(chunk)
                     }
                 } catch {
                     log.error("Shell inbound error: \(error)")
                 }
                 guard let self, !Task.isCancelled else { return }
-                guard await self.isCurrentConnection(generation) else { return }
+                guard self.isCurrentConnection(generation) else { return }
                 await self.handleShellClosed(generation: generation)
             }
 
@@ -367,19 +365,19 @@ final class ShellCoordinator {
         tmuxPollTask?.cancel()
         tmuxPollTask = Task { [weak self] in
             guard let self else { return }
-            guard await self.isCurrentConnection(generation) else { return }
+            guard self.isCurrentConnection(generation) else { return }
 
             // Give the attach a moment to settle, then resolve our client tty.
             try? await Task.sleep(nanoseconds: 1_500_000_000)
-            guard !Task.isCancelled, await self.isCurrentConnection(generation) else { return }
+            guard !Task.isCancelled, self.isCurrentConnection(generation) else { return }
             await self.resolveClientTTY(generation: generation)
-            guard !Task.isCancelled, await self.isCurrentConnection(generation) else { return }
+            guard !Task.isCancelled, self.isCurrentConnection(generation) else { return }
             await self.pollTmuxState(generation: generation)
 
             // Poll every 5 seconds using NoPTY exec channels
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
-                guard !Task.isCancelled, await self.isCurrentConnection(generation) else { return }
+                guard !Task.isCancelled, self.isCurrentConnection(generation) else { return }
                 await self.pollTmuxState(generation: generation)
             }
         }
@@ -527,25 +525,36 @@ final class ShellCoordinator {
         iosClientTTY.map { "-c '\($0)' " } ?? ""
     }
 
+    /// tmux args (joined after a switch with `\;`) that leave copy-mode on the
+    /// target pane. A pane scrolled into copy-mode stays there across window
+    /// switches, where stray digits hit the default `(repeat)` command-prompt
+    /// binding and swallow input — cancel it so the pane is typeable on
+    /// arrival. `copy-mode -q` (tmux 3.2+) is a no-op outside copy-mode; on
+    /// older tmux it errors harmlessly after the switch has already happened.
+    private func cancelCopyModeArgs(target: String) -> String {
+        "copy-mode -q -t '\(target)'"
+    }
+
     /// Switch to a specific tmux window by index in the given session.
     /// `switch-client -t 'session:index'` moves our client to that session AND
     /// selects the window in one step; the attached client repaints to it.
     func selectTmuxWindow(session: String, windowIndex: Int) {
         iosCurrentSession = session
-        runTmuxCommand(tmuxCmd("switch-client \(clientFlag)-t '\(session):\(windowIndex)'"))
+        let target = "\(session):\(windowIndex)"
+        runTmuxCommand(tmuxCmd("switch-client \(clientFlag)-t '\(target)' \\; \(cancelCopyModeArgs(target: target))"))
     }
 
     /// Switch to a different tmux session.
     func switchTmuxSession(_ sessionName: String) {
         iosCurrentSession = sessionName
-        runTmuxCommand(tmuxCmd("switch-client \(clientFlag)-t '\(sessionName)'"))
+        runTmuxCommand(tmuxCmd("switch-client \(clientFlag)-t '\(sessionName)' \\; \(cancelCopyModeArgs(target: sessionName))"))
     }
 
     /// Switch to a specific pane: move our client to the owning window, then
     /// select the pane (pane ids like `%5` are unique across the server).
     func selectTmuxPane(session: String, windowIndex: Int, paneId: String) {
         iosCurrentSession = session
-        runTmuxCommand(tmuxCmd("switch-client \(clientFlag)-t '\(session):\(windowIndex)' \\; select-pane -t '\(paneId)'"))
+        runTmuxCommand(tmuxCmd("switch-client \(clientFlag)-t '\(session):\(windowIndex)' \\; select-pane -t '\(paneId)' \\; \(cancelCopyModeArgs(target: paneId))"))
     }
 
     /// Close (kill) a tmux window.
@@ -586,7 +595,7 @@ final class ShellCoordinator {
     func refreshTmuxState() {
         let generation = connectionGeneration
         Task { [weak self] in
-            guard let self, await self.isCurrentConnection(generation) else { return }
+            guard let self, self.isCurrentConnection(generation) else { return }
             await self.pollTmuxState(generation: generation)
         }
     }
@@ -611,7 +620,7 @@ final class ShellCoordinator {
                 log.error("Tmux exec failed: \(error)")
             }
             try? await Task.sleep(nanoseconds: 300_000_000)
-            guard let self, await self.isCurrentConnection(generation) else { return }
+            guard let self, self.isCurrentConnection(generation) else { return }
             await self.pollTmuxState(generation: generation)
         }
     }
@@ -629,7 +638,7 @@ final class ShellCoordinator {
         sendInput(Data(sequence.utf8))
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 500_000_000)
-            guard let self, await self.isCurrentConnection(generation) else { return }
+            guard let self, self.isCurrentConnection(generation) else { return }
             await self.pollTmuxState(generation: generation)
         }
     }

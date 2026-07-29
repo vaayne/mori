@@ -37,6 +37,8 @@
 "New Session" = "新建会话";
 "New Window" = "新建窗口";
 "No Servers" = "没有服务器";
+"Filter sessions" = "筛选会话";
+"No matches for “%@”" = "没有匹配“%@”的结果";
 "No tmux sessions" = "没有 tmux 会话";
 "Not Connected" = "未连接";
 "Offline" = "离线";
