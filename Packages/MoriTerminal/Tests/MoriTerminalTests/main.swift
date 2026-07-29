@@ -86,7 +86,22 @@ private func testFileDropEscapesPath() {
 }
 
 @MainActor
-private func testMixedDropPreservesOrder() {
+private func testMultipleFileDropPreservesOrder() {
+    let pasteboard = makePasteboard()
+    defer { pasteboard.releaseGlobally() }
+    pasteboard.writeObjects([
+        fileURLItem("file:///Users/test/a.png"),
+        fileURLItem("file:///Users/test/b.png"),
+    ])
+    assertEqual(
+        pasteboard.moriTerminalStringContents(),
+        "/Users/test/a.png /Users/test/b.png",
+        "multiple dropped files are joined in order"
+    )
+}
+
+@MainActor
+private func testFileDropIgnoresStringItems() {
     let pasteboard = makePasteboard()
     defer { pasteboard.releaseGlobally() }
     pasteboard.writeObjects([
@@ -95,8 +110,39 @@ private func testMixedDropPreservesOrder() {
     ])
     assertEqual(
         pasteboard.moriTerminalStringContents(),
-        "/Users/test/image.png describe this",
-        "multiple dropped items are joined in order"
+        "/Users/test/image.png",
+        "file URLs win over plain strings, matching Ghostty's drag precedence"
+    )
+}
+
+@MainActor
+private func testFileDropRejectsLineBreaksInPath() {
+    for (name, encoded) in [("newline", "%0A"), ("carriage return", "%0D")] {
+        let pasteboard = makePasteboard()
+        defer { pasteboard.releaseGlobally() }
+        pasteboard.writeObjects([
+            fileURLItem("file:///Users/test/evil\(encoded)rm%20-rf%20~.png"),
+        ])
+        assertEqual(
+            pasteboard.moriTerminalStringContents(),
+            nil,
+            "file paths containing a \(name) are rejected instead of inserted"
+        )
+    }
+}
+
+@MainActor
+private func testFileDropRejectsWholeDropOnUnsafePath() {
+    let pasteboard = makePasteboard()
+    defer { pasteboard.releaseGlobally() }
+    pasteboard.writeObjects([
+        fileURLItem("file:///Users/test/safe.png"),
+        fileURLItem("file:///Users/test/evil%0Arm%20-rf%20~.png"),
+    ])
+    assertEqual(
+        pasteboard.moriTerminalStringContents(),
+        nil,
+        "one unsafe path rejects the whole drop rather than silently dropping a file"
     )
 }
 
@@ -106,7 +152,10 @@ private func runTests() {
     testURLDropEscapesValue()
     testStringDrop()
     testFileDropEscapesPath()
-    testMixedDropPreservesOrder()
+    testMultipleFileDropPreservesOrder()
+    testFileDropIgnoresStringItems()
+    testFileDropRejectsLineBreaksInPath()
+    testFileDropRejectsWholeDropOnUnsafePath()
 
     if failures == 0 {
         print("MoriTerminalTests passed")
