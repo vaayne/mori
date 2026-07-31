@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🎨 Design
 
+- **macOS**: The sidebar now lists panes instead of windows. Single-pane windows read exactly as before, but split windows expand into one row per pane — each agent running in a split is individually visible (hook-assigned pane title, own state glyph and badge) and clickable, selecting that pane directly. Plain shell panes are numbered ("window · 2"), the hover preview and quick-reply target the row's own pane, and the worktree count chip counts panes.
 - **iOS (MoriRemote)**: The workspace sidebar gains a bottom quick-filter field (cmd+p style) — type to narrow projects, sessions, branches, and windows by name, title, or path. Matching a session keeps its whole group; otherwise only matching windows are shown. Thumb-reachable at the bottom edge, and it rides above the keyboard.
 - **iOS (MoriRemote)**: The keyboard-dismiss button is now pinned at the far left of the accessory key bar, outside the scrollable key row — it used to sit at the row's right end, forcing a swipe to the very end just to put the keyboard away.
 
