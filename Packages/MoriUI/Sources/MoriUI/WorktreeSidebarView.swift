@@ -202,13 +202,45 @@ public struct WorktreeSidebarView: View {
                 worktreeRow(worktree)
                 if expandedWorktrees.contains(worktree.id) {
                     ForEach(allWindows(for: worktree)) { window in
-                        WindowRowView(window: window, isActive: window.tmuxWindowId == selectedWindowId, shortcutIndex: nil, shortcutHintsVisible: shortcutHintsVisible, onSelect: { onSelectWindow(window.tmuxWindowId) }, onRequestPaneOutput: onRequestPaneOutput, onSendKeys: onSendKeys)
-                            .padding(.leading, MoriTokens.Spacing.xxl)
+                        windowRows(window)
                     }
                 }
             }
         }
         .padding(.horizontal, MoriTokens.Spacing.md)
+    }
+
+    /// Rows for one window: single-pane windows keep the classic window row
+    /// (selecting the window, labeled by window name); split windows get one
+    /// row per pane so each agent in a split is visible and clickable.
+    @ViewBuilder
+    private func windowRows(_ window: RuntimeWindow) -> some View {
+        let windowPanes = panes(in: window)
+        if windowPanes.count <= 1 {
+            WindowRowView(window: window, pane: windowPanes.first, isActive: window.tmuxWindowId == selectedWindowId, shortcutIndex: nil, shortcutHintsVisible: shortcutHintsVisible, onSelect: { onSelectWindow(window.tmuxWindowId) }, onRequestPaneOutput: onRequestPaneOutput, onSendKeys: onSendKeys)
+                .padding(.leading, MoriTokens.Spacing.xxl)
+        } else {
+            ForEach(Array(windowPanes.enumerated()), id: \.element.id) { index, pane in
+                WindowRowView(window: window, pane: pane, paneIndex: index + 1, isActive: window.tmuxWindowId == selectedWindowId && pane.isActive, shortcutIndex: nil, shortcutHintsVisible: shortcutHintsVisible, onSelect: {
+                    if let onSelectPane {
+                        onSelectPane(pane.tmuxPaneId)
+                    } else {
+                        onSelectWindow(window.tmuxWindowId)
+                    }
+                }, onRequestPaneOutput: onRequestPaneOutput, onSendKeys: onSendKeys)
+                    .padding(.leading, MoriTokens.Spacing.xxl)
+            }
+        }
+    }
+
+    private func panes(in window: RuntimeWindow) -> [RuntimePane] {
+        panes.filter { $0.tmuxWindowId == window.tmuxWindowId }
+    }
+
+    /// Number of rows the expanded worktree shows — one per pane, with
+    /// pane-less windows (stale poll data) still counting as one row.
+    private func paneRowCount(for worktree: Worktree) -> Int {
+        allWindows(for: worktree).reduce(0) { $0 + max(1, panes(in: $1).count) }
     }
 
     // MARK: - Worktree row
@@ -243,8 +275,8 @@ public struct WorktreeSidebarView: View {
                         .foregroundStyle(worktreeNameColor(worktree, selected: selected))
                         .lineLimit(1)
                     Spacer(minLength: MoriTokens.Spacing.sm)
-                    if wins.count >= 2 {
-                        windowChip(count: wins.count, expanded: expanded, selected: selected, alert: hiddenWindowAlert(wins, expanded: expanded)) { toggle(&expandedWorktrees, worktree.id) }
+                    if paneRowCount(for: worktree) >= 2 {
+                        windowChip(count: paneRowCount(for: worktree), expanded: expanded, selected: selected, alert: hiddenRowAlert(worktree, windows: wins, expanded: expanded)) { toggle(&expandedWorktrees, worktree.id) }
                     }
                 }
                 secondLine(worktree, title: title)
@@ -503,10 +535,13 @@ public struct WorktreeSidebarView: View {
 
     /// Colour for a hidden window that needs you (error wins over waiting), or nil
     /// when nothing is hidden — drives the dot on the worktree's window chip.
-    private func hiddenWindowAlert(_ windows: [RuntimeWindow], expanded: Bool) -> Color? {
-        guard !expanded, windows.count >= 2 else { return nil }
-        if windows.contains(where: { $0.badge == .error || $0.agentState == .error }) { return MoriTokens.Color.error }
-        if windows.contains(where: { $0.badge == .waiting || $0.agentState == .waitingForInput }) { return MoriTokens.Color.attention }
+    private func hiddenRowAlert(_ worktree: Worktree, windows: [RuntimeWindow], expanded: Bool) -> Color? {
+        guard !expanded, paneRowCount(for: worktree) >= 2 else { return nil }
+        let hiddenPanes = windows.flatMap { panes(in: $0) }
+        if windows.contains(where: { $0.badge == .error || $0.agentState == .error })
+            || hiddenPanes.contains(where: { $0.agentState == .error }) { return MoriTokens.Color.error }
+        if windows.contains(where: { $0.badge == .waiting || $0.agentState == .waitingForInput })
+            || hiddenPanes.contains(where: { $0.agentState == .waitingForInput }) { return MoriTokens.Color.attention }
         return nil
     }
 
