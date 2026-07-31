@@ -1,6 +1,6 @@
 import Foundation
 
-protocol SSHChildChannel: Sendable {
+protocol SSHChildChannel: AnyObject, Sendable {
     var receivedBytes: AsyncThrowingStream<Data, Error> { get }
     func execute(_ command: String) async throws
     func write(_ data: Data) async throws

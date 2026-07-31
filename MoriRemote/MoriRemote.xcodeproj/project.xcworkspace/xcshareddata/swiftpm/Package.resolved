@@ -1,5 +1,5 @@
 {
-  "originHash" : "b863132a16209191f5108706c9dfed66e0c53a15734915d1695be42c1c9d0cff",
+  "originHash" : "d2c468b19049b912dff0b54f1d822a2678c673ee6a73143f330b964f7c5645d8",
   "pins" : [
     {
       "identity" : "bigint",
@@ -16,15 +16,6 @@
       "location" : "https://github.com/h3nock/Citadel.git",
       "state" : {
         "revision" : "1d0eadd81d0a521b00ede6663c8b3301f5fc252e"
-      }
-    },
-    {
-      "identity" : "swift-argument-parser",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-argument-parser",
-      "state" : {
-        "revision" : "626b5b7b2f45e1b0b1c6f4a309296d1d21d7311b",
-        "version" : "1.7.1"
       }
     },
     {
@@ -96,15 +87,6 @@
       "state" : {
         "revision" : "7c6ad0fc39d0763e0b699210e4124afd5041c5df",
         "version" : "1.6.4"
-      }
-    },
-    {
-      "identity" : "swiftterm",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/migueldeicaza/SwiftTerm.git",
-      "state" : {
-        "revision" : "8e7a1e154f470e19c709a00a8768df348ba5fc43",
-        "version" : "1.13.0"
       }
     }
   ],

@@ -15,7 +15,7 @@ struct GhosttyRuntimeCallbackGate: Sendable {
 /// owns renderers and waits for unregister before releasing their handles.
 @MainActor
 final class GhosttyTmuxRuntime {
-    let instanceID = UUID()
+    let instanceID: UUID
     private let app: ghostty_app_t
     private let controller: TmuxSessionController
     private let link: TmuxSessionLink
@@ -33,8 +33,9 @@ final class GhosttyTmuxRuntime {
     /// it observable instead of silently dropping the controller callback.
     var onInputFailed: (@MainActor (String) -> Void)?
 
-    init(app: ghostty_app_t, transport: any TmuxControlTransport) {
+    init(app: ghostty_app_t, transport: any TmuxControlTransport, instanceID: UUID = UUID()) {
         self.app = app
+        self.instanceID = instanceID
         gate = GhosttyRuntimeCallbackGate(instanceID: instanceID)
         let relay = Relay()
         controller = TmuxSessionController(callbacks: .init(
@@ -49,14 +50,21 @@ final class GhosttyTmuxRuntime {
         controller.setOutboundSink { [link] bytes in link.enqueue(bytes) }
     }
 
-    func start(columns: UInt16, rows: UInt16) async throws {
+    func start(columns: UInt16, rows: UInt16, historyLineLimit: Int = TmuxSessionController.initialHistoryLineLimit) async throws {
         let controller = controller
-        try await link.start(beforeReceive: { try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in controller.start(columns: columns, rows: rows) { result in continuation.resume(with: result) } } })
+        try await link.start(beforeReceive: { try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in controller.start(columns: columns, rows: rows, historyLineLimit: historyLineLimit) { result in continuation.resume(with: result) } } })
     }
 
     func updateViewport(_ size: CGSize) {
         viewport = size
         surfaces.values.forEach { $0.update(size: size) }
+    }
+
+    func surface(for paneID: TmuxPaneID) -> TmuxPaneSurface? { surfaces[paneID] }
+    func selectWindow(_ id: TmuxWindowID) { controller.selectWindow(id) }
+    func selectPane(_ id: TmuxPaneID) { controller.selectPane(id) }
+    func mutateSharedWorkspace(_ mutation: TmuxClientCommandPolicy.SharedMutation) {
+        controller.mutateSharedWorkspace(mutation)
     }
 
     /// DEBUG probe feeds output only after the surface registration fence.

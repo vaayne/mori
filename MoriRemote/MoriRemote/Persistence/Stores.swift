@@ -84,6 +84,13 @@ struct UUIDJSONRepository<Record: UUIDRecord>: Sendable {
         records[index] = record
         try store.save(records)
     }
+
+    func remove(_ id: UUID) throws {
+        var records = try all()
+        guard records.contains(where: { $0.id == id }) else { throw PersistenceError.notFound(id) }
+        records.removeAll { $0.id == id }
+        try store.save(records)
+    }
 }
 
 /// Server updates own the host-trust invalidation rule so callers cannot accidentally carry trust to a new endpoint.
@@ -98,6 +105,7 @@ struct SavedServerRepository: Sendable {
 
     func all() throws -> [SavedServer] { try records.all() }
     func insertIfAbsent(_ server: SavedServer) throws -> Bool { try records.insertIfAbsent(server) }
+    func remove(_ id: UUID) throws { try records.remove(id) }
 
     func replace(_ server: SavedServer) throws {
         _ = try server.validated()
@@ -166,6 +174,15 @@ struct KeychainCredentialStore: CredentialStoring {
         } else if status != errSecSuccess {
             throw PersistenceError.keychain(status)
         }
+    }
+
+    func deletePassword(for identityID: UUID) throws {
+        let status = SecItemDelete([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: identityID.uuidString,
+        ] as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else { throw PersistenceError.keychain(status) }
     }
 }
 

@@ -223,6 +223,7 @@ final class TmuxPaneSurface {
     @discardableResult func paste(_ text: String) -> Bool { withBytes(text) { ghostty_terminal_surface_paste($0, $1, $2) } }
     @discardableResult func key(_ event: GhosttySurfaceKeyEvent) -> Bool {
         guard let surface, !closed else { return false }
+        controller.prepareForInput()
         return event.withCValue { accepted(ghostty_terminal_surface_key(surface, $0)) }
     }
 
@@ -251,6 +252,9 @@ final class TmuxPaneSurface {
 
     private func withBytes(_ text: String, _ operation: (ghostty_terminal_surface_t, UnsafePointer<UInt8>?, Int) -> ghostty_terminal_surface_input_result_e) -> Bool {
         guard let surface, !closed, !text.isEmpty else { return false }
+        // Do not inspect or alter copy mode while navigating, selecting, or
+        // copying. A real keystroke/paste is the sole intentional exit point.
+        controller.prepareForInput()
         let result: ghostty_terminal_surface_input_result_e = text.utf8.withContiguousStorageIfAvailable { operation(surface, $0.baseAddress, $0.count) } ?? Array(text.utf8).withUnsafeBufferPointer { operation(surface, $0.baseAddress, $0.count) }
         return accepted(result)
     }
@@ -377,6 +381,14 @@ extension GhosttyTerminalResponderView: UITextInput {
     func characterRange(at point: CGPoint) -> UITextRange? { _ = point; let zero = GhosttyVirtualTextPosition(0); return GhosttyVirtualTextRange(zero, zero) }
 }
 
+/// Identity-only seam for replacement tests; native surface handles stay private.
+struct GhosttyTerminalHostAttachmentPolicy {
+    static func needsReplacement(current: ObjectIdentifier?, next: ObjectIdentifier) -> Bool { current != next }
+    /// A reused SwiftUI host may outlive adoption of its pane view by another
+    /// host. Only the current superview owner may touch that shared surface.
+    static func ownsPaneView(superviewIsHostScroll: Bool) -> Bool { superviewIsHostScroll }
+}
+
 @MainActor
 final class GhosttyTerminalHostView: UIView, UIScrollViewDelegate {
     private let scroll = UIScrollView()
@@ -389,10 +401,22 @@ final class GhosttyTerminalHostView: UIView, UIScrollViewDelegate {
     override init(frame: CGRect) { super.init(frame: frame); scroll.delegate = self; scroll.alwaysBounceVertical = true; scroll.showsVerticalScrollIndicator = true; addSubview(scroll); addSubview(responder); let tap = UITapGestureRecognizer(target: self, action: #selector(focus)); addGestureRecognizer(tap); let long = UILongPressGestureRecognizer(target: self, action: #selector(handleSelection(_:))); addGestureRecognizer(long) }
     required init?(coder: NSCoder) { fatalError() }
     func install(_ pane: TmuxPaneSurface) {
+        guard GhosttyTerminalHostAttachmentPolicy.needsReplacement(current: self.pane.map(ObjectIdentifier.init), next: ObjectIdentifier(pane)) else {
+            synchronizePresentationActivity()
+            return
+        }
+        // SwiftUI may reuse this host while focusedPaneID changes. The old
+        // surface must be fully detached before the new view is ordered in,
+        // otherwise it can keep a display link and input callback alive here.
+        teardownCurrentPane()
         self.pane = pane
         responder.pane = pane
         pane.onTerminalActivity = { [weak self] in self?.synchronizeScrollFromTerminal() }
-        if pane.view.superview !== scroll { pane.view.removeFromSuperview(); scroll.addSubview(pane.view) }
+        pane.view.removeFromSuperview()
+        scroll.addSubview(pane.view)
+        budget = .init()
+        lastOffset = 0
+        isSynchronizingFromTerminal = false
         synchronizePresentationActivity()
         setNeedsLayout()
     }
@@ -408,7 +432,23 @@ final class GhosttyTerminalHostView: UIView, UIScrollViewDelegate {
         pane?.setFocused(window != nil && responder.isFirstResponder)
         pane?.view.alignGhosttyRendererSublayers()
     }
-    func detach() { responder.resignFirstResponder(); pane?.onTerminalActivity = nil; pane?.setFocused(false); pane?.setVisible(false); pane = nil }
+    func detach() { teardownCurrentPane() }
+    private func teardownCurrentPane() {
+        responder.resignFirstResponder()
+        responder.pane = nil
+        guard let pane else { return }
+        guard GhosttyTerminalHostAttachmentPolicy.ownsPaneView(superviewIsHostScroll: pane.view.superview === scroll) else {
+            // A newer host has adopted this view. Clearing the callback or
+            // visibility here would blank that live host's terminal.
+            self.pane = nil
+            return
+        }
+        pane.onTerminalActivity = nil
+        pane.setFocused(false)
+        pane.setVisible(false)
+        pane.view.removeFromSuperview()
+        self.pane = nil
+    }
     override func layoutSubviews() { super.layoutSubviews(); scroll.frame = bounds; responder.frame = bounds; guard let pane else { return }; pane.view.frame = CGRect(origin: CGPoint(x: 0, y: scroll.contentOffset.y), size: bounds.size); pane.update(size: bounds.size); let state = pane.interactionState().scrollbar; let cellHeight = max(bounds.height / CGFloat(max(state.len, 1)), 1); scroll.contentSize = CGSize(width: bounds.width, height: max(bounds.height, CGFloat(state.total) * cellHeight)) }
     @objc private func focus() { _ = responder.becomeFirstResponder(); synchronizePresentationActivity() }
     @objc private func handleSelection(_ recognizer: UILongPressGestureRecognizer) { guard recognizer.state == .began, let pane else { return }; pane.selectWord(at: recognizer.location(in: pane.view)); if let text = pane.copySelection(), !text.isEmpty { UIPasteboard.general.string = text } }

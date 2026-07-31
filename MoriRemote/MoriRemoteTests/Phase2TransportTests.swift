@@ -108,12 +108,27 @@ import Testing
             await #expect(throws: Error.self) { try await transport.start() }
             #expect(root.commands().count == 1)
         }
+        let root = FakeRoot(plans: [.finished("tmux 3.1\n")])
+        let transport = SSHTmuxControlTransport(
+            connector: FakeConnector(roots: [root]), pool: SSHRootPool(), poolKey: try key(), sourceSession: "workspace", runtimeID: UUID()
+        )
+        do {
+            try await transport.start()
+            Issue.record("unsupported tmux unexpectedly started")
+        } catch let error as TmuxCommandError {
+            #expect(error == .unsupportedVersion)
+        } catch {
+            Issue.record("startup error was masked: \(error)")
+        }
     }
 
     @Test("attach failure and cleanup mismatch invalidate without kill")
     func failuresInvalidate() async throws {
         let id = UUID()
-        let failedAttach = FakeRoot(plans: [.finished("tmux 3.2\n"), .finished(""), .failed])
+        let failedAttach = FakeRoot(plans: [
+            .finished("tmux 3.2\n"), .finished(""), .failed,
+            .finished("workspace--mori-remote-\(id.uuidString.lowercased())\tworkspace\n"), .finished("")
+        ])
         let failureTransport = SSHTmuxControlTransport(
             connector: FakeConnector(roots: [failedAttach]), pool: SSHRootPool(), poolKey: try key(), sourceSession: "workspace", runtimeID: id
         )
@@ -129,6 +144,36 @@ import Testing
         #expect(root.commands().count == 4)
         #expect(!root.commands().contains { $0.contains("'kill-session'") })
         #expect(root.closed)
+    }
+
+    @Test("close wins a blocked startup race and releases its child exactly once")
+    func closeDuringStartup() async throws {
+        let child = StartupBlockingChild()
+        let root = StartupRaceRoot(child: child)
+        let transport = SSHTmuxControlTransport(
+            connector: StartupRaceConnector(root: root), pool: SSHRootPool(), poolKey: try key(), sourceSession: "workspace"
+        )
+        let start = Task { try await transport.start() }
+        await child.waitUntilExecuting()
+        await transport.close(disposition: .reusable)
+        #expect(await child.closeCount() == 1)
+        await #expect(throws: SSHTmuxControlTransportError.closed) { try await start.value }
+        #expect(!(await transport.isActive()))
+    }
+
+    @Test("a root lease arriving after close returns reusable to the shared pool")
+    func closeBeforeLeaseArrivalKeepsHealthyRoot() async throws {
+        let root = FakeRoot(plans: [])
+        let connector = DelayedRootConnector(root: root)
+        let transport = SSHTmuxControlTransport(
+            connector: connector, pool: SSHRootPool(), poolKey: try key(), sourceSession: "workspace"
+        )
+        let start = Task { try await transport.start() }
+        await connector.waitUntilRequested()
+        await transport.close(disposition: .reusable)
+        await connector.resume()
+        await #expect(throws: SSHTmuxControlTransportError.closed) { try await start.value }
+        #expect(!root.closed)
     }
 
     @Test("root pool coalesces, bounds shared children, drains invalidation, and idles")
@@ -249,6 +294,83 @@ private final class FakeChild: SSHChildChannel, @unchecked Sendable {
     func write(_ data: Data) async throws {}
     func isActive() async -> Bool { active }
     func close() async throws { active = false; continuation.finish() }
+}
+
+private actor DelayedRootConnector: SSHRootConnecting {
+    private let root: FakeRoot
+    private var requested = false
+    private var requestWaiter: CheckedContinuation<Void, Never>?
+    private var connectionWaiter: CheckedContinuation<any SSHRootConnection, Error>?
+
+    init(root: FakeRoot) { self.root = root }
+
+    func connect() async throws -> any SSHRootConnection {
+        requested = true
+        requestWaiter?.resume()
+        requestWaiter = nil
+        return try await withCheckedThrowingContinuation { connectionWaiter = $0 }
+    }
+
+    func waitUntilRequested() async {
+        guard !requested else { return }
+        await withCheckedContinuation { requestWaiter = $0 }
+    }
+
+    func resume() { connectionWaiter?.resume(returning: root); connectionWaiter = nil }
+}
+
+private actor StartupBlockingChild: SSHChildChannel {
+    nonisolated let receivedBytes: AsyncThrowingStream<Data, Error>
+    private let continuation: AsyncThrowingStream<Data, Error>.Continuation
+    private var executionWaiter: CheckedContinuation<Void, Never>?
+    private var startedWaiter: CheckedContinuation<Void, Never>?
+    private var executing = false
+    private var closes = 0
+
+    init() {
+        var continuation: AsyncThrowingStream<Data, Error>.Continuation!
+        receivedBytes = AsyncThrowingStream { continuation = $0 }
+        self.continuation = continuation
+    }
+
+    func execute(_ command: String) async throws {
+        _ = command
+        await withCheckedContinuation { continuation in
+            executionWaiter = continuation
+            executing = true
+            startedWaiter?.resume()
+            startedWaiter = nil
+        }
+    }
+
+    func waitUntilExecuting() async {
+        guard !executing else { return }
+        await withCheckedContinuation { startedWaiter = $0 }
+    }
+
+    func write(_ data: Data) async throws { _ = data }
+    func isActive() async -> Bool { closes == 0 }
+    func close() async throws {
+        closes += 1
+        continuation.finish()
+        executionWaiter?.resume()
+        executionWaiter = nil
+    }
+    func closeCount() -> Int { closes }
+}
+
+private final class StartupRaceRoot: SSHRootConnection, @unchecked Sendable {
+    let child: StartupBlockingChild
+    private let lock = NSLock()
+    private(set) var closed = false
+    init(child: StartupBlockingChild) { self.child = child }
+    func openSessionChannel() async throws -> any SSHChildChannel { child }
+    func close() async { lock.withLock { closed = true } }
+}
+
+private struct StartupRaceConnector: SSHRootConnecting {
+    let root: StartupRaceRoot
+    func connect() async throws -> any SSHRootConnection { root }
 }
 
 private func key() throws -> SSHRootPool.Key {

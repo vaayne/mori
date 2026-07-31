@@ -97,6 +97,7 @@ struct SSHIdentity: Identifiable, Codable, Equatable, Sendable {
 
 struct RemoteSettings: Codable, Equatable, Sendable {
     static let `default` = RemoteSettings()
+    static let minimumInitialScrollbackLines = 2_000
     static let maximumScrollbackLines = 10_000
 
     var initialScrollbackLines: Int
@@ -108,6 +109,12 @@ struct RemoteSettings: Codable, Equatable, Sendable {
         self.initialScrollbackLines = initialScrollbackLines
         self.maximumScrollbackLines = maximumScrollbackLines
         self.allowLegacyRSA = allowLegacyRSA
+    }
+
+    /// Settings from older builds may hold a smaller value. New connections clamp
+    /// it to Ghostty's documented 2k/10k local-history contract.
+    var effectiveInitialScrollbackLines: Int {
+        min(max(initialScrollbackLines, Self.minimumInitialScrollbackLines), Self.maximumScrollbackLines)
     }
 
     func validated() throws -> RemoteSettings {

@@ -4,17 +4,6 @@ options:
     iOS: "17.0"
   groupSortPosition: top
 packages:
-  MoriCore:
-    path: ../Packages/MoriCore
-  MoriTmux:
-    path: ../Packages/MoriTmux
-  MoriSSH:
-    path: ../Packages/MoriSSH
-  MoriTerminal:
-    path: ../Packages/MoriTerminal
-  SwiftTerm:
-    url: https://github.com/migueldeicaza/SwiftTerm.git
-    from: "1.13.0"
   Citadel:
     url: https://github.com/h3nock/Citadel.git
     revision: 1d0eadd81d0a521b00ede6663c8b3301f5fc252e
@@ -32,16 +21,6 @@ targets:
     sources:
       - path: MoriRemote
     dependencies:
-      - package: MoriCore
-        product: MoriCore
-      - package: MoriTmux
-        product: MoriTmux
-      - package: MoriSSH
-        product: MoriSSH
-      - package: MoriTerminal
-        product: MoriTerminal
-      - package: SwiftTerm
-        product: SwiftTerm
       - package: Citadel
         product: Citadel
       - package: NIO

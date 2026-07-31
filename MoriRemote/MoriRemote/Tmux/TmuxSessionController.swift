@@ -28,10 +28,25 @@ struct TmuxSurfaceRegistrationLedger: Sendable {
 /// Client-local navigation only. Keeping this pure makes the command safety
 /// contract testable without inventing a native tmux client.
 enum TmuxClientCommandPolicy {
+    enum SharedMutation: Sendable { case splitHorizontal, splitVertical, newWindow, closePane }
+
     static func selectWindow(_ id: TmuxWindowID) -> String { "select-window -t @\(id.rawValue)" }
     static func selectPane(_ id: TmuxPaneID) -> String { "select-pane -t %\(id.rawValue)" }
+    /// This static conditional runs only immediately before terminal input. It
+    /// never enters copy mode for browsing; it just releases a stale shared mode
+    /// so the arriving keystroke remains typeable.
+    static let cancelStaleInputMode = "if-shell -F '#{pane_in_mode}' 'send-keys -X cancel' ''"
+    static func shared(_ mutation: SharedMutation) -> String {
+        switch mutation {
+        case .splitHorizontal: "split-window -h"
+        case .splitVertical: "split-window -v"
+        case .newWindow: "new-window"
+        case .closePane: "kill-pane"
+        }
+    }
     static func isAllowed(_ command: String) -> Bool {
-        command.hasPrefix("select-window -t @") || command.hasPrefix("select-pane -t %")
+        command.hasPrefix("select-window -t @") || command.hasPrefix("select-pane -t %") ||
+            command == cancelStaleInputMode || ["split-window -h", "split-window -v", "new-window", "kill-pane"].contains(command)
     }
 }
 
@@ -94,7 +109,7 @@ final class TmuxSessionController: @unchecked Sendable {
     deinit { assert(client == nil, "shutdown must free tmux client") }
 
     func setOutboundSink(_ sink: (@Sendable (Data) -> Void)?) { queue.async { [self] in preconditionWriter(); self.sink = sink } }
-    func start(columns: UInt16, rows: UInt16, completion: @escaping @Sendable (Result<Void, StartError>) -> Void) {
+    func start(columns: UInt16, rows: UInt16, historyLineLimit: Int = TmuxSessionController.initialHistoryLineLimit, completion: @escaping @Sendable (Result<Void, StartError>) -> Void) {
         queue.async { [self] in
             preconditionWriter()
             guard !shuttingDown, client == nil else { completion(.failure(.closed)); return }
@@ -103,7 +118,7 @@ final class TmuxSessionController: @unchecked Sendable {
             config.userdata = Unmanaged.passUnretained(self).toOpaque()
             config.action_cb = Self.actionCallback
             config.history_line_limit_is_set = true
-            config.history_line_limit = Self.initialHistoryLineLimit
+            config.history_line_limit = min(max(historyLineLimit, Self.initialHistoryLineLimit), RemoteSettings.maximumScrollbackLines)
             config.max_scrollback = Self.maximumScrollbackBytes
             config.initial_columns = columns; config.initial_rows = rows
             var created: ghostty_tmux_client_t?
@@ -159,6 +174,12 @@ final class TmuxSessionController: @unchecked Sendable {
     /// resize-pane, zoom, or server copy-mode command is admitted here.
     func selectWindow(_ id: TmuxWindowID) { enqueue(TmuxClientCommandPolicy.selectWindow(id), request: .selectWindow) }
     func selectPane(_ id: TmuxPaneID) { enqueue(TmuxClientCommandPolicy.selectPane(id), request: .selectPane) }
+    /// Selection is non-mutating. This is called only from an actual input path,
+    /// before Ghostty emits the pane bytes, and the writer queue preserves order.
+    func prepareForInput() { enqueue(TmuxClientCommandPolicy.cancelStaleInputMode, request: .input) }
+    func mutateSharedWorkspace(_ mutation: TmuxClientCommandPolicy.SharedMutation) {
+        enqueue(TmuxClientCommandPolicy.shared(mutation), request: .input)
+    }
     func sendInput(_ data: Data, to pane: TmuxPaneID, tracked: Bool = false, completion: @escaping @Sendable (CommandResult) -> Void = { _ in }) {
         queue.async { [self, data] in
             preconditionWriter()

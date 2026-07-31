@@ -17,6 +17,17 @@ import Testing
         let key = SSHPrivateKeyInspector.generateEd25519(comment: "test").privateKeyPEM
         guard case .privateKey = try SSHAuthResolver(credentials: Credentials([keyID: .privateKey(.init(privateKeyPEM: key, passphrase: nil))])).resolve(server: SavedServer(id: server.id, name: "s", host: "host", username: "u", identityID: keyID), identity: keyIdentity) else { Issue.record("key was not resolved"); return }
     }
+    @Test("root-pool fingerprint partitions changed secrets without exposing them")
+    func rootPoolFingerprint() {
+        let id = UUID()
+        let first = ResolvedSSHAuth.password(username: "v", password: "first-secret", identityID: id, label: "")
+        let same = ResolvedSSHAuth.password(username: "v", password: "first-secret", identityID: id, label: "")
+        let changed = ResolvedSSHAuth.password(username: "v", password: "second-secret", identityID: id, label: "")
+        #expect(first.rootPoolFingerprint == same.rootPoolFingerprint)
+        #expect(first.rootPoolFingerprint != changed.rootPoolFingerprint)
+        #expect(first.rootPoolFingerprint.count == 64)
+        #expect(!first.rootPoolFingerprint.contains("first-secret"))
+    }
     @Test("unknown and changed host keys fail closed") func trust() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
         let store = TrustedHostStore(url: root), server = SavedServer(name: "s", host: "Host", username: "u"), resolver = SSHHostTrustResolver(store: store)

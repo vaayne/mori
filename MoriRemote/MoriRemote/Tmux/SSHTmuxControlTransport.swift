@@ -6,6 +6,8 @@ import Foundation
 actor SSHTmuxControlTransport: TmuxControlTransport {
     nonisolated let receivedBytes: AsyncThrowingStream<Data, Error>
 
+    private enum Lifecycle: Equatable { case idle, starting, started, closing, closed }
+
     private let connector: any SSHRootConnecting
     private let pool: SSHRootPool
     private let poolKey: SSHRootPool.Key
@@ -16,8 +18,11 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
 
     private var lease: SSHRootLease?
     private var control: (any SSHChildChannel)?
-    private var started = false
-    private var closed = false
+    /// The startup command may be awaiting output when close wins. Retaining it
+    /// lets close unblock and release that child instead of stranding it on root.
+    private var startupChild: (any SSHChildChannel)?
+    private var shadowCreated = false
+    private var lifecycle: Lifecycle = .idle
 
     init(
         connector: any SSHRootConnecting,
@@ -39,15 +44,23 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
     }
 
     func start() async throws {
-        guard !closed else { throw SSHTmuxControlTransportError.closed }
-        guard !started else { throw SSHTmuxControlTransportError.alreadyStarted }
-        started = true
+        guard lifecycle != .closed && lifecycle != .closing else { throw SSHTmuxControlTransportError.closed }
+        guard lifecycle == .idle else { throw SSHTmuxControlTransportError.alreadyStarted }
+        lifecycle = .starting
 
         do {
             let lease = try await pool.lease(for: poolKey, connector: connector)
+            guard lifecycle == .starting else {
+                // close won before this healthy shared root was installed here;
+                // return its lease to the pool instead of tearing down peers.
+                await lease.release(.reusable)
+                throw SSHTmuxControlTransportError.closed
+            }
             self.lease = lease
+
             let preflight = try TmuxCommandBuilder.preflight(executable: tmuxExecutable)
-            let version = try await run(command: preflight, root: lease.root)
+            let version = try await run(command: preflight, root: lease.root, trackStartup: true)
+            try requireStarting()
             try TmuxCommandBuilder.requireSupportedVersion(version)
 
             let shadow = try TmuxCommandBuilder.createShadow(
@@ -55,57 +68,103 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
                 source: sourceSession,
                 runtimeID: runtimeID
             )
-            _ = try await run(command: shadow, root: lease.root)
+            _ = try await run(command: shadow, root: lease.root, trackStartup: true)
+            try requireStarting()
+            shadowCreated = true
 
             let attach = try TmuxCommandBuilder.attachShadow(
                 executable: tmuxExecutable,
                 shadow: try TmuxCommandBuilder.shadowName(source: sourceSession, runtimeID: runtimeID)
             )
             let control = try await lease.root.openSessionChannel()
-            try await control.execute(attach)
+            guard lifecycle == .starting else {
+                try? await control.close()
+                throw SSHTmuxControlTransportError.closed
+            }
             self.control = control
+            try await control.execute(attach)
+            guard lifecycle == .starting else {
+                // close() claims and clears this property before it awaits. Do
+                // not double-close an attach channel after the close race won.
+                if self.control === control {
+                    self.control = nil
+                    try? await control.close()
+                }
+                throw SSHTmuxControlTransportError.closed
+            }
+            lifecycle = .started
         } catch {
-            await finish(disposition: .invalidated, error: error)
-            throw error
+            // Preserve authentication, trust, and tmux startup errors for the
+            // root model. Only a concurrent explicit close changes the error to
+            // `.closed`; otherwise TOFU would be unreachable from the UI.
+            if lifecycle == .starting {
+                await terminate(disposition: .invalidated, error: error)
+                throw error
+            }
+            throw SSHTmuxControlTransportError.closed
         }
     }
 
     func send(_ data: Data) async throws {
-        guard !closed, let control else { throw SSHTmuxControlTransportError.closed }
+        guard lifecycle == .started, let control else { throw SSHTmuxControlTransportError.closed }
         do {
             try await control.write(data)
         } catch {
-            await finish(disposition: .invalidated, error: error)
+            await terminate(disposition: .invalidated, error: error)
             throw error
         }
     }
 
     func isActive() async -> Bool {
-        guard !closed, let control else { return false }
+        guard lifecycle == .started, let control else { return false }
         return await control.isActive()
     }
 
     func close(disposition: TmuxControlTransportCloseDisposition) async {
-        guard !closed else { return }
-        let cleanupDisposition = await cleanupShadowIfPossible()
-        await finish(disposition: cleanupDisposition ?? disposition, error: nil)
+        guard lifecycle != .closed && lifecycle != .closing else { return }
+        await terminate(disposition: disposition, error: nil)
     }
 
-    private func run(command: String, root: any SSHRootConnection) async throws -> String {
+    private func requireStarting() throws {
+        guard lifecycle == .starting else { throw SSHTmuxControlTransportError.closed }
+    }
+
+    private func run(command: String, root: any SSHRootConnection, trackStartup: Bool = false) async throws -> String {
         let child = try await root.openSessionChannel()
-        defer { Task { try? await child.close() } }
-        try await child.execute(command)
-        var output = Data()
-        for try await bytes in child.receivedBytes {
-            output.append(bytes)
+        if trackStartup {
+            guard lifecycle == .starting else {
+                try? await child.close()
+                throw SSHTmuxControlTransportError.closed
+            }
+            startupChild = child
         }
-        return String(decoding: output, as: UTF8.self)
+        do {
+            try await child.execute(command)
+            if trackStartup { try requireStarting() }
+            var output = Data()
+            for try await bytes in child.receivedBytes {
+                if trackStartup { try requireStarting() }
+                output.append(bytes)
+            }
+            if trackStartup { try requireStarting() }
+            let ownsChild = !trackStartup || startupChild === child
+            if ownsChild { try? await child.close() }
+            if trackStartup, ownsChild { startupChild = nil }
+            return String(decoding: output, as: UTF8.self)
+        } catch {
+            // close() clears startupChild before awaiting child.close(). A resumed
+            // startup must not close the same newly acquired child a second time.
+            let ownsChild = !trackStartup || startupChild === child
+            if ownsChild { try? await child.close() }
+            if trackStartup, ownsChild { startupChild = nil }
+            throw error
+        }
     }
 
     /// A mismatch is intentionally non-destructive. Root loss merely leaves an owned
     /// disposable shadow behind; it never risks killing the source workspace.
-    private func cleanupShadowIfPossible() async -> TmuxControlTransportCloseDisposition? {
-        guard let lease else { return nil }
+    private func cleanupShadowIfPossible(using lease: SSHRootLease) async -> TmuxControlTransportCloseDisposition {
+        guard shadowCreated else { return .reusable }
         do {
             let plan = try TmuxCommandBuilder.cleanupPlan(
                 executable: tmuxExecutable,
@@ -122,15 +181,27 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
         }
     }
 
-    private func finish(disposition: TmuxControlTransportCloseDisposition, error: Error?) async {
-        guard !closed else { return }
-        closed = true
+    /// Claim closing synchronously before the first await. Every caller then sees a
+    /// closed transport while this method releases channels, shadow, lease, and stream.
+    private func terminate(disposition: TmuxControlTransportCloseDisposition, error: Error?) async {
+        guard lifecycle != .closed && lifecycle != .closing else { return }
+        lifecycle = .closing
         let control = self.control
+        let startupChild = self.startupChild
         let lease = self.lease
         self.control = nil
+        self.startupChild = nil
         self.lease = nil
+
         if let control { try? await control.close() }
-        if let lease { await lease.release(disposition) }
+        if let startupChild { try? await startupChild.close() }
+        var finalDisposition = disposition
+        if let lease {
+            let cleanup = await cleanupShadowIfPossible(using: lease)
+            if cleanup == .invalidated { finalDisposition = .invalidated }
+            await lease.release(finalDisposition)
+        }
+        lifecycle = .closed
         continuation.finish(throwing: error)
     }
 }

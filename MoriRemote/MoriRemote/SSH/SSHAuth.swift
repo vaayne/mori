@@ -28,6 +28,32 @@ enum ResolvedSSHAuth: Equatable, Sendable {
         case let .password(_, _, id, _), let .privateKey(_, _, id, _): id
         }
     }
+
+    /// In-memory-only pool partitioning. This digest is never persisted, logged,
+    /// or shown to the user; changing any secret forces a fresh authenticated root.
+    var rootPoolFingerprint: String {
+        var material = Data("mori-remote.root-pool.v1".utf8)
+        func append(_ value: String) {
+            let bytes = Data(value.utf8)
+            var length = UInt64(bytes.count).bigEndian
+            withUnsafeBytes(of: &length) { material.append(contentsOf: $0) }
+            material.append(bytes)
+        }
+        switch self {
+        case let .password(username, password, identityID, _):
+            append("password")
+            append(identityID.uuidString)
+            append(username)
+            append(password)
+        case let .privateKey(username, credential, identityID, _):
+            append("private-key")
+            append(identityID.uuidString)
+            append(username)
+            append(credential.privateKeyPEM)
+            append(credential.passphrase ?? "")
+        }
+        return SHA256.hash(data: material).map { String(format: "%02x", $0) }.joined()
+    }
 }
 
 enum SSHAuthResolverError: Error, Equatable, Sendable, LocalizedError {
