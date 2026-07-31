@@ -91,12 +91,22 @@ final class TerminalTabsBarView: NSView {
         ])
     }
 
+    /// Snapshot of the last rendered state. Observation fires for any change to
+    /// the tracked state (every poll touches `runtimeWindows`); comparing against
+    /// the snapshot skips tearing down and recreating every tab view when nothing
+    /// this strip displays actually changed.
+    private var renderedWindows: [RuntimeWindow]?
+    private var renderedSelectedWindowId: String?
+
     private func updateAndObserve() {
         withObservationTracking {
-            rebuildTabs(
-                windows: appState.windowsForSelectedWorktree,
-                selectedWindowId: appState.uiState.selectedWindowId
-            )
+            let windows = appState.windowsForSelectedWorktree
+            let selectedWindowId = appState.uiState.selectedWindowId
+            if windows != renderedWindows || selectedWindowId != renderedSelectedWindowId {
+                renderedWindows = windows
+                renderedSelectedWindowId = selectedWindowId
+                rebuildTabs(windows: windows, selectedWindowId: selectedWindowId)
+            }
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.updateAndObserve()

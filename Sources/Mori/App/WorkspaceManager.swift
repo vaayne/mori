@@ -521,6 +521,19 @@ final class WorkspaceManager {
             appState.uiState.selectedProjectId = worktree.projectId
         }
 
+        // Fast path: the last poll (≤5s ago) saw this session alive — attach the
+        // terminal immediately instead of after the branch-refresh + session-check
+        // + full-rescan chain below (each step is subprocess/SSH round trips; the
+        // chain costs hundreds of ms). The chain still runs to reconcile state;
+        // its re-attach is a no-op for an already-current surface. If the session
+        // died inside the poll window, the surface's `new-session -A` recreates it
+        // without the mori pane environment — rare enough to accept for the wait
+        // this removes from every switch.
+        if let sessionName = worktree.tmuxSessionName,
+           sessionsForEndpoint(of: worktree).contains(where: { $0.name == sessionName }) {
+            onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
+        }
+
         // Ensure tmux session exists, check branch, then switch terminal
         Task {
             await refreshWorktreeBranch(worktreeId: worktreeId)
@@ -626,12 +639,20 @@ final class WorkspaceManager {
     // MARK: - Select Window
 
     func selectWindow(_ windowId: String) {
-        appState.uiState.selectedWindowId = windowId
-
         // Find the window's worktree session to switch tmux window
         if let window = appState.runtimeWindows.first(where: { $0.tmuxWindowId == windowId }),
            let worktree = appState.worktrees.first(where: { $0.id == window.worktreeId }),
            let sessionName = worktree.tmuxSessionName {
+            let tmux = tmuxBackend(for: worktree)
+            let rawWindowId = rawWindowId(from: window)
+            // Detached and issued before any state mutation: an inherited main-actor
+            // Task would queue behind the selection-triggered UI re-render, delaying
+            // the visible tmux switch by the render pass (~60-100ms measured).
+            Task.detached {
+                try? await tmux.selectWindow(sessionId: sessionName, windowId: rawWindowId)
+            }
+
+            appState.uiState.selectedWindowId = windowId
             // Keep worktree and project selection in sync when selecting a window
             // (important for task mode where windows can span projects)
             if appState.uiState.selectedWorktreeId != worktree.id {
@@ -639,11 +660,6 @@ final class WorkspaceManager {
             }
             if appState.uiState.selectedProjectId != worktree.projectId {
                 appState.uiState.selectedProjectId = worktree.projectId
-            }
-            let tmux = tmuxBackend(for: worktree)
-            let rawWindowId = rawWindowId(from: window)
-            Task {
-                try? await tmux.selectWindow(sessionId: sessionName, windowId: rawWindowId)
             }
             // Ensure terminal is attached to the right session and focused
             onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))
@@ -653,6 +669,8 @@ final class WorkspaceManager {
 
             // Fire onWindowFocus hook
             fireHook(event: .onWindowFocus, worktreeId: worktree.id, windowName: window.title)
+        } else {
+            appState.uiState.selectedWindowId = windowId
         }
 
         saveUIState()
@@ -664,6 +682,14 @@ final class WorkspaceManager {
               let worktree = appState.worktrees.first(where: { $0.id == window.worktreeId }),
               let sessionName = worktree.tmuxSessionName else {
             return
+        }
+
+        let tmux = tmuxBackend(for: worktree)
+        let rawWindowId = rawWindowId(from: window)
+        // Detached and issued before any state mutation — see selectWindow.
+        Task.detached {
+            try? await tmux.selectWindow(sessionId: sessionName, windowId: rawWindowId)
+            try? await tmux.selectPane(sessionId: sessionName, paneId: paneId)
         }
 
         appState.uiState.selectedWindowId = window.tmuxWindowId
@@ -679,13 +705,6 @@ final class WorkspaceManager {
         }
         if let windowIndex = appState.runtimeWindows.firstIndex(where: { $0.tmuxWindowId == window.tmuxWindowId }) {
             appState.runtimeWindows[windowIndex].activePaneId = paneId
-        }
-
-        let tmux = tmuxBackend(for: worktree)
-        let rawWindowId = rawWindowId(from: window)
-        Task {
-            try? await tmux.selectWindow(sessionId: sessionName, windowId: rawWindowId)
-            try? await tmux.selectPane(sessionId: sessionName, paneId: paneId)
         }
 
         onTerminalSwitch?(sessionName, worktree.path, location(for: worktree))

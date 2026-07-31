@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **iOS (MoriRemote)**: The workspace sidebar gains a bottom quick-filter field (cmd+p style) — type to narrow projects, sessions, branches, and windows by name, title, or path. Matching a session keeps its whole group; otherwise only matching windows are shown. Thumb-reachable at the bottom edge, and it rides above the keyboard.
 - **iOS (MoriRemote)**: The keyboard-dismiss button is now pinned at the far left of the accessory key bar, outside the scrollable key row — it used to sit at the row's right end, forcing a swipe to the very end just to put the keyboard away.
 
+### ⚡ Performance
+
+- **macOS**: Tab and workspace switching is much snappier. The `tmux select-window` call no longer queues behind the selection-triggered UI re-render (~60–100ms saved per tab switch), switching to a workspace whose session was seen alive by the last poll attaches the terminal immediately instead of waiting for a git branch check plus a full tmux rescan, and the terminal surface cache grew from 3 to 10 so cycling through more than three workspaces stops destroying and respawning shells.
+- **macOS**: Less background churn. The 5-second runtime scan is now a single `tmux list-panes -a` invocation instead of one subprocess per session and window (one SSH round trip instead of dozens for remote workspaces), the terminal tab strip only rebuilds when the windows it shows actually change, and the sidebar's agent "breathing" icon pulses via Core Animation instead of re-rendering the SwiftUI tree every frame while an agent is working.
+
 ### 🐛 Bug Fixes
 
 - **iOS (MoriRemote)**: Switching to a tmux window no longer lands you in a stuck pane showing `(repeat) N` at the bottom. Panes that had been scrolled stay in tmux copy-mode across window switches, where digit keys hit tmux's default `(repeat)` command-prompt binding and swallow input; sidebar switches now cancel copy-mode on the target pane so it's immediately typeable.
