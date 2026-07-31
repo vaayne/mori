@@ -101,10 +101,13 @@ struct RemoteSettings: Codable, Equatable, Sendable {
 
     var initialScrollbackLines: Int
     var maximumScrollbackLines: Int
+    /// Legacy RSA/SHA-1 is disabled unless a user explicitly enables it for an old host.
+    var allowLegacyRSA: Bool
 
-    init(initialScrollbackLines: Int = 2_000, maximumScrollbackLines: Int = 10_000) {
+    init(initialScrollbackLines: Int = 2_000, maximumScrollbackLines: Int = 10_000, allowLegacyRSA: Bool = false) {
         self.initialScrollbackLines = initialScrollbackLines
         self.maximumScrollbackLines = maximumScrollbackLines
+        self.allowLegacyRSA = allowLegacyRSA
     }
 
     func validated() throws -> RemoteSettings {

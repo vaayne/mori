@@ -1,7 +1,7 @@
 import Foundation
 import NIOCore
 import NIOPosix
-import NIOSSH
+@preconcurrency import NIOSSH
 import os.log
 
 private let sshLog = Logger(subsystem: "com.vaayne.mori", category: "SSH")

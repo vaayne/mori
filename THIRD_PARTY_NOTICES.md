@@ -30,6 +30,43 @@ Ghostty distribution. It is licensed under the MIT License:
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
+## Citadel
+
+MoriRemote uses [**h3nock/Citadel**](https://github.com/h3nock/Citadel.git) at
+commit `1d0eadd81d0a521b00ede6663c8b3301f5fc252e`. Citadel is MIT licensed:
+
+> MIT License
+>
+> Copyright (c) 2022 Orlandos
+>
+> Permission is hereby granted, free of charge, to any person obtaining a copy
+> of this software and associated documentation files (the "Software"), to deal
+> in the Software without restriction, including without limitation the rights
+> to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+> copies of the Software, and to permit persons to whom the Software is
+> furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all
+> copies or substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+> IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+> FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+> AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+> LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+> OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+> SOFTWARE.
+
+## h3nock/swift-nio-ssh
+
+MoriRemote's Citadel transport requires h3nock's `swift-nio-ssh` fork at
+`7588777b8f6439efa1a33117f86cb2729abd864c`. MoriSSH uses the same revision
+only while both targets remain in the iOS SwiftPM graph; this prevents two
+incompatible packages exporting the `NIOSSH` module. The fork retains the
+Apache License 2.0 licensing of swift-nio-ssh. The complete required license
+text is distributed at
+[`THIRD_PARTY_LICENSES/swift-nio-ssh-LICENSE.txt`](THIRD_PARTY_LICENSES/swift-nio-ssh-LICENSE.txt).
+
 ## remux reference application
 
 The rewrite design references [**h3nock/remux**](https://github.com/h3nock/remux)

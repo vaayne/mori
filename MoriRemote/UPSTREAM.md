@@ -29,3 +29,15 @@ is also MIT licensed; no remux application source is copied in Phase 0.
 Publishing or mirroring this third-party binary is deliberately deferred to
 Phase 6. It is not necessary to establish Phase 0 feasibility and would create
 an external release obligation before the build gate passes.
+
+## Citadel / NIOSSH package identity (Phase 2)
+
+MoriRemote pins h3nock/Citadel at `1d0eadd81d0a521b00ede6663c8b3301f5fc252e`.
+Citadel pins h3nock's `swift-nio-ssh` fork at
+`7588777b8f6439efa1a33117f86cb2729abd864c`. The app still links the legacy
+`MoriSSH` package during the rewrite, so SwiftPM resolves both through one
+project graph. `Packages/MoriSSH/Package.swift` therefore uses that exact fork
+and revision too: retaining Apple's URL produces two packages with the same
+`NIOSSH` module and an unresolved product identity conflict. This is graph
+correctness, not a MoriSSH API migration; remove the alignment when Phase 4
+removes MoriSSH from the iOS target, after verifying the macOS package graph.

@@ -124,6 +124,14 @@ run = "swift package generate-xcodeproj"
 
 # ─── iOS (MoriRemote) ───────────────────────────────────────────
 
+[tasks."test:tmux-command-builder"]
+description = "Run the macOS POSIX argv contract for MoriRemote tmux commands"
+run = "bash scripts/tests/test-tmux-command-builder.sh"
+
+[tasks."test:tmux-shadow-group"]
+description = "Verify local tmux grouped-shadow cleanup semantics"
+run = "bash scripts/tests/test-tmux-shadow-group.sh"
+
 [tasks."ios:generate"]
 description = "Generate MoriRemote.xcodeproj from project.yml"
 run = "cd MoriRemote && xcodegen generate"
