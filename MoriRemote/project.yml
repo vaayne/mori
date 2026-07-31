@@ -67,6 +67,19 @@ targets:
           CODE_SIGN_IDENTITY: "Apple Distribution"
           CODE_SIGN_STYLE: Manual
           PROVISIONING_PROFILE_SPECIFIER: "MoriRemote App Store"
+  MoriRemoteTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: MoriRemoteTests
+    dependencies:
+      - target: MoriRemote
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   MoriRemote:
     build:
@@ -74,3 +87,6 @@ schemes:
         MoriRemote: all
     archive:
       config: Release
+    test:
+      targets:
+        - MoriRemoteTests
