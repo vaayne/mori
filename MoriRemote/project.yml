@@ -33,10 +33,18 @@ targets:
         product: MoriTerminal
       - package: SwiftTerm
         product: SwiftTerm
+      # Static iOS framework: link only; do not embed/sign it into the app bundle.
+      - framework: ../Frameworks/RemuxGhosttyKit.xcframework
+        embed: false
     settings:
       base:
         PRODUCT_NAME: MoriRemote
         PRODUCT_BUNDLE_IDENTIFIER: com.vaayne.mori-remote
+        # Force-load one inert ABI symbol: validate linkage without changing runtime flow.
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -lc++
+          - -Wl,-u,_ghostty_tmux_client_config_new
         INFOPLIST_FILE: MoriRemote/Info.plist
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
