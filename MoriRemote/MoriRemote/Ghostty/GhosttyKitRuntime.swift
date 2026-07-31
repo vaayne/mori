@@ -32,11 +32,17 @@ final class GhosttyKitRuntime {
     private let state: State
     private let callbacks: Callbacks
 
-    private final class State: @unchecked Sendable {
+    private final class State {
         let app: ghostty_app_t
         let config: ghostty_config_t
+        private var released = false
         init(app: ghostty_app_t, config: ghostty_config_t) { self.app = app; self.config = config }
-        func release() { ghostty_app_free(app); ghostty_config_free(config) }
+        func release() {
+            guard !released else { return }
+            released = true
+            ghostty_app_free(app)
+            ghostty_config_free(config)
+        }
     }
 
     init() throws {
@@ -69,7 +75,13 @@ final class GhosttyKitRuntime {
         callbacks.app = app
     }
 
-    deinit { callbacks.app = nil; state.release() }
+    /// Release only from the main actor after every terminal/surface fence has
+    /// completed. `deinit` is not a safe native lifecycle boundary: a queued
+    /// wakeup may otherwise tick an app whose C storage was just freed.
+    func shutdown() {
+        callbacks.app = nil
+        state.release()
+    }
 
     var appHandle: ghostty_app_t { state.app }
     func surfaceConfig() -> ghostty_terminal_surface_config_s { ghostty_terminal_surface_config_new() }
@@ -114,6 +126,8 @@ final class GhosttyKitRuntime {
     }
 
     private final class Callbacks: @unchecked Sendable {
+        // This reference is read only by a Task dispatched to MainActor and is
+        // cleared by `shutdown()` on that same actor before native free.
         var app: ghostty_app_t?
         var userdata: UnsafeMutableRawPointer { Unmanaged.passUnretained(self).toOpaque() }
         static let wakeup: ghostty_runtime_wakeup_cb = { userdata in

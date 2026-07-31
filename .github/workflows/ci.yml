@@ -58,64 +58,78 @@ jobs:
 
   ios-build:
     runs-on: macos-26
-    timeout-minutes: 20
+    timeout-minutes: 30
+    env:
+      DERIVED_DATA: .derived-data-ios
+      MORI_REMUX_GHOSTTYKIT_MIRROR_URL: ${{ vars.MORI_REMUX_GHOSTTYKIT_MIRROR_URL }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
+
+      - name: Cache pinned RemuxGhosttyKit
+        uses: actions/cache@v5
+        with:
+          path: |
+            Frameworks/RemuxGhosttyKit.xcframework
+            Frameworks/.remux-ghosttykit-provenance
+          key: remux-ghosttykit-20260731-e54ca81edf40721f72e87b5a5449746cd8fdcc877d5b0f284cdf2e34609f21f9
+
+      - name: Fetch and verify pinned RemuxGhosttyKit
+        run: |
+          # PR CI may use an optional Mori mirror; otherwise its byte-pinned
+          # upstream development fallback remains independently verified.
+          bash scripts/fetch-remux-ghosttykit.sh
+          bash scripts/verify-remux-ghosttykit.sh
 
       - name: Cache SPM packages
         uses: actions/cache@v5
         with:
-          path: MoriRemote/.derived-data-sim/SourcePackages
-          key: spm-ios-${{ hashFiles('MoriRemote/MoriRemote.xcodeproj/project.pbxproj', '**/Package.resolved') }}
+          path: ${{ env.DERIVED_DATA }}/SourcePackages
+          key: spm-ios-${{ hashFiles('MoriRemote/project.yml', '**/Package.resolved') }}
           restore-keys: spm-ios-
 
       - name: Install tools
-        run: |
-          brew install xcodegen xcbeautify
-
-      - name: Stub GhosttyKit for SPM resolution
-        run: |
-          mkdir -p Frameworks/GhosttyKit.xcframework/macos-arm64_x86_64/GhosttyKit.framework/Headers
-          touch Frameworks/GhosttyKit.xcframework/macos-arm64_x86_64/GhosttyKit.framework/GhosttyKit
-          cat > Frameworks/GhosttyKit.xcframework/Info.plist << 'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>AvailableLibraries</key>
-            <array>
-              <dict>
-                <key>LibraryIdentifier</key>
-                <string>macos-arm64_x86_64</string>
-                <key>LibraryPath</key>
-                <string>GhosttyKit.framework</string>
-                <key>SupportedArchitectures</key>
-                <array><string>arm64</string><string>x86_64</string></array>
-                <key>SupportedPlatform</key>
-                <string>macos</string>
-              </dict>
-            </array>
-            <key>CFBundlePackageType</key>
-            <string>XFWK</string>
-            <key>XCFrameworkFormatVersion</key>
-            <string>1.0</string>
-          </dict>
-          </plist>
-          PLIST
+        run: brew install xcodegen xcbeautify
 
       - name: Generate Xcode project
         run: cd MoriRemote && xcodegen generate
 
-      - name: Build for iOS Simulator
+      - name: Run MoriRemote Swift Testing suite
         run: |
           set -euo pipefail
+          SIMULATOR="$(xcrun simctl list devices available | grep 'iPhone' | grep -oE '[A-F0-9-]{36}' | head -1)"
           xcodebuild \
             -project MoriRemote/MoriRemote.xcodeproj \
             -scheme MoriRemote \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath .derived-data-ios \
-            build 2>&1 | xcbeautify
+            -destination "platform=iOS Simulator,id=$SIMULATOR" \
+            -derivedDataPath "$DERIVED_DATA" \
+            test 2>&1 | xcbeautify
+
+      - name: Build iPhone and iPad Release simulator products
+        run: |
+          set -euo pipefail
+          for family in iPhone iPad; do
+            SIMULATOR="$(xcrun simctl list devices available | grep "$family" | grep -oE '[A-F0-9-]{36}' | head -1)"
+            xcodebuild \
+              -project MoriRemote/MoriRemote.xcodeproj \
+              -scheme MoriRemote \
+              -configuration Release \
+              -destination "platform=iOS Simulator,id=$SIMULATOR" \
+              -derivedDataPath "$DERIVED_DATA" \
+              build 2>&1 | xcbeautify
+          done
+
+      - name: Smoke library and deterministic Ghostty terminal
+        run: MORI_IOS_SMOKE_OUTPUT="$RUNNER_TEMP/moriremote-smoke" bash scripts/smoke-moriremote-simulator.sh
+
+      - name: Upload simulator smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: MoriRemote-simulator-smoke
+          path: ${{ runner.temp }}/moriremote-smoke
+          if-no-files-found: warn
+          retention-days: 14
 
   bundle:
     needs: [ghosttykit, build-and-test]

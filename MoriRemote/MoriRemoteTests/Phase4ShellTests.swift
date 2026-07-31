@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import Testing
 @testable import MoriRemote
 
@@ -124,6 +125,57 @@ import Testing
         #expect(RemoteSettings(initialScrollbackLines: 50_000).effectiveInitialScrollbackLines == 10_000)
     }
 
+    @Test("memory pressure evicts only dormant workspace runtimes")
+    func memoryPressurePolicy() {
+        let active = UUID(), dormantA = UUID(), dormantB = UUID()
+        let evicted = WorkspaceMemoryPressurePolicy().workspaceIDsToDisconnect(active: active, all: [active, dormantA, dormantB])
+        #expect(Set(evicted) == [dormantA, dormantB])
+        #expect(WorkspaceMemoryPressurePolicy().workspaceIDsToDisconnect(active: active, all: [active]).isEmpty)
+    }
+
+    @Test("Keychain writes are device-bound and require an unlocked device")
+    func keychainProtection() {
+        let attributes = MoriRemoteKeychainProtection.writeAttributes()
+        let value = attributes[kSecAttrAccessible as String]!
+        #expect(CFEqual(value as CFTypeRef, kSecAttrAccessibleWhenUnlockedThisDeviceOnly))
+        let item = MoriRemoteKeychainProtection.item(service: "test", account: "account")
+        #expect(item[kSecAttrService as String] as? String == "test")
+        #expect(item[kSecAttrAccount as String] as? String == "account")
+        #expect(KeychainCredentialStore().upgradesProtectionOnRead)
+        let legacy = KeychainCredentialStore.legacyReader()
+        #expect(legacy.service == KeychainCredentialStore.legacyService)
+        #expect(!legacy.upgradesProtectionOnRead)
+        #expect(!KeychainCredentialStore(service: KeychainCredentialStore.legacyService).upgradesProtectionOnRead)
+    }
+
+    @Test("profile JSON never contains password, private key, or passphrase")
+    func profileJSONExcludesSecrets() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let storage = MoriRemoteStorage(root: root)
+        let passwords = MemoryProfilePasswords()
+        let secrets = MemoryProfileSecrets()
+        let library = RemoteLibrary(
+            storage: storage,
+            migrator: LegacyServerMigrator(storage: storage, legacyServersURL: root.appendingPathComponent("legacy.json")),
+            passwords: passwords,
+            secretData: secrets
+        )
+        let serverID = UUID()
+        let identity = SSHIdentity(id: serverID, serverID: serverID, kind: .privateKey)
+        let server = SavedServer(id: serverID, name: "Build", host: "build.example", username: "mori", identityID: serverID)
+        let workspace = SavedWorkspace(id: UUID(), serverID: serverID, name: "Build", tmuxSession: "build")
+        let privateKey = SSHPrivateKeyInspector.generateEd25519(comment: "audit").privateKeyPEM
+        let passphrase = "phase6-passphrase"
+        _ = try await library.save(server: server, workspace: workspace, identity: identity, credential: .privateKey(.init(privateKeyPEM: privateKey, passphrase: passphrase)))
+        let persisted = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "json" }
+            .reduce(into: "") { $0 += (try? String(contentsOf: $1, encoding: .utf8)) ?? "" }
+        #expect(!persisted.contains("BEGIN OPENSSH PRIVATE KEY"))
+        #expect(!persisted.contains(passphrase))
+        _ = try await library.delete(serverID: serverID)
+    }
+
     @Test("terminal host replacement only reuses the same surface identity")
     func terminalHostAttachmentPolicy() {
         final class Surface {}
@@ -134,4 +186,24 @@ import Testing
         #expect(GhosttyTerminalHostAttachmentPolicy.ownsPaneView(superviewIsHostScroll: true))
         #expect(!GhosttyTerminalHostAttachmentPolicy.ownsPaneView(superviewIsHostScroll: false))
     }
+}
+
+private final class MemoryProfilePasswords: CredentialStoring, @unchecked Sendable {
+    private var values: [UUID: String] = [:]
+    func password(for identityID: UUID) throws -> String? { values[identityID] }
+    func createPasswordIfAbsent(_ password: String, for identityID: UUID) throws -> Bool {
+        guard values[identityID] == nil else { return false }
+        values[identityID] = password
+        return true
+    }
+    func setPassword(_ password: String, for identityID: UUID) throws { values[identityID] = password }
+    func deletePassword(for identityID: UUID) throws { values.removeValue(forKey: identityID) }
+}
+
+private final class MemoryProfileSecrets: SecretDataStore, @unchecked Sendable {
+    private var values: [String: Data] = [:]
+    private func key(service: String, account: String) -> String { service + "\u{0}" + account }
+    func read(service: String, account: String) throws -> Data? { values[key(service: service, account: account)] }
+    func createOrUpdate(_ data: Data, service: String, account: String) throws { values[key(service: service, account: account)] = data }
+    func delete(service: String, account: String) throws { values.removeValue(forKey: key(service: service, account: account)) }
 }

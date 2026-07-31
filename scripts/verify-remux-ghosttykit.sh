@@ -4,6 +4,9 @@ set -euo pipefail
 
 readonly RELEASE_TAG="ghosttykit-20260731"
 readonly ARCHIVE_SHA256="e54ca81edf40721f72e87b5a5449746cd8fdcc877d5b0f284cdf2e34609f21f9"
+# A deterministic digest of every file path and SHA-256 in the audited archive.
+# This is deliberately source-controlled, unlike the adjacent provenance record.
+readonly FRAMEWORK_TREE_SHA256="ccf9e7ae738734c4d41bfb9abd82d51277c440bdc3a8a764728b6afb893b28a5"
 readonly SOURCE_COMMIT="aeb8f73790946d9c9ad175b3dafaec9911ef36bb"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,7 +27,19 @@ read_provenance() {
 }
 [[ "$(read_provenance release_tag)" == "$RELEASE_TAG" ]] || fail "unexpected release tag"
 [[ "$(read_provenance archive_sha256)" == "$ARCHIVE_SHA256" ]] || fail "unexpected archive checksum"
+[[ "$(read_provenance framework_tree_sha256)" == "$FRAMEWORK_TREE_SHA256" ]] || fail "unexpected framework content digest"
 [[ "$(read_provenance source_commit)" == "$SOURCE_COMMIT" ]] || fail "unexpected source commit"
+
+# Cache/provenance metadata is writable beside the ignored framework. Recompute
+# a source-pinned whole-tree digest so changing both metadata and a library does
+# not turn verification into a self-assertion.
+framework_tree_sha256() {
+    local root="$1"
+    find "$root" -type f -print0 | LC_ALL=C sort -z | while IFS= read -r -d '' file; do
+        printf '%s  %s\n' "$(shasum -a 256 "$file" | awk '{print $1}')" "${file#"$root"/}"
+    done | shasum -a 256 | awk '{print $1}'
+}
+[[ "$(framework_tree_sha256 "$xcframework")" == "$FRAMEWORK_TREE_SHA256" ]] || fail "framework files do not match the pinned content digest"
 
 # This release must support iOS 17's device and Apple Silicon simulator SDKs.
 for slice in ios-arm64 ios-arm64-simulator; do

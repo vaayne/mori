@@ -136,9 +136,13 @@ run = "bash scripts/tests/test-tmux-shadow-group.sh"
 description = "Generate MoriRemote.xcodeproj from project.yml"
 run = "cd MoriRemote && xcodegen generate"
 
+[tasks."ios:verify-framework"]
+description = "Verify the pinned RemuxGhosttyKit iOS framework"
+run = "bash scripts/verify-remux-ghosttykit.sh"
+
 [tasks."ios:build"]
 description = "Build MoriRemote for iOS Simulator"
-depends = ["ios:generate"]
+depends = ["ios:generate", "ios:verify-framework"]
 run = '''
 set -euo pipefail
 xcodebuild \
@@ -151,7 +155,7 @@ xcodebuild \
 
 [tasks."ios:test"]
 description = "Build and run MoriRemote tests on iOS Simulator"
-depends = ["ios:generate"]
+depends = ["ios:generate", "ios:verify-framework"]
 run = '''
 set -euo pipefail
 SIMULATOR=${MORI_IOS_SIMULATOR:-$(xcrun simctl list devices available | grep -m1 'iPhone' | sed 's/^ *//' | sed 's/ (.*//')}
@@ -164,30 +168,35 @@ xcodebuild \
 '''
 
 [tasks."ios:run"]
-description = "Build and launch MoriRemote on iOS Simulator"
+description = "Build and prove MoriRemote library + Ghostty simulator paths stay alive"
 depends = ["ios:build"]
-run = '''
-set -euo pipefail
-SIMULATOR=${MORI_IOS_SIMULATOR:-$(xcrun simctl list devices available | grep -m1 'iPhone' | sed 's/^ *//' | sed 's/ (.*//')}
-APP_PATH=$(find "$DERIVED_DATA" -name "MoriRemote.app" -path "*/Debug-iphonesimulator/*" | head -1)
-if [ -z "$APP_PATH" ]; then
-  echo "❌ MoriRemote.app not found in derived data"
-  exit 1
-fi
-xcrun simctl boot "$SIMULATOR" 2>/dev/null || true
-xcrun simctl install "$SIMULATOR" "$APP_PATH"
-xcrun simctl launch "$SIMULATOR" "$(plutil -extract CFBundleIdentifier raw "$APP_PATH/Info.plist")"
-echo "✅ MoriRemote launched on $SIMULATOR simulator"
-'''
+run = "bash scripts/smoke-moriremote-simulator.sh"
+
+[tasks."ios:smoke"]
+description = "Install MoriRemote and verify library/Ghostty launch, liveness, crash logs, and screenshots"
+depends = ["ios:build"]
+run = "bash scripts/smoke-moriremote-simulator.sh"
+
+[tasks."test:remux-ghosttykit-verify"]
+description = "Prove the custom iOS GhosttyKit verifier rejects tampering"
+run = "bash scripts/tests/test-remux-ghosttykit-verify.sh"
+
+[tasks."test:remux-ghosttykit-mirror-provenance"]
+description = "Prove TestFlight discards upstream-provenance GhosttyKit cache before mirror fetch"
+run = "bash scripts/tests/test-remux-ghosttykit-mirror-provenance.sh"
+
+[tasks."test:moriremote-archive-verify"]
+description = "Prove the MoriRemote archive verifier rejects wrong build numbers and legacy payloads"
+run = "bash scripts/tests/test-verify-moriremote-archive.sh"
 
 [tasks."ios:archive"]
 description = "Archive MoriRemote for distribution"
-depends = ["ios:generate"]
+depends = ["ios:generate", "ios:verify-framework"]
 run = '''
 set -euo pipefail
 DERIVED_IOS="${DERIVED_DATA}-ios"
 ARCHIVE_PATH="${DERIVED_IOS}/MoriRemote.xcarchive"
-MARKETING_VERSION="${MARKETING_VERSION:-0.1.0}"
+MARKETING_VERSION="${MARKETING_VERSION:-0.3.5}"
 CURRENT_PROJECT_VERSION="${CURRENT_PROJECT_VERSION:-1}"
 xcodebuild archive \
   -project MoriRemote/MoriRemote.xcodeproj \

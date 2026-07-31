@@ -55,6 +55,28 @@ brew install --cask mori
 
 Or download from [GitHub Releases](https://github.com/vaayne/mori/releases). MoriRemote for iOS is on [TestFlight](https://testflight.apple.com/join/k2GFJPC2).
 
+### MoriRemote
+
+MoriRemote is an iPhone/iPad SSH and tmux companion, not a remote desktop. It
+uses explicit host-key confirmation, supports passwords or imported OpenSSH
+private keys, and keeps mobile navigation isolated from other tmux clients.
+It requires tmux 3.2 or newer on the server. Local terminal history and
+selection stay on the device; split, close, and new-window actions are shared
+workspace mutations.
+
+Building MoriRemote from source requires Xcode, XcodeGen, and the pinned
+RemuxGhosttyKit artifact:
+
+```bash
+bash scripts/fetch-remux-ghosttykit.sh   # checksum-verified development artifact
+mise run ios:test
+mise run ios:run                         # verifies launch, liveness, crash logs, screenshots
+```
+
+A TestFlight/release build additionally requires a byte-identical,
+Mori-controlled artifact mirror. See [`MoriRemote/UPSTREAM.md`](MoriRemote/UPSTREAM.md);
+there is deliberately no release fallback to a third-party maintainer asset.
+
 <details>
 <summary>Build from source</summary>
 

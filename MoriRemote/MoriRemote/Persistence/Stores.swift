@@ -1,6 +1,25 @@
 import Foundation
 import Security
 
+/// Credentials are usable only while this device is unlocked and never migrate
+/// through an encrypted backup. Keep this policy central so passwords and
+/// imported private keys cannot silently diverge.
+enum MoriRemoteKeychainProtection {
+    static func accessibility() -> CFString { kSecAttrAccessibleWhenUnlockedThisDeviceOnly }
+
+    static func item(service: String, account: String) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+    }
+
+    static func writeAttributes() -> [String: Any] {
+        [kSecAttrAccessible as String: accessibility()]
+    }
+}
+
 protocol AtomicDataWriting: Sendable {
     func write(_ data: Data, to url: URL) throws
 }
@@ -123,6 +142,7 @@ protocol CredentialStoring: CredentialReading {
     /// Returns false when a new-app credential already exists; it is never replaced.
     func createPasswordIfAbsent(_ password: String, for identityID: UUID) throws -> Bool
     func setPassword(_ password: String, for identityID: UUID) throws
+    func deletePassword(for identityID: UUID) throws
 }
 
 struct KeychainCredentialStore: CredentialStoring {
@@ -130,31 +150,45 @@ struct KeychainCredentialStore: CredentialStoring {
     static let legacyService = "com.vaayne.mori-remote.servers"
 
     let service: String
+    /// Legacy reads must not alter the old service: migration is explicitly
+    /// one-way and read-only at its source.
+    private let allowsProtectionUpgradeOnRead: Bool
+    /// Only the new destination service is eligible, even if a caller passes
+    /// the legacy service to the general initializer by mistake.
+    var upgradesProtectionOnRead: Bool {
+        allowsProtectionUpgradeOnRead && service == Self.service
+    }
 
-    init(service: String = Self.service) { self.service = service }
+    init(service: String = Self.service, upgradesProtectionOnRead: Bool = true) {
+        self.service = service
+        allowsProtectionUpgradeOnRead = upgradesProtectionOnRead
+    }
+
+    static func legacyReader() -> Self {
+        .init(service: legacyService, upgradesProtectionOnRead: false)
+    }
 
     func password(for identityID: UUID) throws -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: identityID.uuidString,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
+        var query = MoriRemoteKeychainProtection.item(service: service, account: identityID.uuidString)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
         guard status == errSecSuccess, let data = result as? Data else { throw PersistenceError.keychain(status) }
+        // Upgrade destination entries on read. A failure here must not discard
+        // a valid credential; the current authenticated operation can continue.
+        // Never mutate the old migration source service.
+        if upgradesProtectionOnRead {
+            _ = SecItemUpdate(MoriRemoteKeychainProtection.item(service: service, account: identityID.uuidString) as CFDictionary, MoriRemoteKeychainProtection.writeAttributes() as CFDictionary)
+        }
         return String(data: data, encoding: .utf8)
     }
 
     func createPasswordIfAbsent(_ password: String, for identityID: UUID) throws -> Bool {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: identityID.uuidString,
-            kSecValueData as String: Data(password.utf8),
-        ]
+        var query = MoriRemoteKeychainProtection.item(service: service, account: identityID.uuidString)
+        query[kSecValueData as String] = Data(password.utf8)
+        query.merge(MoriRemoteKeychainProtection.writeAttributes(), uniquingKeysWith: { _, replacement in replacement })
         let status = SecItemAdd(query as CFDictionary, nil)
         if status == errSecDuplicateItem { return false }
         guard status == errSecSuccess else { throw PersistenceError.keychain(status) }
@@ -162,12 +196,9 @@ struct KeychainCredentialStore: CredentialStoring {
     }
 
     func setPassword(_ password: String, for identityID: UUID) throws {
-        let attributes = [kSecValueData as String: Data(password.utf8)]
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: identityID.uuidString,
-        ]
+        var attributes = MoriRemoteKeychainProtection.writeAttributes()
+        attributes[kSecValueData as String] = Data(password.utf8)
+        let query = MoriRemoteKeychainProtection.item(service: service, account: identityID.uuidString)
         let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         if status == errSecItemNotFound {
             _ = try createPasswordIfAbsent(password, for: identityID)
@@ -177,11 +208,7 @@ struct KeychainCredentialStore: CredentialStoring {
     }
 
     func deletePassword(for identityID: UUID) throws {
-        let status = SecItemDelete([
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: identityID.uuidString,
-        ] as CFDictionary)
+        let status = SecItemDelete(MoriRemoteKeychainProtection.item(service: service, account: identityID.uuidString) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else { throw PersistenceError.keychain(status) }
     }
 }

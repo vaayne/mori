@@ -97,6 +97,15 @@ struct WorkspaceReconnectPolicy: Sendable {
     }
 }
 
+/// iOS memory warnings are advisory, not an excuse to tear down the terminal a
+/// user is actively using. Evict dormant workspaces first; their one-shot
+/// runtime fences release native surfaces before the root lease returns to pool.
+struct WorkspaceMemoryPressurePolicy: Sendable {
+    func workspaceIDsToDisconnect(active: UUID?, all: some Collection<UUID>) -> [UUID] {
+        all.filter { $0 != active }.sorted { $0.uuidString < $1.uuidString }
+    }
+}
+
 /// Main-actor admission fence for asynchronous connection attempts. A token is
 /// claimed before the first await, then invalidated by disconnect/delete/replacement.
 enum SSHTrustPresentation: Equatable {
@@ -189,6 +198,15 @@ final class ActiveWorkspaceRuntime {
     func stop() async { metadataProjector.stop(); await runtime.stop() }
     func setMetadataRefreshVisible(_ visible: Bool) { metadataProjector.setVisible(visible) }
     func foregrounded() { metadataProjector.foregrounded() }
+    func confirmTransportAfterForeground() async {
+        guard !(await runtime.isActive()) else {
+            foregrounded()
+            return
+        }
+        status = .disconnected(String(localized: "Connection lost."))
+        onChange?()
+        onTransportLoss?(instanceID)
+    }
     func surface() -> TmuxPaneSurface? { focusedPaneID.flatMap(runtime.surface(for:)) }
     func metadata(for paneID: TmuxPaneID) -> AgentMetadata { agentMetadata[paneID] ?? .unknown }
     var agentSummary: AgentMetadata {
@@ -205,7 +223,9 @@ final class ActiveWorkspaceRuntime {
 final class RemoteRootModel {
     private let dependencies: MoriRemoteDependencies
     private let reconnectPolicy = WorkspaceReconnectPolicy()
+    private let memoryPressurePolicy = WorkspaceMemoryPressurePolicy()
     private var reconnectAttempts: [UUID: Int] = [:]
+    private var deferredReconnects = Set<UUID>()
     private var connectionAttempts = WorkspaceConnectionAttemptLedger()
     private var loadingTask: Task<Void, Never>?
     private var bootstrapFailure: String?
@@ -300,8 +320,23 @@ final class RemoteRootModel {
         }
     }
 
-    func connect(workspaceID: UUID, automatic: Bool = false) {
-        if runtimes[workspaceID] != nil { activate(workspaceID: workspaceID); return }
+    func connect(workspaceID: UUID, automatic: Bool = false, activating: Bool? = nil) {
+        let shouldActivate = activating ?? (!automatic || activeWorkspaceID == nil || activeWorkspaceID == workspaceID)
+        deferredReconnects.remove(workspaceID)
+        if let runtime = runtimes[workspaceID] {
+            if case .disconnected = runtime.status {
+                // A background loss leaves its one-shot runtime intact until
+                // foregrounding or an explicit tap. Never "activate" a dead
+                // surface and strand the user without a reconnect path.
+                Task { [weak self] in
+                    await self?.disconnect(workspaceID: workspaceID)
+                    self?.connect(workspaceID: workspaceID, automatic: automatic)
+                }
+            } else if shouldActivate {
+                activate(workspaceID: workspaceID)
+            }
+            return
+        }
         guard let attempt = connectionAttempts.begin(workspaceID: workspaceID) else { return }
         Task { [weak self] in
             guard let self else { return }
@@ -325,9 +360,17 @@ final class RemoteRootModel {
                 runtime = created
                 guard self.attemptIsCurrent(attempt, workspaceID: workspaceID) else { await created.stop(); return }
                 created.onTransportLoss = { [weak self] id in self?.lost(workspaceID: workspaceID, instanceID: id) }
-                created.onChange = { [weak self] in self?.runtimeRevision &+= 1 }
+                created.onChange = { [weak self, weak created] in
+                    guard let self, self.runtimes[workspaceID] === created else { return }
+                    self.runtimeRevision &+= 1
+                }
                 self.runtimes[workspaceID] = created
-                self.activate(workspaceID: workspaceID)
+                // An automatic reconnect must not steal focus from another
+                // healthy workspace. If the lost workspace was focused,
+                // disconnect() cleared the active ID and it is restored here.
+                if shouldActivate {
+                    self.activate(workspaceID: workspaceID)
+                }
                 try await created.start()
                 guard self.attemptIsCurrent(attempt, workspaceID: workspaceID), self.runtimes[workspaceID] === created else { await self.stop(created, workspaceID: workspaceID); return }
                 let snapshot = try await self.dependencies.library.markConnected(workspaceID: workspaceID)
@@ -378,6 +421,7 @@ final class RemoteRootModel {
 
     func disconnect(workspaceID: UUID) async {
         connectionAttempts.cancel(workspaceID: workspaceID)
+        deferredReconnects.remove(workspaceID)
         guard let runtime = runtimes.removeValue(forKey: workspaceID) else { return }
         if activeWorkspaceID == workspaceID { activeWorkspaceID = nil }
         runtime.setMetadataRefreshVisible(false)
@@ -396,7 +440,34 @@ final class RemoteRootModel {
     func scenePhaseChanged(_ phase: ScenePhase) {
         sceneIsActive = phase == .active
         activeRuntime?.setMetadataRefreshVisible(sceneIsActive)
-        if sceneIsActive { activeRuntime?.foregrounded() }
+        guard sceneIsActive else { return }
+        // A loss can occur in any live workspace while iOS suspends this scene.
+        // Drain all deferred attempts before probing the focused one; otherwise
+        // inactive runtimes retain a dead native surface forever.
+        let deferred = deferredReconnects.sorted { $0.uuidString < $1.uuidString }
+        let activeBeforeReconnect = activeWorkspaceID
+        deferredReconnects.removeAll()
+        for workspaceID in deferred {
+            let shouldActivate = activeBeforeReconnect == nil || activeBeforeReconnect == workspaceID
+            if let runtime = runtimes[workspaceID] {
+                reconnectAfterTransportLoss(workspaceID: workspaceID, instanceID: runtime.instanceID, activating: shouldActivate)
+            } else {
+                connect(workspaceID: workspaceID, automatic: true, activating: shouldActivate)
+            }
+        }
+        guard let workspaceID = activeWorkspaceID, let runtime = runtimes[workspaceID] else { return }
+        Task { [weak self, weak runtime] in
+            guard let self, self.runtimes[workspaceID] === runtime else { return }
+            await runtime?.confirmTransportAfterForeground()
+        }
+    }
+
+    func handleMemoryWarning() {
+        let dormant = memoryPressurePolicy.workspaceIDsToDisconnect(active: activeWorkspaceID, all: runtimes.keys)
+        guard !dormant.isEmpty else { return }
+        Task { [weak self] in
+            for workspaceID in dormant { await self?.disconnect(workspaceID: workspaceID) }
+        }
     }
 
     private func activate(workspaceID: UUID) {
@@ -427,10 +498,23 @@ final class RemoteRootModel {
         let attempts = reconnectAttempts[workspaceID, default: 0]
         guard reconnectPolicy.mayReconnect(status: runtimes[workspaceID]?.status ?? .disconnected(""), attempts: attempts) else { return }
         reconnectAttempts[workspaceID] = attempts + 1
-        Task {
+        guard sceneIsActive else {
+            deferredReconnects.insert(workspaceID)
+            return
+        }
+        reconnectAfterTransportLoss(workspaceID: workspaceID, instanceID: instanceID, activating: activeWorkspaceID == nil || activeWorkspaceID == workspaceID)
+    }
+
+    private func reconnectAfterTransportLoss(workspaceID: UUID, instanceID: UUID, activating: Bool) {
+        Task { [weak self] in
+            guard let self, self.runtimes[workspaceID]?.instanceID == instanceID else { return }
             await disconnect(workspaceID: workspaceID)
             try? await Task.sleep(for: .seconds(1))
-            connect(workspaceID: workspaceID, automatic: true)
+            guard self.sceneIsActive else {
+                self.deferredReconnects.insert(workspaceID)
+                return
+            }
+            self.connect(workspaceID: workspaceID, automatic: true, activating: activating)
         }
     }
 

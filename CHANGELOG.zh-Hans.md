@@ -7,9 +7,19 @@
 
 ## [Unreleased]
 
+### ✨ 新功能
+
+- **iOS（MoriRemote）**：远程伴侣已重构为安全、以 pane 为原生单位的 tmux 控制运行时。支持保存工作区、密码或 OpenSSH 私钥认证、显式主机密钥信任、本地终端历史/选择、agent 状态，以及自适应 iPhone/iPad 界面；不会接管其他已连接 tmux 客户端的选择或尺寸。
+
+### 🐛 问题修复
+
+- **iOS（MoriRemote）**：凭证改为仅限本设备、仅在解锁时可用的 Keychain 存储；Ghostty 必须在终端 surface 拆除后才释放；后台期间延后重连；低内存时优先释放非活动运行时。
+
 ### 🔧 CI/CD
 
 - **GhosttyKit**：从固定的 remux Ghostty 源码构建一份通用 macOS + iOS framework，并在复用前校验其来源、平台 slice、构建模式和 tmux ABI。
+- **iOS（MoriRemote）**：CI 现在校验固定 RemuxGhosttyKit 的内容、运行 Swift Testing，并保留模拟器的存活/崩溃/截图 smoke 证据。TestFlight 对已配置、由 Mori 控制且经 checksum 验证的制品镜像失败关闭，营销版本仍固定为 `0.3.5`。
+
 
 ## [0.7.0] - 2026-07-31
 

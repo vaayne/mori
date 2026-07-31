@@ -102,6 +102,24 @@ struct GhosttyScrollDeltaBudget {
     }
 }
 
+/// Models the interval in which UIKit ownership must survive an asynchronous
+/// unregister before the corresponding native surface is freed.
+struct GhosttySurfaceCloseFence: Equatable {
+    enum State: Equatable { case open, awaitingNativeFree, released }
+    private(set) var state: State = .open
+
+    mutating func beginClose() -> Bool {
+        guard state == .open else { return false }
+        state = .awaitingNativeFree
+        return true
+    }
+
+    mutating func finishNativeFree() {
+        precondition(state == .awaitingNativeFree)
+        state = .released
+    }
+}
+
 @MainActor
 final class GhosttyManagedSurfaceRegistry {
     private var surfaces: [TmuxPaneID: TmuxPaneSurface] = [:]
@@ -123,6 +141,8 @@ final class TmuxPaneSurface {
     private let callbackBox: CallbackBox
     private var surface: ghostty_terminal_surface_t?
     private var closed = false
+    private var closeFence = GhosttySurfaceCloseFence()
+    private var closeCompletions: [@MainActor () -> Void] = []
     private var visible = false
     private var focused = false
     private var displayLink: CADisplayLink?
@@ -272,12 +292,30 @@ final class TmuxPaneSurface {
     private func freeUnregistered() { displayLink?.invalidate(); displayLink = nil; callbackBox.owner = nil; if let surface { ghostty_terminal_surface_free(surface) }; surface = nil; closed = true }
 
     func close(_ completion: @escaping @MainActor () -> Void = {}) {
-        guard !closed else { completion(); return }
+        guard closeFence.beginClose() else {
+            if closeFence.state == .awaitingNativeFree {
+                closeCompletions.append(completion)
+            } else {
+                completion()
+            }
+            return
+        }
         closed = true; displayLink?.invalidate(); displayLink = nil; callbackBox.owner = nil
-        guard let surface else { completion(); return }
-        controller.unregisterSurface(paneID: paneID, surface: surface) { [weak self] in
-            // unregister completion is the fence for every queued terminal_changed.
-            ghostty_terminal_surface_free(surface); self?.surface = nil; completion()
+        guard let surface else {
+            closeFence.finishNativeFree()
+            completion()
+            return
+        }
+        closeCompletions.append(completion)
+        controller.unregisterSurface(paneID: paneID, surface: surface) { [self] in
+            // Keep the owner (and therefore CallbackBox/UIKit view) alive until
+            // unregister fences every queued terminal_changed before native free.
+            ghostty_terminal_surface_free(surface)
+            self.surface = nil
+            self.closeFence.finishNativeFree()
+            let completions = self.closeCompletions
+            self.closeCompletions.removeAll()
+            completions.forEach { $0() }
         }
     }
 }

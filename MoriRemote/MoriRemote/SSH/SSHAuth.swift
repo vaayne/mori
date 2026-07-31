@@ -106,6 +106,11 @@ protocol SSHCredentialReading: Sendable {
     func credential(for identityID: UUID) throws -> SSHCredential?
 }
 
+protocol SSHCredentialStoring: SSHCredentialReading {
+    func savePrivateKey(_ credential: SSHPrivateKeyCredential, for identityID: UUID) throws
+    func deletePrivateKey(for identityID: UUID) throws
+}
+
 /// Minimal secret boundary shared by the device Keychain and deterministic tests.
 protocol SecretDataStore: Sendable {
     func read(service: String, account: String) throws -> Data?
@@ -115,32 +120,29 @@ protocol SecretDataStore: Sendable {
 
 struct SecuritySecretDataStore: SecretDataStore {
     func read(service: String, account: String) throws -> Data? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
+        var query = MoriRemoteKeychainProtection.item(service: service, account: account)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
         guard status == errSecSuccess, let data = result as? Data else {
             throw PersistenceError.keychain(status)
         }
+        // Keep existing private-key records device-bound when an older app
+        // created them without an explicit Keychain accessibility class.
+        _ = SecItemUpdate(MoriRemoteKeychainProtection.item(service: service, account: account) as CFDictionary, MoriRemoteKeychainProtection.writeAttributes() as CFDictionary)
         return data
     }
 
     func createOrUpdate(_ data: Data, service: String, account: String) throws {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-        ]
-        let status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        let query = MoriRemoteKeychainProtection.item(service: service, account: account)
+        var attributes = MoriRemoteKeychainProtection.writeAttributes()
+        attributes[kSecValueData as String] = data
+        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         if status == errSecItemNotFound {
             var insert = query
-            insert[kSecValueData as String] = data
+            insert.merge(attributes, uniquingKeysWith: { _, replacement in replacement })
             let insertStatus = SecItemAdd(insert as CFDictionary, nil)
             guard insertStatus == errSecSuccess else { throw PersistenceError.keychain(insertStatus) }
         } else if status != errSecSuccess {
@@ -149,11 +151,7 @@ struct SecuritySecretDataStore: SecretDataStore {
     }
 
     func delete(service: String, account: String) throws {
-        let status = SecItemDelete([
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-        ] as CFDictionary)
+        let status = SecItemDelete(MoriRemoteKeychainProtection.item(service: service, account: account) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw PersistenceError.keychain(status)
         }
@@ -165,7 +163,7 @@ enum SSHCredentialStoreError: Error, Equatable, Sendable {
 }
 
 /// Secrets stay in the Keychain; no key material/passphrase enters profile JSON.
-struct KeychainSSHCredentialStore: SSHCredentialReading, Sendable {
+struct KeychainSSHCredentialStore: SSHCredentialStoring, Sendable {
     static let privateKeyService = "com.vaayne.mori-remote.private-keys"
 
     let passwords: any CredentialReading

@@ -1,12 +1,20 @@
 # Third-party notices
 
-## Ghostty / remux-ghostty
+MoriRemote bundles this document and `THIRD_PARTY_LICENSES/` in every app
+archive. The versions below are the resolved versions in
+`MoriRemote/MoriRemote.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`.
 
-MoriRemote's Phase 0 remux feasibility probe can download an untracked
-`RemuxGhosttyKit.xcframework` from the `ghosttykit-20260731` release of
-[**h3nock/remux-ghostty**](https://github.com/h3nock/remux-ghostty), pinned to
-source commit `aeb8f73790946d9c9ad175b3dafaec9911ef36bb`. This is a modified
-Ghostty distribution. It is licensed under the MIT License:
+## Modified Ghostty / remux-ghostty
+
+MoriRemote statically links the separately fetched `RemuxGhosttyKit.xcframework`.
+It is the byte-pinned `ghosttykit-20260731` artifact from
+[remux-ghostty](https://github.com/h3nock/remux-ghostty), source commit
+`aeb8f73790946d9c9ad175b3dafaec9911ef36bb`, archive SHA-256
+`e54ca81edf40721f72e87b5a5449746cd8fdcc877d5b0f284cdf2e34609f21f9`.
+The installed framework tree is additionally pinned to SHA-256
+`ccf9e7ae738734c4d41bfb9abd82d51277c440bdc3a8a764728b6afb893b28a5`.
+
+Ghostty and the modified distribution are MIT licensed:
 
 > MIT License
 >
@@ -30,10 +38,39 @@ Ghostty distribution. It is licensed under the MIT License:
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
+## remux reference application
+
+MoriRemote adapts selected control, lifecycle, and terminal semantics from
+[remux](https://github.com/h3nock/remux) commit
+`b3a3e5f5dfa4759ab189e203b9a03749e821540c`. The adapted areas and test
+provenance are recorded in `MoriRemote/UPSTREAM.md`.
+
+> MIT License
+>
+> Copyright (c) 2026 h3nock
+>
+> Permission is hereby granted, free of charge, to any person obtaining a copy
+> of this software and associated documentation files (the "Software"), to deal
+> in the Software without restriction, including without limitation the rights
+> to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+> copies of the Software, and to permit persons to whom the Software is
+> furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all
+> copies or substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+> IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+> FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+> AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+> LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+> OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+> SOFTWARE.
+
 ## Citadel
 
-MoriRemote uses [**h3nock/Citadel**](https://github.com/h3nock/Citadel.git) at
-commit `1d0eadd81d0a521b00ede6663c8b3301f5fc252e`. Citadel is MIT licensed:
+MoriRemote uses [Citadel](https://github.com/h3nock/Citadel) commit
+`1d0eadd81d0a521b00ede6663c8b3301f5fc252e`.
 
 > MIT License
 >
@@ -57,40 +94,19 @@ commit `1d0eadd81d0a521b00ede6663c8b3301f5fc252e`. Citadel is MIT licensed:
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
-## h3nock/swift-nio-ssh
+## Swift packages linked by MoriRemote
 
-MoriRemote's Citadel transport requires h3nock's `swift-nio-ssh` fork at
-`7588777b8f6439efa1a33117f86cb2729abd864c`. MoriSSH uses the same revision
-only while both targets remain in the iOS SwiftPM graph; this prevents two
-incompatible packages exporting the `NIOSSH` module. The fork retains the
-Apache License 2.0 licensing of swift-nio-ssh. The complete required license
-text is distributed at
-[`THIRD_PARTY_LICENSES/swift-nio-ssh-LICENSE.txt`](THIRD_PARTY_LICENSES/swift-nio-ssh-LICENSE.txt).
+| Package | Resolved revision/version | License / distributed notice |
+| --- | --- | --- |
+| [BigInt](https://github.com/attaswift/BigInt) | `e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe` / 5.7.0 | MIT: `THIRD_PARTY_LICENSES/BigInt-MIT.txt` |
+| [swift-nio-ssh](https://github.com/h3nock/swift-nio-ssh) | `7588777b8f6439efa1a33117f86cb2729abd864c` | Apache-2.0: `Apache-2.0.txt`; GitHub's recursive tree API for this exact commit contains `LICENSE.txt` and no `NOTICE` file, so no invented package notice is bundled. |
+| [swift-asn1](https://github.com/apple/swift-asn1) | `9f542610331815e29cc3821d3b6f488db8715517` / 1.6.0 | Apache-2.0: `Apache-2.0.txt`, `swift-asn1-NOTICE.txt` |
+| [swift-atomics](https://github.com/apple/swift-atomics) | `b601256eab081c0f92f059e12818ac1d4f178ff7` / 1.3.0 | Apache-2.0: `Apache-2.0.txt` |
+| [swift-collections](https://github.com/apple/swift-collections) | `6675bc0ff86e61436e615df6fc5174e043e57924` / 1.4.1 | Apache-2.0: `Apache-2.0.txt` |
+| [swift-crypto](https://github.com/apple/swift-crypto) | `95ba0316a9b733e92bb6b071255ff46263bbe7dc` / 3.15.1 | Apache-2.0: `Apache-2.0.txt`, `swift-crypto-NOTICE.txt` |
+| [swift-log](https://github.com/apple/swift-log) | `a878e7f8f46cfc0e1125e565b5c08e7d5272dc9a` / 1.14.0 | Apache-2.0: `Apache-2.0.txt`, `swift-log-NOTICE.txt` |
+| [swift-nio](https://github.com/apple/swift-nio) | `558f24a4647193b5a0e2104031b71c55d31ff83a` / 2.97.1 | Apache-2.0: `Apache-2.0.txt`, `swift-nio-NOTICE.txt` |
+| [swift-system](https://github.com/apple/swift-system) | `7c6ad0fc39d0763e0b699210e4124afd5041c5df` / 1.6.4 | Apache-2.0: `Apache-2.0.txt` |
 
-## remux reference application
-
-The rewrite design references [**h3nock/remux**](https://github.com/h3nock/remux)
-at commit `b3a3e5f5dfa4759ab189e203b9a03749e821540c`. Phase 0 copies no remux
-application source. Its MIT License is:
-
-> MIT License
->
-> Copyright (c) 2026 h3nock
->
-> Permission is hereby granted, free of charge, to any person obtaining a copy
-> of this software and associated documentation files (the "Software"), to deal
-> in the Software without restriction, including without limitation the rights
-> to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-> copies of the Software, and to permit persons to whom the Software is
-> furnished to do so, subject to the following conditions:
->
-> The above copyright notice and this permission notice shall be included in all
-> copies or substantial portions of the Software.
->
-> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-> IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-> FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-> AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-> LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-> OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-> SOFTWARE.
+`THIRD_PARTY_LICENSES/Apache-2.0.txt` contains the complete Apache License
+2.0 text. Every listed notice file comes from the resolved source; trailing whitespace is normalized for distribution.

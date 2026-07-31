@@ -1,6 +1,6 @@
 # MoriRemote remux upstreams
 
-## remux GhosttyKit (Phase 0 feasibility probe)
+## remux GhosttyKit (release artifact contract)
 
 MoriRemote's remux rewrite probe uses a separately installed, **untracked**
 XCFramework at `Frameworks/RemuxGhosttyKit.xcframework`. It is intentionally
@@ -16,31 +16,39 @@ replace it.
 | Asset source commit | `aeb8f73790946d9c9ad175b3dafaec9911ef36bb` |
 | Reference application | <https://github.com/h3nock/remux> at `b3a3e5f5dfa4759ab189e203b9a03749e821540c` |
 
-Install it with `scripts/fetch-remux-ghosttykit.sh`, then validate it with
-`scripts/verify-remux-ghosttykit.sh`. The scripts enforce the pinned archive
-checksum and provenance record, require iOS arm64 device and simulator slices,
-and check the custom tmux C ABI before any probe build.
+Install it for local development with `scripts/fetch-remux-ghosttykit.sh`, then
+validate it with `scripts/verify-remux-ghosttykit.sh`. The scripts enforce the
+pinned archive SHA-256 **and** a source-controlled digest of every installed
+framework file, require iOS arm64 device and simulator slices, and check the
+custom tmux C ABI before any build.
+
+A release build must instead run
+`MORI_REMUX_GHOSTTYKIT_MIRROR_URL=<Mori-controlled URL> bash scripts/fetch-remux-ghosttykit.sh --require-mirror`.
+This fails closed when the variable is absent; it never falls back to an
+upstream maintainer's asset. The mirror URL may not override the release tag,
+archive checksum, source commit, or installed-tree digest.
+
+**Remaining operator step before TestFlight:** upload the byte-identical
+`GhosttyKit.xcframework.zip` whose SHA-256 is
+`e54ca81edf40721f72e87b5a5449746cd8fdcc877d5b0f284cdf2e34609f21f9` to a
+Mori-controlled release location, set the repository variable
+`MORI_REMUX_GHOSTTYKIT_MIRROR_URL` to that exact HTTPS asset URL, and trigger
+CI once. Do not change a checksum to accommodate another binary. This checkout
+has no configured Mori-controlled asset, so TestFlight remains intentionally
+blocked.
 
 The framework derives from Ghostty as modified by `h3nock/remux-ghostty`.
-Ghostty is MIT licensed; its required notice is in
-[`../THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md). The remux application
-is also MIT licensed; no remux application source is copied in Phase 0.
-
-Publishing or mirroring this third-party binary is deliberately deferred to
-Phase 6. It is not necessary to establish Phase 0 feasibility and would create
-an external release obligation before the build gate passes.
+Ghostty and the adapted remux source are MIT licensed; complete distributed
+notices are in [`../THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
 
 ## Citadel / NIOSSH package identity (Phase 2)
 
 MoriRemote pins h3nock/Citadel at `1d0eadd81d0a521b00ede6663c8b3301f5fc252e`.
 Citadel pins h3nock's `swift-nio-ssh` fork at
-`7588777b8f6439efa1a33117f86cb2729abd864c`. The app still links the legacy
-`MoriSSH` package during the rewrite, so SwiftPM resolves both through one
-project graph. `Packages/MoriSSH/Package.swift` therefore uses that exact fork
-and revision too: retaining Apple's URL produces two packages with the same
-`NIOSSH` module and an unresolved product identity conflict. This is graph
-correctness, not a MoriSSH API migration; remove the alignment when Phase 4
-removes MoriSSH from the iOS target, after verifying the macOS package graph.
+`7588777b8f6439efa1a33117f86cb2729abd864c`. MoriRemote no longer links the legacy `MoriSSH` package. The fork remains a
+direct MoriRemote dependency because Citadel uses that exact `NIOSSH` module;
+macOS package resolution is independent and must not be changed as a side
+effect of an iOS artifact update.
 
 ## Phase 3 Ghostty tmux core slice
 

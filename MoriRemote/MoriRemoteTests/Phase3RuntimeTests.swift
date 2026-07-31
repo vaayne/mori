@@ -51,7 +51,8 @@ import Testing
         controller.pump(Data(("%begin 1 1 0\n%end 1 1 0\n%session-changed $42 main\n%begin 2 2 1\n3.1\n%end 2 2 1\n%begin 3 3 1\n%end 3 3 1\n%begin 4 4 1\n" + window + "%end 4 4 1\n%begin 5 5 1\n" + pane + "%end 5 5 1\n" + (6...9).map { "%begin \($0) \($0) 1\n%end \($0) \($0) 1\n" }.joined()).utf8))
         await drain(controller)
         #expect(observed.snapshot?.activePaneID == TmuxPaneID(0)); #expect(observed.snapshot?.activeWindowID == TmuxWindowID(0)); #expect(observed.terminals.contains(TmuxPaneID(0))); #expect(!observed.writes.isEmpty)
-        await shutdown(controller); _ = runtime
+        await shutdown(controller)
+        runtime.shutdown()
     }
 
     @Test("local history ceilings are explicit") func historyCeilings() {
@@ -80,6 +81,18 @@ import Testing
     @Test("runtime gate rejects stale and stopped callbacks") func runtimeGate() {
         let id = UUID(); var gate = GhosttyRuntimeCallbackGate(instanceID: id)
         #expect(gate.accepts(id)); #expect(!gate.accepts(UUID())); gate.stop(); #expect(!gate.accepts(id))
+    }
+
+    @Test("surface close fence retains ownership through native free") func surfaceCloseFence() {
+        var fence = GhosttySurfaceCloseFence()
+        #expect(fence.state == .open)
+        let began = fence.beginClose()
+        #expect(began)
+        #expect(fence.state == .awaitingNativeFree)
+        let beganAgain = fence.beginClose()
+        #expect(!beganAgain)
+        fence.finishNativeFree()
+        #expect(fence.state == .released)
     }
 
     @Test("client-local selection commands never admit forbidden server mutations")

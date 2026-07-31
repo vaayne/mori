@@ -55,6 +55,21 @@ brew install --cask mori
 
 也可以从 [GitHub Releases](https://github.com/vaayne/mori/releases) 下载。MoriRemote iOS 版在 [TestFlight](https://testflight.apple.com/join/k2GFJPC2)。
 
+### MoriRemote
+
+MoriRemote 是 iPhone/iPad 上的 SSH 与 tmux 伴侣，不是远程桌面。它要求显式确认主机密钥，支持密码和导入的 OpenSSH 私钥，并保证移动端导航不干扰其他 tmux 客户端。服务器需要 tmux 3.2 或更高版本。本地终端历史和选择只保留在设备上；分屏、关闭与新建窗口属于共享工作区操作。
+
+从源码构建 MoriRemote 需要 Xcode、XcodeGen 和固定版本的 RemuxGhosttyKit：
+
+```bash
+bash scripts/fetch-remux-ghosttykit.sh   # 拉取并校验开发用制品
+mise run ios:test
+mise run ios:run                         # 验证启动、存活、崩溃日志和截图
+```
+
+TestFlight/发布构建还要求字节完全一致、由 Mori 控制的制品镜像。详见
+[`MoriRemote/UPSTREAM.md`](MoriRemote/UPSTREAM.md)；发布路径不会回退到第三方维护者的制品。
+
 <details>
 <summary>从源码编译</summary>
 

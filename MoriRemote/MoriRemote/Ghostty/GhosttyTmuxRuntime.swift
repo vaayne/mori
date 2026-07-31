@@ -61,6 +61,7 @@ final class GhosttyTmuxRuntime {
     }
 
     func surface(for paneID: TmuxPaneID) -> TmuxPaneSurface? { surfaces[paneID] }
+    func isActive() async -> Bool { await link.isActive() }
     func selectWindow(_ id: TmuxWindowID) { controller.selectWindow(id) }
     func selectPane(_ id: TmuxPaneID) { controller.selectPane(id) }
     func mutateSharedWorkspace(_ mutation: TmuxClientCommandPolicy.SharedMutation) {

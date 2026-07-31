@@ -32,6 +32,7 @@
 		6E8368DBBA57DB44BDC8E1E5 /* LegacyMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B88BDAAB702E98FDD084041C /* LegacyMigration.swift */; };
 		7847C4893AE9B6481BD63CEB /* Phase3RuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C489F3E1E08779C85038ED0E /* Phase3RuntimeTests.swift */; };
 		78FE94F2F5065228E0F8B259 /* Phase2TransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8BD2004DFD8216875267B3 /* Phase2TransportTests.swift */; };
+		7EB9D2C181E73D43B40C9485 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E788C063B75F299CBC1D0165 /* PrivacyInfo.xcprivacy */; };
 		85ADFC9BAA17017ECA067C5B /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = F391794B759D1B5CD2C36000 /* Citadel */; };
 		8A1DC8FFA1F8B93734D4E0E3 /* SSHAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46D3CED1154E19B734CC9AA8 /* SSHAuth.swift */; };
 		950C33367217BF06FA564D2B /* NIO in Frameworks */ = {isa = PBXBuildFile; productRef = 6712048F2C2EC6961F582380 /* NIO */; };
@@ -92,6 +93,7 @@
 		DC5CE2DEDF2FDD48461599ED /* SSHRootPool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHRootPool.swift; sourceTree = "<group>"; };
 		DDA4083A9512502482A6CECA /* RemoteRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteRootView.swift; sourceTree = "<group>"; };
 		E6317A1B56EED0B86D2F4D5D /* MoriRemote.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MoriRemote.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E788C063B75F299CBC1D0165 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -144,6 +146,7 @@
 				495654252F6CE455BE0201B3 /* Assets.xcassets */,
 				6C511C1314958A8D89FC53C8 /* Info.plist */,
 				46F3182F8D251430A10B298E /* MoriRemoteApp.swift */,
+				E788C063B75F299CBC1D0165 /* PrivacyInfo.xcprivacy */,
 				D4AFD5A012E0A84CC4FCDB82 /* RemuxGhosttyKitABIProbe.swift */,
 			);
 			path = MoriRemote;
@@ -257,6 +260,7 @@
 				9D6A69F5E0C209F46BFBA798 /* Sources */,
 				D55D2784B20EE0BE03FC4ED5 /* Resources */,
 				F7510CFC46875E2AE7CF2B7A /* Frameworks */,
+				71A46B35119AD087A2D74C49 /* Embed MoriRemote third-party notices */,
 			);
 			buildRules = (
 			);
@@ -338,10 +342,33 @@
 			files = (
 				57A0B148D1B8D23CA120481C /* Assets.xcassets in Resources */,
 				109E4551800EDCA43A760F80 /* Localizable.strings in Resources */,
+				7EB9D2C181E73D43B40C9485 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		71A46B35119AD087A2D74C49 /* Embed MoriRemote third-party notices */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Embed MoriRemote third-party notices";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\ndestination=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH\"\nditto \"$SRCROOT/../THIRD_PARTY_NOTICES.md\" \"$destination/THIRD_PARTY_NOTICES.md\"\nrm -rf \"$destination/THIRD_PARTY_LICENSES\"\nditto \"$SRCROOT/../THIRD_PARTY_LICENSES\" \"$destination/THIRD_PARTY_LICENSES\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		76A5C3E337C059514C36B29A /* Sources */ = {
@@ -438,7 +465,7 @@
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = "${CURRENT_PROJECT_VERSION:1}";
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "${DEVELOPMENT_TEAM}";
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -452,7 +479,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = "${MARKETING_VERSION:0.1.0}";
+				MARKETING_VERSION = 0.3.5;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lc++",
@@ -615,7 +642,7 @@
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = "${CURRENT_PROJECT_VERSION:1}";
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "${DEVELOPMENT_TEAM}";
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -629,7 +656,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = "${MARKETING_VERSION:0.1.0}";
+				MARKETING_VERSION = 0.3.5;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lc++",

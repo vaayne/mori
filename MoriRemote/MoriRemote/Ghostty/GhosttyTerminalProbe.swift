@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import OSLog
 
 #if DEBUG
 /// Credential-free integration route. The terminal pixels below are the native
@@ -32,6 +33,18 @@ struct GhosttyTerminalProbe: View {
     private var ghostty: GhosttyKitRuntime?
     private var timeoutTask: Task<Void, Never>?
     private var runtime: GhosttyTmuxRuntime?
+    private var didRecordResult = false
+    private let logger = Logger(subsystem: "com.vaayne.mori-remote", category: "ghostty-probe")
+
+    private func recordResult(success: Bool, detail: String) {
+        guard !didRecordResult else { return }
+        didRecordResult = true
+        if success {
+            logger.notice("MORI_GHOSTTY_PROBE_RESULT success=true detail=\(detail, privacy: .public)")
+        } else {
+            logger.error("MORI_GHOSTTY_PROBE_RESULT success=false detail=\(detail, privacy: .public)")
+        }
+    }
 
     func start() async {
         guard runtime == nil else { return }
@@ -52,12 +65,14 @@ struct GhosttyTerminalProbe: View {
                     for _ in 0..<20 {
                         if surface.drawCount >= 3 {
                             self?.status = String(localized: "Ghostty rendered deterministic tmux transcript")
+                            self?.recordResult(success: true, detail: "draw-threshold")
                             return
                         }
                         try? await Task.sleep(for: .milliseconds(100))
                     }
                     self?.didTimeOut = true
                     self?.status = String(format: String(localized: "Ghostty renderer did not draw transcript: %@"), surface.rendererDiagnostics())
+                    self?.recordResult(success: false, detail: "draw-threshold-timeout")
                 }
             }
             runtime.onState = { [weak self] state in self?.status = String(format: String(localized: "Ghostty tmux: %@"), String(describing: state)) }
@@ -69,17 +84,28 @@ struct GhosttyTerminalProbe: View {
                 guard let surface = self.surface else {
                     self.didTimeOut = true
                     self.status = String(localized: "No live Ghostty terminal surface arrived within 5 seconds.")
+                    self.recordResult(success: false, detail: "surface-timeout")
                     return
                 }
                 guard surface.drawCount < 3 else { return }
                 self.didTimeOut = true
                 self.status = String(format: String(localized: "Ghostty renderer timed out: %@"), surface.rendererDiagnostics())
+                self.recordResult(success: false, detail: "renderer-timeout")
             }
         } catch {
             didTimeOut = true
             status = String(format: String(localized: "Ghostty probe failed: %@"), String(describing: error))
+            recordResult(success: false, detail: "startup-error")
         }
     }
-    func stop() async { timeoutTask?.cancel(); timeoutTask = nil; await runtime?.stop(); runtime = nil; ghostty = nil; surface = nil }
+    func stop() async {
+        timeoutTask?.cancel()
+        timeoutTask = nil
+        await runtime?.stop()
+        runtime = nil
+        ghostty?.shutdown()
+        ghostty = nil
+        surface = nil
+    }
 }
 #endif

@@ -52,12 +52,19 @@ enum ProfileCredential: Sendable {
 actor RemoteLibrary {
     private let storage: MoriRemoteStorage
     private let migrator: LegacyServerMigrator
-    private let passwords = KeychainCredentialStore()
-    private let credentials = KeychainSSHCredentialStore()
+    private let passwords: any CredentialStoring
+    private let credentials: any SSHCredentialStoring
 
-    init(storage: MoriRemoteStorage, migrator: LegacyServerMigrator) {
+    init(
+        storage: MoriRemoteStorage,
+        migrator: LegacyServerMigrator,
+        passwords: any CredentialStoring = KeychainCredentialStore(),
+        secretData: any SecretDataStore = SecuritySecretDataStore()
+    ) {
         self.storage = storage
         self.migrator = migrator
+        self.passwords = passwords
+        credentials = KeychainSSHCredentialStore(passwords: passwords, secrets: secretData)
     }
 
     func bootstrap() throws -> RemoteLibrarySnapshot {

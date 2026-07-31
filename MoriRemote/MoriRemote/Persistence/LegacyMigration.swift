@@ -44,7 +44,7 @@ struct LegacyServerMigrator: Sendable {
     init(
         storage: MoriRemoteStorage,
         legacyServersURL: URL,
-        legacyCredentials: any CredentialReading = KeychainCredentialStore(service: KeychainCredentialStore.legacyService),
+        legacyCredentials: any CredentialReading = KeychainCredentialStore.legacyReader(),
         destinationCredentials: any CredentialStoring = KeychainCredentialStore(),
         now: @escaping @Sendable () -> Date = Date.init
     ) {

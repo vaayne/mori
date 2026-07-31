@@ -237,6 +237,10 @@ private final class MemoryCredentials: CredentialStoring, @unchecked Sendable {
     func setPassword(_ password: String, for identityID: UUID) throws {
         lock.withLock { values[identityID] = password }
     }
+
+    func deletePassword(for identityID: UUID) throws {
+        lock.withLock { values.removeValue(forKey: identityID) }
+    }
 }
 
 private struct FailingWriter: AtomicDataWriting {
