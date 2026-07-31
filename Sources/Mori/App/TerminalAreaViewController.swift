@@ -112,7 +112,11 @@ final class TerminalAreaViewController: NSViewController, ThemedSurface {
     init(terminalHost: TerminalHost? = nil) {
         let host = terminalHost ?? GhosttyAdapter()
         self.terminalHost = host
-        self.surfaceCache = TerminalSurfaceCache(maxSize: 3, terminalHost: host)
+        // Each cached surface keeps a live tmux client + shell attached; evicting
+        // one means a full shell restart + reattach on the next switch, which is
+        // the dominant cost of workspace switching. 10 covers typical workspace
+        // counts; raise if users report thrash with more.
+        self.surfaceCache = TerminalSurfaceCache(maxSize: 10, terminalHost: host)
         super.init(nibName: nil, bundle: nil)
         installSurfaceCloseObserver()
     }
