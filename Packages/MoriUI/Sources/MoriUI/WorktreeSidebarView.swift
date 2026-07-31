@@ -592,28 +592,83 @@ private enum SidebarStatus { case waiting, running, idle, error }
 /// (template-tinted to the running colour), or a generic AI glyph when the agent
 /// is unknown. Breathes to signal live activity — asset images can't carry an SF
 /// `symbolEffect`, so the pulse is a plain opacity animation.
-private struct AgentWorkingIcon: View {
+private struct AgentWorkingIcon: NSViewRepresentable {
     let asset: String?
     let color: Color
-    @State private var breathing = false
-    var body: some View {
-        Group {
-            if let asset, let image = AgentIconLoader.image(named: asset) {
-                Image(nsImage: image)
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 12, height: 12)
-            } else {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 11, weight: .medium))
-            }
-        }
-        .foregroundStyle(color)
-        .opacity(breathing ? 0.45 : 1)
-        .animation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true), value: breathing)
-        .onAppear { breathing = true }
+
+    func makeNSView(context: Context) -> PulsingIconView {
+        PulsingIconView()
     }
+
+    func updateNSView(_ view: PulsingIconView, context: Context) {
+        let image: NSImage?
+        if let asset, let assetImage = AgentIconLoader.image(named: asset) {
+            image = assetImage
+        } else {
+            image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: nil)?
+                .withSymbolConfiguration(.init(pointSize: 11, weight: .medium))
+        }
+        view.configure(image: image, tint: NSColor(color))
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: PulsingIconView, context: Context) -> NSSize? {
+        NSSize(width: 12, height: 12)
+    }
+}
+
+/// Pulses via a repeating Core Animation opacity animation on the layer instead
+/// of a SwiftUI `repeatForever` animation: CA runs on the render server, while
+/// the SwiftUI animation forced the hosting view to re-render its display list
+/// every frame for as long as any agent was working.
+private final class PulsingIconView: NSView {
+    private let imageView = NSImageView()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        imageView.imageScaling = .scaleProportionallyUpOrDown
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(imageView)
+        NSLayoutConstraint.activate([
+            imageView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            imageView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            imageView.widthAnchor.constraint(lessThanOrEqualToConstant: 12),
+            imageView.heightAnchor.constraint(lessThanOrEqualToConstant: 12),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: 12, height: 12)
+    }
+
+    func configure(image: NSImage?, tint: NSColor) {
+        image?.isTemplate = true
+        imageView.image = image
+        imageView.contentTintColor = tint
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // CA strips animations whenever the layer leaves the tree (row scrolled
+        // out, window changes), so re-add on every attach.
+        guard window != nil, let layer else { return }
+        guard layer.animation(forKey: Self.pulseKey) == nil else { return }
+        let pulse = CABasicAnimation(keyPath: "opacity")
+        pulse.fromValue = 1.0
+        pulse.toValue = 0.45
+        pulse.duration = 0.85
+        pulse.autoreverses = true
+        pulse.repeatCount = .infinity
+        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer.add(pulse, forKey: Self.pulseKey)
+    }
+
+    private static let pulseKey = "mori.agent.pulse"
 }
 
 /// Loads bundled agent SVGs as tintable template images. SwiftPM doesn't compile
