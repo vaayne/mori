@@ -7,24 +7,28 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-31
+
 ### ✨ 新功能
 
-- **macOS**：新增与 Ghostty 一致的终端拖放支持，可接收本地文件、URL 和文本；拖入的文件会以经过 shell 转义的绝对路径插入终端。
+- **macOS**：新增与 Ghostty 一致的终端拖放支持，可接收本地文件、URL 和文本；拖入的文件会以经过 shell 转义的绝对路径插入终端。（[#101](https://github.com/vaayne/mori/pull/101)）
 
 ### 🎨 设计
 
-- **macOS**：侧边栏改为按 pane 列出，不再按 window。单 pane 窗口的显示与之前完全一致；分屏窗口会展开为每个 pane 一行——分屏里运行的每个 agent 都单独可见（显示 hook 命名的 pane 标题、各自的状态图标和徽章），点击即可直接选中该 pane。普通 shell pane 以「窗口名 · 2」编号显示，悬停预览和快捷回复也定向到该行自己的 pane，worktree 计数徽章按 pane 计数。
-- **iOS (MoriRemote)**：工作区侧栏底部新增快速筛选框（类似 cmd+p）——输入即可按名称、标题或路径过滤项目、会话、分支和窗口。匹配到会话时保留整组；否则只显示匹配的窗口。位于底部方便拇指操作，弹出键盘时会自动上浮。
-- **iOS (MoriRemote)**：收起键盘按钮固定在快捷键条最左侧、可滚动按键区之外——此前它在滚动条最右端，每次收键盘都要滑到最末尾。
+- **macOS**：侧边栏改为按 pane 列出，不再按 window。单 pane 窗口的显示与之前完全一致；分屏窗口会展开为每个 pane 一行——分屏里运行的每个 agent 都单独可见（显示 hook 命名的 pane 标题、各自的状态图标和徽章），点击即可直接选中该 pane。普通 shell pane 以「窗口名 · 2」编号显示，悬停预览和快捷回复也定向到该行自己的 pane，worktree 计数徽章按 pane 计数。（[#109](https://github.com/vaayne/mori/pull/109)）
+- **iOS (MoriRemote)**：工作区侧栏底部新增快速筛选框（类似 cmd+p）——输入即可按名称、标题或路径过滤项目、会话、分支和窗口。匹配到会话时保留整组；否则只显示匹配的窗口。位于底部方便拇指操作，弹出键盘时会自动上浮。（[#106](https://github.com/vaayne/mori/pull/106)）
+- **iOS (MoriRemote)**：收起键盘按钮固定在快捷键条最左侧、可滚动按键区之外——此前它在滚动条最右端，每次收键盘都要滑到最末尾。（[#106](https://github.com/vaayne/mori/pull/106)）
 
 ### ⚡ 性能
 
-- **macOS**：标签页与工作区切换明显更跟手。`tmux select-window` 不再排在选中态触发的 UI 重渲染之后（每次切换省约 60–100ms）；切换到上次轮询确认存活的工作区会立即挂载终端，不再等待 git 分支检查和全量 tmux 扫描；终端 surface 缓存从 3 个提升到 10 个，超过三个工作区来回切换时不再反复销毁重建 shell。
-- **macOS**：后台开销更低。每 5 秒的运行时扫描合并为单条 `tmux list-panes -a`（原来每个 session、每个 window 各起一个子进程，远程工作区从几十次 SSH 往返降为一次）；终端标签条只在其显示内容真正变化时才重建；侧边栏 agent"呼吸"图标改用 Core Animation 脉动，agent 工作期间不再逐帧重渲染 SwiftUI 树。
+- **macOS**：标签页与工作区切换明显更跟手。`tmux select-window` 不再排在选中态触发的 UI 重渲染之后（每次切换省约 60–100ms）；切换到上次轮询确认存活的工作区会立即挂载终端，不再等待 git 分支检查和全量 tmux 扫描；终端 surface 缓存从 3 个提升到 10 个，超过三个工作区来回切换时不再反复销毁重建 shell。（[#108](https://github.com/vaayne/mori/pull/108)）
+- **macOS**：后台开销更低。每 5 秒的运行时扫描合并为单条 `tmux list-panes -a`（原来每个 session、每个 window 各起一个子进程，远程工作区从几十次 SSH 往返降为一次）；终端标签条只在其显示内容真正变化时才重建；侧边栏 agent"呼吸"图标改用 Core Animation 脉动，agent 工作期间不再逐帧重渲染 SwiftUI 树。（[#108](https://github.com/vaayne/mori/pull/108)）
 
 ### 🐛 问题修复
 
-- **iOS (MoriRemote)**：切换 tmux 窗口后不再出现底部显示 `(repeat) N`、无法输入的卡死状态。滚动过的 pane 会一直停留在 tmux copy-mode，切换窗口也不退出，此时数字键会命中 tmux 默认的 `(repeat)` 命令提示绑定并吞掉输入；现在从侧栏切换时会自动退出目标 pane 的 copy-mode，切过去即可直接输入。
+- **iOS (MoriRemote)**：切换 tmux 窗口后不再出现底部显示 `(repeat) N`、无法输入的卡死状态。滚动过的 pane 会一直停留在 tmux copy-mode，切换窗口也不退出，此时数字键会命中 tmux 默认的 `(repeat)` 命令提示绑定并吞掉输入；现在从侧栏切换时会自动退出目标 pane 的 copy-mode，切过去即可直接输入。（[#106](https://github.com/vaayne/mori/pull/106)）
+
+**完整更新日志**：[v0.6.3...v0.7.0](https://github.com/vaayne/mori/compare/v0.6.3...v0.7.0)
 
 ## [0.6.3] - 2026-07-24
 

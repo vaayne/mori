@@ -7,24 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-31
+
 ### ✨ Features
 
-- **macOS**: Added Ghostty-compatible terminal drag-and-drop for local files, URLs, and text. Dropped files are inserted as shell-escaped absolute paths.
+- **macOS**: Added Ghostty-compatible terminal drag-and-drop for local files, URLs, and text. Dropped files are inserted as shell-escaped absolute paths. ([#101](https://github.com/vaayne/mori/pull/101))
 
 ### 🎨 Design
 
-- **macOS**: The sidebar now lists panes instead of windows. Single-pane windows read exactly as before, but split windows expand into one row per pane — each agent running in a split is individually visible (hook-assigned pane title, own state glyph and badge) and clickable, selecting that pane directly. Plain shell panes are numbered ("window · 2"), the hover preview and quick-reply target the row's own pane, and the worktree count chip counts panes.
-- **iOS (MoriRemote)**: The workspace sidebar gains a bottom quick-filter field (cmd+p style) — type to narrow projects, sessions, branches, and windows by name, title, or path. Matching a session keeps its whole group; otherwise only matching windows are shown. Thumb-reachable at the bottom edge, and it rides above the keyboard.
-- **iOS (MoriRemote)**: The keyboard-dismiss button is now pinned at the far left of the accessory key bar, outside the scrollable key row — it used to sit at the row's right end, forcing a swipe to the very end just to put the keyboard away.
+- **macOS**: The sidebar now lists panes instead of windows. Single-pane windows read exactly as before, but split windows expand into one row per pane — each agent running in a split is individually visible (hook-assigned pane title, own state glyph and badge) and clickable, selecting that pane directly. Plain shell panes are numbered ("window · 2"), the hover preview and quick-reply target the row's own pane, and the worktree count chip counts panes. ([#109](https://github.com/vaayne/mori/pull/109))
+- **iOS (MoriRemote)**: The workspace sidebar gains a bottom quick-filter field (cmd+p style) — type to narrow projects, sessions, branches, and windows by name, title, or path. Matching a session keeps its whole group; otherwise only matching windows are shown. Thumb-reachable at the bottom edge, and it rides above the keyboard. ([#106](https://github.com/vaayne/mori/pull/106))
+- **iOS (MoriRemote)**: The keyboard-dismiss button is now pinned at the far left of the accessory key bar, outside the scrollable key row — it used to sit at the row's right end, forcing a swipe to the very end just to put the keyboard away. ([#106](https://github.com/vaayne/mori/pull/106))
 
 ### ⚡ Performance
 
-- **macOS**: Tab and workspace switching is much snappier. The `tmux select-window` call no longer queues behind the selection-triggered UI re-render (~60–100ms saved per tab switch), switching to a workspace whose session was seen alive by the last poll attaches the terminal immediately instead of waiting for a git branch check plus a full tmux rescan, and the terminal surface cache grew from 3 to 10 so cycling through more than three workspaces stops destroying and respawning shells.
-- **macOS**: Less background churn. The 5-second runtime scan is now a single `tmux list-panes -a` invocation instead of one subprocess per session and window (one SSH round trip instead of dozens for remote workspaces), the terminal tab strip only rebuilds when the windows it shows actually change, and the sidebar's agent "breathing" icon pulses via Core Animation instead of re-rendering the SwiftUI tree every frame while an agent is working.
+- **macOS**: Tab and workspace switching is much snappier. The `tmux select-window` call no longer queues behind the selection-triggered UI re-render (~60–100ms saved per tab switch), switching to a workspace whose session was seen alive by the last poll attaches the terminal immediately instead of waiting for a git branch check plus a full tmux rescan, and the terminal surface cache grew from 3 to 10 so cycling through more than three workspaces stops destroying and respawning shells. ([#108](https://github.com/vaayne/mori/pull/108))
+- **macOS**: Less background churn. The 5-second runtime scan is now a single `tmux list-panes -a` invocation instead of one subprocess per session and window (one SSH round trip instead of dozens for remote workspaces), the terminal tab strip only rebuilds when the windows it shows actually change, and the sidebar's agent "breathing" icon pulses via Core Animation instead of re-rendering the SwiftUI tree every frame while an agent is working. ([#108](https://github.com/vaayne/mori/pull/108))
 
 ### 🐛 Bug Fixes
 
-- **iOS (MoriRemote)**: Switching to a tmux window no longer lands you in a stuck pane showing `(repeat) N` at the bottom. Panes that had been scrolled stay in tmux copy-mode across window switches, where digit keys hit tmux's default `(repeat)` command-prompt binding and swallow input; sidebar switches now cancel copy-mode on the target pane so it's immediately typeable.
+- **iOS (MoriRemote)**: Switching to a tmux window no longer lands you in a stuck pane showing `(repeat) N` at the bottom. Panes that had been scrolled stay in tmux copy-mode across window switches, where digit keys hit tmux's default `(repeat)` command-prompt binding and swallow input; sidebar switches now cancel copy-mode on the target pane so it's immediately typeable. ([#106](https://github.com/vaayne/mori/pull/106))
+
+**Full Changelog**: [v0.6.3...v0.7.0](https://github.com/vaayne/mori/compare/v0.6.3...v0.7.0)
 
 ## [0.6.3] - 2026-07-24
 
