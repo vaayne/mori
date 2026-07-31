@@ -41,3 +41,25 @@ and revision too: retaining Apple's URL produces two packages with the same
 `NIOSSH` module and an unresolved product identity conflict. This is graph
 correctness, not a MoriSSH API migration; remove the alignment when Phase 4
 removes MoriSSH from the iOS target, after verifying the macOS package graph.
+
+## Phase 3 Ghostty tmux core slice
+
+The reference is `h3nock/remux` commit
+`b3a3e5f5dfa4759ab189e203b9a03749e821540c`. The initial Mori adaptation is
+intentionally limited to the native runtime and control boundary:
+
+| Mori production file | Upstream production reference | Upstream test reference | Mori coverage / deviation |
+| --- | --- | --- | --- |
+| `Ghostty/GhosttyKitRuntime.swift` | `Ghostty/GhosttyKitRuntime.swift` | `GhosttyKitRuntimeTests.swift` | iOS 17 runtime/app ownership only; settings/theme warmup is deferred with the shell. |
+| `Tmux/TmuxSessionController.swift` | `Tmux/TmuxSessionController.swift` | `TmuxSessionControllerClientSizeTests.swift` | One writer queue owns every client call, parser action, command token, outbound consume, native surface notification, topology revision, and retained canonical terminal. `Phase3RuntimeTests` translates the local history, topology projection, command admission, tracked-input failure, shutdown, and surface-fence contracts. Deliberately omits upstream `refresh-client -C`, `resize-pane -Z`, zoom, and server copy-mode commands. |
+| `Tmux/TmuxControl.swift` | `Tmux/TmuxSessionLink.swift` | `TmuxSessionLinkWriteFailureTests.swift` | Adds a narrow `beforeReceive` gate: the client is created after SSH attach but before inbound pumping, preventing startup bytes from bypassing Ghostty. `DeterministicTmuxControlTransport` adds delayed chunks, terminal errors, and captured writes for those tests. |
+| `Ghostty/GhosttyTmuxRuntime.swift` | `Tmux/TmuxTerminalSession.swift` | `GhosttyRuntimeSurfaceTopologySnapshotTests.swift` | One-shot runtime composition, callback instance fence, and stop order (link → every unregister fence → controller shutdown). `GhosttyRuntimeCallbackGate` is tested as a pure projection because a fabricated C surface would make a false ABI claim. |
+| `Ghostty/GhosttyTerminalProbe.swift` | debug terminal fixture patterns | n/a | DEBUG-only deterministic route (`--ghostty-terminal-probe`); it does not replace the production root or require credentials. |
+
+The upstream managed surface, responder, input, viewport, and scrolling files
+were reviewed but not copied wholesale. `Ghostty/GhosttyPaneSurface.swift`
+provides the local-only iOS 17 adaptation: CAMetal rendering, native surface
+registration fences, hardware/software keyboard and IME input, paste,
+selection/copy, and bounded local scrolling. It deliberately omits remux's
+server zoom, server copy-mode browsing, and viewport resize commands because
+those would violate MoriRemote's isolated-client invariants.

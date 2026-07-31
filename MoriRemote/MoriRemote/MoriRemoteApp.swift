@@ -9,13 +9,25 @@ struct MoriRemoteApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView(
-                regularWidthSelection: regularWidthSelection,
-                terminalSessionHost: terminalSessionHost
-            )
-            .environment(coordinator)
-            .environment(store)
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--ghostty-terminal-probe") {
+                GhosttyTerminalProbe()
+            } else {
+                root
+            }
+            #else
+            root
+            #endif
         }
+    }
+
+    private var root: some View {
+        RootView(
+            regularWidthSelection: regularWidthSelection,
+            terminalSessionHost: terminalSessionHost
+        )
+        .environment(coordinator)
+        .environment(store)
     }
 }
 

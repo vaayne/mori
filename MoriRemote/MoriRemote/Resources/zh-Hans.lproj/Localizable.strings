@@ -10,6 +10,16 @@
 "Choose a server from the sidebar to review its connection details before connecting." = "从侧边栏选择一个服务器，先查看连接详情，再决定是否连接。";
 "Connect" = "连接";
 "Connected" = "已连接";
+"Ghostty terminal probe loading" = "正在载入 Ghostty 终端探针";
+"Starting Ghostty tmux transcript…" = "正在启动 Ghostty tmux 记录…";
+"Ghostty rendered deterministic tmux transcript" = "Ghostty 已渲染确定性 tmux 记录";
+"Ghostty probe failed: %@" = "Ghostty 探针失败：%@";
+"Ghostty tmux: %@" = "Ghostty tmux：%@";
+"Ghostty renderer failed" = "Ghostty 渲染器失败";
+"Ghostty transcript fed; waiting for native draw…" = "Ghostty 记录已送入，正在等待原生绘制…";
+"Ghostty renderer did not draw transcript: %@" = "Ghostty 渲染器未绘制记录：%@";
+"No live Ghostty terminal surface arrived within 5 seconds." = "5 秒内未出现可用的 Ghostty 终端 surface。";
+"Ghostty renderer timed out: %@" = "Ghostty 渲染器超时：%@";
 "Connecting..." = "连接中...";
 "Connecting…" = "正在连接…";
 "Connecting to Server" = "正在连接服务器";

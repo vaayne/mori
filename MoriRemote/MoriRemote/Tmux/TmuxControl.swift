@@ -106,7 +106,6 @@ enum TmuxCommandBuilder {
     private static func validate(_ value: String) throws {
         guard !value.contains(where: { $0 == "\n" || $0 == "\r" || $0 == "\0" }) else { throw TmuxCommandError.unsafeArgument }
     }
-
 }
 
 protocol TmuxControlTransport: Sendable {
@@ -119,40 +118,70 @@ protocol TmuxControlTransport: Sendable {
 
 enum TmuxControlTransportCloseDisposition: Equatable, Sendable { case reusable, invalidated }
 
+/// The continuation is made once at init. `enqueue` is synchronous and
+/// thread-safe, so serial controller drains retain their exact admission order.
 actor TmuxSessionLink {
     private let transport: any TmuxControlTransport
     private let receive: @Sendable (Data) -> Void
     private let disconnected: @Sendable () -> Void
+    private let outbound: AsyncStream<Data>
+    nonisolated private let outboundContinuation: AsyncStream<Data>.Continuation
     private var writer: Task<Void, Never>?
     private var reader: Task<Void, Never>?
-    private var continuation: AsyncStream<Data>.Continuation?
     private var closed = false
 
-    init(transport: any TmuxControlTransport, receive: @escaping @Sendable (Data) -> Void, disconnected: @escaping @Sendable () -> Void) {
+    init(
+        transport: any TmuxControlTransport,
+        receive: @escaping @Sendable (Data) -> Void,
+        disconnected: @escaping @Sendable () -> Void
+    ) {
         self.transport = transport
         self.receive = receive
         self.disconnected = disconnected
+
+        var continuation: AsyncStream<Data>.Continuation!
+        outbound = AsyncStream { continuation = $0 }
+        outboundContinuation = continuation
     }
 
-    func start() async throws {
-        var continuation: AsyncStream<Data>.Continuation!
-        let outbound = AsyncStream<Data> { continuation = $0 }
-        self.continuation = continuation
-        writer = Task { [transport] in
+    nonisolated func enqueue(_ bytes: Data) {
+        outboundContinuation.yield(bytes)
+    }
+
+    /// Compatibility for async transport callers; writer-queue users call `enqueue`.
+    func send(_ bytes: Data) {
+        enqueue(bytes)
+    }
+
+    func start(beforeReceive: @escaping @Sendable () async throws -> Void = {}) async throws {
+        guard writer == nil else { return }
+        writer = Task { [transport, outbound] in
             for await bytes in outbound {
-                do { try await transport.send(bytes) }
-                catch { await self.fail(); return }
+                do {
+                    try await transport.send(bytes)
+                } catch {
+                    await self.fail()
+                    return
+                }
             }
         }
         try await transport.start()
+        do {
+            try await beforeReceive()
+        } catch {
+            await fail()
+            throw error
+        }
         reader = Task { [transport] in
-            do { for try await bytes in transport.receivedBytes { self.receive(bytes) } } catch {}
+            do {
+                for try await bytes in transport.receivedBytes {
+                    self.receive(bytes)
+                }
+            } catch {}
             if !Task.isCancelled { await self.fail() }
         }
     }
 
-    /// Actor admission defines submission order; callers needing an order submit sequentially.
-    func send(_ bytes: Data) { guard !closed else { return }; continuation?.yield(bytes) }
     func isActive() async -> Bool {
         guard !closed else { return false }
         return await transport.isActive()
@@ -161,14 +190,16 @@ actor TmuxSessionLink {
     func stop() async {
         guard !closed else { return }
         closed = true
-        continuation?.finish(); writer?.cancel(); reader?.cancel()
+        outboundContinuation.finish()
+        writer?.cancel()
+        reader?.cancel()
         await transport.close(disposition: .reusable)
     }
 
     private func fail() async {
         guard !closed else { return }
         closed = true
-        continuation?.finish()
+        outboundContinuation.finish()
         await transport.close(disposition: .invalidated)
         disconnected()
     }

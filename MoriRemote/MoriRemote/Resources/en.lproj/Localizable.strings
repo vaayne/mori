@@ -10,6 +10,16 @@
 "Choose a server from the sidebar to review its connection details before connecting." = "Choose a server from the sidebar to review its connection details before connecting.";
 "Connect" = "Connect";
 "Connected" = "Connected";
+"Ghostty terminal probe loading" = "Ghostty terminal probe loading";
+"Starting Ghostty tmux transcript…" = "Starting Ghostty tmux transcript…";
+"Ghostty rendered deterministic tmux transcript" = "Ghostty rendered deterministic tmux transcript";
+"Ghostty probe failed: %@" = "Ghostty probe failed: %@";
+"Ghostty tmux: %@" = "Ghostty tmux: %@";
+"Ghostty renderer failed" = "Ghostty renderer failed";
+"Ghostty transcript fed; waiting for native draw…" = "Ghostty transcript fed; waiting for native draw…";
+"Ghostty renderer did not draw transcript: %@" = "Ghostty renderer did not draw transcript: %@";
+"No live Ghostty terminal surface arrived within 5 seconds." = "No live Ghostty terminal surface arrived within 5 seconds.";
+"Ghostty renderer timed out: %@" = "Ghostty renderer timed out: %@";
 "Connecting..." = "Connecting...";
 "Connecting…" = "Connecting…";
 "Connecting to Server" = "Connecting to Server";
