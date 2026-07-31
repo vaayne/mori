@@ -77,6 +77,9 @@ final class GhosttyTmuxRuntime {
         }
     }
     func sendInput(_ text: String, to pane: TmuxPaneID) { controller.sendInput(Data(text.utf8), to: pane, tracked: true) { _ in } }
+    func queryAgentMetadata(completion: @escaping @Sendable (TmuxSessionController.CommandResult) -> Void) {
+        controller.queryAgentMetadata(completion: completion)
+    }
 
     func stop() async {
         guard !stopped else { return }; gate.stop()

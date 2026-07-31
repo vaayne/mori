@@ -4,6 +4,7 @@ import UIKit
 @MainActor
 struct RemoteRootView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.scenePhase) private var scenePhase
     let root: RemoteRootModel
     @State private var sheet: RemoteSheet?
     @State private var pendingConfirmation: RemoteDestructiveAction?
@@ -21,16 +22,15 @@ struct RemoteRootView: View {
                 }
             } else if !root.isLoaded {
                 ProgressView(String(localized: "Loading library…"))
-            } else if sizeClass == .regular {
-                regularLayout
-            } else if let runtime = root.activeRuntime {
-                RemoteTerminalView(root: root, runtime: runtime, compact: true, showLibrary: { sheet = .library })
             } else {
-                NavigationStack { library }
+                adaptiveLayout
             }
         }
         .tint(.mint)
         .task { root.bootstrap() }
+        .onChange(of: scenePhase) { _, phase in
+            root.scenePhaseChanged(phase)
+        }
         .sheet(item: $sheet) { route in
             switch route {
             case .add:
@@ -81,20 +81,31 @@ struct RemoteRootView: View {
         }
     }
 
-    private var regularLayout: some View {
-        NavigationSplitView {
-            library
-                .navigationTitle(String(localized: "Library"))
-        } detail: {
-            if let runtime = root.activeRuntime {
-                RemoteTerminalView(root: root, runtime: runtime, compact: false, showLibrary: {})
-            } else {
-                ContentUnavailableView(
-                    String(localized: "Select a workspace"),
-                    systemImage: "rectangle.split.3x1",
-                    description: Text(String(localized: "Choose a saved workspace to open its terminal."))
-                )
+    /// The terminal is always the trailing child. Size-class changes only add or
+    /// remove the leading library, preserving the representable's surface,
+    /// viewport, responder, and its runtime instance.
+    private var adaptiveLayout: some View {
+        HStack(spacing: 0) {
+            if sizeClass == .regular {
+                NavigationStack { library.navigationTitle(String(localized: "Library")) }
+                    .frame(minWidth: 300, idealWidth: 360, maxWidth: 420)
+                Divider()
             }
+            terminalDetail
+        }
+    }
+
+    @ViewBuilder private var terminalDetail: some View {
+        if let runtime = root.activeRuntime {
+            RemoteTerminalView(root: root, runtime: runtime, compact: sizeClass == .compact, showLibrary: { sheet = .library })
+        } else if sizeClass == .compact {
+            NavigationStack { library }
+        } else {
+            ContentUnavailableView(
+                String(localized: "Select a workspace"),
+                systemImage: "rectangle.split.3x1",
+                description: Text(String(localized: "Choose a saved workspace to open its terminal."))
+            )
         }
     }
 
@@ -103,6 +114,7 @@ struct RemoteRootView: View {
             servers: root.servers,
             workspaces: root.workspaces,
             activeWorkspaceIDs: Set(root.activeWorkspaces.map(\.id)),
+            agentSummaries: Dictionary(uniqueKeysWithValues: root.activeWorkspaces.map { ($0.id, root.agentSummary(for: $0.id)) }),
             migrationReport: root.migrationReport,
             onConnect: {
                 root.connect(workspaceID: $0)
@@ -171,6 +183,7 @@ private struct RemoteLibraryView: View {
     let servers: [SavedServer]
     let workspaces: [SavedWorkspace]
     let activeWorkspaceIDs: Set<UUID>
+    let agentSummaries: [UUID: AgentMetadata]
     let migrationReport: LegacyMigrationReport?
     let onConnect: (UUID) -> Void
     let onAdd: () -> Void
@@ -212,7 +225,11 @@ private struct RemoteLibraryView: View {
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                if activeWorkspaceIDs.contains(workspace.id) { Image(systemName: "dot.radiowaves.left.and.right") }
+                                if let summary = agentSummaries[workspace.id], summary.state != .unknown {
+                                    AgentMetadataBadge(metadata: summary)
+                                } else if activeWorkspaceIDs.contains(workspace.id) {
+                                    Image(systemName: "dot.radiowaves.left.and.right")
+                                }
                             }
                         }
                         .contextMenu {
@@ -249,6 +266,47 @@ private struct RemoteLibraryView: View {
     }
 }
 
+private struct AgentMetadataBadge: View {
+    let metadata: AgentMetadata
+
+    var body: some View {
+        if metadata.state != .unknown {
+            HStack(spacing: 4) {
+                Image(systemName: symbol)
+                if let name = metadata.name { Text(verbatim: name).lineLimit(1) }
+                Text(stateTitle).lineLimit(1)
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(color)
+        }
+    }
+
+    private var symbol: String {
+        switch metadata.state {
+        case .working: "bolt.fill"
+        case .waiting: "exclamationmark.circle.fill"
+        case .done: "checkmark.circle.fill"
+        case .unknown: "questionmark.circle"
+        }
+    }
+    private var color: Color {
+        switch metadata.state {
+        case .working: .mint
+        case .waiting: .orange
+        case .done: .green
+        case .unknown: .secondary
+        }
+    }
+    private var stateTitle: String {
+        switch metadata.state {
+        case .working: String(localized: "Working")
+        case .waiting: String(localized: "Waiting")
+        case .done: String(localized: "Done")
+        case .unknown: String(localized: "Unknown")
+        }
+    }
+}
+
 @MainActor
 private struct RemoteTerminalView: View {
     let root: RemoteRootModel
@@ -263,7 +321,7 @@ private struct RemoteTerminalView: View {
             header
             if let surface = runtime.surface() {
                 TmuxPaneSurfaceView(surface: surface)
-                    .id(runtime.instanceID)
+                    .id(RemoteTerminalPresentation.identity(for: runtime.instanceID, mode: compact ? .compact : .regular))
                     .background(Color.black)
             } else {
                 ContentUnavailableView(runtime.status.title, systemImage: "terminal", description: Text(String(localized: "Waiting for the active tmux pane.")))
@@ -293,7 +351,10 @@ private struct RemoteTerminalView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(verbatim: runtime.topology?.sessionName ?? runtime.workspace.name)
                         .lineLimit(1)
-                    Text(runtime.status.title).font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Text(runtime.status.title).font(.caption).foregroundStyle(.secondary)
+                        AgentMetadataBadge(metadata: runtime.metadata(for: runtime.focusedPaneID ?? TmuxPaneID(0)))
+                    }
                 }
             }
             Spacer()
@@ -320,10 +381,14 @@ private struct RemoteTerminalView: View {
                 Section(String(localized: "Windows")) {
                     ForEach(runtime.topology?.windows ?? [], id: \.id) { window in
                         Button { root.selectWindow(window.id) } label: {
-                            Label {
-                                Text(verbatim: window.name)
-                            } icon: {
-                                Image(systemName: window.active ? "rectangle.inset.filled" : "rectangle")
+                            HStack {
+                                Label {
+                                    Text(verbatim: window.name)
+                                } icon: {
+                                    Image(systemName: window.active ? "rectangle.inset.filled" : "rectangle")
+                                }
+                                Spacer()
+                                AgentMetadataBadge(metadata: windowMetadata(window))
                             }
                         }
                     }
@@ -337,6 +402,7 @@ private struct RemoteTerminalView: View {
                             HStack {
                                 Text(verbatim: "%\(pane.id.rawValue)")
                                     .font(.body.monospaced())
+                                AgentMetadataBadge(metadata: runtime.metadata(for: pane.id))
                                 Spacer()
                                 Text(verbatim: "\(pane.width)×\(pane.height)")
                                     .font(.caption.monospaced())
@@ -351,6 +417,12 @@ private struct RemoteTerminalView: View {
         }
     }
 
+    private func windowMetadata(_ window: TmuxSessionController.Window) -> AgentMetadata {
+        runtime.topology?.panes
+            .filter { $0.windowID == window.id }
+            .map { runtime.metadata(for: $0.id) }
+            .max { $0.state.priority < $1.state.priority } ?? .unknown
+    }
     private func dismissKeyboard() { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
     private func copySelection() { if let text = runtime.surface()?.copySelection(), !text.isEmpty { UIPasteboard.general.string = text } }
 }

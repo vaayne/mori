@@ -21,6 +21,7 @@
 		4B2ADF9D0C7011A644E1104E /* TmuxShellCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = D631082FBB8A05D4BA1F801F /* TmuxShellCommand.swift */; };
 		4E34F7CDB1296EF5B949969A /* TmuxSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C4381824F6C5E7604AAF7A /* TmuxSessionController.swift */; };
 		51CDD881F49D4124117A3D7D /* HostTrust.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E4A9E8D51098FB9FE41A085 /* HostTrust.swift */; };
+		54F38E40C11EB8E48022762A /* AgentMetadataProjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 806F0C378B5C9E2D51B6E1A3 /* AgentMetadataProjector.swift */; };
 		54F48944A9E87F22A490B8D4 /* LegacyMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46F1405B1589426A03FA7530 /* LegacyMigrationTests.swift */; };
 		553D7FA2654275C5B609DB67 /* SSHRootPool.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC5CE2DEDF2FDD48461599ED /* SSHRootPool.swift */; };
 		57A0B148D1B8D23CA120481C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 495654252F6CE455BE0201B3 /* Assets.xcassets */; };
@@ -41,6 +42,7 @@
 		DE5D4372E774A67A9B411667 /* DeterministicTmuxControlTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4890358DA9214454F2A47677 /* DeterministicTmuxControlTransport.swift */; };
 		EDD8C4E66770445F478F5BA5 /* RemoteRootModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1E077AE28FE61640CCBFBC /* RemoteRootModel.swift */; };
 		EF60EB78984BBF1E9A3FFC35 /* GhosttyKitRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C56BC03B97609DD98C3EF2C /* GhosttyKitRuntime.swift */; };
+		F80DC80D0F8E3E17AD450B98 /* Phase5AgentMetadataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0323091B8EC347B211B0AF /* Phase5AgentMetadataTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -54,6 +56,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0A0323091B8EC347B211B0AF /* Phase5AgentMetadataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Phase5AgentMetadataTests.swift; sourceTree = "<group>"; };
 		0B2C6DECBA8C1C75B1A429CD /* Phase4ShellTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Phase4ShellTests.swift; sourceTree = "<group>"; };
 		0EBBE7E60EEF6A3363F73F0A /* MoriRemoteDependencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoriRemoteDependencies.swift; sourceTree = "<group>"; };
 		19D5EB975098390AD7F38424 /* GhosttyTerminalProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyTerminalProbe.swift; sourceTree = "<group>"; };
@@ -73,6 +76,7 @@
 		73D1DDD00FB01982F6F52E2B /* SSHPrivateKeyInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHPrivateKeyInspector.swift; sourceTree = "<group>"; };
 		7C56BC03B97609DD98C3EF2C /* GhosttyKitRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyKitRuntime.swift; sourceTree = "<group>"; };
 		7E8BD2004DFD8216875267B3 /* Phase2TransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Phase2TransportTests.swift; sourceTree = "<group>"; };
+		806F0C378B5C9E2D51B6E1A3 /* AgentMetadataProjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMetadataProjector.swift; sourceTree = "<group>"; };
 		959028AD3B554BF795BA1E1D /* GhosttyPaneSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyPaneSurface.swift; sourceTree = "<group>"; };
 		9B1E077AE28FE61640CCBFBC /* RemoteRootModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteRootModel.swift; sourceTree = "<group>"; };
 		B05E4FE02E3C3962771154D7 /* Stores.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stores.swift; sourceTree = "<group>"; };
@@ -168,6 +172,7 @@
 		85F3C6650D4ABEA622250660 /* Tmux */ = {
 			isa = PBXGroup;
 			children = (
+				806F0C378B5C9E2D51B6E1A3 /* AgentMetadataProjector.swift */,
 				4890358DA9214454F2A47677 /* DeterministicTmuxControlTransport.swift */,
 				21CE86B5FC370573653D3245 /* SSHTmuxControlTransport.swift */,
 				6A8E335F20D27CE6353A85E4 /* TmuxControl.swift */,
@@ -236,6 +241,7 @@
 				7E8BD2004DFD8216875267B3 /* Phase2TransportTests.swift */,
 				C489F3E1E08779C85038ED0E /* Phase3RuntimeTests.swift */,
 				0B2C6DECBA8C1C75B1A429CD /* Phase4ShellTests.swift */,
+				0A0323091B8EC347B211B0AF /* Phase5AgentMetadataTests.swift */,
 				B402FCCB191BE4C43EE332CF /* SSHTransportTests.swift */,
 			);
 			path = MoriRemoteTests;
@@ -346,6 +352,7 @@
 				78FE94F2F5065228E0F8B259 /* Phase2TransportTests.swift in Sources */,
 				7847C4893AE9B6481BD63CEB /* Phase3RuntimeTests.swift in Sources */,
 				3FAC41CC848F16DDB123A9F6 /* Phase4ShellTests.swift in Sources */,
+				F80DC80D0F8E3E17AD450B98 /* Phase5AgentMetadataTests.swift in Sources */,
 				3207EDDDF0FDBE441D981A8B /* SSHTransportTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -354,6 +361,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				54F38E40C11EB8E48022762A /* AgentMetadataProjector.swift in Sources */,
 				16DF0B72EA0BA73D616F61D5 /* CitadelSSHTransport.swift in Sources */,
 				DE5D4372E774A67A9B411667 /* DeterministicTmuxControlTransport.swift in Sources */,
 				EF60EB78984BBF1E9A3FFC35 /* GhosttyKitRuntime.swift in Sources */,

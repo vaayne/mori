@@ -85,6 +85,8 @@
 "Terminal renderer is not ready yet." = "终端渲染器尚未就绪。";
 "Window" = "窗口";
 "Working" = "运行中";
+"Waiting" = "等待中";
+"Unknown" = "未知";
 "Needs input" = "等待输入";
 "TMUX SESSION" = "TMUX 会话";
 "tmux did not report a pane ID." = "tmux 没有返回 pane ID。";

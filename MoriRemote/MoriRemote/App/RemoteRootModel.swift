@@ -131,8 +131,10 @@ final class ActiveWorkspaceRuntime {
     let workspace: SavedWorkspace
     let instanceID: UUID
     private let runtime: GhosttyTmuxRuntime
+    private let metadataProjector: AgentMetadataProjector
     private let initialScrollbackLines: Int
     private(set) var topology: TmuxSessionController.Topology?
+    var agentMetadata: [TmuxPaneID: AgentMetadata] { metadataProjector.metadata }
     private(set) var focusedPaneID: TmuxPaneID?
     private(set) var status: WorkspaceRuntimeStatus = .connecting
     var onTransportLoss: (@MainActor (UUID) -> Void)?
@@ -142,7 +144,12 @@ final class ActiveWorkspaceRuntime {
         self.workspace = workspace
         self.instanceID = instanceID
         initialScrollbackLines = settings.effectiveInitialScrollbackLines
-        runtime = GhosttyTmuxRuntime(app: app.appHandle, transport: transport, instanceID: instanceID)
+        let runtime = GhosttyTmuxRuntime(app: app.appHandle, transport: transport, instanceID: instanceID)
+        self.runtime = runtime
+        metadataProjector = AgentMetadataProjector(instanceID: instanceID) { completion in
+            runtime.queryAgentMetadata(completion: completion)
+        }
+        metadataProjector.onChange = { [weak self] in self?.onChange?() }
         runtime.onTopology = { [weak self] topology in
             guard let self else { return }
             self.topology = topology
@@ -152,12 +159,17 @@ final class ActiveWorkspaceRuntime {
                 self.focusedPaneID = topology.activePaneID
             }
             self.status = .ready
+            self.metadataProjector.topologyDidChange(topology)
             self.onChange?()
         }
         runtime.onState = { [weak self] state in
             guard let self else { return }
             switch state {
-            case .ready: self.status = .ready
+            case .ready:
+                self.status = .ready
+                // Topology normally follows, but a ready signal without it must
+                // still dismiss the connecting presentation deterministically.
+                if self.topology == nil { self.onChange?() }
             case .detached:
                 self.status = .disconnected(String(localized: "Connection lost."))
                 self.onChange?()
@@ -174,8 +186,14 @@ final class ActiveWorkspaceRuntime {
     }
 
     func start() async throws { try await runtime.start(columns: 120, rows: 40, historyLineLimit: initialScrollbackLines) }
-    func stop() async { await runtime.stop() }
+    func stop() async { metadataProjector.stop(); await runtime.stop() }
+    func setMetadataRefreshVisible(_ visible: Bool) { metadataProjector.setVisible(visible) }
+    func foregrounded() { metadataProjector.foregrounded() }
     func surface() -> TmuxPaneSurface? { focusedPaneID.flatMap(runtime.surface(for:)) }
+    func metadata(for paneID: TmuxPaneID) -> AgentMetadata { agentMetadata[paneID] ?? .unknown }
+    var agentSummary: AgentMetadata {
+        agentMetadata.values.max { lhs, rhs in lhs.state.priority < rhs.state.priority } ?? .unknown
+    }
     func selectWindow(_ id: TmuxWindowID) { runtime.selectWindow(id) }
     func selectPane(_ id: TmuxPaneID) { focusedPaneID = id; runtime.selectPane(id); onChange?() }
     func split(horizontal: Bool) { runtime.mutateSharedWorkspace(horizontal ? .splitHorizontal : .splitVertical) }
@@ -191,6 +209,7 @@ final class RemoteRootModel {
     private var connectionAttempts = WorkspaceConnectionAttemptLedger()
     private var loadingTask: Task<Void, Never>?
     private var bootstrapFailure: String?
+    private var sceneIsActive = true
 
     private(set) var servers: [SavedServer] = []
     private(set) var workspaces: [SavedWorkspace] = []
@@ -211,6 +230,8 @@ final class RemoteRootModel {
 
     var activeRuntime: ActiveWorkspaceRuntime? { activeWorkspaceID.flatMap { runtimes[$0] } }
     var activeWorkspaces: [SavedWorkspace] { workspaces.filter { runtimes[$0.id] != nil } }
+    func agentSummary(for workspaceID: UUID) -> AgentMetadata { runtimes[workspaceID]?.agentSummary ?? .unknown }
+    func metadata(for workspaceID: UUID, paneID: TmuxPaneID) -> AgentMetadata { runtimes[workspaceID]?.metadata(for: paneID) ?? .unknown }
 
     func bootstrap() {
         guard !isLoaded, loadingTask == nil else { return }
@@ -280,7 +301,7 @@ final class RemoteRootModel {
     }
 
     func connect(workspaceID: UUID, automatic: Bool = false) {
-        if runtimes[workspaceID] != nil { activeWorkspaceID = workspaceID; return }
+        if runtimes[workspaceID] != nil { activate(workspaceID: workspaceID); return }
         guard let attempt = connectionAttempts.begin(workspaceID: workspaceID) else { return }
         Task { [weak self] in
             guard let self else { return }
@@ -306,7 +327,7 @@ final class RemoteRootModel {
                 created.onTransportLoss = { [weak self] id in self?.lost(workspaceID: workspaceID, instanceID: id) }
                 created.onChange = { [weak self] in self?.runtimeRevision &+= 1 }
                 self.runtimes[workspaceID] = created
-                self.activeWorkspaceID = workspaceID
+                self.activate(workspaceID: workspaceID)
                 try await created.start()
                 guard self.attemptIsCurrent(attempt, workspaceID: workspaceID), self.runtimes[workspaceID] === created else { await self.stop(created, workspaceID: workspaceID); return }
                 let snapshot = try await self.dependencies.library.markConnected(workspaceID: workspaceID)
@@ -359,6 +380,7 @@ final class RemoteRootModel {
         connectionAttempts.cancel(workspaceID: workspaceID)
         guard let runtime = runtimes.removeValue(forKey: workspaceID) else { return }
         if activeWorkspaceID == workspaceID { activeWorkspaceID = nil }
+        runtime.setMetadataRefreshVisible(false)
         await runtime.stop()
     }
 
@@ -368,6 +390,24 @@ final class RemoteRootModel {
     func split(horizontal: Bool) { activeRuntime?.split(horizontal: horizontal) }
     func newWindow() { activeRuntime?.newWindow() }
     func closePane() { activeRuntime?.closePane() }
+    /// Scene activation is intentionally metadata-only: reconnect remains
+    /// reserved for a real control-transport loss. Backgrounding stops the
+    /// visible-runtime poll; foregrounding starts one immediate refresh.
+    func scenePhaseChanged(_ phase: ScenePhase) {
+        sceneIsActive = phase == .active
+        activeRuntime?.setMetadataRefreshVisible(sceneIsActive)
+        if sceneIsActive { activeRuntime?.foregrounded() }
+    }
+
+    private func activate(workspaceID: UUID) {
+        guard activeWorkspaceID != workspaceID else {
+            runtimes[workspaceID]?.setMetadataRefreshVisible(sceneIsActive)
+            return
+        }
+        if let activeWorkspaceID { runtimes[activeWorkspaceID]?.setMetadataRefreshVisible(false) }
+        activeWorkspaceID = workspaceID
+        runtimes[workspaceID]?.setMetadataRefreshVisible(sceneIsActive)
+    }
 
     private func attemptIsCurrent(_ attempt: UUID, workspaceID: UUID) -> Bool {
         connectionAttempts.isCurrent(attempt, for: workspaceID)
@@ -378,6 +418,7 @@ final class RemoteRootModel {
             runtimes[workspaceID] = nil
             if activeWorkspaceID == workspaceID { activeWorkspaceID = nil }
         }
+        runtime.setMetadataRefreshVisible(false)
         await runtime.stop()
     }
 

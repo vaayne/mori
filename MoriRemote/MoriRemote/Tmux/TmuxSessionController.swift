@@ -36,6 +36,9 @@ enum TmuxClientCommandPolicy {
     /// never enters copy mode for browsing; it just releases a stale shared mode
     /// so the arriving keystroke remains typeable.
     static let cancelStaleInputMode = "if-shell -F '#{pane_in_mode}' 'send-keys -X cancel' ''"
+    /// Fixed command only: agent metadata must stay in Ghostty's correlated
+    /// control stream, never a polling SSH channel or a second parser.
+    static let agentMetadataQuery = "list-panes -a -F '#{pane_id}\t#{@mori-agent-state}\t#{@mori-agent-name}'"
     static func shared(_ mutation: SharedMutation) -> String {
         switch mutation {
         case .splitHorizontal: "split-window -h"
@@ -46,7 +49,8 @@ enum TmuxClientCommandPolicy {
     }
     static func isAllowed(_ command: String) -> Bool {
         command.hasPrefix("select-window -t @") || command.hasPrefix("select-pane -t %") ||
-            command == cancelStaleInputMode || ["split-window -h", "split-window -v", "new-window", "kill-pane"].contains(command)
+            command == cancelStaleInputMode || command == agentMetadataQuery ||
+            ["split-window -h", "split-window -v", "new-window", "kill-pane"].contains(command)
     }
 }
 
@@ -103,6 +107,7 @@ final class TmuxSessionController: @unchecked Sendable {
     private var surfaceLedger = TmuxSurfaceRegistrationLedger()
     private var completions: [UInt64: Request] = [:]
     private var trackedInputCompletions: [UInt64: @Sendable (CommandResult) -> Void] = [:]
+    private var queryCompletions: [UInt64: @Sendable (CommandResult) -> Void] = [:]
     private var shuttingDown = false
 
     init(callbacks: Callbacks, queue: DispatchQueue = .init(label: "mori.remote.tmux.writer")) { self.callbacks = callbacks; self.queue = queue }
@@ -177,6 +182,11 @@ final class TmuxSessionController: @unchecked Sendable {
     /// Selection is non-mutating. This is called only from an actual input path,
     /// before Ghostty emits the pane bytes, and the writer queue preserves order.
     func prepareForInput() { enqueue(TmuxClientCommandPolicy.cancelStaleInputMode, request: .input) }
+    /// The only query result API. The fixed command is correlated by Ghostty's
+    /// command token, so callers cannot observe or parse raw control bytes.
+    func queryAgentMetadata(completion: @escaping @Sendable (CommandResult) -> Void) {
+        enqueueQuery(TmuxClientCommandPolicy.agentMetadataQuery, completion: completion)
+    }
     func mutateSharedWorkspace(_ mutation: TmuxClientCommandPolicy.SharedMutation) {
         enqueue(TmuxClientCommandPolicy.shared(mutation), request: .input)
     }
@@ -200,6 +210,28 @@ final class TmuxSessionController: @unchecked Sendable {
         guard result == GHOSTTY_TMUX_RESULT_OK else { callbacks.completion(request, .init(status: .error, body: "\(result)", causeToken: 0)); return }
         completions[token] = request; drainOutbound()
     } }
+
+    private func enqueueQuery(_ command: String, completion: @escaping @Sendable (CommandResult) -> Void) {
+        queue.async { [self] in
+            preconditionWriter()
+            guard let client, !shuttingDown else {
+                completion(.init(status: .error, body: "session unavailable", causeToken: 0))
+                return
+            }
+            var token: UInt64 = 0
+            let result = command.utf8.withContiguousStorageIfAvailable {
+                ghostty_tmux_client_enqueue_command(client, .init(ptr: $0.baseAddress, len: $0.count), &token)
+            } ?? Array(command.utf8).withUnsafeBufferPointer {
+                ghostty_tmux_client_enqueue_command(client, .init(ptr: $0.baseAddress, len: $0.count), &token)
+            }
+            guard result == GHOSTTY_TMUX_RESULT_OK else {
+                completion(.init(status: .error, body: "\(result)", causeToken: 0))
+                return
+            }
+            queryCompletions[token] = completion
+            drainOutbound()
+        }
+    }
 
     private func drainOutbound() {
         preconditionWriter(); guard let client else { return }
@@ -263,12 +295,14 @@ final class TmuxSessionController: @unchecked Sendable {
         let status: CommandStatus = command.status == GHOSTTY_TMUX_COMMAND_SUCCESS ? .success : command.status == GHOSTTY_TMUX_COMMAND_SKIPPED ? .skipped : .error
         let result = CommandResult(status: status, body: decode(command.body), causeToken: command.cause_token)
         if let callback = trackedInputCompletions.removeValue(forKey: command.token) { callback(result) }
+        if let callback = queryCompletions.removeValue(forKey: command.token) { callback(result) }
         if let request = completions.removeValue(forKey: command.token) { callbacks.completion(request, result) }
     }
     private func failPending() {
         let result = CommandResult(status: .error, body: "transport closed", causeToken: 0)
         let commands = completions.values; completions.removeAll(); commands.forEach { callbacks.completion($0, result) }
         let inputs = trackedInputCompletions.values; trackedInputCompletions.removeAll(); inputs.forEach { $0(result) }
+        let queries = queryCompletions.values; queryCompletions.removeAll(); queries.forEach { $0(result) }
     }
     private func publish(_ state: State) { let callbacks = callbacks; DispatchQueue.main.async { callbacks.state(state) } }
     private func preconditionWriter() { dispatchPrecondition(condition: .onQueue(queue)) }

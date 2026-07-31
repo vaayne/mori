@@ -85,6 +85,8 @@
 "Terminal renderer is not ready yet." = "Terminal renderer is not ready yet.";
 "Window" = "Window";
 "Working" = "Working";
+"Waiting" = "Waiting";
+"Unknown" = "Unknown";
 "Needs input" = "Needs input";
 "TMUX SESSION" = "TMUX SESSION";
 "tmux did not report a pane ID." = "tmux did not report a pane ID.";
