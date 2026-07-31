@@ -138,6 +138,70 @@ func testParsePanesEmpty() {
     assertEqual(panes.count, 0)
 }
 
+// MARK: - TmuxParser: Full Scan Parsing Tests
+
+func testParseScanGroupsSessionsWindowsPanes() {
+    // Two sessions; first session has two windows, second window has two panes.
+    let output = """
+    $0\tdev\t2\t1\t@0\t1\tzsh\t1\t%0\t/dev/ttys001\t1\t/Users/test\tzsh\t100\tzsh\t90\t111\t\t
+    $0\tdev\t2\t1\t@1\t2\tvim\t0\t%1\t/dev/ttys002\t0\t/Users/test/src\tvim\t200\tvim\t190\t222\t\t
+    $0\tdev\t2\t1\t@1\t2\tvim\t0\t%2\t/dev/ttys003\t1\t/Users/test/docs\tless\t300\tless\t290\t333\tworking\tclaude
+    $1\tmori/main\t1\t0\t@2\t1\tnode\t1\t%3\t/dev/ttys004\t1\t/Users/test/mori\tnode\t400\tnode\t390\t444\t\t
+    """
+    let sessions = TmuxParser.parseScan(output)
+    assertEqual(sessions.count, 2)
+
+    assertEqual(sessions[0].sessionId, "$0")
+    assertEqual(sessions[0].name, "dev")
+    assertEqual(sessions[0].windowCount, 2)
+    assertTrue(sessions[0].isAttached)
+    assertEqual(sessions[0].windows.count, 2)
+
+    assertEqual(sessions[0].windows[0].windowId, "@0")
+    assertEqual(sessions[0].windows[0].windowIndex, 1)
+    assertEqual(sessions[0].windows[0].name, "zsh")
+    assertTrue(sessions[0].windows[0].isActive)
+    assertEqual(sessions[0].windows[0].panes.count, 1)
+    assertEqual(sessions[0].windows[0].panes[0].paneId, "%0")
+
+    assertEqual(sessions[0].windows[1].windowId, "@1")
+    assertFalse(sessions[0].windows[1].isActive)
+    assertEqual(sessions[0].windows[1].panes.count, 2)
+    assertEqual(sessions[0].windows[1].panes[0].paneId, "%1")
+    assertEqual(sessions[0].windows[1].panes[1].paneId, "%2")
+    assertEqual(sessions[0].windows[1].panes[1].agentState, "working")
+    assertEqual(sessions[0].windows[1].panes[1].agentName, "claude")
+
+    assertEqual(sessions[1].sessionId, "$1")
+    assertEqual(sessions[1].name, "mori/main")
+    assertFalse(sessions[1].isAttached)
+    assertEqual(sessions[1].windows.count, 1)
+    assertEqual(sessions[1].windows[0].panes[0].paneId, "%3")
+}
+
+func testParseScanWindowPathFromActivePane() {
+    // list-windows resolves pane variables against the active pane; the scan
+    // groups panes itself, so the window path must come from the active pane
+    // (%2 here), not the first one.
+    let output = """
+    $0\tdev\t1\t1\t@0\t1\tzsh\t1\t%1\t/dev/ttys002\t0\t/Users/test/src\tvim\t200\tvim\t190\t222\t\t
+    $0\tdev\t1\t1\t@0\t1\tzsh\t1\t%2\t/dev/ttys003\t1\t/Users/test/docs\tless\t300\tless\t290\t333\t\t
+    """
+    let sessions = TmuxParser.parseScan(output)
+    assertEqual(sessions.count, 1)
+    assertEqual(sessions[0].windows.count, 1)
+    assertEqual(sessions[0].windows[0].currentPath, "/Users/test/docs")
+}
+
+func testParseScanEmpty() {
+    assertEqual(TmuxParser.parseScan("").count, 0)
+}
+
+func testParseScanMalformed() {
+    let sessions = TmuxParser.parseScan("$0\tdev\t1\t1\t@0\n")
+    assertEqual(sessions.count, 0, "Should skip rows missing pane fields")
+}
+
 func testParsePanesWithActivity() {
     let output = "%0\t/dev/ttys001\t1\t/Users/test\tzsh\t1710784200\n"
     let panes = TmuxParser.parsePanes(output)
@@ -653,6 +717,10 @@ testParsePanesSingle()
 testParsePanesMultiple()
 testParsePanesEmptyOptionals()
 testParsePanesEmpty()
+testParseScanGroupsSessionsWindowsPanes()
+testParseScanWindowPathFromActivePane()
+testParseScanEmpty()
+testParseScanMalformed()
 testParsePanesWithActivity()
 testParsePanesMultipleWithActivity()
 testParsePanesActivityEmptyField()

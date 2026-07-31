@@ -43,7 +43,89 @@ public enum TmuxParser {
         "#{@mori-agent-name}",
     ].joined(separator: delimiter)
 
+    /// Format string for the single-command full scan (`tmux list-panes -a -F`).
+    /// One row per pane, prefixed with its session and window context so the whole
+    /// session → window → pane tree comes back in a single tmux invocation instead
+    /// of 1 + sessions + windows separate ones. tmux guarantees every session has
+    /// at least one window and every window at least one pane, so grouping rows
+    /// loses no nodes.
+    public static let scanFormat: String = [
+        "#{session_id}",
+        "#{session_name}",
+        "#{session_windows}",
+        "#{session_attached}",
+        "#{window_id}",
+        "#{window_index}",
+        "#{window_name}",
+        "#{window_active}",
+    ].joined(separator: delimiter) + delimiter + paneFormat
+
+    /// Number of session/window context fields prefixed to each `scanFormat` row.
+    private static let scanContextFieldCount = 8
+
     // MARK: - Parsing
+
+    /// Parse the output of `tmux list-panes -a -F scanFormat` into the full
+    /// session tree. Rows are grouped by session and window in output order.
+    /// A window's `currentPath` mirrors `list-windows` semantics (which resolves
+    /// pane variables against the active pane): it is taken from the window's
+    /// active pane, falling back to the first pane.
+    public static func parseScan(_ output: String) -> [TmuxSession] {
+        var sessions: [TmuxSession] = []
+        var sessionIndexById: [String: Int] = [:]
+        var windowIndexById: [String: [String: Int]] = [:]
+
+        for fields in parseLines(output) {
+            guard fields.count >= scanContextFieldCount + 5,
+                  let pane = parsePane(Array(fields[scanContextFieldCount...])) else { continue }
+            let sessionId = fields[0]
+
+            let sessionIndex: Int
+            if let existing = sessionIndexById[sessionId] {
+                sessionIndex = existing
+            } else {
+                sessionIndex = sessions.count
+                sessionIndexById[sessionId] = sessionIndex
+                sessions.append(TmuxSession(
+                    sessionId: sessionId,
+                    name: fields[1],
+                    windowCount: Int(fields[2]) ?? 0,
+                    isAttached: fields[3] == "1"
+                ))
+            }
+
+            let windowId = fields[4]
+            let windowIndex: Int
+            if let existing = windowIndexById[sessionId]?[windowId] {
+                windowIndex = existing
+            } else {
+                windowIndex = sessions[sessionIndex].windows.count
+                windowIndexById[sessionId, default: [:]][windowId] = windowIndex
+                sessions[sessionIndex].windows.append(TmuxWindow(
+                    windowId: windowId,
+                    windowIndex: Int(fields[5]) ?? 0,
+                    name: fields[6],
+                    isActive: fields[7] == "1"
+                ))
+            }
+
+            let window = sessions[sessionIndex].windows[windowIndex]
+            var panes = window.panes
+            panes.append(pane)
+            let currentPath = panes.first(where: { $0.isActive })?.currentPath
+                ?? panes.first?.currentPath
+            sessions[sessionIndex].windows[windowIndex] = TmuxWindow(
+                windowId: window.windowId,
+                windowIndex: window.windowIndex,
+                name: window.name,
+                isActive: window.isActive,
+                currentPath: currentPath,
+                panes: panes
+            )
+        }
+
+        return sessions
+    }
 
     /// Parse the output of `tmux list-sessions -F` into `TmuxSession` models.
     public static func parseSessions(_ output: String) -> [TmuxSession] {
@@ -83,7 +165,11 @@ public enum TmuxParser {
 
     /// Parse the output of `tmux list-panes -F` into `TmuxPane` models.
     public static func parsePanes(_ output: String) -> [TmuxPane] {
-        parseLines(output).compactMap { fields in
+        parseLines(output).compactMap(parsePane)
+    }
+
+    /// Parse a single `paneFormat` field row into a `TmuxPane`.
+    private static func parsePane(_ fields: [String]) -> TmuxPane? {
             guard fields.count >= 5 else { return nil }
             let paneId = fields[0]
             let tty = fields[1].isEmpty ? nil : fields[1]
@@ -109,7 +195,6 @@ public enum TmuxParser {
                 agentState: agentState,
                 agentName: agentName
             )
-        }
     }
 
     // MARK: - Private

@@ -82,32 +82,13 @@ public actor TmuxBackend: TmuxControlling {
     }
 
     public func scanAll() async throws -> [TmuxSession] {
-        // 1. List all sessions
-        let sessionsOutput = try await runner.run(
-            "list-sessions", "-F", TmuxParser.sessionFormat
+        // A single list-panes -a returns every session/window/pane in one tmux
+        // invocation (one subprocess locally, one round trip over SSH) instead
+        // of 1 + sessions + windows separate ones.
+        let output = try await runner.run(
+            "list-panes", "-a", "-F", TmuxParser.scanFormat
         )
-        var sessions = TmuxParser.parseSessions(sessionsOutput)
-
-        // 2. For each session, list windows
-        for i in sessions.indices {
-            let windowsOutput = try await runner.run(
-                "list-windows", "-t", sessions[i].sessionId,
-                "-F", TmuxParser.windowFormat
-            )
-            sessions[i].windows = TmuxParser.parseWindows(windowsOutput)
-
-            // 3. For each window, list panes
-            for j in sessions[i].windows.indices {
-                let target = "\(sessions[i].sessionId):\(sessions[i].windows[j].windowId)"
-                let panesOutput = try await runner.run(
-                    "list-panes", "-t", target,
-                    "-F", TmuxParser.paneFormat
-                )
-                sessions[i].windows[j].panes = TmuxParser.parsePanes(panesOutput)
-            }
-        }
-
-        return sessions
+        return TmuxParser.parseScan(output)
     }
 
     /// List tmux session names without deep window/pane scans.
