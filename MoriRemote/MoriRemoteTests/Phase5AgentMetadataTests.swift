@@ -56,13 +56,13 @@ import Testing
         await relay.waitUntilRequested()
 
         relay.complete(.init(succeeded: true, body: "%1\tworking\tclaude\n"))
-        await Task.yield()
+        await eventually { projector.metadata[1] == .init(state: .working, name: "claude") }
         #expect(projector.metadata[1] == .init(state: .working, name: "claude"))
 
         projector.foregrounded()
         await relay.waitUntilRequested()
         relay.complete(.init(succeeded: true, body: "%1\twaiting\tclaude\n"))
-        await Task.yield()
+        await eventually { projector.metadata[1] == .init(state: .waiting, name: "claude") }
         #expect(projector.metadata[1] == .init(state: .waiting, name: "claude"))
         projector.stop()
     }
@@ -75,7 +75,7 @@ import Testing
         projector.setVisible(true)
         await relay.waitUntilRequested()
         relay.complete(.init(succeeded: false, body: "transport closed"))
-        await Task.yield()
+        await eventually { projector.lastFailure == "transport closed" }
         #expect(projector.metadata[1] == .unknown)
         #expect(projector.lastFailure == "transport closed")
 
@@ -95,7 +95,7 @@ import Testing
         projector.setVisible(true)
         await relay.waitUntilRequested()
         relay.complete(.init(succeeded: true, body: "%1\tworking\tclaude\n"))
-        await Task.yield()
+        await eventually { projector.metadata[1] == .init(state: .working, name: "claude") }
 
         projector.foregrounded()
         await relay.waitUntilRequested()
@@ -107,7 +107,7 @@ import Testing
         await Task.yield()
         #expect(projector.metadata.isEmpty)
         relay.complete(.init(succeeded: true, body: "%1\twaiting\tclaude\n"))
-        await Task.yield()
+        await eventually { projector.metadata[1] == .init(state: .waiting, name: "claude") }
         #expect(projector.metadata[1] == .init(state: .waiting, name: "claude"))
         projector.stop()
     }
@@ -137,9 +137,9 @@ import Testing
 
 @MainActor
 private func eventually(_ condition: @escaping @MainActor () -> Bool) async {
-    for _ in 0..<40 {
+    for _ in 0..<100 {
         if condition() { return }
-        await Task.yield()
+        try? await Task.sleep(for: .milliseconds(1))
     }
     Issue.record("condition did not become true")
 }
