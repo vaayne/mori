@@ -358,14 +358,7 @@ private final class GhosttySingleViewportContainerView: UIView,
         if changedFrame || changedContainer {
             container.layoutIfNeeded()
         }
-        GhosttyRuntimeTrace.flowEndIfActive(
-            GhosttyRuntimeTrace.paneSwitchFlow,
-            event: "presentation.reveal.ready",
-            fields: [
-                "surface_uuid": surface.id.uuidString,
-                "wall_ns": "\(GhosttyRuntimeTrace.wallNanos())",
-            ]
-        )
+
         if let startedAt {
             GhosttyRuntimeTrace.perf(
                 "viewport.layout bounds=\(ghosttyDiagnosticRect(bounds)) changed=\(changedFrame || changedContainer) elapsed_ms=\(GhosttyRuntimeTrace.elapsedMilliseconds(from: startedAt))"

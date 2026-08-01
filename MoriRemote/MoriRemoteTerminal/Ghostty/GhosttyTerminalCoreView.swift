@@ -56,7 +56,7 @@ struct GhosttyTerminalCoreView: View {
                     terminalTheme: .ghosttyDefault,
                     trackpadDriver: trackpadDriver,
                     onSurfaceTap: { _ in activateTerminalInput() },
-                    onWindowSwipe: { guard isInputAvailable else { return }; _ = screen.focusAdjacentTmuxTopLevel($0) },
+                    onWindowSwipe: { guard isInputAvailable else { return }; screen.focusAdjacentTmuxTopLevel($0) },
                     sendKeyEvent: sendTerminalKey,
                     onTrackpadFeedbackChange: { trackpadFeedback = $0 },
                     isMouseCaptured: { isInputAvailable && screen.isMouseCaptured(for: $0) },

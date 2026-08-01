@@ -175,19 +175,7 @@ final class GhosttyTerminalResponderUIView: UIView, UIKeyInput, UITextInputTrait
         GhosttyRuntimeTrace.diagnostics(
             "responder.update enabled=\(isEnabled) wasEnabled=\(wasInputEnabled) wantsFirstResponder=\(wantsFirstResponder) previousWantsFirstResponder=\(previouslyWantedFirstResponder) token=\(activationToken) previousToken=\(previousActivationToken) firstResponder=\(isFirstResponder) hasWindow=\(window != nil)"
         )
-        GhosttyRuntimeTrace.flowEventIfActive(
-            "terminal.input",
-            event: "responder.update",
-            fields: [
-                "enabled": "\(isEnabled)",
-                "firstResponder": "\(isFirstResponder)",
-                "hasWindow": "\(window != nil)",
-                "token": "\(activationToken)",
-                "wasEnabled": "\(wasInputEnabled)",
-                "wantsFirstResponder": "\(wantsFirstResponder)",
-                "previousWantsFirstResponder": "\(previouslyWantedFirstResponder)",
-            ]
-        )
+
         self.isInputEnabled = isEnabled
         self.wantsFirstResponder = wantsFirstResponder
         self.keyboardAppearance = keyboardAppearance
@@ -239,15 +227,7 @@ final class GhosttyTerminalResponderUIView: UIView, UIKeyInput, UITextInputTrait
         GhosttyRuntimeTrace.diagnostics(
             "responder.\(source) bytes=\(text.lengthOfBytes(using: .utf8)) firstResponder=\(isFirstResponder) token=\(activationToken)"
         )
-        GhosttyRuntimeTrace.flowEventIfActive(
-            "terminal.input",
-            event: "responder.\(source)",
-            fields: [
-                "bytes": "\(text.lengthOfBytes(using: .utf8))",
-                "firstResponder": "\(isFirstResponder)",
-                "token": "\(activationToken)",
-            ],
-        )
+
         _ = sendTextHandler?(text)
     }
 
@@ -268,15 +248,7 @@ final class GhosttyTerminalResponderUIView: UIView, UIKeyInput, UITextInputTrait
     override func becomeFirstResponder() -> Bool {
         let didBecomeFirstResponder = super.becomeFirstResponder()
         reportFirstResponderStateIfChanged()
-        GhosttyRuntimeTrace.flowEventIfActive(
-            "terminal.input",
-            event: "responder.becomeFirstResponder.result",
-            fields: [
-                "firstResponder": "\(isFirstResponder)",
-                "result": "\(didBecomeFirstResponder)",
-                "token": "\(activationToken)",
-            ]
-        )
+
         return didBecomeFirstResponder
     }
 
@@ -284,15 +256,7 @@ final class GhosttyTerminalResponderUIView: UIView, UIKeyInput, UITextInputTrait
         cancelTrackpadGestureIfActive(reason: "resignFirstResponder")
         let didResignFirstResponder = super.resignFirstResponder()
         reportFirstResponderStateIfChanged()
-        GhosttyRuntimeTrace.flowEventIfActive(
-            "terminal.input",
-            event: "responder.resignFirstResponder.result",
-            fields: [
-                "firstResponder": "\(isFirstResponder)",
-                "result": "\(didResignFirstResponder)",
-                "token": "\(activationToken)",
-            ]
-        )
+
         return didResignFirstResponder
     }
 
@@ -331,14 +295,7 @@ final class GhosttyTerminalResponderUIView: UIView, UIKeyInput, UITextInputTrait
                 self?.trackpadFeedbackHandler?(state)
             }
         )
-        GhosttyRuntimeTrace.flowEventIfActive(
-            "terminal.input",
-            event: "responder.trackpad.begin",
-            fields: [
-                "firstResponder": "\(isFirstResponder)",
-                "token": "\(activationToken)",
-            ]
-        )
+
     }
 
     func updateFloatingCursor(at point: CGPoint) {
@@ -348,26 +305,12 @@ final class GhosttyTerminalResponderUIView: UIView, UIKeyInput, UITextInputTrait
 
     func endFloatingCursor() {
         guard trackpadDriver.end(owner: self) != nil else { return }
-        GhosttyRuntimeTrace.flowEventIfActive(
-            "terminal.input",
-            event: "responder.trackpad.end",
-            fields: [
-                "firstResponder": "\(isFirstResponder)",
-                "token": "\(activationToken)",
-            ]
-        )
+
     }
 
     func cancelTrackpadGestureIfActive(reason: String) {
         guard trackpadDriver.cancel(owner: self) else { return }
-        GhosttyRuntimeTrace.flowEventIfActive(
-            "terminal.input",
-            event: "responder.trackpad.cancel",
-            fields: [
-                "reason": reason,
-                "token": "\(activationToken)",
-            ]
-        )
+
     }
 
     func deleteBackward() {
@@ -464,14 +407,7 @@ final class GhosttyTerminalResponderUIView: UIView, UIKeyInput, UITextInputTrait
         guard !responderReconciliationScheduled else { return }
 
         responderReconciliationScheduled = true
-        GhosttyRuntimeTrace.flowEventIfActive(
-            "terminal.input",
-            event: "responder.reconcile.scheduled",
-            fields: [
-                "reason": reason,
-                "token": "\(activationToken)",
-            ]
-        )
+
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.reconcileResponderState()
@@ -514,14 +450,7 @@ final class GhosttyTerminalResponderUIView: UIView, UIKeyInput, UITextInputTrait
         GhosttyRuntimeTrace.perf(
             "responder.requestFirstResponder deferred token=\(activationToken) firstResponder=\(isFirstResponder)"
         )
-        GhosttyRuntimeTrace.flowEventIfActive(
-            "terminal.input",
-            event: "responder.becomeFirstResponder.scheduled",
-            fields: [
-                "route": "reconcile",
-                "token": "\(activationToken)",
-            ]
-        )
+
         _ = attemptFirstResponderRequest(route: "reconcile")
     }
 
@@ -533,27 +462,12 @@ final class GhosttyTerminalResponderUIView: UIView, UIKeyInput, UITextInputTrait
             GhosttyRuntimeTrace.perf(
                 "responder.requestFirstResponder result=true route=\(route) token=\(activationToken) firstResponder=true"
             )
-            GhosttyRuntimeTrace.flowEventIfActive(
-                "terminal.input",
-                event: "responder.becomeFirstResponder.already",
-                fields: [
-                    "route": route,
-                    "token": "\(activationToken)",
-                ]
-            )
+
             return true
         }
 
         let traceStart = GhosttyRuntimeTrace.nowNanos()
-        GhosttyRuntimeTrace.flowEventIfActive(
-            "terminal.input",
-            event: "responder.becomeFirstResponder.begin",
-            fields: [
-                "route": route,
-                "token": "\(activationToken)",
-            ],
-            at: traceStart
-        )
+
         let didBecomeFirstResponder = becomeFirstResponder()
         let elapsedMilliseconds = GhosttyRuntimeTrace.elapsedMilliseconds(from: traceStart)
         GhosttyRuntimeTrace.perf(
@@ -562,16 +476,7 @@ final class GhosttyTerminalResponderUIView: UIView, UIKeyInput, UITextInputTrait
         GhosttyRuntimeTrace.diagnostics(
             "responder.requestFirstResponder result=\(didBecomeFirstResponder) route=\(route) token=\(activationToken) firstResponder=\(isFirstResponder)"
         )
-        GhosttyRuntimeTrace.flowEventIfActive(
-            "terminal.input",
-            event: "responder.becomeFirstResponder.end",
-            fields: [
-                "elapsed_ms": elapsedMilliseconds,
-                "result": "\(didBecomeFirstResponder)",
-                "route": route,
-                "token": "\(activationToken)",
-            ]
-        )
+
         if didBecomeFirstResponder {
             pendingFirstResponderRequest = false
         }

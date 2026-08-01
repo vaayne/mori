@@ -123,7 +123,8 @@ public final class MoriRemoteTerminalSession: ObservableObject {
     public var onTopologyChange: (@MainActor (MoriRemoteTerminalTopology) -> Void)?
 
     private let runtime: GhosttyKitRuntime
-    fileprivate let screen: TmuxScreenModel
+    private let terminalSession: TmuxTerminalSession
+    fileprivate let screenAdapter: TmuxTerminalScreenAdapter
 
     public init(
         transport: MoriRemoteTerminalTransport,
@@ -133,21 +134,30 @@ public final class MoriRemoteTerminalSession: ObservableObject {
         self.instanceID = instanceID
         let runtime = try GhosttyKitRuntime()
         self.runtime = runtime
-        screen = TmuxScreenModel(
+        let terminalSession = TmuxTerminalSession(
             app: runtime.appHandle,
             transport: ClosureTmuxControlTransport(base: transport),
             historyLineLimit: initialScrollbackLines,
             baseSurfaceConfig: { runtime.makeTmuxBaseSurfaceConfig() },
             paneViewTheme: { .ghosttyDefault }
         )
-        screen.session?.onStateChange = { [weak self] state in self?.receive(state) }
-        screen.session?.onTopologyChange = { [weak self] snapshot in self?.receive(snapshot) }
-        screen.session?.onPresentationChange = { [weak self] ready in self?.isPresentationReady = ready }
+        let screenAdapter = TmuxTerminalScreenAdapter()
+        self.terminalSession = terminalSession
+        self.screenAdapter = screenAdapter
+        screenAdapter.activate(
+            session: terminalSession,
+            initialViewportHandler: { [weak terminalSession] size, scale in
+                terminalSession?.updateViewportMetrics(size: size, scale: scale)
+            }
+        )
+        terminalSession.onStateChange = { [weak self] state in self?.receive(state) }
+        terminalSession.onTopologyChange = { [weak self] snapshot in self?.receive(snapshot) }
+        terminalSession.onPresentationChange = { [weak self] ready in self?.isPresentationReady = ready }
     }
 
     public func start() async throws {
         do {
-            try await screen.connect()
+            try await terminalSession.connect()
         } catch {
             lastError = error.localizedDescription
             publishConnectionState(.disconnected)
@@ -156,26 +166,27 @@ public final class MoriRemoteTerminalSession: ObservableObject {
     }
 
     public func stop() async {
-        await screen.stop()
+        screenAdapter.invalidate()
+        await terminalSession.shutdown()
         publishConnectionState(.disconnected)
     }
 
     public func setPresentationActive(_ active: Bool) {
-        screen.session?.setAppActive(active)
+        terminalSession.setAppActive(active)
     }
 
-    public func isControlChannelActive() async -> Bool { await screen.session?.controlChannelIsActive() ?? false }
+    public func isControlChannelActive() async -> Bool { await terminalSession.controlChannelIsActive() }
 
-    public func selectWindow(_ id: UInt64) { screen.session?.controller.requestSelectWindow(windowID: .init(id)) }
-    public func selectPane(_ id: UInt64) { screen.session?.controller.requestSelectPane(paneID: .init(id)) }
+    public func selectWindow(_ id: UInt64) { terminalSession.controller.requestSelectWindow(windowID: .init(id)) }
+    public func selectPane(_ id: UInt64) { terminalSession.controller.requestSelectPane(paneID: .init(id)) }
     public func queryAgentMetadata() async -> MoriRemoteTerminalAgentMetadataResult {
         await withCheckedContinuation { continuation in
-            screen.session?.controller.queryAgentMetadata { result in
+            terminalSession.controller.queryAgentMetadata { result in
                 let status: MoriRemoteTerminalAgentMetadataResult.Status = switch result.status {
                 case .success: .success; case .skipped: .skipped; case .failed: .failed
                 }
                 continuation.resume(returning: .init(status: status, body: result.body))
-            } ?? continuation.resume(returning: .init(status: .failed, body: ""))
+            }
         }
     }
 
@@ -184,7 +195,7 @@ public final class MoriRemoteTerminalSession: ObservableObject {
         case .newWindow: .newWindow; case .splitHorizontal: .splitHorizontal
         case .splitVertical: .splitVertical; case .closePane: .closePane; case .closeWindow: .closeWindow
         }
-        screen.session?.controller.requestSharedMutation(value)
+        terminalSession.controller.requestSharedMutation(value)
     }
 
     private func receive(_ state: TmuxSessionController.SessionState) {
@@ -241,7 +252,7 @@ public struct MoriRemoteTerminalView: View {
 
     public var body: some View {
         GhosttyTerminalCoreView(
-            screen: session.screen.screenAdapter,
+            screen: session.screenAdapter,
             isInputSuspended: isInputSuspended,
             imageUploader: imageUploader,
             onShowNavigator: onShowNavigator,

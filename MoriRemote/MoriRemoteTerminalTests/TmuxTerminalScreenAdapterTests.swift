@@ -5,36 +5,13 @@ import XCTest
 
 @MainActor
 final class TmuxTerminalScreenAdapterTests: XCTestCase {
-    func testIdentityRegistryKeepsPaneRoundTripStable() {
-        var registry = TmuxTerminalIdentityRegistry()
-        let paneID = TmuxPaneID(41)
-
-        let surfaceID = registry.surfaceID(for: paneID)
-
-        XCTAssertEqual(registry.surfaceID(for: paneID), surfaceID)
-        XCTAssertEqual(registry.paneID(for: surfaceID), paneID)
-        XCTAssertNil(registry.paneID(for: UUID()))
-    }
-
-    func testIdentityRegistryKeepsWindowRoundTripStable() {
-        var registry = TmuxTerminalIdentityRegistry()
-        let windowID = TmuxWindowID(17)
-
-        let surfaceID = registry.surfaceID(for: windowID)
-
-        XCTAssertEqual(registry.surfaceID(for: windowID), surfaceID)
-        XCTAssertEqual(registry.windowID(for: surfaceID), windowID)
-        XCTAssertNil(registry.windowID(for: UUID()))
-    }
-
     func testTopologyProjectionReflectsEmittedTopologyImmediately() async throws {
         let runtime = try GhosttyKitRuntime()
         let session = makeSession(runtime: runtime)
         let adapter = TmuxTerminalScreenAdapter()
         adapter.activate(
             session: session,
-            initialViewportHandler: { _, _ in },
-            viewportStabilityHandler: { _ in }
+            initialViewportHandler: { _, _ in }
         )
 
         session.handleTopology(.init(
@@ -47,10 +24,8 @@ final class TmuxTerminalScreenAdapterTests: XCTestCase {
             activeWindowID: 1
         ))
 
-        let first = adapter.terminalInteractionProjection
-        XCTAssertEqual(first.windowCount, 2)
-        XCTAssertEqual(first.selectedWindowIndex, 0)
-        XCTAssertEqual(first.paneCount, 1)
+        let first = adapter.terminalScreenPresentationProjection
+        XCTAssertEqual(first.viewport.windowCount, 2)
 
         session.handleTopology(.init(
             sessionName: "fresh-test",
@@ -59,9 +34,8 @@ final class TmuxTerminalScreenAdapterTests: XCTestCase {
             activeWindowID: 1
         ))
 
-        let second = adapter.terminalInteractionProjection
-        XCTAssertEqual(second.windowCount, 1)
-        XCTAssertEqual(second.selectedWindowIndex, 0)
+        let second = adapter.terminalScreenPresentationProjection
+        XCTAssertEqual(second.viewport.windowCount, 1)
 
         await session.shutdown()
     }

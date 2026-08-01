@@ -7,7 +7,7 @@ import GhosttyKit
 /// single consumer task drains an ordered stream fed from the writer
 /// queue), and transport loss closes this attachment promptly.
 ///
-/// Viewport ownership stays in the screen model. The control client is
+/// Viewport ownership stays in `TmuxTerminalSession`. The control client is
 /// deliberately unsized; all local viewport metrics stay renderer-only.
 actor TmuxSessionLink {
     let controller: TmuxSessionController

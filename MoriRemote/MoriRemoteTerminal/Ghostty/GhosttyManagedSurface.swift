@@ -92,27 +92,11 @@ final class GhosttyManagedSurface {
         return controlSurface.sendPaste(text) ? .accepted : .surfaceRejected
     }
 
-    func sendPasteAwaitingCommandCompletion(_ text: String) async -> Bool {
-        guard !text.isEmpty, let paneOwner else { return false }
-        return await paneOwner.sendPasteAwaitingCommandCompletion(text)
-    }
-
     @discardableResult
     func sendKeyEvent(_ event: GhosttySurfaceKeyEvent) -> FocusedTerminalInputSubmissionResult {
         guard controlSurface.sendKeyEvent(event) else { return .surfaceRejected }
         onLocalSelectionGeometryChange?()
         return .accepted
-    }
-
-    func sendKeyEventAwaitingCommandCompletion(
-        _ event: GhosttySurfaceKeyEvent
-    ) async -> Bool {
-        guard let paneOwner else { return false }
-        let delivered = await paneOwner.sendKeyEventAwaitingCommandCompletion(event)
-        if delivered {
-            onLocalSelectionGeometryChange?()
-        }
-        return delivered
     }
 
     func setVisible(_ visible: Bool) {

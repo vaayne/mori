@@ -1,4 +1,5 @@
 import Foundation
+@testable import MoriRemoteTerminal
 
 actor DeterministicTmuxControlTransport: TmuxControlTransport {
     nonisolated let receivedBytes: AsyncThrowingStream<Data, Error>

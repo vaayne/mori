@@ -88,20 +88,9 @@ final class TmuxPaneSurface {
     }
 
     private final class CallbackBox: @unchecked Sendable {
-        enum TrackedWriteTransport {
-            case exact
-            case literal
-        }
-
-        private struct TrackedWrite {
-            let transport: TrackedWriteTransport
-            let completion: @Sendable (Bool) -> Void
-        }
-
         let controller: TmuxSessionController
         let paneID: TmuxPaneID
         let failureRelay: FailureRelay
-        private var trackedWrite: TrackedWrite?
 
         init(
             controller: TmuxSessionController,
@@ -115,54 +104,16 @@ final class TmuxPaneSurface {
 
         static let writeCallback: ghostty_terminal_surface_write_cb = { userdata, pointer, count in
             // ghostty.h: write_cb fires only from terminal-surface input
-            // operations on the presentation-owner thread, never from the
-            // output feed. `trackedWrite` is single-threaded because of
-            // this contract.
+            // operations on the presentation-owner thread, never output.
             assert(Thread.isMainThread)
             guard let userdata else { return false }
             let box = Unmanaged<CallbackBox>.fromOpaque(userdata).takeUnretainedValue()
             guard count > 0 else { return true }
             guard let pointer else { return false }
-            if let trackedWrite = box.trackedWrite {
-                box.trackedWrite = nil
-                let bytes = Data(bytes: pointer, count: count)
-                let admitted = switch trackedWrite.transport {
-                case .exact:
-                    box.controller.sendTrackedInput(
-                        paneID: box.paneID,
-                        bytes,
-                        completion: trackedWrite.completion
-                    )
-                case .literal:
-                    box.controller.sendTrackedLiteralInput(
-                        paneID: box.paneID,
-                        bytes,
-                        completion: trackedWrite.completion
-                    )
-                }
-                if !admitted {
-                    trackedWrite.completion(false)
-                }
-                return admitted
-            }
             return box.controller.sendInput(
                 paneID: box.paneID,
                 Data(bytes: pointer, count: count)
             )
-        }
-
-        func performTrackedWrite(
-            transport: TrackedWriteTransport,
-            completion: @escaping @Sendable (Bool) -> Void,
-            _ operation: () -> Bool
-        ) {
-            MainActor.preconditionIsolated()
-            precondition(trackedWrite == nil)
-            trackedWrite = TrackedWrite(transport: transport, completion: completion)
-            _ = operation()
-            guard trackedWrite != nil else { return }
-            trackedWrite = nil
-            completion(false)
         }
 
         static let healthCallback: ghostty_terminal_surface_renderer_health_cb = { userdata, health in
@@ -279,35 +230,6 @@ final class TmuxPaneSurface {
     }
 
     var rawSurface: ghostty_terminal_surface_t? { renderer?.handle }
-
-    func sendPasteAwaitingCommandCompletion(_ text: String) async -> Bool {
-        guard !text.isEmpty, lifecycle == .active, let renderer else { return false }
-        return await performInputAwaitingCommandCompletion(transport: .literal) {
-            renderer.control.sendPaste(text)
-        }
-    }
-
-    func sendKeyEventAwaitingCommandCompletion(
-        _ event: GhosttySurfaceKeyEvent
-    ) async -> Bool {
-        guard lifecycle == .active, let renderer else { return false }
-        return await performInputAwaitingCommandCompletion(transport: .exact) {
-            renderer.control.sendKeyEvent(event)
-        }
-    }
-
-    private func performInputAwaitingCommandCompletion(
-        transport: CallbackBox.TrackedWriteTransport,
-        _ operation: () -> Bool
-    ) async -> Bool {
-        await withCheckedContinuation { continuation in
-            callbackBox.performTrackedWrite(
-                transport: transport,
-                completion: { continuation.resume(returning: $0) },
-                operation
-            )
-        }
-    }
 
     func screenSurface(
         onDisplayUpdate: @escaping (GhosttyManagedSurface, CGSize, CGFloat) -> Void

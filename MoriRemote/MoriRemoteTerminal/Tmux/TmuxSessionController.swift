@@ -191,7 +191,6 @@ final class TmuxSessionController: @unchecked Sendable {
             @Sendable (Result<String, PaneCurrentDirectoryError>) -> Void
         )
         case agentMetadata(@Sendable (AgentMetadataQueryResult) -> Void)
-        case trackedInput(@Sendable (Bool) -> Void)
     }
 
     private struct DesiredPaneRefresh {
@@ -285,7 +284,6 @@ final class TmuxSessionController: @unchecked Sendable {
             guard !shuttingDown else { return }
             failOutstandingPaneDirectoryQueries(with: .sessionUnavailable)
             failOutstandingAgentMetadataQueries()
-            failOutstandingTrackedInput()
             deferredNavigationIntent = nil
             successfulMutationRequiredAfterRevision = nil
             guard case .closed = state else {
@@ -303,7 +301,6 @@ final class TmuxSessionController: @unchecked Sendable {
             guard !shuttingDown else { return }
             failOutstandingPaneDirectoryQueries(with: .sessionUnavailable)
             failOutstandingAgentMetadataQueries()
-            failOutstandingTrackedInput()
             deferredNavigationIntent = nil
             successfulMutationRequiredAfterRevision = nil
             guard case .closed = state else {
@@ -319,11 +316,9 @@ final class TmuxSessionController: @unchecked Sendable {
             outboundSink = nil
             let directoryQueries = outstandingPaneDirectoryQueries()
             let agentMetadataQueries = outstandingAgentMetadataQueries()
-            let trackedInputCompletions = outstandingTrackedInputCompletions()
             requestsByToken.removeAll()
             directoryQueries.forEach { $0(.failure(.sessionUnavailable)) }
             agentMetadataQueries.forEach { $0(.init(status: .failed, body: "")) }
-            trackedInputCompletions.forEach { $0(false) }
             deferredNavigationIntent = nil
             successfulMutationRequiredAfterRevision = nil
             topology = nil
@@ -401,7 +396,6 @@ final class TmuxSessionController: @unchecked Sendable {
         case GHOSTTY_TMUX_ACTION_EXIT:
             failOutstandingPaneDirectoryQueries(with: .sessionUnavailable)
             failOutstandingAgentMetadataQueries()
-            failOutstandingTrackedInput()
             deferredNavigationIntent = nil
             successfulMutationRequiredAfterRevision = nil
             let exit = action.value.exit
@@ -563,13 +557,6 @@ final class TmuxSessionController: @unchecked Sendable {
         preconditionOnWriterQueue()
         guard let outstanding = requestsByToken.removeValue(forKey: completion.token) else { return }
         switch outstanding {
-        case .trackedInput(let completionHandler):
-            let succeeded = completion.status == GHOSTTY_TMUX_COMMAND_SUCCESS
-            if !succeeded {
-                reportRequestFailure(.sendInput)
-            }
-            completionHandler(succeeded)
-            return
         case .paneCurrentDirectory(let completionHandler):
             completionHandler(paneCurrentDirectoryResult(for: completion))
             return
@@ -692,89 +679,6 @@ final class TmuxSessionController: @unchecked Sendable {
             } else {
                 reportImmediateFailure(result, request: .sendInput)
             }
-        }
-        return true
-    }
-
-    /// Sends one terminal payload and completes only when tmux answers for
-    /// that exact send-keys command (or the session can no longer do so).
-    func sendTrackedInput(
-        paneID: TmuxPaneID,
-        _ bytes: Data,
-        completion: @escaping @Sendable (Bool) -> Void
-    ) -> Bool {
-        sendTrackedInput(
-            paneID: paneID,
-            bytes,
-            transport: .exact,
-            completion: completion
-        )
-    }
-
-    func sendTrackedLiteralInput(
-        paneID: TmuxPaneID,
-        _ bytes: Data,
-        completion: @escaping @Sendable (Bool) -> Void
-    ) -> Bool {
-        sendTrackedInput(
-            paneID: paneID,
-            bytes,
-            transport: .literal,
-            completion: completion
-        )
-    }
-
-    private enum TrackedInputTransport {
-        case exact
-        case literal
-    }
-
-    private func sendTrackedInput(
-        paneID: TmuxPaneID,
-        _ bytes: Data,
-        transport: TrackedInputTransport,
-        completion: @escaping @Sendable (Bool) -> Void
-    ) -> Bool {
-        guard !bytes.isEmpty else { return false }
-        queue.async { [self, bytes] in
-            guard let client, outboundSink != nil, !shuttingDown else {
-                reportRequestFailure(.sendInput)
-                completion(false)
-                return
-            }
-            guard admitCommandOnWriter(
-                command: Self.cancelStaleSharedInputMode,
-                request: .sendInput
-            ) else { completion(false); return }
-            var token: UInt64 = 0
-            let result = bytes.withUnsafeBytes { buffer in
-                let pointer = buffer.bindMemory(to: UInt8.self).baseAddress
-                return switch transport {
-                case .exact:
-                    ghostty_tmux_client_send_pane_input_tracked(
-                        client,
-                        paneID.rawValue,
-                        pointer,
-                        buffer.count,
-                        &token
-                    )
-                case .literal:
-                    ghostty_tmux_client_send_pane_literal_input_tracked(
-                        client,
-                        paneID.rawValue,
-                        pointer,
-                        buffer.count,
-                        &token
-                    )
-                }
-            }
-            guard result == GHOSTTY_TMUX_RESULT_OK else {
-                reportImmediateFailure(result, request: .sendInput)
-                completion(false)
-                return
-            }
-            requestsByToken[token] = .trackedInput(completion)
-            _ = drainOutbound()
         }
         return true
     }
@@ -1248,7 +1152,6 @@ final class TmuxSessionController: @unchecked Sendable {
         guard !shuttingDown else { return }
         failOutstandingPaneDirectoryQueries(with: .sessionUnavailable)
         failOutstandingAgentMetadataQueries()
-        failOutstandingTrackedInput()
         deferredNavigationIntent = nil
         successfulMutationRequiredAfterRevision = nil
         switch result {
@@ -1336,23 +1239,6 @@ final class TmuxSessionController: @unchecked Sendable {
             return false
         }
         completions.forEach { $0(.init(status: .failed, body: "")) }
-    }
-
-    private func outstandingTrackedInputCompletions() -> [@Sendable (Bool) -> Void] {
-        requestsByToken.values.compactMap {
-            guard case .trackedInput(let completion) = $0 else { return nil }
-            return completion
-        }
-    }
-
-    private func failOutstandingTrackedInput() {
-        preconditionOnWriterQueue()
-        let completions = outstandingTrackedInputCompletions()
-        requestsByToken = requestsByToken.filter {
-            guard case .trackedInput = $0.value else { return true }
-            return false
-        }
-        completions.forEach { $0(false) }
     }
 
     private func preconditionOnWriterQueue() {

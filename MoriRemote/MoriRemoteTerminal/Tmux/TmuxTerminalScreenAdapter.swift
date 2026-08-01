@@ -4,9 +4,8 @@ import Foundation
 import GhosttyKit
 
 
-/// Presents the new tmux session stack (`TmuxTerminalSession`) through the
-/// `GhosttyTerminalScreenModeling` boundary so `GhosttySurfaceScreen` — the
-/// full terminal UX — renders it unchanged.
+/// Projects one `TmuxTerminalSession` into the active MoriRemote viewport and
+/// routes local input back to its retained pane surface.
 ///
 /// Topology mapping: tmux window/pane IDs (UInt64) are mapped to stable UUIDs
 /// for the screen's projections. The session may retain multiple real pane
@@ -22,16 +21,11 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
     /// `willSet`, so reading the property inside a sink returns the previous
     /// snapshot and the projection lags one topology update behind.
     private var latestTopology: TmuxSessionController.TopologySnapshot?
-    private var identities = TmuxTerminalIdentityRegistry()
 
     private var activeManagedSurface: GhosttyManagedSurface?
-    private var activeManagedPaneID: TmuxPaneID?
     private var initialViewportHandler: ((CGSize, CGFloat) -> Void)?
-    private var viewportStabilityHandler: ((Bool) -> Void)?
-    private var cachedTopologySnapshot = GhosttyRuntimeSurfaceTopologySnapshot.empty
 
     private var commandFailureMessage: String?
-    private(set) var commandFailureEvent: GhosttyTmuxCommandFailureEvent?
     private var commandFailureToken: UInt64 = 0
 
     private var subscriptions: [AnyCancellable] = []
@@ -40,13 +34,11 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
     /// session is created.
     func activate(
         session: TmuxTerminalSession,
-        initialViewportHandler: @escaping (CGSize, CGFloat) -> Void,
-        viewportStabilityHandler: @escaping (Bool) -> Void
+        initialViewportHandler: @escaping (CGSize, CGFloat) -> Void
     ) {
         self.session = session
         self.controller = session.controller
         self.initialViewportHandler = initialViewportHandler
-        self.viewportStabilityHandler = viewportStabilityHandler
 
         session.$state
             .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -57,7 +49,6 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
             .sink { [weak self] topology in
                 guard let self else { return }
                 self.latestTopology = topology
-                self.rebuildTopologySnapshot()
                 self.objectWillChange.send()
             }
             .store(in: &subscriptions)
@@ -81,59 +72,10 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
     func invalidate() {
         subscriptions.removeAll()
         activeManagedSurface = nil
-        activeManagedPaneID = nil
         session = nil
         controller = nil
         initialViewportHandler = nil
-        viewportStabilityHandler = nil
         latestTopology = nil
-        cachedTopologySnapshot = Self.emptyTopologySnapshot
-    }
-
-    func tmuxPaneID(for surfaceID: UUID) -> TmuxPaneID? {
-        let paneID = activeManagedSurface?.id == surfaceID
-            ? activeManagedPaneID
-            : identities.paneID(for: surfaceID)
-        guard let paneID,
-              latestTopology?.panes.contains(where: { $0.id == paneID }) == true
-        else { return nil }
-        return paneID
-    }
-
-    // MARK: Topology synthesis
-
-    private static var emptyTopologySnapshot: GhosttyRuntimeSurfaceTopologySnapshot {
-        GhosttyRuntimeSurfaceTopologySnapshot.empty
-    }
-
-    private var topologySnapshot: GhosttyRuntimeSurfaceTopologySnapshot {
-        cachedTopologySnapshot
-    }
-
-    private func rebuildTopologySnapshot() {
-        guard let topology = latestTopology else {
-            cachedTopologySnapshot = Self.emptyTopologySnapshot
-            return
-        }
-
-        let topLevels = topology.windows.map { window in
-            let paneIDs = topology.panes
-                .filter { $0.windowID == window.id }
-                .sorted { lhs, rhs in
-                    (lhs.y, lhs.x, lhs.id) < (rhs.y, rhs.x, rhs.id)
-                }
-                .map { identities.surfaceID(for: $0.id) }
-            return GhosttyTopLevelSurface(
-                id: identities.surfaceID(for: window.id),
-                leafIDs: paneIDs,
-                focusedLeafID: window.activePaneID.map { identities.surfaceID(for: $0) }
-            )
-        }
-
-        cachedTopologySnapshot = GhosttyRuntimeSurfaceTopologySnapshot(
-            topLevels: topLevels,
-            selectedTopLevelID: topology.activeWindowID.map { identities.surfaceID(for: $0) }
-        )
     }
 
     private var runtimePhase: GhosttyTerminalRuntimePhase {
@@ -167,41 +109,7 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
     // MARK: Managed surface lifecycle
 
     private func rebuildActiveManagedSurface(for paneSurface: TmuxPaneSurface?) {
-        if activeManagedSurface != nil {
-            activeManagedSurface = nil
-            activeManagedPaneID = nil
-        }
-
-        guard let paneSurface else { return }
-
-        let paneID = paneSurface.paneID
-        let wasAlreadyWrapped = paneSurface.managedSurface != nil
-        let managed = paneSurface.screenSurface { [weak paneSurface] managed, size, _ in
-            guard size.width > 1, size.height > 1 else { return }
-            GhosttyRuntimeTrace.flowEventOnce(
-                GhosttyRuntimeTrace.paneSwitchFlow,
-                event: "presentation.layout.ready",
-                fields: [
-                    "height": "\(size.height)",
-                    "pane": "\(paneID)",
-                    "surface": paneSurface.map { String(describing: $0.rawSurface) } ?? "released",
-                    "width": "\(size.width)",
-                ]
-            )
-        }
-        activeManagedSurface = managed
-        activeManagedPaneID = paneID
-        if !wasAlreadyWrapped {
-            GhosttyRuntimeTrace.flowEventIfActive(
-                GhosttyRuntimeTrace.paneSwitchFlow,
-                event: "presentation.managedSurface.ready",
-                fields: [
-                    "pane": "\(paneID)",
-                    "surface": String(describing: paneSurface.rawSurface),
-                    "surface_uuid": managed.id.uuidString,
-                ]
-            )
-        }
+        activeManagedSurface = paneSurface?.screenSurface { _, _, _ in }
     }
 
     private func managedSurface(for id: UUID) -> GhosttyManagedSurface? {
@@ -222,10 +130,6 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
         commandFailureToken &+= 1
         let message = "tmux: \(Self.failureLabel(for: request)) failed"
         commandFailureMessage = message
-        commandFailureEvent = GhosttyTmuxCommandFailureEvent(
-            token: commandFailureToken,
-            message: message
-        )
         objectWillChange.send()
 
         let token = commandFailureToken
@@ -247,9 +151,7 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
     }
 }
 
-// MARK: - GhosttyTerminalScreenModeling
-
-extension TmuxTerminalScreenAdapter: GhosttyTerminalScreenModeling {
+extension TmuxTerminalScreenAdapter {
     func prepareInitialViewport(size: CGSize, scale: CGFloat) {
         initialViewportHandler?(size, scale)
     }
@@ -262,15 +164,14 @@ extension TmuxTerminalScreenAdapter: GhosttyTerminalScreenModeling {
             debugStatus: stateTraceLabel,
             registryDebugSummary: "tmux session stack",
             presentedSurfaceID: activeManagedSurface?.id,
-            snapshot: topologySnapshot
+            topLevelCount: latestTopology?.windows.count ?? 0
         )
     }
 
     var terminalInteractionProjection: GhosttyTerminalInteractionProjection {
         GhosttyTerminalPresentationProjector.terminalInteractionProjection(
             phase: runtimePhase,
-            presentedSurfaceID: activeManagedSurface?.id,
-            snapshot: topologySnapshot
+            presentedSurfaceID: activeManagedSurface?.id
         )
     }
 
@@ -291,10 +192,6 @@ extension TmuxTerminalScreenAdapter: GhosttyTerminalScreenModeling {
         }
     }
 
-    func setViewportStabilityHint(stable: Bool) {
-        viewportStabilityHandler?(stable)
-    }
-
     // MARK: Input routing
 
     private func preflightFocusedInput() -> FocusedTerminalInputSubmissionResult? {
@@ -311,38 +208,6 @@ extension TmuxTerminalScreenAdapter: GhosttyTerminalScreenModeling {
     func sendPasteToFocusedSurface(_ text: String) -> FocusedTerminalInputSubmissionResult {
         if let preflight = preflightFocusedInput() { return preflight }
         return focusedManagedSurface?.sendPaste(text) ?? .noFocusedSurface
-    }
-
-    func sendPaste(_ text: String, to surfaceID: UUID) -> FocusedTerminalInputSubmissionResult {
-        guard isTransportWritable else { return .transportUnavailable }
-        guard let managed = managedSurface(for: surfaceID) else { return .noFocusedSurface }
-        return managed.sendPaste(text)
-    }
-
-    func sendPasteAwaitingCommandCompletion(_ text: String, to surfaceID: UUID) async -> Bool {
-        guard isTransportWritable,
-              let managed = managedSurface(for: surfaceID)
-        else { return false }
-        return await managed.sendPasteAwaitingCommandCompletion(text)
-    }
-
-    func sendKeyEvent(
-        _ event: GhosttySurfaceKeyEvent,
-        to surfaceID: UUID
-    ) -> FocusedTerminalInputSubmissionResult {
-        guard isTransportWritable else { return .transportUnavailable }
-        guard let managed = managedSurface(for: surfaceID) else { return .noFocusedSurface }
-        return managed.sendKeyEvent(event)
-    }
-
-    func sendKeyEventAwaitingCommandCompletion(
-        _ event: GhosttySurfaceKeyEvent,
-        to surfaceID: UUID
-    ) async -> Bool {
-        guard isTransportWritable,
-              let managed = managedSurface(for: surfaceID)
-        else { return false }
-        return await managed.sendKeyEventAwaitingCommandCompletion(event)
     }
 
     func sendKeyEventToFocusedSurface(_ event: GhosttySurfaceKeyEvent) -> FocusedTerminalInputSubmissionResult {
@@ -389,70 +254,24 @@ extension TmuxTerminalScreenAdapter: GhosttyTerminalScreenModeling {
 
     // MARK: tmux topology actions
 
-    func performSharedMutation(_ mutation: TmuxSessionController.SharedMutation) -> GhosttyTmuxModelActionOutcome {
-        guard let controller else { return .missingTarget(.host) }
-        controller.requestSharedMutation(mutation)
-        return .queued
-    }
-
-    func focusTmuxPane(_ id: UUID) -> GhosttyTmuxModelActionOutcome {
-        guard let paneID = identities.paneID(for: id), let controller else {
-            GhosttyRuntimeTrace.flowEventIfActive(
-                GhosttyRuntimeTrace.paneSwitchFlow,
-                event: "adapter.resolve.failed",
-                fields: ["target_uuid": id.uuidString]
-            )
-            return .missingTarget(.pane(id))
-        }
-        GhosttyRuntimeTrace.flowEventIfActive(
-            GhosttyRuntimeTrace.paneSwitchFlow,
-            event: "adapter.resolve.ready",
-            fields: [
-                "pane": "\(paneID)",
-                "target_uuid": id.uuidString,
-            ]
-        )
-        session?.prepareForPaneSelection(paneID: paneID)
-        controller.requestSelectPane(paneID: paneID)
-        return .queued
-    }
-
-    func focusTmuxTopLevel(_ id: UUID) -> GhosttyTmuxModelActionOutcome {
-        guard let windowID = identities.windowID(for: id), let controller else {
-            return .missingTarget(.window(id))
-        }
-        if let topology = latestTopology,
-           let targetWindow = topology.windows.first(where: { $0.id == windowID }) {
-            requestWindowSelection(targetWindow, in: topology, controller: controller)
-        } else {
-            controller.requestSelectWindow(windowID: windowID)
-        }
-        return .queued
-    }
-
     func focusAdjacentTmuxTopLevel(
         _ direction: GhosttyRuntimeSelectionDirection
-    ) -> GhosttyTmuxModelActionOutcome {
+    ) {
         guard
             let controller,
             let topology = latestTopology,
             !topology.windows.isEmpty,
             let activeWindowID = topology.activeWindowID,
             let activeIndex = topology.windows.firstIndex(where: { $0.id == activeWindowID })
-        else {
-            return .missingTarget(.adjacentWindow)
-        }
+        else { return }
 
         let targetIndex = direction.advancedIndex(
             from: activeIndex,
             count: topology.windows.count
         )
-        guard targetIndex != activeIndex else {
-            return .missingTarget(.adjacentWindow)
-        }
+        guard targetIndex != activeIndex else { return }
         let targetWindow = topology.windows[targetIndex]
         requestWindowSelection(targetWindow, in: topology, controller: controller)
-        return .queued
     }
 
     private func requestWindowSelection(
