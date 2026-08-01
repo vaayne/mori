@@ -83,6 +83,7 @@ struct GhosttyTerminalCoreView: View {
                 isEnabled: interaction.isInputAvailable,
                 isCompact: false,
                 isControlArmed: terminalInputController.isControlArmed,
+                isAltArmed: terminalInputController.isAltArmed,
                 windowCount: interaction.windowCount,
                 paneCount: interaction.paneCount,
                 actions: .init(
@@ -91,6 +92,7 @@ struct GhosttyTerminalCoreView: View {
                     showPanes: showPanes,
                     toggleKeyboard: toggleKeyboard,
                     toggleControl: { terminalInputController.toggleControl() },
+                    toggleAlt: { terminalInputController.toggleAlt() },
                     sendKey: sendTerminalKey
                 )
             )
@@ -106,12 +108,11 @@ struct GhosttyTerminalCoreView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
             completeKeyboardTransition(for: .hidden)
         }
-        .onDisappear { cancelPrefixFlush() }
+        .onDisappear { cancelTransientInput() }
         .onChange(of: screen.stateTraceLabel) { oldState, newState in
-            // A session lifecycle change must not let a delayed key reach a
-            // replacement surface. The input buffer is cleared and its task
-            // generation fenced before the next state can accept input.
-            if oldState != newState { cancelPrefixFlush() }
+            // A session lifecycle change must not let delayed or latched input
+            // reach a replacement surface.
+            if oldState != newState { cancelTransientInput() }
         }
         .sheet(item: $selectionSheet) { sheet in
             switch sheet {
@@ -222,6 +223,11 @@ struct GhosttyTerminalCoreView: View {
         prefixFlushTask = nil
         _ = terminalInputController.flushPendingTmuxPrefixInput()
         sessionGeneration &+= 1
+    }
+
+    private func cancelTransientInput() {
+        cancelPrefixFlush()
+        terminalInputController.clearModifiers()
     }
 
     private func sendTerminalPaste(_ text: String) -> Bool {

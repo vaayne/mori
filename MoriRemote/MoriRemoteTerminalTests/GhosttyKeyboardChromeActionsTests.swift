@@ -8,7 +8,18 @@ final class GhosttyKeyboardChromeActionsTests: XCTestCase {
 
         XCTAssertTrue(actions.perform(.escape))
         XCTAssertTrue(actions.perform(.tab))
-        XCTAssertEqual(events.map(\.keyCode), [.escape, .tab])
+        XCTAssertTrue(actions.perform(.shiftTab))
+        XCTAssertTrue(actions.perform(.arrowLeft))
+        XCTAssertTrue(actions.perform(.arrowUp))
+        XCTAssertTrue(actions.perform(.arrowDown))
+        XCTAssertTrue(actions.perform(.arrowRight))
+        XCTAssertTrue(actions.perform(.questionMark))
+        XCTAssertTrue(actions.perform(.slash))
+        XCTAssertEqual(events.map(\.keyCode), [.escape, .tab, .tab, .arrowLeft, .arrowUp, .arrowDown, .arrowRight, .slash, .slash])
+        XCTAssertEqual(events[2].mods, .shift)
+        XCTAssertEqual(events[7].text, "?")
+        XCTAssertEqual(events[7].mods, .shift)
+        XCTAssertEqual(events[8].text, "/")
     }
 
     func testSelectorsAndModifiersInvokeTheirRetainedActions() {
@@ -19,6 +30,7 @@ final class GhosttyKeyboardChromeActionsTests: XCTestCase {
             showPanes: { calls.append("panes") },
             toggleKeyboard: { calls.append("keyboard") },
             toggleControl: { calls.append("control") },
+            toggleAlt: { calls.append("alt") },
             sendKey: { _ in false }
         )
 
@@ -27,7 +39,8 @@ final class GhosttyKeyboardChromeActionsTests: XCTestCase {
         XCTAssertTrue(actions.perform(.panes))
         XCTAssertTrue(actions.perform(.keyboard))
         XCTAssertTrue(actions.perform(.control))
-        XCTAssertEqual(calls, ["sessions", "windows", "panes", "keyboard", "control"])
+        XCTAssertTrue(actions.perform(.alt))
+        XCTAssertEqual(calls, ["sessions", "windows", "panes", "keyboard", "control", "alt"])
     }
 
     private func makeActions(
@@ -35,7 +48,7 @@ final class GhosttyKeyboardChromeActionsTests: XCTestCase {
     ) -> GhosttyKeyboardChromeActions {
         GhosttyKeyboardChromeActions(
             showSessions: {}, showWindows: {}, showPanes: {},
-            toggleKeyboard: {}, toggleControl: {}, sendKey: sendKey
+            toggleKeyboard: {}, toggleControl: {}, toggleAlt: {}, sendKey: sendKey
         )
     }
 }

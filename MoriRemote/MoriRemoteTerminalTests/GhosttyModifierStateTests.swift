@@ -46,4 +46,34 @@ final class GhosttyModifierStateTests: XCTestCase {
         XCTAssertFalse(state.isControlArmed)
     }
 
+    func testAltLatchPrefixesTextWithEscapeAndClears() {
+        var state = GhosttyModifierState()
+        state.toggleAlt()
+
+        XCTAssertEqual(state.apply(to: "b"), "\u{1B}b")
+        XCTAssertFalse(state.isAltArmed)
+    }
+
+    func testControlAndAltLatchesComposeForText() {
+        var state = GhosttyModifierState()
+        state.toggleControl()
+        state.toggleAlt()
+
+        XCTAssertEqual(state.apply(to: "c"), "\u{1B}\u{03}")
+        XCTAssertFalse(state.isControlArmed)
+        XCTAssertFalse(state.isAltArmed)
+    }
+
+    func testAltLatchAddsModifierToKeyEventAndClearsBothLatches() {
+        var state = GhosttyModifierState()
+        state.toggleControl()
+        state.toggleAlt()
+
+        XCTAssertEqual(
+            state.apply(to: GhosttySurfaceKeyEvent(keyCode: .arrowLeft)),
+            GhosttySurfaceKeyEvent(keyCode: .arrowLeft, mods: [.ctrl, .alt])
+        )
+        XCTAssertFalse(state.isControlArmed)
+        XCTAssertFalse(state.isAltArmed)
+    }
 }

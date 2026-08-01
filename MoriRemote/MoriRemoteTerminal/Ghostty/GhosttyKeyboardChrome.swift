@@ -53,6 +53,7 @@ struct GhosttyKeyboardChromeActions {
     let showPanes: () -> Void
     let toggleKeyboard: () -> Void
     let toggleControl: () -> Void
+    let toggleAlt: () -> Void
     let sendKey: (GhosttySurfaceKeyEvent) -> Bool
 
     func perform(_ action: Action) -> Bool {
@@ -62,12 +63,25 @@ struct GhosttyKeyboardChromeActions {
         case .panes: showPanes(); return true
         case .keyboard: toggleKeyboard(); return true
         case .control: toggleControl(); return true
+        case .alt: toggleAlt(); return true
         case .escape: return sendKey(.init(keyCode: .escape))
         case .tab: return sendKey(.init(keyCode: .tab))
+        case .shiftTab: return sendKey(.init(keyCode: .tab, mods: .shift))
+        case .arrowLeft: return sendKey(.init(keyCode: .arrowLeft))
+        case .arrowUp: return sendKey(.init(keyCode: .arrowUp))
+        case .arrowDown: return sendKey(.init(keyCode: .arrowDown))
+        case .arrowRight: return sendKey(.init(keyCode: .arrowRight))
+        case .questionMark:
+            return sendKey(.init(keyCode: .slash, text: "?", mods: .shift, consumedMods: .shift, unshiftedCodepoint: 0x2F))
+        case .slash:
+            return sendKey(.init(keyCode: .slash, text: "/", unshiftedCodepoint: 0x2F))
         }
     }
 
-    enum Action { case sessions, windows, panes, keyboard, control, escape, tab }
+    enum Action {
+        case sessions, windows, panes, keyboard, control, alt, escape, tab, shiftTab
+        case arrowLeft, arrowUp, arrowDown, arrowRight, questionMark, slash
+    }
 }
 
 /// The retained terminal portion of remux's keyboard chrome. It keeps Ctrl,
@@ -77,6 +91,7 @@ struct GhosttyKeyboardChrome: View {
     let isEnabled: Bool
     let isCompact: Bool
     let isControlArmed: Bool
+    let isAltArmed: Bool
     let windowCount: Int
     let paneCount: Int
     let actions: GhosttyKeyboardChromeActions
@@ -84,17 +99,35 @@ struct GhosttyKeyboardChrome: View {
     var body: some View {
         HStack(spacing: isCompact ? 6 : 10) {
             group {
-                key("ctrl", id: "terminal.ctrl", active: isControlArmed) { actions.perform(.control) }
-                key("esc", id: "terminal.esc") { actions.perform(.escape) }
-                key("tab", id: "terminal.tab") { actions.perform(.tab) }
+                icon("keyboard", id: "terminal.keyboard", label: keyboardMode == .hidden ? "Show keyboard" : "Hide keyboard") { actions.perform(.keyboard) }
             }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: isCompact ? 6 : 10) {
+                    group {
+                        key("esc", id: "terminal.esc") { actions.perform(.escape) }
+                        key("tab", id: "terminal.tab") { actions.perform(.tab) }
+                        key("ctrl", id: "terminal.ctrl", active: isControlArmed) { actions.perform(.control) }
+                        key("alt", id: "terminal.alt", active: isAltArmed) { actions.perform(.alt) }
+                    }
+                    group {
+                        key("←", id: "terminal.left", label: "Left arrow") { actions.perform(.arrowLeft) }
+                        key("↑", id: "terminal.up", label: "Up arrow") { actions.perform(.arrowUp) }
+                        key("↓", id: "terminal.down", label: "Down arrow") { actions.perform(.arrowDown) }
+                        key("→", id: "terminal.right", label: "Right arrow") { actions.perform(.arrowRight) }
+                    }
+                    group {
+                        key("⇧tab", id: "terminal.shift-tab", label: "Shift Tab", width: 54) { actions.perform(.shiftTab) }
+                        key("?", id: "terminal.question-mark") { actions.perform(.questionMark) }
+                        key("/", id: "terminal.slash") { actions.perform(.slash) }
+                    }
+                }
+            }
+
             group {
                 icon("rectangle.stack", id: "terminal.sessions", label: "Sessions") { actions.perform(.sessions) }
                 icon("rectangle.on.rectangle", id: "terminal.windows", label: "Windows", enabled: windowCount > 0) { actions.perform(.windows) }
                 icon("square.split.2x1", id: "terminal.panes", label: "Panes", enabled: paneCount > 0) { actions.perform(.panes) }
-            }
-            group {
-                icon("keyboard", id: "terminal.keyboard", label: keyboardMode == .hidden ? "Show keyboard" : "Hide keyboard") { actions.perform(.keyboard) }
             }
         }
         .frame(maxWidth: .infinity)
@@ -107,16 +140,24 @@ struct GhosttyKeyboardChrome: View {
             .background(.thinMaterial, in: Capsule())
     }
 
-    private func key(_ title: String, id: String, active: Bool = false, action: @escaping () -> Bool) -> some View {
+    private func key(
+        _ title: String,
+        id: String,
+        label: String? = nil,
+        active: Bool = false,
+        width: CGFloat = GhosttyKeyboardChromeSizing.dockButtonWidth,
+        action: @escaping () -> Bool
+    ) -> some View {
         Button { _ = action() } label: { Text(title).font(.system(size: 12, weight: .semibold)) }
-            .buttonStyle(ChromeButtonStyle(active: active))
+            .buttonStyle(ChromeButtonStyle(active: active, width: width))
+            .accessibilityLabel(label ?? title)
             .accessibilityIdentifier(id)
             .disabled(!isEnabled)
     }
 
     private func icon(_ name: String, id: String, label: String, enabled: Bool = true, action: @escaping () -> Bool) -> some View {
         Button { _ = action() } label: { Image(systemName: name).font(.system(size: 16, weight: .semibold)) }
-            .buttonStyle(ChromeButtonStyle(active: id == "terminal.keyboard" && keyboardMode == .system))
+            .buttonStyle(ChromeButtonStyle(active: id == "terminal.keyboard" && keyboardMode == .system, width: GhosttyKeyboardChromeSizing.dockButtonWidth))
             .accessibilityLabel(label)
             .accessibilityIdentifier(id)
             .disabled(!isEnabled || !enabled)
@@ -125,9 +166,10 @@ struct GhosttyKeyboardChrome: View {
 
 private struct ChromeButtonStyle: ButtonStyle {
     let active: Bool
+    let width: CGFloat
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .frame(width: GhosttyKeyboardChromeSizing.dockButtonWidth, height: GhosttyKeyboardChromeSizing.dockButtonHeight)
+            .frame(width: width, height: GhosttyKeyboardChromeSizing.dockButtonHeight)
             .foregroundStyle(active ? Color.accentColor : Color.primary)
             .background(active ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: GhosttyKeyboardChromeSizing.dockButtonCornerRadius, style: .continuous))
             .opacity(configuration.isPressed ? 0.65 : 1)

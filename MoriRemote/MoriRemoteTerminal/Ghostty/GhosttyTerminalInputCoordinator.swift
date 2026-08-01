@@ -134,16 +134,16 @@ struct GhosttyTerminalInputController: Equatable {
     private var modifierState = GhosttyModifierState()
     private var tmuxPrefixInputBuffer = GhosttyTmuxPrefixInputBuffer()
 
-    var isControlArmed: Bool {
-        modifierState.isControlArmed
-    }
+    var isControlArmed: Bool { modifierState.isControlArmed }
+    var isAltArmed: Bool { modifierState.isAltArmed }
 
-    mutating func toggleControl() {
-        modifierState.toggleControl()
-    }
-
-    mutating func clearControl() {
+    mutating func toggleControl() { modifierState.toggleControl() }
+    mutating func toggleAlt() { modifierState.toggleAlt() }
+    mutating func clearControl() { modifierState.clearControl() }
+    mutating func clearAlt() { modifierState.clearAlt() }
+    mutating func clearModifiers() {
         modifierState.clearControl()
+        modifierState.clearAlt()
     }
 
     mutating func receiveText(_ text: String) -> TextAction {

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Features
 
 - **iOS (MoriRemote)**: Rebuilt the remote companion around a secure, pane-native tmux control runtime. It supports saved workspaces, password or OpenSSH private-key authentication, explicit host-key trust, local terminal history/selection, agent status, and adaptive iPhone/iPad presentation without taking over another attached tmux client's selection or size.
+- **iOS (MoriRemote)**: Expanded the terminal shortcut bar with one-shot Ctrl and Alt, Esc, Tab, Shift-Tab, arrow keys, `?`, and `/`. The shortcut row scrolls horizontally while the keyboard toggle stays pinned at the left edge.
 
 ### 🐛 Bug Fixes
 

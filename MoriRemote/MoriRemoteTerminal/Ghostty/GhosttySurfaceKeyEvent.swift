@@ -66,6 +66,7 @@ struct GhosttySurfaceKeyEvent: Equatable {
         static let pageUp = Self(rawValue: 0x74)
         static let pageDown = Self(rawValue: 0x79)
         static let space = Self(rawValue: 0x31)
+        static let slash = Self(rawValue: 0x2C)
     }
 
     let action: Action
