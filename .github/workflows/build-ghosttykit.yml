@@ -7,7 +7,7 @@ on:
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -28,7 +28,8 @@ jobs:
           path: |
             Frameworks/GhosttyKit.xcframework
             Frameworks/ghostty-resources
-          key: ghosttykit-native-${{ steps.ghostty-sha.outputs.sha }}
+            Frameworks/.ghosttykit-provenance
+          key: ghosttykit-universal-v2-${{ steps.ghostty-sha.outputs.sha }}
 
       - name: Install Zig 0.15.2
         if: steps.cache.outputs.cache-hit != 'true'
@@ -48,7 +49,6 @@ jobs:
           zig version
 
       - name: Select Xcode
-        if: steps.cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           if [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
@@ -67,7 +67,10 @@ jobs:
 
       - name: Build GhosttyKit
         if: steps.cache.outputs.cache-hit != 'true'
-        run: bash scripts/build-ghostty.sh
+        run: bash scripts/build-ghostty.sh --universal
+
+      - name: Verify universal GhosttyKit
+        run: bash scripts/verify-ghosttykit.sh
 
       - name: Upload GhosttyKit artifact
         uses: actions/upload-artifact@v7
@@ -76,4 +79,6 @@ jobs:
           path: |
             Frameworks/GhosttyKit.xcframework
             Frameworks/ghostty-resources
+            Frameworks/.ghosttykit-provenance
+          include-hidden-files: true
           retention-days: 7

@@ -66,8 +66,16 @@ run = "cd Packages/MoriTerminal && swift run MoriTerminalTests"
 run = "cd Packages/MoriUI && swift run MoriUITests"
 
 [tasks."build:ghostty"]
-description = "Build GhosttyKit XCFramework from source"
+description = "Build the macOS GhosttyKit XCFramework from the pinned remux source"
 run = "bash scripts/build-ghostty.sh"
+
+[tasks."build:ghostty-universal"]
+description = "Build the universal macOS + iOS GhosttyKit XCFramework from the pinned remux source"
+run = "bash scripts/build-ghostty.sh --universal"
+
+[tasks."test:ghosttykit-verify"]
+description = "Prove the universal GhosttyKit verifier rejects framework tampering"
+run = "bash scripts/tests/test-ghosttykit-verify.sh"
 
 [tasks.bundle]
 description = "Build release and create Mori.app bundle"
