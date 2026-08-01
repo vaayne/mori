@@ -77,6 +77,10 @@ run = "bash scripts/build-ghostty.sh --universal"
 description = "Run offline adversarial GhosttyKit lock and source-contract fixtures"
 run = "bash scripts/tests/test-ghosttykit-contract.sh"
 
+[tasks."test:release-workflows"]
+description = "Verify immutable-safe GitHub release draft flows offline"
+run = "bash scripts/tests/test-release-workflows.sh"
+
 [tasks."test:ghosttykit-verify"]
 description = "Prove the universal GhosttyKit verifier rejects framework tampering"
 run = "bash scripts/tests/test-ghosttykit-verify.sh"

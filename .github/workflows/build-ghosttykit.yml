@@ -35,17 +35,8 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          source scripts/ghosttykit-contract.sh
-          ghosttykit_load_contract ghosttykit-lock.json
-          archive="$RUNNER_TEMP/zig.tar.xz"
-          extracted="$RUNNER_TEMP/zig-aarch64-macos-${MORI_GHOSTTYKIT_ZIG_VERSION}"
-          curl -fSL "https://ziglang.org/download/${MORI_GHOSTTYKIT_ZIG_VERSION}/zig-aarch64-macos-${MORI_GHOSTTYKIT_ZIG_VERSION}.tar.xz" -o "$archive"
-          printf '%s  %s\n' "$MORI_GHOSTTYKIT_ZIG_ARCHIVE_SHA256" "$archive" | shasum -a 256 -c -
-          tar xf "$archive" -C "$RUNNER_TEMP"
-          sudo mkdir -p /usr/local/bin /usr/local/lib
-          sudo cp -f "$extracted/zig" /usr/local/bin/zig
-          sudo cp -rf "$extracted/lib" /usr/local/lib/zig
-          [[ "$(zig version)" == "$MORI_GHOSTTYKIT_ZIG_VERSION" ]]
+          ZIG_BIN="$(bash scripts/install-verified-zig.sh --prefix "$RUNNER_TEMP/zig")"
+          echo "$ZIG_BIN" >> "$GITHUB_PATH"
 
       - name: Select Xcode
         run: |

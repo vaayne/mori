@@ -200,7 +200,9 @@ ln -s Info.plist "$framework/unsafe-link"
 expect_reject "symlinked framework entry" ghosttykit_framework_tree_sha256 "$framework"
 
 workflow="$repo_root/.github/workflows/build-ghosttykit.yml"
+installer="$repo_root/scripts/install-verified-zig.sh"
 grep -Fq "hashFiles('ghosttykit-lock.json')" "$workflow" || die "workflow cache is not keyed by the complete lock"
-grep -Fq 'MORI_GHOSTTYKIT_ZIG_ARCHIVE_SHA256' "$workflow" || die "workflow does not verify the locked Zig archive digest"
+grep -Fq 'scripts/install-verified-zig.sh' "$workflow" || die "workflow does not use the shared verified Zig installer"
+grep -Fq 'MORI_GHOSTTYKIT_ZIG_ARCHIVE_SHA256' "$installer" || die "shared Zig installer does not verify the locked archive digest"
 
 echo "✅ GhosttyKit contract accepts the candidate and rejects malformed, mismatched, and mutated fixtures"

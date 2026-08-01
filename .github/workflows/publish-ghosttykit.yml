@@ -1,0 +1,213 @@
+name: Publish GhosttyKit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: ghosttykit-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    environment: ghosttykit-publish
+    runs-on: macos-15
+    timeout-minutes: 75
+    steps:
+      - name: Checkout reviewed source and submodules
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Load candidate contract and reject an existing tag
+        id: contract
+        run: |
+          set -euo pipefail
+          source scripts/ghosttykit-contract.sh
+          ghosttykit_load_contract ghosttykit-lock.json
+          [[ "$MORI_GHOSTTYKIT_ARTIFACT_STATE" == candidate ]] || {
+            echo "Publishing requires a candidate lock with null artifact digests." >&2
+            exit 1
+          }
+          set +e
+          remote_tags="$(git ls-remote --exit-code --tags origin "refs/tags/$MORI_GHOSTTYKIT_ARTIFACT_TAG")"
+          remote_status=$?
+          set -e
+          if [[ "$remote_status" -eq 0 && -n "$remote_tags" ]]; then
+            echo "Refusing to overwrite existing GhosttyKit tag $MORI_GHOSTTYKIT_ARTIFACT_TAG." >&2
+            exit 1
+          fi
+          [[ "$remote_status" -eq 2 ]] || {
+            echo "Could not establish whether GhosttyKit tag $MORI_GHOSTTYKIT_ARTIFACT_TAG exists." >&2
+            exit 1
+          }
+          echo "tag=$MORI_GHOSTTYKIT_ARTIFACT_TAG" >> "$GITHUB_OUTPUT"
+          echo "name=$MORI_GHOSTTYKIT_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch complete Ghostty source history
+        run: |
+          set -euo pipefail
+          if [[ "$(git -C vendor/ghostty rev-parse --is-shallow-repository)" == true ]]; then
+            git -C vendor/ghostty fetch --unshallow --tags
+          fi
+          source scripts/ghosttykit-contract.sh
+          ghosttykit_load_contract ghosttykit-lock.json
+          git -C vendor/ghostty cat-file -e "$MORI_GHOSTTYKIT_BASE_COMMIT^{commit}"
+
+      - name: Install verified Zig
+        run: |
+          set -euo pipefail
+          ZIG_BIN="$(bash scripts/install-verified-zig.sh --prefix "$RUNNER_TEMP/zig")"
+          echo "$ZIG_BIN" >> "$GITHUB_PATH"
+
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          if [[ -d "/Applications/Xcode.app/Contents/Developer" ]]; then
+            XCODE_DIR="/Applications/Xcode.app/Contents/Developer"
+          else
+            XCODE_APP="$(ls -d /Applications/Xcode*.app 2>/dev/null | head -n 1 || true)"
+            [[ -n "$XCODE_APP" ]] || { echo "No Xcode.app found under /Applications" >&2; exit 1; }
+            XCODE_DIR="$XCODE_APP/Contents/Developer"
+          fi
+          echo "DEVELOPER_DIR=$XCODE_DIR" >> "$GITHUB_ENV"
+          xcodebuild -version
+
+      - name: Build and verify a clean universal GhosttyKit
+        run: |
+          set -euo pipefail
+          bash scripts/build-ghostty.sh --clean --universal
+          bash scripts/verify-ghosttykit.sh
+
+      - name: Package GhosttyKit candidate
+        run: |
+          set -euo pipefail
+          bash scripts/package-ghosttykit.sh --output "$RUNNER_TEMP/ghosttykit-package"
+
+      - name: Attest GhosttyKit archive
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ runner.temp }}/ghosttykit-package/${{ steps.contract.outputs.name }}
+
+      - name: Atomically reserve the release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash scripts/github-tag-reservation.sh --reserve \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag "${{ steps.contract.outputs.tag }}" \
+            --sha "$GITHUB_SHA"
+          echo "reserved=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify reserved tag ownership
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash scripts/github-tag-reservation.sh --verify \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag "${{ steps.contract.outputs.tag }}" \
+            --sha "$GITHUB_SHA"
+
+      - name: Create and upload draft release
+        id: draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/ghosttykit-package/${{ steps.contract.outputs.name }}"
+          manifest="${archive%.zip}.manifest.json"
+          bash scripts/github-tag-reservation.sh --verify \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag "${{ steps.contract.outputs.tag }}" \
+            --sha "$GITHUB_SHA"
+          output="$(bash scripts/github-release-draft.sh --create-draft \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag "${{ steps.contract.outputs.tag }}" \
+            --target "$GITHUB_SHA" \
+            --title "GhosttyKit ${{ steps.contract.outputs.tag }}" \
+            --prerelease \
+            --make-latest false \
+            --require-immutable \
+            --defer-asset-verification \
+            --asset "$archive" \
+            --asset "$manifest")"
+          release_id="${output#release_id=}"
+          [[ "$release_id" =~ ^[0-9]+$ ]]
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Verify server digests and uploaded bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/ghosttykit-package/${{ steps.contract.outputs.name }}"
+          manifest="${archive%.zip}.manifest.json"
+          bash scripts/github-release-draft.sh --verify-draft-assets \
+            --repo "$GITHUB_REPOSITORY" \
+            --release-id "${{ steps.draft.outputs.release_id }}" \
+            --download-assets \
+            --asset "$archive" \
+            --asset "$manifest"
+
+      - name: Publish immutable GhosttyKit release once
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash scripts/github-release-draft.sh --publish-draft \
+            --repo "$GITHUB_REPOSITORY" \
+            --release-id "${{ steps.draft.outputs.release_id }}" \
+            --require-immutable
+
+      - name: Record lock values
+        if: success()
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/ghosttykit-package/${{ steps.contract.outputs.name }}"
+          manifest="${archive%.zip}.manifest.json"
+          archive_sha256="$(shasum -a 256 "$archive" | awk '{print $1}')"
+          framework_tree_sha256="$(python3 - "$manifest" <<'PY'
+          import json
+          import sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              print(json.load(stream)["artifact"]["frameworkTreeSha256"])
+          PY
+          )"
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Published GhosttyKit lock values
+
+          \`ghosttykit-lock.json\` remains a candidate until these returned values are reviewed and committed:
+
+          \`\`\`json
+          {
+            "artifact": {
+              "tag": "${{ steps.contract.outputs.tag }}",
+              "name": "${{ steps.contract.outputs.name }}",
+              "sha256": "$archive_sha256",
+              "frameworkTreeSha256": "$framework_tree_sha256"
+            }
+          }
+          \`\`\`
+          EOF
+
+      - name: Delete incomplete draft and reserved tag
+        if: failure() && steps.tag.outputs.reserved == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ -n "${{ steps.draft.outputs.release_id }}" ]]; then
+            bash scripts/github-release-draft.sh --cleanup-draft \
+              --repo "$GITHUB_REPOSITORY" \
+              --release-id "${{ steps.draft.outputs.release_id }}"
+          fi
+          bash scripts/github-tag-reservation.sh --cleanup \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag "${{ steps.contract.outputs.tag }}" \
+            --sha "$GITHUB_SHA"
