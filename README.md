@@ -55,13 +55,36 @@ brew install --cask mori
 
 Or download from [GitHub Releases](https://github.com/vaayne/mori/releases). MoriRemote for iOS is on [TestFlight](https://testflight.apple.com/join/k2GFJPC2).
 
+### MoriRemote
+
+MoriRemote is an iPhone/iPad SSH and tmux companion, not a remote desktop. It
+uses explicit host-key confirmation, supports passwords or imported OpenSSH
+private keys, and keeps mobile navigation isolated from other tmux clients.
+It requires tmux 3.2 or newer on the server. Local terminal history and
+selection stay on the device; split, close, and new-window actions are shared
+workspace mutations.
+
+Building MoriRemote from source requires Xcode, XcodeGen, and the pinned remux
+Ghostty source. The local task builds one universal macOS + iOS XCFramework;
+CI builds the same source once and shares that artifact with macOS and iOS jobs.
+
+```bash
+mise run ios:test
+mise run ios:run                         # verifies launch, liveness, crash logs, screenshots
+```
+
+The framework is built from `h3nock/remux-ghostty` at the pinned source commit,
+not downloaded from a third-party prebuilt artifact. See
+[`MoriRemote/UPSTREAM.md`](MoriRemote/UPSTREAM.md).
+
 <details>
 <summary>Build from source</summary>
 
 Requires macOS 14+, tmux, [mise](https://mise.jdx.dev/), Zig 0.15.2, and Xcode.
 
 ```bash
-mise run build    # Debug build (bootstraps libghostty automatically)
+mise run build    # Debug build (bootstraps macOS libghostty automatically)
+# `mise run ios:*` bootstraps the universal macOS + iOS GhosttyKit artifact
 mise run dev      # Build + run
 mise run test     # Run all tests
 ```

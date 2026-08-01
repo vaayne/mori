@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version (e.g. 0.1.0)"
+        description: "Version (must be 0.3.5)"
         required: true
       build_number:
         description: "Optional build number override (defaults to UTC timestamp, e.g. 202604071105)"
@@ -21,22 +21,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  ghosttykit:
+    uses: ./.github/workflows/build-ghosttykit.yml
+
   release-ios:
+    needs: ghosttykit
     runs-on: macos-26
     timeout-minutes: 30
     env:
       DERIVED_DATA: .derived-data-ios
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
 
-      - name: Resolve version
+      - name: Resolve fixed marketing version and build number
         id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          VERSION_INPUT: ${{ inputs.version }}
+          BUILD_NUMBER_INPUT: ${{ inputs.build_number }}
         run: |
+          set -euo pipefail
           DEFAULT_BUILD_NUMBER="$(date -u +%Y%m%d%H%M)"
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            VERSION="${{ github.event.inputs.version }}"
-            BUILD_NUMBER="${{ github.event.inputs.build_number }}"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            VERSION="$VERSION_INPUT"
+            BUILD_NUMBER="$BUILD_NUMBER_INPUT"
             if [[ -z "$BUILD_NUMBER" ]]; then
               BUILD_NUMBER="$DEFAULT_BUILD_NUMBER"
             fi
@@ -44,55 +55,35 @@ jobs:
             VERSION="${GITHUB_REF_NAME#ios-v}"
             BUILD_NUMBER="$DEFAULT_BUILD_NUMBER"
           fi
+          [[ "$VERSION" == "0.3.5" ]] || { echo "MoriRemote TestFlight marketing version is pinned to 0.3.5." >&2; exit 1; }
+          [[ "$BUILD_NUMBER" =~ ^[0-9]+$ ]] || { echo "Build number must contain only digits." >&2; exit 1; }
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "build_number=${BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
           echo "📦 Version: ${VERSION} (${BUILD_NUMBER})"
 
+      - name: Download Mori-built GhosttyKit
+        uses: actions/download-artifact@v7
+        with:
+          name: GhosttyKit
+          path: Frameworks
+
+      - name: Verify universal GhosttyKit
+        run: bash scripts/verify-ghosttykit.sh
+
       - name: Install tools
-        run: |
-          brew install xcodegen xcbeautify
+        run: brew install xcodegen xcbeautify
 
       - name: Cache SPM packages
         uses: actions/cache@v5
         with:
           path: ${{ env.DERIVED_DATA }}/SourcePackages
-          key: spm-ios-${{ hashFiles('MoriRemote/MoriRemote.xcodeproj/project.pbxproj', '**/Package.resolved') }}
+          key: spm-ios-${{ hashFiles('MoriRemote/project.yml', '**/Package.resolved') }}
           restore-keys: spm-ios-
 
       - name: Generate Xcode project
         env:
           DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
         run: cd MoriRemote && xcodegen generate
-
-      - name: Stub GhosttyKit for SPM resolution
-        run: |
-          mkdir -p Frameworks/GhosttyKit.xcframework/macos-arm64_x86_64/GhosttyKit.framework/Headers
-          touch Frameworks/GhosttyKit.xcframework/macos-arm64_x86_64/GhosttyKit.framework/GhosttyKit
-          cat > Frameworks/GhosttyKit.xcframework/Info.plist << 'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>AvailableLibraries</key>
-            <array>
-              <dict>
-                <key>LibraryIdentifier</key>
-                <string>macos-arm64_x86_64</string>
-                <key>LibraryPath</key>
-                <string>GhosttyKit.framework</string>
-                <key>SupportedArchitectures</key>
-                <array><string>arm64</string><string>x86_64</string></array>
-                <key>SupportedPlatform</key>
-                <string>macos</string>
-              </dict>
-            </array>
-            <key>CFBundlePackageType</key>
-            <string>XFWK</string>
-            <key>XCFrameworkFormatVersion</key>
-            <string>1.0</string>
-          </dict>
-          </plist>
-          PLIST
 
       - name: Import signing certificate
         env:
@@ -146,7 +137,8 @@ jobs:
             MARKETING_VERSION="$VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             2>&1 | xcbeautify
-          echo "✅ Archive created"
+          bash scripts/verify-moriremote-archive.sh "$DERIVED_DATA/MoriRemote.xcarchive" "$VERSION" "$BUILD_NUMBER"
+          echo "✅ Archive created and inspected"
 
       - name: Export IPA
         run: |
@@ -164,11 +156,8 @@ jobs:
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
           set -euo pipefail
-          IPA_PATH=$(find "$DERIVED_DATA/export" -name "*.ipa" | head -1)
-          if [ -z "$IPA_PATH" ]; then
-            echo "❌ No IPA found"
-            exit 1
-          fi
+          IPA_PATH=$(find "$DERIVED_DATA/export" -name "*.ipa" -print -quit)
+          [[ -n "$IPA_PATH" ]] || { echo "❌ No IPA found"; exit 1; }
           xcrun altool --upload-app \
             --type ios \
             --file "$IPA_PATH" \
@@ -177,7 +166,7 @@ jobs:
           echo "✅ Uploaded to TestFlight"
 
       - name: Upload IPA artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: MoriRemote-${{ steps.version.outputs.version }}.ipa
           path: ${{ env.DERIVED_DATA }}/export/*.ipa

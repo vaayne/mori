@@ -4,17 +4,15 @@ options:
     iOS: "17.0"
   groupSortPosition: top
 packages:
-  MoriCore:
-    path: ../Packages/MoriCore
-  MoriTmux:
-    path: ../Packages/MoriTmux
-  MoriSSH:
-    path: ../Packages/MoriSSH
-  MoriTerminal:
-    path: ../Packages/MoriTerminal
-  SwiftTerm:
-    url: https://github.com/migueldeicaza/SwiftTerm.git
-    from: "1.13.0"
+  Citadel:
+    url: https://github.com/h3nock/Citadel.git
+    revision: 1d0eadd81d0a521b00ede6663c8b3301f5fc252e
+  NIO:
+    url: https://github.com/apple/swift-nio.git
+    exactVersion: 2.97.1
+  NIOSSH:
+    url: https://github.com/h3nock/swift-nio-ssh.git
+    revision: 7588777b8f6439efa1a33117f86cb2729abd864c
 targets:
   MoriRemote:
     type: application
@@ -23,20 +21,26 @@ targets:
     sources:
       - path: MoriRemote
     dependencies:
-      - package: MoriCore
-        product: MoriCore
-      - package: MoriTmux
-        product: MoriTmux
-      - package: MoriSSH
-        product: MoriSSH
-      - package: MoriTerminal
-        product: MoriTerminal
-      - package: SwiftTerm
-        product: SwiftTerm
+      - package: Citadel
+        product: Citadel
+      - package: NIO
+        product: NIO
+      - package: NIO
+        product: NIOPosix
+      - package: NIOSSH
+        product: NIOSSH
+      # Static iOS framework: link only; do not embed/sign it into the app bundle.
+      - framework: ../Frameworks/GhosttyKit.xcframework
+        embed: false
     settings:
       base:
         PRODUCT_NAME: MoriRemote
         PRODUCT_BUNDLE_IDENTIFIER: com.vaayne.mori-remote
+        # Force-load one inert ABI symbol: validate linkage without changing runtime flow.
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -lc++
+          - -Wl,-u,_ghostty_tmux_client_config_new
         INFOPLIST_FILE: MoriRemote/Info.plist
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
@@ -49,8 +53,10 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         EXCLUDED_ARCHS[sdk=iphonesimulator*]: x86_64
         DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
-        MARKETING_VERSION: ${MARKETING_VERSION:0.1.0}
-        CURRENT_PROJECT_VERSION: ${CURRENT_PROJECT_VERSION:1}
+        # TestFlight overrides only the build number; the marketing version is
+        # deliberately pinned to 0.3.5 unless a product decision changes it.
+        MARKETING_VERSION: "0.3.5"
+        CURRENT_PROJECT_VERSION: "1"
       configs:
         Debug:
           CODE_SIGN_IDENTITY: "Apple Development"
@@ -59,6 +65,28 @@ targets:
           CODE_SIGN_IDENTITY: "Apple Distribution"
           CODE_SIGN_STYLE: Manual
           PROVISIONING_PROFILE_SPECIFIER: "MoriRemote App Store"
+    postBuildScripts:
+      - name: Embed MoriRemote third-party notices
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          destination="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+          ditto "$SRCROOT/../THIRD_PARTY_NOTICES.md" "$destination/THIRD_PARTY_NOTICES.md"
+          rm -rf "$destination/THIRD_PARTY_LICENSES"
+          ditto "$SRCROOT/../THIRD_PARTY_LICENSES" "$destination/THIRD_PARTY_LICENSES"
+  MoriRemoteTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: MoriRemoteTests
+    dependencies:
+      - target: MoriRemote
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   MoriRemote:
     build:
@@ -66,3 +94,6 @@ schemes:
         MoriRemote: all
     archive:
       config: Release
+    test:
+      targets:
+        - MoriRemoteTests

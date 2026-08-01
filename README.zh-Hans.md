@@ -55,13 +55,28 @@ brew install --cask mori
 
 也可以从 [GitHub Releases](https://github.com/vaayne/mori/releases) 下载。MoriRemote iOS 版在 [TestFlight](https://testflight.apple.com/join/k2GFJPC2)。
 
+### MoriRemote
+
+MoriRemote 是 iPhone/iPad 上的 SSH 与 tmux 伴侣，不是远程桌面。它要求显式确认主机密钥，支持密码和导入的 OpenSSH 私钥，并保证移动端导航不干扰其他 tmux 客户端。服务器需要 tmux 3.2 或更高版本。本地终端历史和选择只保留在设备上；分屏、关闭与新建窗口属于共享工作区操作。
+
+从源码构建 MoriRemote 需要 Xcode、XcodeGen 和固定的 remux Ghostty 源码。本地任务会构建一份同时支持 macOS 与 iOS 的通用 XCFramework；CI 也只构建一次同一源码制品，并由 macOS 和 iOS job 共享。
+
+```bash
+mise run ios:test
+mise run ios:run                         # 验证启动、存活、崩溃日志和截图
+```
+
+该框架从固定 commit 的 `h3nock/remux-ghostty` 源码构建，而非下载第三方预构建制品。详见
+[`MoriRemote/UPSTREAM.md`](MoriRemote/UPSTREAM.md)。
+
 <details>
 <summary>从源码编译</summary>
 
 需要 macOS 14+、tmux、[mise](https://mise.jdx.dev/)、Zig 0.15.2 和 Xcode。
 
 ```bash
-mise run build    # Debug 构建（自动拉取 libghostty）
+mise run build    # Debug 构建（自动引导 macOS libghostty）
+# `mise run ios:*` 会自动引导通用 macOS + iOS GhosttyKit 制品
 mise run dev      # 构建并运行
 mise run test     # 跑所有测试
 ```

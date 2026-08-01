@@ -1,13 +1,21 @@
 {
-  "originHash" : "f62bb908e2cd6f3bd56901c05b0610de8d021e996cc0a4da7d3d964c2d4be226",
+  "originHash" : "d2c468b19049b912dff0b54f1d822a2678c673ee6a73143f330b964f7c5645d8",
   "pins" : [
     {
-      "identity" : "swift-argument-parser",
+      "identity" : "bigint",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-argument-parser",
+      "location" : "https://github.com/attaswift/BigInt.git",
       "state" : {
-        "revision" : "626b5b7b2f45e1b0b1c6f4a309296d1d21d7311b",
-        "version" : "1.7.1"
+        "revision" : "e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe",
+        "version" : "5.7.0"
+      }
+    },
+    {
+      "identity" : "citadel",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/h3nock/Citadel.git",
+      "state" : {
+        "revision" : "1d0eadd81d0a521b00ede6663c8b3301f5fc252e"
       }
     },
     {
@@ -47,6 +55,15 @@
       }
     },
     {
+      "identity" : "swift-log",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-log.git",
+      "state" : {
+        "revision" : "a878e7f8f46cfc0e1125e565b5c08e7d5272dc9a",
+        "version" : "1.14.0"
+      }
+    },
+    {
       "identity" : "swift-nio",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-nio.git",
@@ -58,10 +75,9 @@
     {
       "identity" : "swift-nio-ssh",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-nio-ssh.git",
+      "location" : "https://github.com/h3nock/swift-nio-ssh.git",
       "state" : {
-        "revision" : "8f33cac67309a13aecc0a4d95044543549b20ffb",
-        "version" : "0.12.0"
+        "revision" : "7588777b8f6439efa1a33117f86cb2729abd864c"
       }
     },
     {
@@ -71,15 +87,6 @@
       "state" : {
         "revision" : "7c6ad0fc39d0763e0b699210e4124afd5041c5df",
         "version" : "1.6.4"
-      }
-    },
-    {
-      "identity" : "swiftterm",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/migueldeicaza/SwiftTerm.git",
-      "state" : {
-        "revision" : "8e7a1e154f470e19c709a00a8768df348ba5fc43",
-        "version" : "1.13.0"
       }
     }
   ],

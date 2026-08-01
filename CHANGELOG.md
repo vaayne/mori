@@ -7,9 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Features
+
+- **iOS (MoriRemote)**: Rebuilt the remote companion around a secure, pane-native tmux control runtime. It supports saved workspaces, password or OpenSSH private-key authentication, explicit host-key trust, local terminal history/selection, agent status, and adaptive iPhone/iPad presentation without taking over another attached tmux client's selection or size.
+
+### 🐛 Bug Fixes
+
+- **iOS (MoriRemote)**: Fixed SSH tmux connections remaining on “Waiting for the active tmux pane” even though the remote control client had attached.
+- **iOS (MoriRemote)**: Hardened credentials to device-bound, unlocked-only Keychain storage; fenced Ghostty shutdown behind terminal-surface teardown; defer reconnects while backgrounded; and release dormant runtimes first under memory pressure.
+
 ### 🔧 CI/CD
 
 - **GhosttyKit**: Build one universal macOS + iOS framework from the pinned remux Ghostty source and verify its provenance, platform slices, build mode, and tmux ABI before reuse.
+- **iOS (MoriRemote)**: CI consumes that same-run verified universal framework for app tests, simulator smoke, and archives; TestFlight marketing version remains pinned to `0.3.5`.
+
+
 
 ## [0.7.0] - 2026-07-31
 

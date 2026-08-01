@@ -13,7 +13,7 @@ let package = Package(
         .library(name: "MoriSSH", targets: ["MoriSSH"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-nio-ssh.git", from: "0.8.0"),
+        .package(url: "https://github.com/h3nock/swift-nio-ssh.git", revision: "7588777b8f6439efa1a33117f86cb2729abd864c"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.65.0"),
     ],
     targets: [
