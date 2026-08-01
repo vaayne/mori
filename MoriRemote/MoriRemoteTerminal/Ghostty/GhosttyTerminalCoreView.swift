@@ -102,6 +102,7 @@ struct GhosttyTerminalCoreView: View {
                     toggleControl: { terminalInputController.toggleControl() },
                     toggleAlt: { terminalInputController.toggleAlt() },
                     requestSharedMutation: onSharedMutationRequest,
+                    sendShortcut: sendTerminalShortcut,
                     sendKey: sendTerminalKey
                 )
             )
@@ -237,6 +238,19 @@ struct GhosttyTerminalCoreView: View {
     private func cancelTransientInput() {
         cancelPrefixFlush()
         terminalInputController.clearModifiers()
+    }
+
+    private func sendTerminalShortcut(_ text: String) -> Bool {
+        // A menu shortcut is explicit terminal input, never the second half of
+        // a previously armed tmux prefix. Flush that prefix before sending the
+        // exact control/meta sequence and clear one-shot modifiers.
+        prefixFlushTask?.cancel()
+        prefixFlushTask = nil
+        if let pendingPrefix = terminalInputController.flushPendingTmuxPrefixInput() {
+            _ = screen.sendInputToFocusedSurface(pendingPrefix)
+        }
+        terminalInputController.clearModifiers()
+        return screen.sendInputToFocusedSurface(text).isAccepted
     }
 
     private func sendTerminalPaste(_ text: String) -> Bool {

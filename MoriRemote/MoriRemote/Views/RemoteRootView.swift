@@ -91,7 +91,7 @@ struct RemoteRootView: View {
 
     @ViewBuilder private var terminalDetail: some View {
         if let runtime = root.activeRuntime {
-            RemoteTerminalDetailView(root: root, runtime: runtime, compact: sizeClass == .compact, showLibrary: { sheet = .library })
+            RemoteTerminalDetailView(root: root, runtime: runtime, showLibrary: { sheet = .library })
         } else if sizeClass == .compact {
             NavigationStack { library }
         } else {
@@ -324,15 +324,12 @@ private struct AgentMetadataBadge: View {
 private struct RemoteTerminalDetailView: View {
     let root: RemoteRootModel
     let runtime: ActiveWorkspaceRuntime
-    let compact: Bool
     let showLibrary: () -> Void
     @State private var showsSessions = false
-    @State private var showsPanes = false
     @State private var pendingSharedMutation: RemoteSharedMutation?
 
     var body: some View {
         VStack(spacing: 0) {
-            header
             MoriRemoteTerminalView(
                 session: runtime.session,
                 onShowSessions: { showsSessions = true },
@@ -344,7 +341,6 @@ private struct RemoteTerminalDetailView: View {
         }
         .background(Color.black.ignoresSafeArea())
         .sheet(isPresented: $showsSessions) { sessionSwitcher }
-        .sheet(isPresented: $showsPanes) { panePicker }
         .confirmationDialog(
             String(localized: "Confirm shared workspace change"),
             isPresented: sharedMutationConfirmationBinding,
@@ -359,38 +355,6 @@ private struct RemoteTerminalDetailView: View {
         } message: {
             Text(String(localized: "This change affects every tmux client."))
         }
-    }
-
-    private var header: some View {
-        HStack(spacing: 12) {
-            if compact {
-                Button(action: showLibrary) { Image(systemName: "sidebar.left") }
-                    .accessibilityLabel(String(localized: "Show library"))
-            }
-            Button { showsPanes = true } label: {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(verbatim: runtime.workspace.name).lineLimit(1)
-                    HStack(spacing: 6) {
-                        Text(runtime.status.title).font(.caption).foregroundStyle(.secondary)
-                        AgentMetadataBadge(metadata: runtime.metadata(for: runtime.focusedPaneID ?? 0))
-                    }
-                }
-            }
-            Spacer()
-            Menu {
-                Button(String(localized: "Split right (shared)")) { pendingSharedMutation = .splitHorizontal }
-                Button(String(localized: "Split down (shared)")) { pendingSharedMutation = .splitVertical }
-                Button(String(localized: "New window (shared)")) { pendingSharedMutation = .newWindow }
-                Button(String(localized: "Close pane (shared)"), role: .destructive) { pendingSharedMutation = .closePane }
-                Button(String(localized: "Close window (shared)"), role: .destructive) { pendingSharedMutation = .closeWindow }
-            } label: { Image(systemName: "rectangle.3.group") }
-            Button(action: root.disconnectActive) { Image(systemName: "power") }
-                .accessibilityLabel(String(localized: "Disconnect"))
-        }
-        .padding(.horizontal, 12)
-        .frame(height: 48)
-        .foregroundStyle(.white)
-        .background(Color(white: 0.12))
     }
 
     private var sharedMutationConfirmationBinding: Binding<Bool> {
@@ -424,54 +388,6 @@ private struct RemoteTerminalDetailView: View {
         }
     }
 
-    private var panePicker: some View {
-        NavigationStack {
-            List {
-                Section(String(localized: "Windows")) {
-                    ForEach(runtime.topology?.windows ?? []) { window in
-                        Button { root.selectWindow(window.id) } label: {
-                            HStack {
-                                Label {
-                                    Text(verbatim: window.title)
-                                } icon: {
-                                    Image(systemName: window.active ? "rectangle.inset.filled" : "rectangle")
-                                }
-                                Spacer()
-                                AgentMetadataBadge(metadata: windowMetadata(window))
-                            }
-                        }
-                    }
-                }
-                Section(String(localized: "Panes")) {
-                    ForEach(runtime.topology?.panes ?? []) { pane in
-                        Button {
-                            root.selectPane(pane.id)
-                            showsPanes = false
-                        } label: {
-                            HStack {
-                                Text(verbatim: "%\(pane.id)")
-                                    .font(.body.monospaced())
-                                AgentMetadataBadge(metadata: runtime.metadata(for: pane.id))
-                                Spacer()
-                                Text(verbatim: "\(pane.columns)×\(pane.rows)")
-                                    .font(.caption.monospaced())
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle(String(localized: "Workspace controls"))
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(String(localized: "Done")) { showsPanes = false } } }
-        }
-    }
-
-    private func windowMetadata(_ window: MoriRemoteTerminalWindow) -> AgentMetadata {
-        runtime.topology?.panes
-            .filter { $0.windowID == window.id }
-            .map { runtime.metadata(for: $0.id) }
-            .max { $0.state.priority < $1.state.priority } ?? .unknown
-    }
 }
 
 private enum RemoteSharedMutation: Identifiable, Equatable {

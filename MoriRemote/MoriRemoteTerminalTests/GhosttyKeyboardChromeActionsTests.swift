@@ -48,6 +48,7 @@ final class GhosttyKeyboardChromeActionsTests: XCTestCase {
                 case .closeWindow: calls.append("close-window")
                 }
             },
+            sendShortcut: { value in calls.append(value); return true },
             sendKey: { _ in false }
         )
 
@@ -69,13 +70,35 @@ final class GhosttyKeyboardChromeActionsTests: XCTestCase {
         ])
     }
 
+    func testCommonShortcutsSendExactTerminalSequences() {
+        var sequences: [String] = []
+        let actions = GhosttyKeyboardChromeActions(
+            showSessions: {}, showLibrary: {}, showWindows: {}, showPanes: {},
+            toggleKeyboard: {}, toggleControl: {}, toggleAlt: {},
+            requestSharedMutation: { _ in },
+            sendShortcut: { sequences.append($0); return true },
+            sendKey: { _ in false }
+        )
+
+        for action in [
+            GhosttyKeyboardChromeActions.Action.ctrlC, .ctrlD, .ctrlZ, .ctrlL,
+            .ctrlA, .ctrlE, .ctrlR, .ctrlU, .ctrlK, .ctrlW, .altB, .altF,
+        ] {
+            XCTAssertTrue(actions.perform(action))
+        }
+        XCTAssertEqual(sequences, [
+            "\u{03}", "\u{04}", "\u{1A}", "\u{0C}", "\u{01}", "\u{05}",
+            "\u{12}", "\u{15}", "\u{0B}", "\u{17}", "\u{1B}b", "\u{1B}f",
+        ])
+    }
+
     private func makeActions(
         sendKey: @escaping (GhosttySurfaceKeyEvent) -> Bool
     ) -> GhosttyKeyboardChromeActions {
         GhosttyKeyboardChromeActions(
             showSessions: {}, showLibrary: {}, showWindows: {}, showPanes: {},
             toggleKeyboard: {}, toggleControl: {}, toggleAlt: {},
-            requestSharedMutation: { _ in }, sendKey: sendKey
+            requestSharedMutation: { _ in }, sendShortcut: { _ in false }, sendKey: sendKey
         )
     }
 }

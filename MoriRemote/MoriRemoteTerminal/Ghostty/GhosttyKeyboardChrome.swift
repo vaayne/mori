@@ -55,6 +55,7 @@ struct GhosttyKeyboardChromeActions {
     let toggleControl: () -> Void
     let toggleAlt: () -> Void
     let requestSharedMutation: (MoriRemoteTerminalSharedMutation) -> Void
+    let sendShortcut: (String) -> Bool
     let sendKey: (GhosttySurfaceKeyEvent) -> Bool
 
     func perform(_ action: Action) -> Bool {
@@ -71,6 +72,18 @@ struct GhosttyKeyboardChromeActions {
         case .splitVertical: requestSharedMutation(.splitVertical); return true
         case .closePane: requestSharedMutation(.closePane); return true
         case .closeWindow: requestSharedMutation(.closeWindow); return true
+        case .ctrlC: return sendShortcut("\u{03}")
+        case .ctrlD: return sendShortcut("\u{04}")
+        case .ctrlZ: return sendShortcut("\u{1A}")
+        case .ctrlL: return sendShortcut("\u{0C}")
+        case .ctrlA: return sendShortcut("\u{01}")
+        case .ctrlE: return sendShortcut("\u{05}")
+        case .ctrlR: return sendShortcut("\u{12}")
+        case .ctrlU: return sendShortcut("\u{15}")
+        case .ctrlK: return sendShortcut("\u{0B}")
+        case .ctrlW: return sendShortcut("\u{17}")
+        case .altB: return sendShortcut("\u{1B}b")
+        case .altF: return sendShortcut("\u{1B}f")
         case .escape: return sendKey(.init(keyCode: .escape))
         case .tab: return sendKey(.init(keyCode: .tab))
         case .shiftTab: return sendKey(.init(keyCode: .tab, mods: .shift))
@@ -93,6 +106,7 @@ struct GhosttyKeyboardChromeActions {
         case sessions, library, windows, panes, keyboard, control, alt
         case escape, tab, shiftTab, arrowLeft, arrowUp, arrowDown, arrowRight
         case home, end, pageUp, pageDown, questionMark, slash
+        case ctrlC, ctrlD, ctrlZ, ctrlL, ctrlA, ctrlE, ctrlR, ctrlU, ctrlK, ctrlW, altB, altF
         case newWindow, splitHorizontal, splitVertical, closePane, closeWindow
     }
 }
@@ -132,11 +146,27 @@ struct GhosttyKeyboardChrome: View {
                 Button { _ = actions.perform(.alt) } label: {
                     Label("Alt", systemImage: isAltArmed ? "checkmark" : "option")
                 }
+                Section("Common shortcuts") {
+                    Button("Ctrl-C · Interrupt") { _ = actions.perform(.ctrlC) }
+                    Button("Ctrl-D · End input") { _ = actions.perform(.ctrlD) }
+                    Button("Ctrl-Z · Suspend") { _ = actions.perform(.ctrlZ) }
+                    Button("Ctrl-L · Clear") { _ = actions.perform(.ctrlL) }
+                    Button("Ctrl-R · History search") { _ = actions.perform(.ctrlR) }
+                }
+                Section("Line editing") {
+                    Button("Ctrl-A · Line start") { _ = actions.perform(.ctrlA) }
+                    Button("Ctrl-E · Line end") { _ = actions.perform(.ctrlE) }
+                    Button("Ctrl-U · Delete to start") { _ = actions.perform(.ctrlU) }
+                    Button("Ctrl-K · Delete to end") { _ = actions.perform(.ctrlK) }
+                    Button("Ctrl-W · Delete word") { _ = actions.perform(.ctrlW) }
+                    Button("Alt-B · Previous word") { _ = actions.perform(.altB) }
+                    Button("Alt-F · Next word") { _ = actions.perform(.altF) }
+                }
             } label: {
                 menuLabel("control", active: isControlArmed || isAltArmed)
             }
-            .accessibilityLabel(String(localized: "Modifiers"))
-            .accessibilityIdentifier("terminal.modifiers")
+            .accessibilityLabel(String(localized: "Shortcuts"))
+            .accessibilityIdentifier("terminal.shortcuts")
 
             Menu {
                 Section {
