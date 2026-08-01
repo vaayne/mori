@@ -30,7 +30,7 @@ targets:
       - package: NIOSSH
         product: NIOSSH
       # Static iOS framework: link only; do not embed/sign it into the app bundle.
-      - framework: ../Frameworks/RemuxGhosttyKit.xcframework
+      - framework: ../Frameworks/GhosttyKit.xcframework
         embed: false
     settings:
       base:

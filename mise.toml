@@ -73,18 +73,6 @@ run = "bash scripts/build-ghostty.sh"
 description = "Build the universal macOS + iOS GhosttyKit XCFramework from the pinned remux source"
 run = "bash scripts/build-ghostty.sh --universal"
 
-[tasks."test:ghosttykit-contract"]
-description = "Run offline adversarial GhosttyKit lock and source-contract fixtures"
-run = "bash scripts/tests/test-ghosttykit-contract.sh"
-
-[tasks."test:release-workflows"]
-description = "Verify immutable-safe GitHub release draft flows offline"
-run = "bash scripts/tests/test-release-workflows.sh"
-
-[tasks."test:ghosttykit-verify"]
-description = "Prove the universal GhosttyKit verifier rejects framework tampering"
-run = "bash scripts/tests/test-ghosttykit-verify.sh"
-
 [tasks.bundle]
 description = "Build release and create Mori.app bundle"
 run = "bash scripts/bundle.sh"
@@ -137,8 +125,9 @@ description = "Generate MoriRemote.xcodeproj from project.yml"
 run = "cd MoriRemote && xcodegen generate"
 
 [tasks."ios:verify-framework"]
-description = "Verify the pinned RemuxGhosttyKit iOS framework"
-run = "bash scripts/verify-remux-ghosttykit.sh"
+description = "Verify the Mori-built universal GhosttyKit framework"
+depends = ["build:ghostty-universal"]
+run = "bash scripts/verify-ghosttykit.sh"
 
 [tasks."ios:build"]
 description = "Build MoriRemote for iOS Simulator"
@@ -177,13 +166,17 @@ description = "Install MoriRemote and verify library/Ghostty launch, liveness, c
 depends = ["ios:build"]
 run = "bash scripts/smoke-moriremote-simulator.sh"
 
-[tasks."test:remux-ghosttykit-verify"]
-description = "Prove the custom iOS GhosttyKit verifier rejects tampering"
-run = "bash scripts/tests/test-remux-ghosttykit-verify.sh"
+[tasks."test:ghosttykit-contract"]
+description = "Run offline adversarial GhosttyKit lock and source-contract fixtures"
+run = "bash scripts/tests/test-ghosttykit-contract.sh"
 
-[tasks."test:remux-ghosttykit-mirror-provenance"]
-description = "Prove TestFlight discards upstream-provenance GhosttyKit cache before mirror fetch"
-run = "bash scripts/tests/test-remux-ghosttykit-mirror-provenance.sh"
+[tasks."test:ghosttykit-verify"]
+description = "Prove the universal GhosttyKit verifier rejects framework tampering"
+run = "bash scripts/tests/test-ghosttykit-verify.sh"
+
+[tasks."test:release-workflows"]
+description = "Verify immutable-safe GitHub release draft flows offline"
+run = "bash scripts/tests/test-release-workflows.sh"
 
 [tasks."test:moriremote-archive-verify"]
 description = "Prove the MoriRemote archive verifier rejects wrong build numbers and legacy payloads"

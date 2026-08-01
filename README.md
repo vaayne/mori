@@ -64,18 +64,18 @@ It requires tmux 3.2 or newer on the server. Local terminal history and
 selection stay on the device; split, close, and new-window actions are shared
 workspace mutations.
 
-Building MoriRemote from source requires Xcode, XcodeGen, and the pinned
-RemuxGhosttyKit artifact:
+Building MoriRemote from source requires Xcode, XcodeGen, and the pinned remux
+Ghostty source. The local task builds one universal macOS + iOS XCFramework;
+CI builds the same source once and shares that artifact with macOS and iOS jobs.
 
 ```bash
-bash scripts/fetch-remux-ghosttykit.sh   # checksum-verified development artifact
 mise run ios:test
 mise run ios:run                         # verifies launch, liveness, crash logs, screenshots
 ```
 
-A TestFlight/release build additionally requires a byte-identical,
-Mori-controlled artifact mirror. See [`MoriRemote/UPSTREAM.md`](MoriRemote/UPSTREAM.md);
-there is deliberately no release fallback to a third-party maintainer asset.
+The framework is built from `h3nock/remux-ghostty` at the pinned source commit,
+not downloaded from a third-party prebuilt artifact. See
+[`MoriRemote/UPSTREAM.md`](MoriRemote/UPSTREAM.md).
 
 <details>
 <summary>Build from source</summary>
@@ -83,7 +83,8 @@ there is deliberately no release fallback to a third-party maintainer asset.
 Requires macOS 14+, tmux, [mise](https://mise.jdx.dev/), Zig 0.15.2, and Xcode.
 
 ```bash
-mise run build    # Debug build (bootstraps libghostty automatically)
+mise run build    # Debug build (bootstraps macOS libghostty automatically)
+# `mise run ios:*` bootstraps the universal macOS + iOS GhosttyKit artifact
 mise run dev      # Build + run
 mise run test     # Run all tests
 ```

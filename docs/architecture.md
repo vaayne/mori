@@ -76,7 +76,7 @@ Pane                  pane                 tmux pane ID, e.g. %3
 
 ## Terminal Rendering
 
-`TerminalHost` protocol abstracts terminal backends. Primary implementation is `GhosttyAdapter` (libghostty — GPU-accelerated Metal rendering, native mouse/scroll/paste/IME). `NativeTerminalAdapter` (PTY via `forkpty()`) is kept as an emergency fallback. GhosttyKit is built from the pinned remux Ghostty source: `mise run build:ghostty` builds the native macOS slice, while `mise run build:ghostty-universal` builds the shared macOS + iOS artifact (requires Zig 0.15.2 + Xcode).
+`TerminalHost` protocol abstracts terminal backends. Primary implementation is `GhosttyAdapter` (libghostty — GPU-accelerated Metal rendering, native mouse/scroll/paste/IME). `NativeTerminalAdapter` (PTY via `forkpty()`) is kept as an emergency fallback. GhosttyKit is built from the pinned remux Ghostty source (including MoriRemote's tmux ABI): `mise run build:ghostty` makes the macOS slice, while `mise run build:ghostty-universal` makes the shared macOS + iOS artifact (requires Zig 0.15.2 + Xcode).
 
 ## Persistence
 

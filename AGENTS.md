@@ -19,7 +19,7 @@ mise run test:ui         # MoriUI tests only
 mise run clean           # Remove .build and .derived-data
 ```
 
-Tests are executable targets (not XCTest), run via `swift run <TestTarget>` from each package directory. MoriRemote is the narrow exception: `mise run ios:test` runs its Swift Testing suite. `mise run ios:run` / `mise run ios:smoke` build, install, verify process liveness and crash diagnostics, and save library/terminal screenshots; a returned simulator PID alone is not success. Before an iOS release, `bash scripts/verify-moriremote-archive.sh <archive> 0.3.5` verifies the archive contract.
+Tests are executable targets (not XCTest), run via `swift run <TestTarget>` from each package directory. MoriRemote is the narrow exception: `mise run ios:test` runs its Swift Testing suite and bootstraps the universal GhosttyKit artifact with `mise run build:ghostty-universal`. `mise run ios:run` / `mise run ios:smoke` build, install, verify process liveness and crash diagnostics, and save library/terminal screenshots; a returned simulator PID alone is not success. Before an iOS release, `bash scripts/verify-moriremote-archive.sh <archive> 0.3.5` verifies the archive contract.
 
 ## Pre-Push Verification
 

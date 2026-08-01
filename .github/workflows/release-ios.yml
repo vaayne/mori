@@ -21,15 +21,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  ghosttykit:
+    uses: ./.github/workflows/build-ghosttykit.yml
+
   release-ios:
+    needs: ghosttykit
     runs-on: macos-26
     timeout-minutes: 30
     env:
       DERIVED_DATA: .derived-data-ios
-      MORI_REMUX_GHOSTTYKIT_MIRROR_URL: ${{ vars.MORI_REMUX_GHOSTTYKIT_MIRROR_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
 
       - name: Resolve fixed marketing version and build number
         id: version
@@ -56,18 +61,14 @@ jobs:
           echo "build_number=${BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
           echo "📦 Version: ${VERSION} (${BUILD_NUMBER})"
 
-      - name: Cache pinned RemuxGhosttyKit
-        uses: actions/cache@v5
+      - name: Download Mori-built GhosttyKit
+        uses: actions/download-artifact@v7
         with:
-          path: |
-            Frameworks/RemuxGhosttyKit.xcframework
-            Frameworks/.remux-ghosttykit-provenance
-          key: remux-ghosttykit-20260731-e54ca81edf40721f72e87b5a5449746cd8fdcc877d5b0f284cdf2e34609f21f9
+          name: GhosttyKit
+          path: Frameworks
 
-      - name: Fetch and verify Mori-controlled RemuxGhosttyKit
-        run: |
-          bash scripts/fetch-remux-ghosttykit.sh --require-mirror
-          bash scripts/verify-remux-ghosttykit.sh
+      - name: Verify universal GhosttyKit
+        run: bash scripts/verify-ghosttykit.sh
 
       - name: Install tools
         run: brew install xcodegen xcbeautify

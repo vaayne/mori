@@ -1,41 +1,27 @@
 # MoriRemote remux upstreams
 
-## remux GhosttyKit (release artifact contract)
+## Mori-built universal GhosttyKit
 
-MoriRemote's remux rewrite probe uses a separately installed, **untracked**
-XCFramework at `Frameworks/RemuxGhosttyKit.xcframework`. It is intentionally
-not the macOS framework at `Frameworks/GhosttyKit.xcframework` and must never
-replace it.
+Mori builds one **untracked** `Frameworks/GhosttyKit.xcframework` from the
+pinned remux Ghostty source. It contains the universal macOS slice and the iOS
+arm64 device and simulator slices; both Mori and MoriRemote link that one
+framework without embedding it in either app bundle.
 
 | Field | Value |
 | --- | --- |
-| Release asset | `GhosttyKit.xcframework.zip` |
-| Release tag | `ghosttykit-20260731` |
-| SHA-256 | `e54ca81edf40721f72e87b5a5449746cd8fdcc877d5b0f284cdf2e34609f21f9` |
-| Asset repository | <https://github.com/h3nock/remux-ghostty> |
-| Asset source commit | `aeb8f73790946d9c9ad175b3dafaec9911ef36bb` |
+| Source repository | <https://github.com/h3nock/remux-ghostty> |
+| Source commit | `aeb8f73790946d9c9ad175b3dafaec9911ef36bb` |
+| Upstream Ghostty base | `b213a72c03b427607b43c89ff4223a7baa079fe8` |
+| Added remux ABI | `ghostty_tmux_client_*` |
 | Reference application | <https://github.com/h3nock/remux> at `b3a3e5f5dfa4759ab189e203b9a03749e821540c` |
 
-Install it for local development with `scripts/fetch-remux-ghosttykit.sh`, then
-validate it with `scripts/verify-remux-ghosttykit.sh`. The scripts enforce the
-pinned archive SHA-256 **and** a source-controlled digest of every installed
-framework file, require iOS arm64 device and simulator slices, and check the
-custom tmux C ABI before any build.
-
-A release build must instead run
-`MORI_REMUX_GHOSTTYKIT_MIRROR_URL=<Mori-controlled URL> bash scripts/fetch-remux-ghosttykit.sh --require-mirror`.
-This fails closed when the variable is absent; it never falls back to an
-upstream maintainer's asset. The mirror URL may not override the release tag,
-archive checksum, source commit, or installed-tree digest.
-
-**Remaining operator step before TestFlight:** upload the byte-identical
-`GhosttyKit.xcframework.zip` whose SHA-256 is
-`e54ca81edf40721f72e87b5a5449746cd8fdcc877d5b0f284cdf2e34609f21f9` to a
-Mori-controlled release location, set the repository variable
-`MORI_REMUX_GHOSTTYKIT_MIRROR_URL` to that exact HTTPS asset URL, and trigger
-CI once. Do not change a checksum to accommodate another binary. This checkout
-has no configured Mori-controlled asset, so TestFlight remains intentionally
-blocked.
+`scripts/build-ghostty.sh --universal` builds the framework with
+`ReleaseFast`; `scripts/verify-ghosttykit.sh` fails closed unless its provenance
+matches the pinned source and generated framework content digest, the macOS and
+iOS arm64 slices are present, iOS minimum OS is at most 17, and the custom tmux
+ABI compiles and exports from all slices. CI and `release-ios.yml` build this artifact through the reusable
+`build-ghosttykit.yml` workflow and download it only from that same workflow
+run. There is no third-party prebuilt or mirror fallback.
 
 The framework derives from Ghostty as modified by `h3nock/remux-ghostty`.
 Ghostty and the adapted remux source are MIT licensed; complete distributed

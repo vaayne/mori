@@ -18,7 +18,8 @@
 ### 🔧 CI/CD
 
 - **GhosttyKit**：从固定的 remux Ghostty 源码构建一份通用 macOS + iOS framework，并在复用前校验其来源、平台 slice、构建模式和 tmux ABI。
-- **iOS（MoriRemote）**：CI 现在校验固定 RemuxGhosttyKit 的内容、运行 Swift Testing，并保留模拟器的存活/崩溃/截图 smoke 证据。TestFlight 对已配置、由 Mori 控制且经 checksum 验证的制品镜像失败关闭，营销版本仍固定为 `0.3.5`。
+- **iOS（MoriRemote）**：CI 在应用测试、模拟器 smoke 和 archive 中消费同一次运行内已验证的通用 framework；TestFlight 营销版本仍固定为 `0.3.5`。
+
 
 
 ## [0.7.0] - 2026-07-31

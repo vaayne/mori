@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🔧 CI/CD
 
 - **GhosttyKit**: Build one universal macOS + iOS framework from the pinned remux Ghostty source and verify its provenance, platform slices, build mode, and tmux ABI before reuse.
-- **iOS (MoriRemote)**: CI now verifies the pinned RemuxGhosttyKit contents, runs Swift Testing, and captures liveness/crash/screenshot simulator smoke evidence. TestFlight is fail-closed on a configured Mori-controlled, checksum-verified artifact mirror and remains pinned to marketing version `0.3.5`.
+- **iOS (MoriRemote)**: CI consumes that same-run verified universal framework for app tests, simulator smoke, and archives; TestFlight marketing version remains pinned to `0.3.5`.
+
 
 
 ## [0.7.0] - 2026-07-31
