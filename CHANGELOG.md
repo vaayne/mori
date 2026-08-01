@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Bug Fixes
 
+- **iOS (MoriRemote)**: Fixed SSH tmux connections remaining on “Waiting for the active tmux pane” even though the remote control client had attached.
 - **iOS (MoriRemote)**: Hardened credentials to device-bound, unlocked-only Keychain storage; fenced Ghostty shutdown behind terminal-surface teardown; defer reconnects while backgrounded; and release dormant runtimes first under memory pressure.
 
 ### 🔧 CI/CD

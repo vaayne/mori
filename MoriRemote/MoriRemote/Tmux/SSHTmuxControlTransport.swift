@@ -18,6 +18,7 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
 
     private var lease: SSHRootLease?
     private var control: (any SSHChildChannel)?
+    private var controlReader: Task<Void, Never>?
     /// The startup command may be awaiting output when close wins. Retaining it
     /// lets close unblock and release that child instead of stranding it on root.
     private var startupChild: (any SSHChildChannel)?
@@ -93,6 +94,17 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
                 throw SSHTmuxControlTransportError.closed
             }
             lifecycle = .started
+            let receivedBytes = control.receivedBytes
+            controlReader = Task { [weak self] in
+                do {
+                    for try await bytes in receivedBytes {
+                        await self?.forwardControlBytes(bytes)
+                    }
+                    await self?.controlStreamEnded(error: nil)
+                } catch {
+                    await self?.controlStreamEnded(error: error)
+                }
+            }
         } catch {
             // Preserve authentication, trust, and tmux startup errors for the
             // root model. Only a concurrent explicit close changes the error to
@@ -103,6 +115,17 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
             }
             throw SSHTmuxControlTransportError.closed
         }
+    }
+
+    private func forwardControlBytes(_ bytes: Data) {
+        guard lifecycle == .started else { return }
+        continuation.yield(bytes)
+    }
+
+    private func controlStreamEnded(error: Error?) async {
+        guard lifecycle == .started else { return }
+        controlReader = nil
+        await terminate(disposition: .invalidated, error: error)
     }
 
     func send(_ data: Data) async throws {
@@ -187,12 +210,15 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
         guard lifecycle != .closed && lifecycle != .closing else { return }
         lifecycle = .closing
         let control = self.control
+        let controlReader = self.controlReader
         let startupChild = self.startupChild
         let lease = self.lease
         self.control = nil
+        self.controlReader = nil
         self.startupChild = nil
         self.lease = nil
 
+        controlReader?.cancel()
         if let control { try? await control.close() }
         if let startupChild { try? await startupChild.close() }
         var finalDisposition = disposition

@@ -13,6 +13,7 @@
 
 ### 🐛 问题修复
 
+- **iOS（MoriRemote）**：修复远端 tmux 控制客户端已经连接，但界面仍一直停在“正在等待活动的 tmux pane”的问题。
 - **iOS（MoriRemote）**：凭证改为仅限本设备、仅在解锁时可用的 Keychain 存储；Ghostty 必须在终端 surface 拆除后才释放；后台期间延后重连；低内存时优先释放非活动运行时。
 
 ### 🔧 CI/CD

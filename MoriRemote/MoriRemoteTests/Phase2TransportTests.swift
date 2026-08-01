@@ -98,6 +98,37 @@ import Testing
         #expect(root.commands()[4].contains("'kill-session'"))
     }
 
+    @Test("control child bytes reach the public transport stream")
+    func forwardsControlBytes() async throws {
+        let expected = Data("%session-changed $0 workspace\n".utf8)
+        let id = UUID(uuidString: "00000000-0000-0000-0000-0000F04A2D1A")!
+        let root = FakeRoot(plans: [
+            .finished("tmux 3.2a\n"), .finished(""), .streaming(expected),
+            .finished("workspace--mori-remote-\(id.uuidString.lowercased())\tworkspace\n"), .finished(""),
+        ])
+        let transport = SSHTmuxControlTransport(
+            connector: FakeConnector(roots: [root]),
+            pool: SSHRootPool(),
+            poolKey: try key(),
+            sourceSession: "workspace",
+            runtimeID: id
+        )
+        let recorder = DataRecorder()
+        let reader = Task {
+            do {
+                for try await bytes in transport.receivedBytes {
+                    recorder.append(bytes)
+                    break
+                }
+            } catch {}
+        }
+
+        try await transport.start()
+        try await eventually { recorder.values() == [expected] }
+        await transport.close(disposition: .reusable)
+        reader.cancel()
+    }
+
     @Test("old or malformed tmux never mutates")
     func rejectedPreflight() async throws {
         for output in ["tmux 3.1\n", "not tmux\n"] {
@@ -241,7 +272,7 @@ private struct Passwords: CredentialReading {
     func password(for identityID: UUID) throws -> String? { values[identityID] }
 }
 
-private enum FakePlan { case finished(String), open, failed }
+private enum FakePlan { case finished(String), streaming(Data), open, failed }
 
 private final class FakeConnector: SSHRootConnecting, @unchecked Sendable {
     private let lock = NSLock()
@@ -287,6 +318,7 @@ private final class FakeChild: SSHChildChannel, @unchecked Sendable {
         record(command)
         switch plan {
         case .finished(let output): continuation.yield(Data(output.utf8)); continuation.finish()
+        case .streaming(let bytes): continuation.yield(bytes)
         case .open: break
         case .failed: throw SSHTmuxControlTransportError.closed
         }
@@ -375,6 +407,13 @@ private struct StartupRaceConnector: SSHRootConnecting {
 
 private func key() throws -> SSHRootPool.Key {
     try .init(serverID: UUID(), endpoint: CanonicalEndpoint(host: "example.test", port: 22), username: "v", authenticationFingerprint: UUID().uuidString)
+}
+
+private final class DataRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [Data] = []
+    func append(_ data: Data) { lock.withLock { recorded.append(data) } }
+    func values() -> [Data] { lock.withLock { recorded } }
 }
 
 private func eventually(_ condition: @escaping @Sendable () -> Bool) async throws {
