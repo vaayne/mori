@@ -24,8 +24,8 @@ final class TmuxTerminalScreenAdapterTests: XCTestCase {
             activeWindowID: 1
         ))
 
-        let first = adapter.terminalScreenPresentationProjection
-        XCTAssertEqual(first.viewport.windowCount, 2)
+        let first = adapter.terminalViewportPresentationProjection
+        XCTAssertEqual(first.windowCount, 2)
 
         session.handleTopology(.init(
             sessionName: "fresh-test",
@@ -34,8 +34,8 @@ final class TmuxTerminalScreenAdapterTests: XCTestCase {
             activeWindowID: 1
         ))
 
-        let second = adapter.terminalScreenPresentationProjection
-        XCTAssertEqual(second.viewport.windowCount, 1)
+        let second = adapter.terminalViewportPresentationProjection
+        XCTAssertEqual(second.windowCount, 1)
 
         await session.shutdown()
     }

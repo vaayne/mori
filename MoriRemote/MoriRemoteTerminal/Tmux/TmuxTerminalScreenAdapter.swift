@@ -25,9 +25,6 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
     private var activeManagedSurface: GhosttyManagedSurface?
     private var initialViewportHandler: ((CGSize, CGFloat) -> Void)?
 
-    private var commandFailureMessage: String?
-    private var commandFailureToken: UInt64 = 0
-
     private var subscriptions: [AnyCancellable] = []
 
     /// Connects the adapter to a live session. Called once, right after the
@@ -58,15 +55,6 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
                 self?.objectWillChange.send()
             }
             .store(in: &subscriptions)
-        session.$lastFailedRequest
-            .sink { [weak self] request in
-                guard let request else { return }
-                self?.presentCommandFailure(for: request)
-            }
-            .store(in: &subscriptions)
-        session.$transportFailure
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &subscriptions)
     }
 
     func invalidate() {
@@ -76,30 +64,6 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
         controller = nil
         initialViewportHandler = nil
         latestTopology = nil
-    }
-
-    private var runtimePhase: GhosttyTerminalRuntimePhase {
-        guard let session else {
-            return .failed(message: "terminal session unavailable", reason: nil)
-        }
-        switch session.state {
-        case .attaching, .syncing:
-            return .starting
-        case .ready:
-            return .running
-        case .detached(nil):
-            if let failure = session.transportFailure {
-                return .failed(message: failure.message, reason: failure)
-            }
-            // Pre-connect; the first connect is imminent.
-            return .starting
-        case .detached(.some(let reason)):
-            let mapped = reason.terminalDisconnectReason
-            return .failed(message: mapped.message, reason: mapped)
-        case .closed(let reason):
-            let mapped = reason.terminalDisconnectReason
-            return .failed(message: mapped.message, reason: mapped)
-        }
     }
 
     private var isTransportWritable: Bool {
@@ -122,33 +86,6 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
     private var focusedManagedSurface: GhosttyManagedSurface? {
         activeManagedSurface
     }
-
-
-    // MARK: Command failures
-
-    private func presentCommandFailure(for request: TmuxSessionController.Request) {
-        commandFailureToken &+= 1
-        let message = "tmux: \(Self.failureLabel(for: request)) failed"
-        commandFailureMessage = message
-        objectWillChange.send()
-
-        let token = commandFailureToken
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(4))
-            guard let self, self.commandFailureToken == token else { return }
-            self.commandFailureMessage = nil
-            self.objectWillChange.send()
-        }
-    }
-
-    private static func failureLabel(for request: TmuxSessionController.Request) -> String {
-        switch request {
-        case .selectWindow: "select window"
-        case .selectPane: "select pane"
-        case .sharedMutation: "shared workspace action"
-        case .sendInput: "input"
-        }
-    }
 }
 
 extension TmuxTerminalScreenAdapter {
@@ -156,23 +93,15 @@ extension TmuxTerminalScreenAdapter {
         initialViewportHandler?(size, scale)
     }
 
-    var terminalScreenPresentationProjection: GhosttyTerminalScreenPresentationProjection {
-        GhosttyTerminalPresentationProjector.terminalScreenPresentationProjection(
-            phase: runtimePhase,
-            transportWritable: isTransportWritable,
-            commandFailureMessage: commandFailureMessage,
-            debugStatus: stateTraceLabel,
-            registryDebugSummary: "tmux session stack",
-            presentedSurfaceID: activeManagedSurface?.id,
-            topLevelCount: latestTopology?.windows.count ?? 0
+    var terminalViewportPresentationProjection: GhosttyTerminalViewportPresentationProjection {
+        GhosttyTerminalViewportPresentationProjection(
+            surfaceID: activeManagedSurface?.id,
+            windowCount: latestTopology?.windows.count ?? 0
         )
     }
 
-    var terminalInteractionProjection: GhosttyTerminalInteractionProjection {
-        GhosttyTerminalPresentationProjector.terminalInteractionProjection(
-            phase: runtimePhase,
-            presentedSurfaceID: activeManagedSurface?.id
-        )
+    var isInputAvailable: Bool {
+        isTransportWritable && activeManagedSurface != nil
     }
 
     var terminalManagedSurfaceLookup: GhosttyManagedSurfaceLookup {
@@ -290,45 +219,4 @@ extension TmuxTerminalScreenAdapter {
         )
     }
 
-}
-
-// MARK: - Shared reason mapping
-
-extension TmuxSessionController.DetachReason {
-    var terminalDisconnectReason: TerminalDisconnectReason {
-        switch self {
-        case .serverExited(let message):
-            TerminalDisconnectReason(
-                kind: .remoteExit,
-                message: message ?? "tmux server exited"
-            )
-        case .transportClosed:
-            TerminalDisconnectReason(
-                kind: .transportIO,
-                message: "connection lost"
-            )
-        case .channelAborted:
-            TerminalDisconnectReason(
-                kind: .runtime,
-                message: "tmux control protocol error"
-            )
-        case .outOfMemory:
-            TerminalDisconnectReason(
-                kind: .runtime,
-                message: "tmux session sync failed"
-            )
-        }
-    }
-}
-
-extension TmuxSessionController.CloseReason {
-    var terminalDisconnectReason: TerminalDisconnectReason {
-        switch self {
-        case .unsupportedVersion(let version):
-            TerminalDisconnectReason(
-                kind: .runtime,
-                message: "unsupported tmux version \(version) (requires 3.2+)"
-            )
-        }
-    }
 }

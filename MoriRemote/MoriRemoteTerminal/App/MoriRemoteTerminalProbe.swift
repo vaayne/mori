@@ -27,9 +27,6 @@ public struct MoriRemoteTerminalProbe: View {
         .padding()
         .accessibilityIdentifier("ghostty-terminal-probe")
         .task { await model.start() }
-        .onChange(of: model.session?.isPresentationReady) { _, ready in
-            if ready == true { model.recordSuccess() }
-        }
         .onDisappear { Task { await model.stop() } }
     }
 }
@@ -66,7 +63,7 @@ public struct MoriRemoteTerminalProbe: View {
             try await session.start()
             timeoutTask = Task { [weak self, weak session] in
                 try? await Task.sleep(for: .seconds(5))
-                guard !Task.isCancelled, let self, !self.didRecordResult, session?.isPresentationReady != true else { return }
+                guard !Task.isCancelled, let self, !self.didRecordResult, session != nil else { return }
                 self.didTimeOut = true
                 self.status = "No live Ghostty terminal surface arrived within 5 seconds."
                 self.recordFailure("presentation-timeout")

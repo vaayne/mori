@@ -119,31 +119,6 @@ final class TmuxSessionController: @unchecked Sendable {
         let body: String
     }
 
-    enum PaneCurrentDirectoryError: LocalizedError, Equatable, Sendable {
-        case sessionUnavailable
-        case paneUnavailable
-        case commandSkipped
-        case commandFailed(String)
-        case invalidResponse
-
-        var errorDescription: String? {
-            switch self {
-            case .sessionUnavailable:
-                return "The terminal session is no longer available."
-            case .paneUnavailable:
-                return "The originating terminal pane is no longer available."
-            case .commandSkipped:
-                return "tmux did not execute the current-directory query."
-            case .commandFailed(let detail):
-                return detail.isEmpty
-                    ? "tmux could not resolve the terminal's current directory."
-                    : detail
-            case .invalidResponse:
-                return "tmux returned an invalid current directory."
-            }
-        }
-    }
-
     /// One retained reference to ControlClient's canonical pane terminal.
     /// Ownership transfers from the writer queue to MainActor exactly once.
     final class RetainedPaneTerminal: @unchecked Sendable {
@@ -187,9 +162,6 @@ final class TmuxSessionController: @unchecked Sendable {
 
     private enum OutstandingRequest {
         case action(Request, topologyRevisionAtSubmission: UInt64)
-        case paneCurrentDirectory(
-            @Sendable (Result<String, PaneCurrentDirectoryError>) -> Void
-        )
         case agentMetadata(@Sendable (AgentMetadataQueryResult) -> Void)
     }
 
@@ -282,7 +254,6 @@ final class TmuxSessionController: @unchecked Sendable {
     func transportClosed() {
         queue.async { [self] in
             guard !shuttingDown else { return }
-            failOutstandingPaneDirectoryQueries(with: .sessionUnavailable)
             failOutstandingAgentMetadataQueries()
             deferredNavigationIntent = nil
             successfulMutationRequiredAfterRevision = nil
@@ -299,7 +270,6 @@ final class TmuxSessionController: @unchecked Sendable {
     func attachmentStopped() {
         queue.async { [self] in
             guard !shuttingDown else { return }
-            failOutstandingPaneDirectoryQueries(with: .sessionUnavailable)
             failOutstandingAgentMetadataQueries()
             deferredNavigationIntent = nil
             successfulMutationRequiredAfterRevision = nil
@@ -314,10 +284,8 @@ final class TmuxSessionController: @unchecked Sendable {
         queue.async { [self] in
             shuttingDown = true
             outboundSink = nil
-            let directoryQueries = outstandingPaneDirectoryQueries()
             let agentMetadataQueries = outstandingAgentMetadataQueries()
             requestsByToken.removeAll()
-            directoryQueries.forEach { $0(.failure(.sessionUnavailable)) }
             agentMetadataQueries.forEach { $0(.init(status: .failed, body: "")) }
             deferredNavigationIntent = nil
             successfulMutationRequiredAfterRevision = nil
@@ -394,7 +362,6 @@ final class TmuxSessionController: @unchecked Sendable {
         preconditionOnWriterQueue()
         switch action.tag {
         case GHOSTTY_TMUX_ACTION_EXIT:
-            failOutstandingPaneDirectoryQueries(with: .sessionUnavailable)
             failOutstandingAgentMetadataQueries()
             deferredNavigationIntent = nil
             successfulMutationRequiredAfterRevision = nil
@@ -557,9 +524,6 @@ final class TmuxSessionController: @unchecked Sendable {
         preconditionOnWriterQueue()
         guard let outstanding = requestsByToken.removeValue(forKey: completion.token) else { return }
         switch outstanding {
-        case .paneCurrentDirectory(let completionHandler):
-            completionHandler(paneCurrentDirectoryResult(for: completion))
-            return
         case .agentMetadata(let completionHandler):
             let status: AgentMetadataQueryResult.Status = switch completion.status {
             case GHOSTTY_TMUX_COMMAND_SUCCESS: .success
@@ -731,17 +695,6 @@ final class TmuxSessionController: @unchecked Sendable {
         }
     }
 
-    func paneCurrentDirectory(for paneID: TmuxPaneID) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
-            queue.async { [self] in
-                submitPaneCurrentDirectoryQueryOnWriter(
-                    paneID: paneID,
-                    completion: { continuation.resume(with: $0) }
-                )
-            }
-        }
-    }
-
     private func submitNavigation(_ intent: NavigationIntent) {
         preconditionOnWriterQueue()
         guard !navigationAdmissionBlocked else {
@@ -907,36 +860,6 @@ final class TmuxSessionController: @unchecked Sendable {
             topologyRevisionAtSubmission: topologyRevision
         )
         return true
-    }
-
-    private func submitPaneCurrentDirectoryQueryOnWriter(
-        paneID: TmuxPaneID,
-        completion: @escaping @Sendable (
-            Result<String, PaneCurrentDirectoryError>
-        ) -> Void
-    ) {
-        preconditionOnWriterQueue()
-        guard let client, !shuttingDown else {
-            completion(.failure(.sessionUnavailable))
-            return
-        }
-        guard retainedPaneIDs.contains(paneID) else {
-            completion(.failure(.paneUnavailable))
-            return
-        }
-
-        let command = "display-message -p -t %\(paneID.rawValue) '#{pane_current_path}'"
-        let (result, token) = enqueueCommandTokenOnWriter(command, client: client)
-        guard result == GHOSTTY_TMUX_RESULT_OK else {
-            completion(.failure(.commandFailed(String(describing: result))))
-            if result == GHOSTTY_TMUX_RESULT_CLIENT_FAILED
-                || result == GHOSTTY_TMUX_RESULT_CLOSED {
-                handleClientFailure(result)
-            }
-            return
-        }
-        requestsByToken[token] = .paneCurrentDirectory(completion)
-        _ = drainOutbound()
     }
 
     private func enqueueCommandTokenOnWriter(
@@ -1150,7 +1073,6 @@ final class TmuxSessionController: @unchecked Sendable {
     private func handleClientFailure(_ result: ghostty_tmux_result_e) {
         preconditionOnWriterQueue()
         guard !shuttingDown else { return }
-        failOutstandingPaneDirectoryQueries(with: .sessionUnavailable)
         failOutstandingAgentMetadataQueries()
         deferredNavigationIntent = nil
         successfulMutationRequiredAfterRevision = nil
@@ -1177,51 +1099,6 @@ final class TmuxSessionController: @unchecked Sendable {
 
     private func reportRequestFailure(_ request: Request) {
         DispatchQueue.main.async { self.callbacks.onRequestFailed(request) }
-    }
-
-    private func paneCurrentDirectoryResult(
-        for completion: ghostty_tmux_command_completion_s
-    ) -> Result<String, PaneCurrentDirectoryError> {
-        switch completion.status {
-        case GHOSTTY_TMUX_COMMAND_SUCCESS:
-            let path = decodeTmuxString(completion.body)
-                .trimmingCharacters(in: .newlines)
-            guard path.hasPrefix("/"),
-                  !path.contains("\0"),
-                  !path.contains("\n"),
-                  !path.contains("\r")
-            else { return .failure(.invalidResponse) }
-            return .success(path)
-        case GHOSTTY_TMUX_COMMAND_SKIPPED:
-            return .failure(.commandSkipped)
-        case GHOSTTY_TMUX_COMMAND_ERROR_BLOCK:
-            let detail = decodeTmuxString(completion.body)
-                .trimmingCharacters(in: .newlines)
-            return .failure(.commandFailed(detail))
-        default:
-            return .failure(.invalidResponse)
-        }
-    }
-
-    private func outstandingPaneDirectoryQueries() -> [
-        @Sendable (Result<String, PaneCurrentDirectoryError>) -> Void
-    ] {
-        requestsByToken.values.compactMap {
-            guard case .paneCurrentDirectory(let completion) = $0 else { return nil }
-            return completion
-        }
-    }
-
-    private func failOutstandingPaneDirectoryQueries(
-        with error: PaneCurrentDirectoryError
-    ) {
-        preconditionOnWriterQueue()
-        let completions = outstandingPaneDirectoryQueries()
-        requestsByToken = requestsByToken.filter {
-            guard case .paneCurrentDirectory = $0.value else { return true }
-            return false
-        }
-        completions.forEach { $0(.failure(error)) }
     }
 
     private func outstandingAgentMetadataQueries() -> [@Sendable (AgentMetadataQueryResult) -> Void] {

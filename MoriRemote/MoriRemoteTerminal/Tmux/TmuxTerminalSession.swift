@@ -10,11 +10,8 @@ final class TmuxTerminalSession: ObservableObject {
     @Published private(set) var topology: TmuxSessionController.TopologySnapshot?
     @Published private(set) var paneSurface: TmuxPaneSurface?
     @Published private(set) var livePaneIDs: Set<TmuxPaneID> = []
-    @Published private(set) var lastFailedRequest: TmuxSessionController.Request?
-    @Published private(set) var transportFailure: TerminalDisconnectReason?
     var onStateChange: (@MainActor (TmuxSessionController.SessionState) -> Void)?
     var onTopologyChange: (@MainActor (TmuxSessionController.TopologySnapshot) -> Void)?
-    var onPresentationChange: (@MainActor (Bool) -> Void)?
 
     private let app: ghostty_app_t
     private(set) var controller: TmuxSessionController!
@@ -106,7 +103,6 @@ final class TmuxTerminalSession: ObservableObject {
         guard !isShutDown, !didStartLink else { return }
         didStartLink = true
         linkIsActive = true
-        transportFailure = nil
         let link = self.link
         do {
             try await link.start()
@@ -116,11 +112,10 @@ final class TmuxTerminalSession: ObservableObject {
         }
     }
 
-    private func connectFailed(link failed: TmuxSessionLink, error: any Error) async {
+    private func connectFailed(link failed: TmuxSessionLink, error _: any Error) async {
         await failed.stop()
         guard !isShutDown, link === failed, linkIsActive else { return }
         linkIsActive = false
-        transportFailure = GhosttyTerminalDisconnectReasonClassifier.transportStartFailure(error)
         state = .detached(nil)
     }
 
@@ -133,18 +128,6 @@ final class TmuxTerminalSession: ObservableObject {
 
     func controlChannelIsActive() async -> Bool {
         await link.controlChannelIsActive() ?? false
-    }
-
-    func invalidateInactiveTransportOnForeground(
-        willInvalidate: (TerminalDisconnectReason) -> Void
-    ) async -> TerminalDisconnectReason? {
-        guard linkIsActive else { return nil }
-        guard let isActive = await link.controlChannelIsActive(), !isActive else { return nil }
-        guard linkIsActive, !isShutDown else { return nil }
-        let reason = GhosttyTerminalDisconnectReasonClassifier.foregroundMissingHost()
-        willInvalidate(reason)
-        await link.invalidateTransport()
-        return reason
     }
 
     func shutdown() async {
@@ -309,7 +292,6 @@ final class TmuxTerminalSession: ObservableObject {
     }
 
     private func handleRequestFailed(_ request: TmuxSessionController.Request) {
-        lastFailedRequest = request
         if request == .selectPane || request == .selectWindow {
             pendingPaneID = nil
                 cancelPendingPresentation()
@@ -458,7 +440,6 @@ final class TmuxTerminalSession: ObservableObject {
                 return
             }
             paneSurface = surface
-            onPresentationChange?(true)
             pendingPaneID = nil
             surface.setSceneActive(isAppActive)
             surface.setPresented(true)
@@ -475,7 +456,6 @@ final class TmuxTerminalSession: ObservableObject {
         guard let surface = paneSurface else { return }
         surface.setPresented(false)
         paneSurface = nil
-        onPresentationChange?(false)
     }
 
     private func relinquishPresentationOwnership(of surface: TmuxPaneSurface) {

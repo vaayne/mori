@@ -112,12 +112,11 @@ public struct MoriRemoteTerminalImageUploader: Sendable {
 /// constructing the tmux client, so callers cannot repeat an uninitialized
 /// native harness or leak Ghostty handles into the application target.
 @MainActor
-public final class MoriRemoteTerminalSession: ObservableObject {
+public final class MoriRemoteTerminalSession {
     public let instanceID: UUID
-    @Published public private(set) var connectionState: MoriRemoteTerminalConnectionState = .connecting
-    @Published public private(set) var topology: MoriRemoteTerminalTopology?
-    @Published public private(set) var isPresentationReady = false
-    @Published public private(set) var lastError: String?
+    public private(set) var connectionState: MoriRemoteTerminalConnectionState = .connecting
+    public private(set) var topology: MoriRemoteTerminalTopology?
+    public private(set) var lastError: String?
 
     public var onConnectionStateChange: (@MainActor (MoriRemoteTerminalConnectionState) -> Void)?
     public var onTopologyChange: (@MainActor (MoriRemoteTerminalTopology) -> Void)?
@@ -152,7 +151,6 @@ public final class MoriRemoteTerminalSession: ObservableObject {
         )
         terminalSession.onStateChange = { [weak self] state in self?.receive(state) }
         terminalSession.onTopologyChange = { [weak self] snapshot in self?.receive(snapshot) }
-        terminalSession.onPresentationChange = { [weak self] ready in self?.isPresentationReady = ready }
     }
 
     public func start() async throws {
@@ -230,7 +228,7 @@ public final class MoriRemoteTerminalSession: ObservableObject {
 }
 
 public struct MoriRemoteTerminalView: View {
-    @ObservedObject private var session: MoriRemoteTerminalSession
+    private let session: MoriRemoteTerminalSession
     private let isInputSuspended: Bool
     private let imageUploader: MoriRemoteTerminalImageUploader?
     private let onShowNavigator: () -> Void

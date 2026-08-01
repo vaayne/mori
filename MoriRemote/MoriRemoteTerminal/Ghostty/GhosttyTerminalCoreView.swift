@@ -39,10 +39,9 @@ struct GhosttyTerminalCoreView: View {
     }
 
     var body: some View {
-        let projection = screen.terminalScreenPresentationProjection
-        let interaction = projection.interaction
+        let viewportPresentation = screen.terminalViewportPresentationProjection
         let isInputAvailable = GhosttyTerminalInputAvailabilityProjection(
-            isTerminalReady: interaction.isInputAvailable,
+            isTerminalReady: screen.isInputAvailable,
             isSuspended: isInputSuspended || isImageAttachmentPresented
         ).isInputAvailable
         ZStack(alignment: .bottom) {
@@ -52,7 +51,7 @@ struct GhosttyTerminalCoreView: View {
                 let effectiveSize = compositionState.viewportCoordinator.effectiveSize(liveSize: liveSize)
                 GhosttySingleViewportView(
                     surfaceLookup: screen.terminalManagedSurfaceLookup,
-                    projection: projection.viewport,
+                    projection: viewportPresentation,
                     terminalTheme: .ghosttyDefault,
                     trackpadDriver: trackpadDriver,
                     onSurfaceTap: { _ in activateTerminalInput() },
@@ -278,7 +277,7 @@ struct GhosttyTerminalCoreView: View {
 
     private var isTerminalInputAvailable: Bool {
         GhosttyTerminalInputAvailabilityProjection(
-            isTerminalReady: screen.terminalInteractionProjection.isInputAvailable,
+            isTerminalReady: screen.isInputAvailable,
             isSuspended: isTerminalInputSuspended
         ).isInputAvailable
     }
