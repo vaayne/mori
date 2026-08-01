@@ -97,7 +97,15 @@ launch_and_capture() {
 }
 
 launch_and_capture library
-launch_and_capture ghostty-terminal --ghostty-terminal-probe
+if [[ "$configuration" == "Debug" ]]; then
+    launch_and_capture ghostty-terminal --ghostty-terminal-probe
+    screenshots="$output_dir/library.png, $output_dir/ghostty-terminal.png"
+else
+    # The deterministic transport is intentionally absent from production.
+    # Release smoke proves the signed app launches; real-host acceptance owns
+    # terminal interaction coverage.
+    screenshots="$output_dir/library.png"
+fi
 
 echo "✅ MoriRemote simulator smoke passed on $device"
-echo "   Screenshots: $output_dir/library.png, $output_dir/ghostty-terminal.png"
+echo "   Screenshots: $screenshots"
