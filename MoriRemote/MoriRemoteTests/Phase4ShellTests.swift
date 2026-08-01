@@ -1,23 +1,12 @@
 import Foundation
+import Observation
 import Security
 import Testing
+import MoriRemoteTerminal
 @testable import MoriRemote
 
 @Suite("Phase 4 app shell contracts") struct Phase4ShellTests {
-    @Test("input-only copy-mode cancellation is ordered but never exposed as browsing")
-    func inputModePolicy() {
-        #expect(TmuxClientCommandPolicy.isAllowed(TmuxClientCommandPolicy.cancelStaleInputMode))
-        #expect(!TmuxClientCommandPolicy.isAllowed("copy-mode -t %1"))
-        #expect(!TmuxClientCommandPolicy.isAllowed("resize-pane -Z -t %1"))
-        #expect(!TmuxClientCommandPolicy.isAllowed("refresh-client -C 80x24"))
-    }
 
-    @Test("shared mutations are explicit and bounded")
-    func sharedMutations() {
-        for mutation in [TmuxClientCommandPolicy.SharedMutation.splitHorizontal, .splitVertical, .newWindow, .closePane] {
-            #expect(TmuxClientCommandPolicy.isAllowed(TmuxClientCommandPolicy.shared(mutation)))
-        }
-    }
 
     @Test("reconnect policy retries only a transport loss once")
     func reconnectPolicy() {
@@ -28,34 +17,98 @@ import Testing
         #expect(!policy.mayReconnect(status: .connecting, attempts: 0))
     }
 
-    @Test("workspace draft owns a distinct record and rejects unsafe sessions")
-    func workspaceDraftValidation() throws {
-        let serverID = UUID()
-        var draft = WorkspaceDraft(serverID: serverID)
-        draft.name = "Logs"
-        draft.tmuxSession = "logs"
-        let workspace = try draft.record()
-        #expect(workspace.serverID == serverID)
-        #expect(workspace.id != serverID)
-        draft.tmuxSession = "bad\nname"
-        #expect(throws: SavedModelValidationError.invalidTmuxSession) { try draft.record() }
+    @Test("runtime state changes invalidate direct observers")
+    @MainActor
+    func runtimeObservation() async throws {
+        let workspace = try SavedWorkspace(
+            serverID: UUID(),
+            name: "main",
+            tmuxSession: "main"
+        ).validated()
+        let bytes = AsyncThrowingStream<Data, Error> { $0.finish() }
+        let runtime = try ActiveWorkspaceRuntime(
+            workspace: workspace,
+            settings: .default,
+            transport: .init(
+                receivedBytes: bytes,
+                start: {},
+                send: { _ in },
+                close: { _ in },
+                isActive: { false }
+            )
+        )
+        let observation = ObservationFlag()
+        withObservationTracking {
+            _ = runtime.status
+        } onChange: {
+            observation.markChanged()
+        }
+
+        await runtime.stop()
+
+        #expect(observation.didChange)
     }
 
-    @Test("profile draft keeps server identity and rejects unsafe sessions")
+    @Test("new profile draft saves only the server and identity")
     func profileDraftValidation() throws {
-        var draft = ServerWorkspaceDraft()
+        var draft = ServerProfileDraft()
         draft.serverName = "Build"
         draft.host = "build.example"
         draft.port = "22"
         draft.username = "mori"
-        draft.workspaceName = "Build"
-        draft.tmuxSession = "build"
         let records = try draft.records()
-        #expect(records.0.id == records.1?.serverID)
-        #expect(records.0.identityID == records.2.id)
-        #expect(records.2.serverID == records.0.id)
-        draft.tmuxSession = "bad\nname"
-        #expect(throws: SavedModelValidationError.invalidTmuxSession) { try draft.records() }
+        #expect(records.0.identityID == records.1.id)
+        #expect(records.1.serverID == records.0.id)
+    }
+
+    @Test("tmux discovery lists source sessions and hides MoriRemote shadows")
+    func tmuxSessionDiscoveryProjection() throws {
+        let shadowID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
+        let output = "zeta\nmain\nmain--mori-remote-\(shadowID.uuidString.lowercased())\nalpha\nmain\n"
+        #expect(TmuxSessionList.parse(output).names == ["alpha", "main", "zeta"])
+        #expect(try TmuxCommandBuilder.listSessions(executable: "tmux").contains("'list-sessions' '-F' '#{session_name}'"))
+    }
+
+    @Test("discovered sessions reuse saved identities and add only missing sessions")
+    func synchronizeDiscoveredSessions() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let storage = MoriRemoteStorage(root: root)
+        let library = RemoteLibrary(storage: storage, migrator: LegacyServerMigrator(storage: storage, legacyServersURL: root.appendingPathComponent("legacy.json")))
+        let serverID = UUID(), workspaceID = UUID()
+        let server = SavedServer(id: serverID, name: "Build", host: "build.example", username: "mori", identityID: serverID)
+        let identity = SSHIdentity(id: serverID, serverID: serverID, kind: .password)
+        let main = SavedWorkspace(id: workspaceID, serverID: serverID, name: "Main", tmuxSession: "main")
+        _ = try await library.save(server: server, identity: identity, credential: nil)
+        _ = try storage.workspaces.insertIfAbsent(main)
+
+        let first = try await library.synchronizeDiscoveredSessions(serverID: serverID, names: ["main", "ops"])
+        #expect(first.workspaces.first(where: { $0.tmuxSession == "main" })?.id == workspaceID)
+        #expect(Set(first.workspaces.map(\.tmuxSession)) == ["main", "ops"])
+        let second = try await library.synchronizeDiscoveredSessions(serverID: serverID, names: ["main", "ops"])
+        #expect(second.workspaces.count == 2)
+    }
+
+    @Test("navigator filters sessions, windows, and panes within their scopes")
+    func navigatorFiltering() {
+        let serverID = UUID()
+        let sessions = [
+            SavedWorkspace(serverID: serverID, name: "Main", tmuxSession: "cs/main"),
+            SavedWorkspace(serverID: serverID, name: "Backup", tmuxSession: "cs/backup-v2"),
+        ]
+        #expect(RemoteNavigatorProjection.sessions(sessions, matching: "BACKUP").map(\.tmuxSession) == ["cs/backup-v2"])
+
+        let windows = [
+            MoriRemoteTerminalWindow(id: 1, title: "editor", active: true, activePaneID: 10),
+            MoriRemoteTerminalWindow(id: 2, title: "deploy", active: false, activePaneID: 20),
+        ]
+        let panes = [
+            MoriRemoteTerminalPane(id: 10, windowID: 1, columns: 120, rows: 40),
+            MoriRemoteTerminalPane(id: 20, windowID: 2, columns: 80, rows: 24),
+        ]
+        #expect(RemoteNavigatorProjection.windows(windows, matching: "DEPLOY").map(\.id) == [2])
+        #expect(RemoteNavigatorProjection.panes(panes, windows: windows, matching: "editor").map(\.id) == [10])
+        #expect(RemoteNavigatorProjection.panes(panes, windows: windows, matching: "20").map(\.id) == [20])
     }
 
     @Test("connection attempt admission is synchronous and stale tokens cannot finish")
@@ -74,19 +127,19 @@ import Testing
         #expect(!attempts.isCurrent(replacement, for: workspace))
     }
 
-    @Test("profile edits preserve the selected workspace identity and recency")
-    func profileDraftPreservesWorkspace() throws {
-        let serverID = UUID(), workspaceID = UUID(), identityID = UUID()
+    @Test("profile drafts preserve server identity and recency")
+    func profileDraftPreservesServer() throws {
+        let serverID = UUID(), identityID = UUID()
         let date = Date(timeIntervalSince1970: 123)
         let server = SavedServer(id: serverID, name: "Build", host: "build.example", username: "mori", identityID: identityID, lastConnectedAt: date)
-        let workspace = SavedWorkspace(id: workspaceID, serverID: serverID, name: "Build", tmuxSession: "build", lastConnectedAt: date)
-        let draft = ServerWorkspaceDraft(server: server, workspace: workspace, identity: SSHIdentity(id: identityID, serverID: serverID, kind: .password))
+        let draft = ServerProfileDraft(
+            server: server,
+            identity: SSHIdentity(id: identityID, serverID: serverID, kind: .password)
+        )
         let records = try draft.records(existingIdentityID: identityID)
-        #expect(records.1?.id == workspaceID)
+        #expect(records.0.id == serverID)
         #expect(records.0.lastConnectedAt == date)
-        #expect(records.1?.lastConnectedAt == date)
-        let serverOnly = ServerWorkspaceDraft(server: server, identity: SSHIdentity(id: identityID, serverID: serverID, kind: .password))
-        #expect(try serverOnly.records(existingIdentityID: identityID).1 == nil)
+        #expect(records.1.id == identityID)
     }
 
     @Test("profile persistence preserves recency and never inserts a server-edit workspace")
@@ -100,17 +153,13 @@ import Testing
         let originalServer = SavedServer(id: serverID, name: "Build", host: "build.example", username: "mori", identityID: identityID, lastConnectedAt: date)
         let originalWorkspace = SavedWorkspace(id: workspaceID, serverID: serverID, name: "Build", tmuxSession: "build", lastConnectedAt: date)
         let identity = SSHIdentity(id: identityID, serverID: serverID, kind: .password)
-        _ = try await library.save(server: originalServer, workspace: originalWorkspace, identity: identity, credential: nil)
+        _ = try await library.save(server: originalServer, identity: identity, credential: nil)
+        _ = try storage.workspaces.insertIfAbsent(originalWorkspace)
         let editedServer = SavedServer(id: serverID, name: "Renamed", host: "build.example", username: "mori", identityID: identityID)
-        let editedWorkspace = SavedWorkspace(id: workspaceID, serverID: serverID, name: "Renamed", tmuxSession: "build")
-        let snapshot = try await library.save(server: editedServer, workspace: editedWorkspace, identity: identity, credential: nil)
+        let snapshot = try await library.save(server: editedServer, identity: identity, credential: nil)
         #expect(snapshot.servers.first?.lastConnectedAt == date)
-        #expect(snapshot.workspaces == [SavedWorkspace(id: workspaceID, serverID: serverID, name: "Renamed", tmuxSession: "build", lastConnectedAt: date)])
-        _ = try await library.save(server: editedServer, workspace: nil, identity: identity, credential: nil)
-        let workspaceOnlyEdit = SavedWorkspace(id: workspaceID, serverID: serverID, name: "Workspace only", tmuxSession: "build")
-        let workspaceSnapshot = try await library.save(workspace: workspaceOnlyEdit)
-        #expect(workspaceSnapshot.workspaces == [SavedWorkspace(id: workspaceID, serverID: serverID, name: "Workspace only", tmuxSession: "build", lastConnectedAt: date)])
-        #expect((try await library.reload()).workspaces.count == 1)
+        #expect(snapshot.workspaces == [originalWorkspace])
+        #expect((try await library.reload()).workspaces == [originalWorkspace])
     }
 
     @Test("stale SSH trust challenges become localized errors rather than disappearing")
@@ -167,7 +216,8 @@ import Testing
         let workspace = SavedWorkspace(id: UUID(), serverID: serverID, name: "Build", tmuxSession: "build")
         let privateKey = SSHPrivateKeyInspector.generateEd25519(comment: "audit").privateKeyPEM
         let passphrase = "phase6-passphrase"
-        _ = try await library.save(server: server, workspace: workspace, identity: identity, credential: .privateKey(.init(privateKeyPEM: privateKey, passphrase: passphrase)))
+        _ = try await library.save(server: server, identity: identity, credential: .privateKey(.init(privateKeyPEM: privateKey, passphrase: passphrase)))
+        _ = try storage.workspaces.insertIfAbsent(workspace)
         let persisted = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "json" }
             .reduce(into: "") { $0 += (try? String(contentsOf: $1, encoding: .utf8)) ?? "" }
@@ -176,16 +226,15 @@ import Testing
         _ = try await library.delete(serverID: serverID)
     }
 
-    @Test("terminal host replacement only reuses the same surface identity")
-    func terminalHostAttachmentPolicy() {
-        final class Surface {}
-        let first = Surface(), second = Surface()
-        let firstID = ObjectIdentifier(first)
-        #expect(!GhosttyTerminalHostAttachmentPolicy.needsReplacement(current: firstID, next: firstID))
-        #expect(GhosttyTerminalHostAttachmentPolicy.needsReplacement(current: firstID, next: ObjectIdentifier(second)))
-        #expect(GhosttyTerminalHostAttachmentPolicy.ownsPaneView(superviewIsHostScroll: true))
-        #expect(!GhosttyTerminalHostAttachmentPolicy.ownsPaneView(superviewIsHostScroll: false))
-    }
+
+}
+
+private final class ObservationFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var changed = false
+
+    var didChange: Bool { lock.withLock { changed } }
+    func markChanged() { lock.withLock { changed = true } }
 }
 
 private final class MemoryProfilePasswords: CredentialStoring, @unchecked Sendable {

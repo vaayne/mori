@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install and prove both the library and deterministic Ghostty paths stay alive.
+# Install and prove both the library and deterministic terminal-facade paths stay alive.
 # simctl launch returning a PID is intentionally not accepted as success.
 set -euo pipefail
 
@@ -66,7 +66,7 @@ wait_for_probe_result() {
     while ((SECONDS < deadline)); do
         logs="$(probe_logs "$pid")"
         if grep -Fq 'MORI_GHOSTTY_PROBE_RESULT success=false' <<<"$logs"; then
-            echo "Ghostty probe reported native rendering failure:" >&2
+            echo "Ghostty terminal-facade probe reported startup failure:" >&2
             printf '%s\n' "$logs" >&2
             return 1
         fi
@@ -75,7 +75,7 @@ wait_for_probe_result() {
         fi
         sleep 1
     done
-    echo "Ghostty probe did not report successful native rendering within 30 seconds:" >&2
+    echo "Ghostty terminal-facade probe did not report successful startup within 30 seconds:" >&2
     probe_logs "$pid" >&2 || true
     return 1
 }
@@ -97,7 +97,15 @@ launch_and_capture() {
 }
 
 launch_and_capture library
-launch_and_capture ghostty-terminal --ghostty-terminal-probe
+if [[ "$configuration" == "Debug" ]]; then
+    launch_and_capture ghostty-terminal --ghostty-terminal-probe
+    screenshots="$output_dir/library.png, $output_dir/ghostty-terminal.png"
+else
+    # The deterministic transport is intentionally absent from production.
+    # Release smoke proves the signed app launches; real-host acceptance owns
+    # terminal interaction coverage.
+    screenshots="$output_dir/library.png"
+fi
 
 echo "✅ MoriRemote simulator smoke passed on $device"
-echo "   Screenshots: $output_dir/library.png, $output_dir/ghostty-terminal.png"
+echo "   Screenshots: $screenshots"

@@ -50,6 +50,17 @@
                ReferencedContainer = "container:MoriRemote.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "CC5FEE20D68E195A5B4E8935"
+               BuildableName = "MoriRemoteTerminalTests.xctest"
+               BlueprintName = "MoriRemoteTerminalTests"
+               ReferencedContainer = "container:MoriRemote.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

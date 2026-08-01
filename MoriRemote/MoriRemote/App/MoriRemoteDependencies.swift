@@ -6,14 +6,17 @@ import Foundation
 @MainActor
 final class MoriRemoteDependencies {
     let library: RemoteLibrary
-    let trustedHosts: TrustedHostStore
-    let roots = SSHRootPool()
-    private var ghosttyRuntime: GhosttyKitRuntime?
+    let sshRoots: SSHRootAccess
 
     init(storage: MoriRemoteStorage, legacyServersURL: URL) {
-        trustedHosts = storage.trustedHosts
         let migrator = LegacyServerMigrator(storage: storage, legacyServersURL: legacyServersURL)
-        library = RemoteLibrary(storage: storage, migrator: migrator)
+        let library = RemoteLibrary(storage: storage, migrator: migrator)
+        self.library = library
+        sshRoots = SSHRootAccess(
+            library: library,
+            pool: SSHRootPool(),
+            trustedHosts: storage.trustedHosts
+        )
     }
 
     static func live() -> MoriRemoteDependencies {
@@ -26,12 +29,6 @@ final class MoriRemoteDependencies {
         }
     }
 
-    func terminalRuntime() throws -> GhosttyKitRuntime {
-        if let ghosttyRuntime { return ghosttyRuntime }
-        let runtime = try GhosttyKitRuntime()
-        ghosttyRuntime = runtime
-        return runtime
-    }
 }
 
 struct RemoteLibrarySnapshot: Sendable {
@@ -74,24 +71,16 @@ actor RemoteLibrary {
 
     func reload() throws -> RemoteLibrarySnapshot { try snapshot(migration: nil) }
 
-    func save(server: SavedServer, workspace: SavedWorkspace?, identity: SSHIdentity, credential: ProfileCredential?) throws -> RemoteLibrarySnapshot {
+    func save(server: SavedServer, identity: SSHIdentity, credential: ProfileCredential?) throws -> RemoteLibrarySnapshot {
         var server = try server.validated()
-        var workspace = try workspace?.validated()
         _ = try identity.validated()
-        guard (workspace == nil || workspace?.serverID == server.id), identity.serverID == server.id, identity.id == server.identityID else {
+        guard identity.serverID == server.id, identity.id == server.identityID else {
             throw PersistenceError.corruptStore("profile references")
         }
         let existingServers = try storage.servers.all()
-        let existingWorkspaces = try storage.workspaces.all()
         // Drafts never own recency. Preserve it through profile edits so an edit
-        // cannot reorder a server/workspace or revive a different workspace.
+        // cannot reorder a server or its discovered sessions.
         if let existing = existingServers.first(where: { $0.id == server.id }) { server.lastConnectedAt = existing.lastConnectedAt }
-        if let id = workspace?.id, let existing = existingWorkspaces.first(where: { $0.id == id }) {
-            // A profile edit may update only its own selected workspace; it may
-            // never repurpose another server's workspace record.
-            guard existing.serverID == server.id else { throw PersistenceError.corruptStore("workspace ownership") }
-            workspace?.lastConnectedAt = existing.lastConnectedAt
-        }
         let existingIdentity = try storage.identities.all().first { $0.id == identity.id }
         if let existingIdentity, existingIdentity.kind != identity.kind, credential == nil {
             // A changed identity type must never silently reinterpret a secret.
@@ -110,13 +99,6 @@ actor RemoteLibrary {
             try storage.servers.replace(server)
         } else {
             _ = try storage.servers.insertIfAbsent(server)
-        }
-        if let workspace {
-            if existingWorkspaces.contains(where: { $0.id == workspace.id }) {
-                try storage.workspaces.replace(workspace)
-            } else {
-                _ = try storage.workspaces.insertIfAbsent(workspace)
-            }
         }
         if try storage.identities.all().contains(where: { $0.id == identity.id }) {
             try storage.identities.replace(identity)
@@ -151,28 +133,6 @@ actor RemoteLibrary {
         return try snapshot(migration: nil)
     }
 
-    func save(workspace: SavedWorkspace) throws -> RemoteLibrarySnapshot {
-        var workspace = try workspace.validated()
-        guard try storage.servers.all().contains(where: { $0.id == workspace.serverID }) else {
-            throw PersistenceError.notFound(workspace.serverID)
-        }
-        let existingWorkspaces = try storage.workspaces.all()
-        if let existing = existingWorkspaces.first(where: { $0.id == workspace.id }) {
-            guard existing.serverID == workspace.serverID else { throw PersistenceError.corruptStore("workspace ownership") }
-            // User edits name/session, never their recency ordering.
-            workspace.lastConnectedAt = existing.lastConnectedAt
-            try storage.workspaces.replace(workspace)
-        } else {
-            _ = try storage.workspaces.insertIfAbsent(workspace)
-        }
-        return try snapshot(migration: nil)
-    }
-
-    func delete(workspaceID: UUID) throws -> RemoteLibrarySnapshot {
-        try storage.workspaces.remove(workspaceID)
-        return try snapshot(migration: nil)
-    }
-
     func delete(serverID: UUID) throws -> RemoteLibrarySnapshot {
         let workspaces = try storage.workspaces.all().filter { $0.serverID == serverID }
         let identities = try storage.identities.all().filter { $0.serverID == serverID }
@@ -194,6 +154,29 @@ actor RemoteLibrary {
 
     func trust(_ challenge: SSHHostTrustChallenge, replaceChanged: Bool) throws {
         try SSHHostTrustResolver(store: storage.trustedHosts).explicitlyTrust(challenge, replaceChanged: replaceChanged)
+    }
+
+    func synchronizeDiscoveredSessions(serverID: UUID, names: [String]) throws -> RemoteLibrarySnapshot {
+        guard try storage.servers.all().contains(where: { $0.id == serverID }) else {
+            throw PersistenceError.notFound(serverID)
+        }
+        var existingNames = Set(try storage.workspaces.all().filter { $0.serverID == serverID }.map(\.tmuxSession))
+        for name in names where !existingNames.contains(name) {
+            let workspace = try SavedWorkspace(serverID: serverID, name: name, tmuxSession: name).validated()
+            _ = try storage.workspaces.insertIfAbsent(workspace)
+            existingNames.insert(name)
+        }
+        return try snapshot(migration: nil)
+    }
+
+    func discoveryMaterial(for serverID: UUID) throws -> (SavedServer, SSHIdentity, RemoteSettings) {
+        guard let server = try storage.servers.all().first(where: { $0.id == serverID }) else {
+            throw PersistenceError.notFound(serverID)
+        }
+        guard let identity = try storage.identities.all().first(where: { $0.id == server.identityID }) else {
+            throw SSHAuthResolverError.missingIdentity(server.identityID)
+        }
+        return (server, identity, try storage.settings.load(or: .default))
     }
 
     func connectionMaterial(for workspaceID: UUID) throws -> (SavedWorkspace, SavedServer, SSHIdentity, RemoteSettings) {

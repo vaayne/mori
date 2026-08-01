@@ -1,65 +1,37 @@
 import Foundation
+import MoriRemoteTerminal
 import Observation
 import SwiftUI
 
-struct WorkspaceDraft: Identifiable, Sendable {
+struct ServerProfileDraft: Identifiable, Sendable {
     let id: UUID
-    let serverID: UUID
-    var name: String
-    var tmuxSession: String
-
-    init(serverID: UUID, workspace: SavedWorkspace? = nil) {
-        id = workspace?.id ?? UUID()
-        self.serverID = serverID
-        name = workspace?.name ?? "main"
-        tmuxSession = workspace?.tmuxSession ?? "main"
-    }
-
-    func record() throws -> SavedWorkspace {
-        try SavedWorkspace(id: id, serverID: serverID, name: name, tmuxSession: tmuxSession).validated()
-    }
-}
-
-struct ServerWorkspaceDraft: Identifiable, Sendable {
-    let id: UUID
-    /// Nil means an existing server edit: profile edits must not invent or
-    /// overwrite an arbitrary workspace belonging to that server.
-    let workspaceID: UUID?
     let serverLastConnectedAt: Date?
-    let workspaceLastConnectedAt: Date?
     var serverName: String
     var host: String
     var port: String
     var username: String
-    var workspaceName: String
-    var tmuxSession: String
     var identityKind: SSHIdentityKind
     var password: String
     var privateKey: String
     var passphrase: String
 
-    init(server: SavedServer? = nil, workspace: SavedWorkspace? = nil, identity: SSHIdentity? = nil) {
+    init(server: SavedServer? = nil, identity: SSHIdentity? = nil) {
         id = server?.id ?? UUID()
-        workspaceID = workspace?.id ?? (server == nil ? UUID() : nil)
         serverLastConnectedAt = server?.lastConnectedAt
-        workspaceLastConnectedAt = workspace?.lastConnectedAt
         serverName = server?.name ?? ""
         host = server?.host ?? ""
         port = String(server?.port ?? 22)
         username = server?.username ?? ""
-        workspaceName = workspace?.name ?? "main"
-        tmuxSession = workspace?.tmuxSession ?? "main"
         identityKind = identity?.kind ?? .password
         password = ""
         privateKey = ""
         passphrase = ""
     }
 
-    func records(existingIdentityID: UUID? = nil) throws -> (SavedServer, SavedWorkspace?, SSHIdentity, ProfileCredential?) {
+    func records(existingIdentityID: UUID? = nil) throws -> (SavedServer, SSHIdentity, ProfileCredential?) {
         guard let port = Int(port) else { throw SavedModelValidationError.invalidPort }
         let identityID = existingIdentityID ?? id
         let server = SavedServer(id: id, name: serverName, host: host, port: port, username: username, identityID: identityID, lastConnectedAt: serverLastConnectedAt)
-        let workspace = try workspaceID.map { try SavedWorkspace(id: $0, serverID: id, name: workspaceName, tmuxSession: tmuxSession, lastConnectedAt: workspaceLastConnectedAt).validated() }
         let identity = SSHIdentity(id: identityID, serverID: id, kind: identityKind, label: identityKind == .password ? "password" : "private key")
         let credential: ProfileCredential?
         switch identityKind {
@@ -67,21 +39,52 @@ struct ServerWorkspaceDraft: Identifiable, Sendable {
         case .privateKey:
             credential = privateKey.isEmpty ? nil : .privateKey(.init(privateKeyPEM: privateKey, passphrase: passphrase.isEmpty ? nil : passphrase))
         }
-        return (try server.validated(), workspace, try identity.validated(), credential)
+        return (try server.validated(), try identity.validated(), credential)
     }
+}
+
+enum RemoteNavigatorProjection {
+    static func sessions(_ values: [SavedWorkspace], matching query: String) -> [SavedWorkspace] {
+        values.filter { query.isEmpty || $0.tmuxSession.localizedCaseInsensitiveContains(query) }
+    }
+
+    static func windows(_ values: [MoriRemoteTerminalWindow], matching query: String) -> [MoriRemoteTerminalWindow] {
+        values.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) || String($0.id).contains(query) }
+    }
+
+    static func panes(
+        _ values: [MoriRemoteTerminalPane],
+        windows: [MoriRemoteTerminalWindow],
+        matching query: String
+    ) -> [MoriRemoteTerminalPane] {
+        values.filter { pane in
+            let windowTitle = windows.first(where: { $0.id == pane.windowID })?.title ?? ""
+            return query.isEmpty || String(pane.id).contains(query) || windowTitle.localizedCaseInsensitiveContains(query)
+        }
+    }
+}
+
+enum ServerSessionDiscoveryStatus: Equatable, Sendable {
+    case idle
+    case loading
+    case loaded
+    case failed(String)
+}
+
+enum PendingSSHTrustAction: Equatable, Sendable {
+    case connect(UUID)
+    case discover(UUID)
 }
 
 enum WorkspaceRuntimeStatus: Equatable {
     case connecting
     case ready
-    case reconnecting
     case disconnected(String)
 
     var title: String {
         switch self {
         case .connecting: String(localized: "Connecting…")
         case .ready: String(localized: "Connected")
-        case .reconnecting: String(localized: "Reconnecting…")
         case .disconnected: String(localized: "Disconnected")
         }
     }
@@ -106,6 +109,8 @@ struct WorkspaceMemoryPressurePolicy: Sendable {
     }
 }
 
+/// Adaptive chrome may change around a workspace, but never the retained
+/// terminal-session identity. A new runtime is the only valid replacement.
 /// Main-actor admission fence for asynchronous connection attempts. A token is
 /// claimed before the first await, then invalidated by disconnect/delete/replacement.
 enum SSHTrustPresentation: Equatable {
@@ -135,88 +140,88 @@ struct WorkspaceConnectionAttemptLedger: Sendable {
     mutating func cancel(workspaceID: UUID) { tokens[workspaceID] = nil }
 }
 
-@MainActor
+@MainActor @Observable
 final class ActiveWorkspaceRuntime {
     let workspace: SavedWorkspace
     let instanceID: UUID
-    private let runtime: GhosttyTmuxRuntime
+    let session: MoriRemoteTerminalSession
     private let metadataProjector: AgentMetadataProjector
-    private let initialScrollbackLines: Int
-    private(set) var topology: TmuxSessionController.Topology?
-    var agentMetadata: [TmuxPaneID: AgentMetadata] { metadataProjector.metadata }
-    private(set) var focusedPaneID: TmuxPaneID?
+    private var metadataRevision: UInt64 = 0
+    private(set) var topology: MoriRemoteTerminalTopology?
+    var agentMetadata: [UInt64: AgentMetadata] {
+        _ = metadataRevision
+        return metadataProjector.metadata
+    }
+    var focusedPaneID: UInt64? {
+        guard let activeWindowID = topology?.activeWindowID else { return nil }
+        return topology?.windows.first(where: { $0.id == activeWindowID })?.activePaneID
+    }
     private(set) var status: WorkspaceRuntimeStatus = .connecting
     var onTransportLoss: (@MainActor (UUID) -> Void)?
-    var onChange: (@MainActor () -> Void)?
 
-    init(workspace: SavedWorkspace, settings: RemoteSettings, app: GhosttyKitRuntime, transport: any TmuxControlTransport, instanceID: UUID = UUID()) {
+    init(workspace: SavedWorkspace, settings: RemoteSettings, transport: MoriRemoteTerminalTransport, instanceID: UUID = UUID()) throws {
         self.workspace = workspace
         self.instanceID = instanceID
-        initialScrollbackLines = settings.effectiveInitialScrollbackLines
-        let runtime = GhosttyTmuxRuntime(app: app.appHandle, transport: transport, instanceID: instanceID)
-        self.runtime = runtime
-        metadataProjector = AgentMetadataProjector(instanceID: instanceID) { completion in
-            runtime.queryAgentMetadata(completion: completion)
+        session = try MoriRemoteTerminalSession(
+            transport: transport,
+            initialScrollbackLines: settings.effectiveInitialScrollbackLines,
+            instanceID: instanceID
+        )
+        metadataProjector = AgentMetadataProjector(instanceID: instanceID) { [session] in
+            let result = await session.queryAgentMetadata()
+            return .init(succeeded: result.status == .success, body: result.body)
         }
-        metadataProjector.onChange = { [weak self] in self?.onChange?() }
-        runtime.onTopology = { [weak self] topology in
+        metadataProjector.onChange = { [weak self] in self?.metadataRevision &+= 1 }
+        session.onTopologyChange = { [weak self] topology in
             guard let self else { return }
             self.topology = topology
-            if let focused = self.focusedPaneID, topology.panes.contains(where: { $0.id == focused }) {
-                // Keep client-local focus stable through topology updates.
-            } else {
-                self.focusedPaneID = topology.activePaneID
-            }
             self.status = .ready
-            self.metadataProjector.topologyDidChange(topology)
-            self.onChange?()
+            self.metadataProjector.topologyDidChange(paneIDs: topology.panes.map(\.id))
         }
-        runtime.onState = { [weak self] state in
-            guard let self else { return }
-            switch state {
-            case .ready:
-                self.status = .ready
-                // Topology normally follows, but a ready signal without it must
-                // still dismiss the connecting presentation deterministically.
-                if self.topology == nil { self.onChange?() }
-            case .detached:
-                self.status = .disconnected(String(localized: "Connection lost."))
-                self.onChange?()
-                self.onTransportLoss?(self.instanceID)
-            case .closed: self.onChange?()
-            case .attaching: self.status = .connecting; self.onChange?()
-            }
-        }
-        // Surface registration completes asynchronously after topology. Wake
-        // SwiftUI when the real renderer arrives instead of leaving a quiet pane
-        // on the placeholder until another tmux event happens.
-        runtime.onSurface = { [weak self] _ in self?.onChange?() }
-        runtime.onInputFailed = { [weak self] _ in self?.onChange?() }
+        session.onConnectionStateChange = { [weak self] state in self?.receive(state) }
+        session.setPresentationActive(false)
     }
 
-    func start() async throws { try await runtime.start(columns: 120, rows: 40, historyLineLimit: initialScrollbackLines) }
-    func stop() async { metadataProjector.stop(); await runtime.stop() }
-    func setMetadataRefreshVisible(_ visible: Bool) { metadataProjector.setVisible(visible) }
+    func start() async throws { try await session.start() }
+    func stop() async { metadataProjector.stop(); await session.stop() }
+    func setVisible(_ visible: Bool) {
+        metadataProjector.setVisible(visible)
+        session.setPresentationActive(visible)
+    }
     func foregrounded() { metadataProjector.foregrounded() }
     func confirmTransportAfterForeground() async {
-        guard !(await runtime.isActive()) else {
-            foregrounded()
+        guard await session.isControlChannelActive() else {
+            status = .disconnected(String(localized: "Connection lost."))
+            onTransportLoss?(instanceID)
             return
         }
-        status = .disconnected(String(localized: "Connection lost."))
-        onChange?()
-        onTransportLoss?(instanceID)
+        foregrounded()
     }
-    func surface() -> TmuxPaneSurface? { focusedPaneID.flatMap(runtime.surface(for:)) }
-    func metadata(for paneID: TmuxPaneID) -> AgentMetadata { agentMetadata[paneID] ?? .unknown }
+    func metadata(for paneID: UInt64) -> AgentMetadata { agentMetadata[paneID] ?? .unknown }
     var agentSummary: AgentMetadata {
         agentMetadata.values.max { lhs, rhs in lhs.state.priority < rhs.state.priority } ?? .unknown
     }
-    func selectWindow(_ id: TmuxWindowID) { runtime.selectWindow(id) }
-    func selectPane(_ id: TmuxPaneID) { focusedPaneID = id; runtime.selectPane(id); onChange?() }
-    func split(horizontal: Bool) { runtime.mutateSharedWorkspace(horizontal ? .splitHorizontal : .splitVertical) }
-    func newWindow() { runtime.mutateSharedWorkspace(.newWindow) }
-    func closePane() { runtime.mutateSharedWorkspace(.closePane) }
+    func selectWindow(_ id: UInt64) { session.selectWindow(id) }
+    func selectPane(_ id: UInt64) { session.selectPane(id) }
+    func performSharedMutation(_ mutation: MoriRemoteTerminalSharedMutation) { session.performSharedMutation(mutation) }
+
+    private func receive(_ state: MoriRemoteTerminalConnectionState) {
+        switch state {
+        case .connecting:
+            // A late syncing notification may race the topology callback. Once
+            // topology exists, the rendered terminal is authoritative and ready.
+            if topology == nil { status = .connecting }
+        case .ready:
+            status = .ready
+        case .disconnected:
+            let wasDisconnected: Bool
+            if case .disconnected = status { wasDisconnected = true } else { wasDisconnected = false }
+            status = .disconnected(String(localized: "Connection lost."))
+            // A thrown start error is already surfaced by connect(); only a
+            // post-start transport transition earns the bounded reconnect.
+            if !wasDisconnected, session.lastError == nil { onTransportLoss?(instanceID) }
+        }
+    }
 }
 
 @MainActor @Observable
@@ -236,12 +241,13 @@ final class RemoteRootModel {
     private(set) var identities: [SSHIdentity] = []
     private(set) var settings = RemoteSettings.default
     private(set) var runtimes: [UUID: ActiveWorkspaceRuntime] = [:]
+    private(set) var sessionDiscovery: [UUID: ServerSessionDiscoveryStatus] = [:]
+    private var discoveredSessionNames: [UUID: Set<String>] = [:]
     var activeWorkspaceID: UUID?
     var pendingTrust: SSHHostTrustChallenge?
     var errorMessage: String?
     var migrationReport: LegacyMigrationReport?
-    var runtimeRevision = 0
-    private var pendingTrustWorkspaceID: UUID?
+    private var pendingTrustAction: PendingSSHTrustAction?
     private(set) var isLoaded = false
     var libraryLoadError: String? { bootstrapFailure }
     var isBootstrapping: Bool { loadingTask != nil }
@@ -250,8 +256,26 @@ final class RemoteRootModel {
 
     var activeRuntime: ActiveWorkspaceRuntime? { activeWorkspaceID.flatMap { runtimes[$0] } }
     var activeWorkspaces: [SavedWorkspace] { workspaces.filter { runtimes[$0.id] != nil } }
+    func visibleWorkspaces(for serverID: UUID) -> [SavedWorkspace] {
+        let discovered = discoveredSessionNames[serverID]
+        let candidates = workspaces.filter {
+            $0.serverID == serverID && (discovered == nil || discovered?.contains($0.tmuxSession) == true)
+        }
+        return Dictionary(grouping: candidates, by: \.tmuxSession)
+            .values
+            .compactMap { duplicates in
+                duplicates.max { lhs, rhs in
+                    let lhsActive = runtimes[lhs.id] != nil
+                    let rhsActive = runtimes[rhs.id] != nil
+                    if lhsActive != rhsActive { return !lhsActive && rhsActive }
+                    return (lhs.lastConnectedAt ?? .distantPast, lhs.id.uuidString)
+                        < (rhs.lastConnectedAt ?? .distantPast, rhs.id.uuidString)
+                }
+            }
+            .sorted { $0.tmuxSession.localizedStandardCompare($1.tmuxSession) == .orderedAscending }
+    }
     func agentSummary(for workspaceID: UUID) -> AgentMetadata { runtimes[workspaceID]?.agentSummary ?? .unknown }
-    func metadata(for workspaceID: UUID, paneID: TmuxPaneID) -> AgentMetadata { runtimes[workspaceID]?.metadata(for: paneID) ?? .unknown }
+    func metadata(for workspaceID: UUID, paneID: UInt64) -> AgentMetadata { runtimes[workspaceID]?.metadata(for: paneID) ?? .unknown }
 
     func bootstrap() {
         guard !isLoaded, loadingTask == nil else { return }
@@ -268,34 +292,43 @@ final class RemoteRootModel {
         }
     }
 
-    func save(_ draft: ServerWorkspaceDraft, existingServer: SavedServer? = nil) {
+    func save(_ draft: ServerProfileDraft, existingServer: SavedServer? = nil) {
         Task {
             do {
                 let currentIdentity = existingServer.flatMap { server in identities.first { $0.id == server.identityID } }
                 let records = try draft.records(existingIdentityID: currentIdentity?.id)
-                let snapshot = try await dependencies.library.save(server: records.0, workspace: records.1, identity: records.2, credential: records.3)
+                let snapshot = try await dependencies.library.save(server: records.0, identity: records.1, credential: records.2)
                 apply(snapshot)
+                discoverSessions(serverID: records.0.id)
             } catch { errorMessage = error.localizedDescription }
         }
     }
 
-    func save(_ draft: WorkspaceDraft) {
-        Task {
+    func discoverSessions(serverID: UUID) {
+        guard sessionDiscovery[serverID] != .loading else { return }
+        sessionDiscovery[serverID] = .loading
+        Task { [weak self] in
+            guard let self else { return }
             do {
-                let snapshot = try await dependencies.library.save(workspace: draft.record())
-                apply(snapshot)
-            } catch { errorMessage = error.localizedDescription }
-        }
-    }
-
-    func delete(workspace: SavedWorkspace) {
-        connectionAttempts.cancel(workspaceID: workspace.id)
-        Task {
-            do {
-                await disconnect(workspaceID: workspace.id)
-                let snapshot = try await dependencies.library.delete(workspaceID: workspace.id)
-                apply(snapshot)
-            } catch { errorMessage = error.localizedDescription }
+                let root = try await self.dependencies.sshRoots.server(serverID)
+                let names = try await SSHTmuxSessionDiscovery(rootSource: root).load()
+                let snapshot = try await self.dependencies.library.synchronizeDiscoveredSessions(serverID: serverID, names: names)
+                self.apply(snapshot)
+                self.discoveredSessionNames[serverID] = Set(names)
+                self.sessionDiscovery[serverID] = .loaded
+            } catch let error as SSHHostTrustError {
+                switch SSHTrustPresentation.resolve(error) {
+                case let .challenge(challenge):
+                    self.errorMessage = nil
+                    self.pendingTrust = challenge
+                    self.pendingTrustAction = .discover(serverID)
+                    self.sessionDiscovery[serverID] = .idle
+                case let .error(message):
+                    self.sessionDiscovery[serverID] = .failed(message)
+                }
+            } catch {
+                self.sessionDiscovery[serverID] = .failed(error.localizedDescription)
+            }
         }
     }
 
@@ -342,28 +375,23 @@ final class RemoteRootModel {
             guard let self else { return }
             var runtime: ActiveWorkspaceRuntime?
             do {
-                let material = try await self.dependencies.library.connectionMaterial(for: workspaceID)
+                let access = try await self.dependencies.sshRoots.workspace(workspaceID)
                 guard self.attemptIsCurrent(attempt, workspaceID: workspaceID) else { return }
-                let auth = try await self.dependencies.library.resolveAuth(server: material.1, identity: material.2, settings: material.3)
-                guard self.attemptIsCurrent(attempt, workspaceID: workspaceID) else { return }
-                let endpoint = try CanonicalEndpoint(host: material.1.host, port: material.1.port)
-                let key = SSHRootPool.Key(serverID: material.1.id, endpoint: endpoint, username: material.1.username, authenticationFingerprint: auth.rootPoolFingerprint)
                 let instanceID = UUID()
                 let transport = SSHTmuxControlTransport(
-                    connector: CitadelSSHRootConnector(server: material.1, auth: auth, trust: SSHHostTrustResolver(store: self.dependencies.trustedHosts)),
-                    pool: self.dependencies.roots,
-                    poolKey: key,
-                    sourceSession: material.0.tmuxSession,
+                    rootSource: access.root,
+                    sourceSession: access.workspace.tmuxSession,
                     runtimeID: instanceID
                 )
-                let created = ActiveWorkspaceRuntime(workspace: material.0, settings: material.3, app: try self.dependencies.terminalRuntime(), transport: transport, instanceID: instanceID)
+                let created = try ActiveWorkspaceRuntime(
+                    workspace: access.workspace,
+                    settings: access.settings,
+                    transport: transport.asTerminalTransport(),
+                    instanceID: instanceID
+                )
                 runtime = created
                 guard self.attemptIsCurrent(attempt, workspaceID: workspaceID) else { await created.stop(); return }
                 created.onTransportLoss = { [weak self] id in self?.lost(workspaceID: workspaceID, instanceID: id) }
-                created.onChange = { [weak self, weak created] in
-                    guard let self, self.runtimes[workspaceID] === created else { return }
-                    self.runtimeRevision &+= 1
-                }
                 self.runtimes[workspaceID] = created
                 // An automatic reconnect must not steal focus from another
                 // healthy workspace. If the lost workspace was focused,
@@ -386,10 +414,10 @@ final class RemoteRootModel {
                 case let .challenge(challenge):
                     self.errorMessage = nil
                     self.pendingTrust = challenge
-                    self.pendingTrustWorkspaceID = workspaceID
+                    self.pendingTrustAction = .connect(workspaceID)
                 case let .error(message):
                     self.pendingTrust = nil
-                    self.pendingTrustWorkspaceID = nil
+                    self.pendingTrustAction = nil
                     self.errorMessage = message
                 }
             } catch {
@@ -403,18 +431,22 @@ final class RemoteRootModel {
 
     func dismissTrust() {
         pendingTrust = nil
-        pendingTrustWorkspaceID = nil
+        pendingTrustAction = nil
     }
 
     func confirmTrust(_ challenge: SSHHostTrustChallenge, replaceChanged: Bool) {
         Task {
             do {
                 try await dependencies.library.trust(challenge, replaceChanged: replaceChanged)
-                let workspaceID = pendingTrustWorkspaceID
+                let action = pendingTrustAction
                 pendingTrust = nil
-                pendingTrustWorkspaceID = nil
+                pendingTrustAction = nil
                 errorMessage = nil
-                if let workspaceID { connect(workspaceID: workspaceID) }
+                switch action {
+                case let .connect(workspaceID): connect(workspaceID: workspaceID)
+                case let .discover(serverID): discoverSessions(serverID: serverID)
+                case nil: break
+                }
             } catch { errorMessage = error.localizedDescription }
         }
     }
@@ -424,22 +456,26 @@ final class RemoteRootModel {
         deferredReconnects.remove(workspaceID)
         guard let runtime = runtimes.removeValue(forKey: workspaceID) else { return }
         if activeWorkspaceID == workspaceID { activeWorkspaceID = nil }
-        runtime.setMetadataRefreshVisible(false)
+        runtime.setVisible(false)
         await runtime.stop()
     }
 
     func disconnectActive() { if let activeWorkspaceID { Task { await disconnect(workspaceID: activeWorkspaceID) } } }
-    func selectWindow(_ id: TmuxWindowID) { activeRuntime?.selectWindow(id) }
-    func selectPane(_ id: TmuxPaneID) { activeRuntime?.selectPane(id) }
-    func split(horizontal: Bool) { activeRuntime?.split(horizontal: horizontal) }
-    func newWindow() { activeRuntime?.newWindow() }
-    func closePane() { activeRuntime?.closePane() }
+    func selectWindow(_ id: UInt64) { activeRuntime?.selectWindow(id) }
+    func selectPane(_ id: UInt64) { activeRuntime?.selectPane(id) }
+    func performSharedMutation(_ mutation: MoriRemoteTerminalSharedMutation) {
+        activeRuntime?.performSharedMutation(mutation)
+    }
+
+    func imageUploader(for workspaceID: UUID) -> MoriRemoteTerminalImageUploader {
+        SSHImageUploadService(sshRoots: dependencies.sshRoots).uploader(for: workspaceID)
+    }
     /// Scene activation is intentionally metadata-only: reconnect remains
     /// reserved for a real control-transport loss. Backgrounding stops the
     /// visible-runtime poll; foregrounding starts one immediate refresh.
     func scenePhaseChanged(_ phase: ScenePhase) {
         sceneIsActive = phase == .active
-        activeRuntime?.setMetadataRefreshVisible(sceneIsActive)
+        activeRuntime?.setVisible(sceneIsActive)
         guard sceneIsActive else { return }
         // A loss can occur in any live workspace while iOS suspends this scene.
         // Drain all deferred attempts before probing the focused one; otherwise
@@ -472,12 +508,12 @@ final class RemoteRootModel {
 
     private func activate(workspaceID: UUID) {
         guard activeWorkspaceID != workspaceID else {
-            runtimes[workspaceID]?.setMetadataRefreshVisible(sceneIsActive)
+            runtimes[workspaceID]?.setVisible(sceneIsActive)
             return
         }
-        if let activeWorkspaceID { runtimes[activeWorkspaceID]?.setMetadataRefreshVisible(false) }
+        if let activeWorkspaceID { runtimes[activeWorkspaceID]?.setVisible(false) }
         activeWorkspaceID = workspaceID
-        runtimes[workspaceID]?.setMetadataRefreshVisible(sceneIsActive)
+        runtimes[workspaceID]?.setVisible(sceneIsActive)
     }
 
     private func attemptIsCurrent(_ attempt: UUID, workspaceID: UUID) -> Bool {
@@ -489,7 +525,7 @@ final class RemoteRootModel {
             runtimes[workspaceID] = nil
             if activeWorkspaceID == workspaceID { activeWorkspaceID = nil }
         }
-        runtime.setMetadataRefreshVisible(false)
+        runtime.setVisible(false)
         await runtime.stop()
     }
 

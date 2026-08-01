@@ -2,16 +2,16 @@ import Foundation
 import Testing
 @testable import MoriRemote
 
-@Suite("Phase 5 agent metadata and adaptive presentation") struct Phase5AgentMetadataTests {
-    @Test("parser strictly normalizes pane options and bounds untrusted output")
+@Suite("Agent metadata facade projection") struct Phase5AgentMetadataTests {
+    @Test("parser strictly normalizes UInt64 pane IDs and bounds untrusted output")
     func parserNormalization() {
         let parser = AgentMetadataResponseParser()
         let metadata = parser.parse("%1\tworking\tclaude\n%2\tWAITING\tcodex\n%3\tdone\tpi\ninvalid\tworking\tbad\n%4\twaiting\tbad\u{0000}name\n")
-        #expect(metadata[.init(1)] == .init(state: .working, name: "claude"))
-        #expect(metadata[.init(2)] == .init(state: .unknown, name: "codex"))
-        #expect(metadata[.init(3)] == .init(state: .done, name: "pi"))
-        #expect(metadata[.init(4)] == .init(state: .waiting, name: nil))
-        #expect(metadata[.init(99)] == nil)
+        #expect(metadata[1] == .init(state: .working, name: "claude"))
+        #expect(metadata[2] == .init(state: .unknown, name: "codex"))
+        #expect(metadata[3] == .init(state: .done, name: "pi"))
+        #expect(metadata[4] == .init(state: .waiting, name: nil))
+        #expect(metadata[99] == nil)
         #expect(parser.parse(String(repeating: "x", count: AgentMetadataResponseParser.maximumResponseBytes + 1)).isEmpty)
     }
 
@@ -30,62 +30,59 @@ import Testing
 
     @Test("authoritative merge clears missing records and ignores removed panes")
     func projectionMerge() {
-        let topology = makeTopology(paneIDs: [.init(1), .init(2)])
-        let records: [TmuxPaneID: AgentMetadata] = [
-            .init(1): .init(state: .working, name: "claude"),
-            .init(9): .init(state: .done, name: "other")
+        let records: [UInt64: AgentMetadata] = [
+            1: .init(state: .working, name: "claude"),
+            9: .init(state: .done, name: "other")
         ]
-        let merged = AgentMetadataProjection.merge(records, into: topology)
+        let merged = AgentMetadataProjection.merge(records, paneIDs: [1, 2])
         #expect(merged == [
-            .init(1): .init(state: .working, name: "claude"),
-            .init(2): .unknown
+            1: .init(state: .working, name: "claude"),
+            2: .unknown
         ])
     }
 
-    @Test("duplicate topology panes are deterministically uniqued")
+    @Test("duplicate facade topology panes are deterministically uniqued")
     func projectionDuplicateTopology() {
-        let topology = makeTopology(paneIDs: [.init(1), .init(1), .init(2)])
-        let merged = AgentMetadataProjection.merge([.init(1): .init(state: .done, name: "pi")], into: topology)
-        #expect(merged == [.init(1): .init(state: .done, name: "pi"), .init(2): .unknown])
+        let merged = AgentMetadataProjection.merge([1: .init(state: .done, name: "pi")], paneIDs: [1, 1, 2])
+        #expect(merged == [1: .init(state: .done, name: "pi"), 2: .unknown])
     }
 
-    @Test("visible projector observes option changes without topology or terminal interruption") @MainActor
+    @Test("visible projector consumes the facade's fixed success result") @MainActor
     func projectorRefreshesOptions() async {
         let relay = QueryRelay()
-        let projector = AgentMetadataProjector(instanceID: UUID()) { relay.set($0) }
-        projector.topologyDidChange(makeTopology(paneIDs: [.init(1)]))
+        let projector = AgentMetadataProjector(instanceID: UUID()) { await relay.query() }
+        projector.topologyDidChange(paneIDs: [1])
         projector.setVisible(true)
+        await relay.waitUntilRequested()
 
-        relay.complete(.success, "%1\tworking\tclaude\n")
-        await Task.yield()
-        #expect(projector.metadata[.init(1)] == .init(state: .working, name: "claude"))
-
-        projector.foregrounded()
-        relay.complete(.success, "%1\twaiting\tclaude\n")
-        await Task.yield()
-        #expect(projector.metadata[.init(1)] == .init(state: .waiting, name: "claude"))
+        relay.complete(.init(succeeded: true, body: "%1\tworking\tclaude\n"))
+        await eventually { projector.metadata[1] == .init(state: .working, name: "claude") }
+        #expect(projector.metadata[1] == .init(state: .working, name: "claude"))
 
         projector.foregrounded()
-        relay.complete(.success, "%1\tdone\tclaude\n")
-        await Task.yield()
-        #expect(projector.metadata[.init(1)] == .init(state: .done, name: "claude"))
+        await relay.waitUntilRequested()
+        relay.complete(.init(succeeded: true, body: "%1\twaiting\tclaude\n"))
+        await eventually { projector.metadata[1] == .init(state: .waiting, name: "claude") }
+        #expect(projector.metadata[1] == .init(state: .waiting, name: "claude"))
         projector.stop()
     }
 
     @Test("failed query yields unknown and cancellation rejects a late response") @MainActor
     func queryFailureAndCancellation() async {
         let relay = QueryRelay()
-        let projector = AgentMetadataProjector(instanceID: UUID()) { relay.set($0) }
-        projector.topologyDidChange(makeTopology(paneIDs: [.init(1)]))
+        let projector = AgentMetadataProjector(instanceID: UUID()) { await relay.query() }
+        projector.topologyDidChange(paneIDs: [1])
         projector.setVisible(true)
-        relay.complete(.error, "transport closed")
-        await Task.yield()
-        #expect(projector.metadata[.init(1)] == .unknown)
+        await relay.waitUntilRequested()
+        relay.complete(.init(succeeded: false, body: "transport closed"))
+        await eventually { projector.lastFailure == "transport closed" }
+        #expect(projector.metadata[1] == .unknown)
         #expect(projector.lastFailure == "transport closed")
 
         projector.foregrounded()
+        await relay.waitUntilRequested()
         projector.stop()
-        relay.complete(.success, "%1\tworking\tlate\n")
+        relay.complete(.init(succeeded: true, body: "%1\tworking\tlate\n"))
         await Task.yield()
         #expect(projector.metadata.isEmpty)
     }
@@ -93,77 +90,80 @@ import Testing
     @Test("hiding clears badges and a late generation cannot repopulate them") @MainActor
     func hideReshowDropsLateResponse() async {
         let relay = QueryRelay()
-        let projector = AgentMetadataProjector(instanceID: UUID()) { relay.set($0) }
-        var changes = 0
-        projector.onChange = { changes += 1 }
-        projector.topologyDidChange(makeTopology(paneIDs: [.init(1)]))
+        let projector = AgentMetadataProjector(instanceID: UUID()) { await relay.query() }
+        projector.topologyDidChange(paneIDs: [1])
         projector.setVisible(true)
-        relay.complete(.success, "%1\tworking\tclaude\n")
-        await Task.yield()
-        #expect(projector.metadata[.init(1)]?.state == .working)
+        await relay.waitUntilRequested()
+        relay.complete(.init(succeeded: true, body: "%1\tworking\tclaude\n"))
+        await eventually { projector.metadata[1] == .init(state: .working, name: "claude") }
 
-        projector.foregrounded() // leave this generation in flight
+        projector.foregrounded()
+        await relay.waitUntilRequested()
         projector.setVisible(false)
         #expect(projector.metadata.isEmpty)
-        #expect(changes >= 3)
         projector.setVisible(true)
-        relay.complete(.success, "%1\tdone\tlate\n")
+        await relay.waitUntilRequested()
+        relay.complete(.init(succeeded: true, body: "%1\tdone\tlate\n"))
         await Task.yield()
         #expect(projector.metadata.isEmpty)
-        relay.complete(.success, "%1\twaiting\tclaude\n")
-        await Task.yield()
-        #expect(projector.metadata[.init(1)] == .init(state: .waiting, name: "claude"))
+        relay.complete(.init(succeeded: true, body: "%1\twaiting\tclaude\n"))
+        await eventually { projector.metadata[1] == .init(state: .waiting, name: "claude") }
+        #expect(projector.metadata[1] == .init(state: .waiting, name: "claude"))
         projector.stop()
     }
 
-    @Test("replaced runtime projector cannot publish an old response") @MainActor
+    @Test("replaced runtime projector cannot publish an old facade response") @MainActor
     func runtimeReplacementFence() async {
         let oldRelay = QueryRelay()
-        let old = AgentMetadataProjector(instanceID: UUID()) { oldRelay.set($0) }
-        old.topologyDidChange(makeTopology(paneIDs: [.init(1)]))
+        let old = AgentMetadataProjector(instanceID: UUID()) { await oldRelay.query() }
+        old.topologyDidChange(paneIDs: [1])
         old.setVisible(true)
+        await oldRelay.waitUntilRequested()
         old.stop()
 
         let newRelay = QueryRelay()
-        let replacement = AgentMetadataProjector(instanceID: UUID()) { newRelay.set($0) }
-        replacement.topologyDidChange(makeTopology(paneIDs: [.init(1)]))
+        let replacement = AgentMetadataProjector(instanceID: UUID()) { await newRelay.query() }
+        replacement.topologyDidChange(paneIDs: [1])
         replacement.setVisible(true)
-        oldRelay.complete(.success, "%1\tdone\told\n")
-        newRelay.complete(.success, "%1\tworking\tnew\n")
-        await Task.yield()
+        await newRelay.waitUntilRequested()
+        oldRelay.complete(.init(succeeded: true, body: "%1\tdone\told\n"))
+        newRelay.complete(.init(succeeded: true, body: "%1\tworking\tnew\n"))
+        await eventually { replacement.metadata[1] == .init(state: .working, name: "new") }
         #expect(old.metadata.isEmpty)
-        #expect(replacement.metadata[.init(1)] == .init(state: .working, name: "new"))
+        #expect(replacement.metadata[1] == .init(state: .working, name: "new"))
         replacement.stop()
-    }
-
-    @Test("fixed metadata command stays inside the sole controller admission boundary")
-    func metadataQueryPolicy() {
-        #expect(TmuxClientCommandPolicy.isAllowed(TmuxClientCommandPolicy.agentMetadataQuery))
-        #expect(!TmuxClientCommandPolicy.isAllowed("list-panes -a"))
-        #expect(!TmuxClientCommandPolicy.isAllowed("set-option -p @mori-agent-state working"))
-        #expect(!TmuxClientCommandPolicy.agentMetadataQuery.contains("refresh-client"))
-    }
-
-    @Test("compact and regular presentation preserve terminal runtime identity")
-    func presentationIdentity() {
-        let instance = UUID()
-        #expect(RemoteTerminalPresentation.identity(for: instance, mode: .compact) == instance)
-        #expect(RemoteTerminalPresentation.identity(for: instance, mode: .regular) == instance)
-        #expect(RemoteTerminalPresentation.identity(for: UUID(), mode: .regular) != instance)
-    }
-
-    private func makeTopology(paneIDs: [TmuxPaneID]) -> TmuxSessionController.Topology {
-        let window = TmuxSessionController.Window(id: .init(1), name: "build", active: true, activePaneID: paneIDs.first ?? .init(0))
-        let panes = paneIDs.map { TmuxSessionController.Pane(id: $0, windowID: window.id, width: 80, height: 24, phase: .live) }
-        return .init(revision: 1, sessionName: "workspace", windows: [window], panes: panes, activeWindowID: window.id)
     }
 }
 
-private final class QueryRelay: @unchecked Sendable {
-    private var completions: [@Sendable (TmuxSessionController.CommandResult) -> Void] = []
-    func set(_ completion: @escaping @Sendable (TmuxSessionController.CommandResult) -> Void) { completions.append(completion) }
-    func complete(_ status: TmuxSessionController.CommandStatus, _ body: String) {
-        guard !completions.isEmpty else { return }
-        completions.removeFirst()(.init(status: status, body: body, causeToken: 1))
+@MainActor
+private func eventually(_ condition: @escaping @MainActor () -> Bool) async {
+    for _ in 0..<100 {
+        if condition() { return }
+        try? await Task.sleep(for: .milliseconds(1))
+    }
+    Issue.record("condition did not become true")
+}
+
+@MainActor
+private final class QueryRelay {
+    private var continuations: [CheckedContinuation<AgentMetadataQueryResult, Never>] = []
+    private var requestedWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func query() async -> AgentMetadataQueryResult {
+        await withCheckedContinuation { continuation in
+            continuations.append(continuation)
+            requestedWaiters.forEach { $0.resume() }
+            requestedWaiters.removeAll()
+        }
+    }
+
+    func waitUntilRequested() async {
+        guard continuations.isEmpty else { return }
+        await withCheckedContinuation { requestedWaiters.append($0) }
+    }
+
+    func complete(_ result: AgentMetadataQueryResult) {
+        guard !continuations.isEmpty else { return }
+        continuations.removeFirst().resume(returning: result)
     }
 }

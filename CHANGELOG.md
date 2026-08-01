@@ -10,9 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Features
 
 - **iOS (MoriRemote)**: Rebuilt the remote companion around a secure, pane-native tmux control runtime. It supports saved workspaces, password or OpenSSH private-key authentication, explicit host-key trust, local terminal history/selection, agent status, and adaptive iPhone/iPad presentation without taking over another attached tmux client's selection or size.
+- **iOS (MoriRemote)**: Reworked terminal navigation and input chrome: a slim four-icon keyboard accessory replaces the oversized capsule dock; Navigator has an explicit host selector and switches terminals only after choosing a session; modal forms suspend the terminal responder; Chinese and other IMEs now commit marked text exactly once. Keypad also adds photo/clipboard image input through the current authenticated SSH root: MoriRemote previews and atomically uploads the image, then inserts a shell-escaped remote path without pressing Enter.
+- **iOS (MoriRemote)**: Server profiles now discover their live tmux sessions after SSH login, so users choose a session instead of manually creating workspace records. The terminal’s Sessions button refreshes and lists every tmux session on the current host, including sessions not yet connected on the phone.
 
 ### 🐛 Bug Fixes
 
+- **iOS (MoriRemote)**: Make workspace runtime status, topology, and agent metadata directly observable, so an open Navigator and library badges update instead of writing to an unused revision counter.
+- **iOS (MoriRemote)**: Refresh local scrollback geometry after Ghostty publishes each completed renderer frame, so output arriving after the pre-render terminal-change callback no longer leaves a stale hard stop above the true bottom.
+- **iOS (MoriRemote)**: Prevented a usable terminal from remaining labeled “Connecting…” when a delayed syncing callback arrives after live topology.
 - **iOS (MoriRemote)**: Fixed SSH tmux connections remaining on “Waiting for the active tmux pane” even though the remote control client had attached.
 - **iOS (MoriRemote)**: Hardened credentials to device-bound, unlocked-only Keychain storage; fenced Ghostty shutdown behind terminal-surface teardown; defer reconnects while backgrounded; and release dormant runtimes first under memory pressure.
 

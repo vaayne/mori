@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import MoriRemoteTerminal
 
 @MainActor
 struct RemoteRootView: View {
@@ -45,11 +46,6 @@ struct RemoteRootView: View {
                 }
             case .settings:
                 RemoteSettingsView(settings: root.settings, onSave: root.save(settings:))
-            case let .workspace(serverID, workspaceID):
-                WorkspaceEditorView(
-                    draft: .init(serverID: serverID, workspace: workspaceID.flatMap { id in root.workspaces.first { $0.id == id } }),
-                    onSave: root.save
-                )
             case .library:
                 NavigationStack { library }
             }
@@ -59,8 +55,6 @@ struct RemoteRootView: View {
                 switch action {
                 case let .server(server, _):
                     Button(String(localized: "Delete"), role: .destructive) { root.delete(server); pendingConfirmation = nil }
-                case let .workspace(workspace):
-                    Button(String(localized: "Delete"), role: .destructive) { root.delete(workspace: workspace); pendingConfirmation = nil }
                 }
             }
         } message: {
@@ -97,7 +91,12 @@ struct RemoteRootView: View {
 
     @ViewBuilder private var terminalDetail: some View {
         if let runtime = root.activeRuntime {
-            RemoteTerminalView(root: root, runtime: runtime, compact: sizeClass == .compact, showLibrary: { sheet = .library })
+            RemoteTerminalDetailView(
+                root: root,
+                runtime: runtime,
+                isInputSuspended: sheet != nil,
+                showLibrary: { sheet = .library }
+            )
         } else if sizeClass == .compact {
             NavigationStack { library }
         } else {
@@ -112,7 +111,8 @@ struct RemoteRootView: View {
     private var library: some View {
         RemoteLibraryView(
             servers: root.servers,
-            workspaces: root.workspaces,
+            workspacesByServer: Dictionary(uniqueKeysWithValues: root.servers.map { ($0.id, root.visibleWorkspaces(for: $0.id)) }),
+            sessionDiscovery: root.sessionDiscovery,
             activeWorkspaceIDs: Set(root.activeWorkspaces.map(\.id)),
             agentSummaries: Dictionary(uniqueKeysWithValues: root.activeWorkspaces.map { ($0.id, root.agentSummary(for: $0.id)) }),
             migrationReport: root.migrationReport,
@@ -123,9 +123,7 @@ struct RemoteRootView: View {
             onAdd: { sheet = .add },
             onEdit: { sheet = .edit($0.id) },
             onDelete: { server in pendingConfirmation = .server(server, workspaceCount: root.workspaces.filter { $0.serverID == server.id }.count) },
-            onAddWorkspace: { sheet = .workspace(serverID: $0, workspaceID: nil) },
-            onEditWorkspace: { sheet = .workspace(serverID: $0.serverID, workspaceID: $0.id) },
-            onDeleteWorkspace: { pendingConfirmation = .workspace($0) },
+            onRefreshSessions: { root.discoverSessions(serverID: $0) },
             onSettings: { sheet = .settings }
         )
     }
@@ -147,33 +145,26 @@ struct RemoteRootView: View {
 
 private enum RemoteDestructiveAction: Identifiable {
     case server(SavedServer, workspaceCount: Int)
-    case workspace(SavedWorkspace)
 
     var id: UUID {
-        switch self {
-        case let .server(server, _): server.id
-        case let .workspace(workspace): workspace.id
-        }
+        switch self { case let .server(server, _): server.id }
     }
 
     var message: String {
         switch self {
         case let .server(_, workspaceCount):
             String(format: String(localized: "Deleting this server also deletes %lld workspaces and their saved credentials."), workspaceCount)
-        case .workspace:
-            String(localized: "Deleting this workspace disconnects it and cannot be undone.")
         }
     }
 }
 
 private enum RemoteSheet: Identifiable {
-    case add, edit(UUID), settings, workspace(serverID: UUID, workspaceID: UUID?), library
+    case add, edit(UUID), settings, library
     var id: String {
         switch self {
         case .add: "add"
         case let .edit(id): "edit-\(id)"
         case .settings: "settings"
-        case let .workspace(serverID, workspaceID): "workspace-\(serverID)-\(workspaceID?.uuidString ?? "new")"
         case .library: "library"
         }
     }
@@ -181,7 +172,8 @@ private enum RemoteSheet: Identifiable {
 
 private struct RemoteLibraryView: View {
     let servers: [SavedServer]
-    let workspaces: [SavedWorkspace]
+    let workspacesByServer: [UUID: [SavedWorkspace]]
+    let sessionDiscovery: [UUID: ServerSessionDiscoveryStatus]
     let activeWorkspaceIDs: Set<UUID>
     let agentSummaries: [UUID: AgentMetadata]
     let migrationReport: LegacyMigrationReport?
@@ -189,9 +181,7 @@ private struct RemoteLibraryView: View {
     let onAdd: () -> Void
     let onEdit: (SavedServer) -> Void
     let onDelete: (SavedServer) -> Void
-    let onAddWorkspace: (UUID) -> Void
-    let onEditWorkspace: (SavedWorkspace) -> Void
-    let onDeleteWorkspace: (SavedWorkspace) -> Void
+    let onRefreshSessions: (UUID) -> Void
     let onSettings: () -> Void
     @State private var filter = ""
 
@@ -205,15 +195,15 @@ private struct RemoteLibraryView: View {
             }
             if filteredServers.isEmpty {
                 ContentUnavailableView(
-                    filter.isEmpty ? String(localized: "No saved servers") : String(localized: "No matching workspaces"),
+                    filter.isEmpty ? String(localized: "No saved servers") : String(localized: "No matching sessions"),
                     systemImage: "server.rack",
-                    description: Text(String(localized: "Add a server and workspace to begin."))
+                    description: Text(String(localized: "Add a server to get started."))
                 )
                 .listRowBackground(Color.clear)
             }
             ForEach(filteredServers) { server in
                 Section {
-                    ForEach(workspaces.filter { $0.serverID == server.id && matches($0) }) { workspace in
+                    ForEach((workspacesByServer[server.id] ?? []).filter(matches)) { workspace in
                         Button { onConnect(workspace.id) } label: {
                             HStack {
                                 Image(systemName: activeWorkspaceIDs.contains(workspace.id) ? "terminal.fill" : "terminal")
@@ -232,17 +222,18 @@ private struct RemoteLibraryView: View {
                                 }
                             }
                         }
-                        .contextMenu {
-                            Button(String(localized: "Edit workspace"), action: { onEditWorkspace(workspace) })
-                            Button(String(localized: "Delete workspace"), role: .destructive, action: { onDeleteWorkspace(workspace) })
-                        }
                     }
-                    Button(String(localized: "Add workspace"), systemImage: "plus") { onAddWorkspace(server.id) }
+                    discoveryRow(for: server)
                 } header: {
                     HStack {
                         Text(verbatim: server.name)
                         Spacer()
                         Text(verbatim: "\(server.username)@\(server.host)")
+                        Button { onRefreshSessions(server.id) } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(String(localized: "Refresh sessions"))
                     }
                 }
                 .contextMenu {
@@ -251,18 +242,45 @@ private struct RemoteLibraryView: View {
                 }
             }
         }
-        .searchable(text: $filter, prompt: String(localized: "Filter servers and workspaces"))
+        .searchable(text: $filter, prompt: String(localized: "Filter servers and sessions"))
         .toolbar {
             ToolbarItem(placement: .topBarLeading) { Button(String(localized: "Settings"), systemImage: "gear", action: onSettings) }
             ToolbarItem(placement: .topBarTrailing) { Button(String(localized: "Add server"), systemImage: "plus", action: onAdd) }
         }
     }
 
+    @ViewBuilder private func discoveryRow(for server: SavedServer) -> some View {
+        switch sessionDiscovery[server.id] ?? .idle {
+        case .idle:
+            Button(String(localized: "Load sessions"), systemImage: "arrow.clockwise") { onRefreshSessions(server.id) }
+        case .loading:
+            HStack { ProgressView(); Text(String(localized: "Loading sessions…")) }
+                .foregroundStyle(.secondary)
+        case .loaded:
+            if (workspacesByServer[server.id] ?? []).isEmpty {
+                Label(String(localized: "No tmux sessions"), systemImage: "terminal")
+                    .foregroundStyle(.secondary)
+            }
+        case let .failed(message):
+            Button { onRefreshSessions(server.id) } label: {
+                VStack(alignment: .leading) {
+                    Label(String(localized: "Session discovery failed"), systemImage: "exclamationmark.triangle")
+                    Text(verbatim: message).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
     private var filteredServers: [SavedServer] {
-        servers.filter { server in workspaces.contains { $0.serverID == server.id && matches($0) } }
+        servers.filter { server in
+            filter.isEmpty
+                || server.name.localizedCaseInsensitiveContains(filter)
+                || server.host.localizedCaseInsensitiveContains(filter)
+                || (workspacesByServer[server.id] ?? []).contains(where: matches)
+        }
     }
     private func matches(_ workspace: SavedWorkspace) -> Bool {
-        filter.isEmpty || workspace.name.localizedCaseInsensitiveContains(filter) || workspace.tmuxSession.localizedCaseInsensitiveContains(filter) || servers.first(where: { $0.id == workspace.serverID })?.name.localizedCaseInsensitiveContains(filter) == true
+        filter.isEmpty || workspace.name.localizedCaseInsensitiveContains(filter) || workspace.tmuxSession.localizedCaseInsensitiveContains(filter)
     }
 }
 
@@ -308,132 +326,362 @@ private struct AgentMetadataBadge: View {
 }
 
 @MainActor
-private struct RemoteTerminalView: View {
+private struct RemoteTerminalDetailView: View {
     let root: RemoteRootModel
     let runtime: ActiveWorkspaceRuntime
-    let compact: Bool
+    let isInputSuspended: Bool
     let showLibrary: () -> Void
-    @State private var showsPanes = false
-    @State private var confirmsClosePane = false
+    @State private var showsNavigator = false
+    @State private var pendingSharedMutation: RemoteSharedMutation?
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            if let surface = runtime.surface() {
-                TmuxPaneSurfaceView(surface: surface)
-                    .id(RemoteTerminalPresentation.identity(for: runtime.instanceID, mode: compact ? .compact : .regular))
-                    .background(Color.black)
-            } else {
-                ContentUnavailableView(runtime.status.title, systemImage: "terminal", description: Text(String(localized: "Waiting for the active tmux pane.")))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black)
-            }
+            MoriRemoteTerminalView(
+                session: runtime.session,
+                isInputSuspended: isInputSuspended || showsNavigator,
+                imageUploader: root.imageUploader(for: runtime.workspace.id),
+                onShowNavigator: {
+                    root.discoverSessions(serverID: runtime.workspace.serverID)
+                    showsNavigator = true
+                },
+                onSharedMutationRequest: { pendingSharedMutation = RemoteSharedMutation($0) }
+            )
+                .id(runtime.instanceID)
+                .background(Color.black)
         }
         .background(Color.black.ignoresSafeArea())
-        .sheet(isPresented: $showsPanes) { panePicker }
-        .onChange(of: root.runtimeRevision) { _, _ in }
-        .confirmationDialog(String(localized: "Close shared pane?"), isPresented: $confirmsClosePane, titleVisibility: .visible) {
-            Button(String(localized: "Close pane"), role: .destructive) { root.closePane() }
+        .sheet(isPresented: $showsNavigator) {
+            RemoteNavigatorView(root: root, runtime: runtime) {
+                showsNavigator = false
+                Task { @MainActor in
+                    await Task.yield()
+                    showLibrary()
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .confirmationDialog(
+            String(localized: "Confirm shared workspace change"),
+            isPresented: sharedMutationConfirmationBinding,
+            titleVisibility: .visible
+        ) {
+            if let mutation = pendingSharedMutation {
+                Button(mutation.title, role: mutation.isDestructive ? .destructive : nil) {
+                    root.performSharedMutation(mutation.value)
+                    pendingSharedMutation = nil
+                }
+            }
         } message: {
-            Text(String(localized: "Closing this shared pane affects every tmux client."))
+            Text(String(localized: "This change affects every tmux client."))
         }
     }
 
-    private var header: some View {
-        HStack(spacing: 12) {
-            if compact {
-                Button(action: dismissKeyboard) { Image(systemName: "keyboard.chevron.compact.down") }
-                    .accessibilityLabel(String(localized: "Dismiss keyboard"))
-                Button(action: showLibrary) { Image(systemName: "sidebar.left") }
-                    .accessibilityLabel(String(localized: "Show library"))
-            }
-            Button { showsPanes = true } label: {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(verbatim: runtime.topology?.sessionName ?? runtime.workspace.name)
-                        .lineLimit(1)
-                    HStack(spacing: 6) {
-                        Text(runtime.status.title).font(.caption).foregroundStyle(.secondary)
-                        AgentMetadataBadge(metadata: runtime.metadata(for: runtime.focusedPaneID ?? TmuxPaneID(0)))
-                    }
-                }
-            }
-            Spacer()
-            Menu {
-                Button(String(localized: "Split right (shared)")) { root.split(horizontal: true) }
-                Button(String(localized: "Split down (shared)")) { root.split(horizontal: false) }
-                Button(String(localized: "New window (shared)")) { root.newWindow() }
-                Button(String(localized: "Close pane (shared)"), role: .destructive) { confirmsClosePane = true }
-            } label: { Image(systemName: "rectangle.3.group") }
-            Button(action: copySelection) { Image(systemName: "doc.on.doc") }
-                .accessibilityLabel(String(localized: "Copy selection"))
-            Button(action: root.disconnectActive) { Image(systemName: "power") }
-                .accessibilityLabel(String(localized: "Disconnect"))
-        }
-        .padding(.horizontal, 12)
-        .frame(height: 48)
-        .foregroundStyle(.white)
-        .background(Color(white: 0.12))
+    private var sharedMutationConfirmationBinding: Binding<Bool> {
+        .init(get: { pendingSharedMutation != nil }, set: { if !$0 { pendingSharedMutation = nil } })
     }
 
-    private var panePicker: some View {
+}
+
+@MainActor
+private struct RemoteNavigatorView: View {
+    enum Scope: String, CaseIterable, Identifiable {
+        case sessions, windows, panes
+        var id: Self { self }
+        var title: String {
+            switch self {
+            case .sessions: String(localized: "Sessions")
+            case .windows: String(localized: "Windows")
+            case .panes: String(localized: "Panes")
+            }
+        }
+    }
+
+    @Environment(\.dismiss) private var dismiss
+    let root: RemoteRootModel
+    let runtime: ActiveWorkspaceRuntime
+    let showLibrary: () -> Void
+    @State private var selectedServerID: UUID
+    @State private var scope = Scope.sessions
+    @State private var filter = ""
+
+    init(root: RemoteRootModel, runtime: ActiveWorkspaceRuntime, showLibrary: @escaping () -> Void) {
+        self.root = root
+        self.runtime = runtime
+        self.showLibrary = showLibrary
+        _selectedServerID = State(initialValue: runtime.workspace.serverID)
+    }
+
+    var body: some View {
         NavigationStack {
-            List {
-                Section(String(localized: "Windows")) {
-                    ForEach(runtime.topology?.windows ?? [], id: \.id) { window in
-                        Button { root.selectWindow(window.id) } label: {
-                            HStack {
-                                Label {
-                                    Text(verbatim: window.name)
-                                } icon: {
-                                    Image(systemName: window.active ? "rectangle.inset.filled" : "rectangle")
-                                }
-                                Spacer()
-                                AgentMetadataBadge(metadata: windowMetadata(window))
-                            }
-                        }
+            VStack(spacing: 0) {
+                hostSelector
+
+                Picker(String(localized: "Navigator"), selection: $scope) {
+                    ForEach(Scope.allCases) { item in
+                        Text(item.title)
+                            .tag(item)
+                            .disabled(item != .sessions && !isBrowsingActiveHost)
                     }
                 }
-                Section(String(localized: "Panes")) {
-                    ForEach(runtime.topology?.panes ?? [], id: \.id) { pane in
-                        Button {
-                            root.selectPane(pane.id)
-                            showsPanes = false
-                        } label: {
-                            HStack {
-                                Text(verbatim: "%\(pane.id.rawValue)")
-                                    .font(.body.monospaced())
-                                AgentMetadataBadge(metadata: runtime.metadata(for: pane.id))
-                                Spacer()
-                                Text(verbatim: "\(pane.width)×\(pane.height)")
-                                    .font(.caption.monospaced())
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+
+                List { content }
+                    .listStyle(.plain)
+                    .overlay { emptyState }
+            }
+            .navigationTitle(String(localized: "Navigator"))
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $filter, prompt: String(localized: "Filter sessions, windows, and panes"))
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: showLibrary) { Image(systemName: "server.rack") }
+                        .accessibilityLabel(String(localized: "Manage servers"))
+                }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        root.discoverSessions(serverID: selectedServerID)
+                    } label: { Image(systemName: "arrow.clockwise") }
+                    .accessibilityLabel(String(localized: "Refresh sessions"))
+                    Button(String(localized: "Done")) { dismiss() }
                 }
             }
-            .navigationTitle(String(localized: "Workspace controls"))
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(String(localized: "Done")) { showsPanes = false } } }
+        }
+        .onChange(of: scope) { _, newScope in
+            if newScope != .sessions, !isBrowsingActiveHost {
+                scope = .sessions
+            }
+            filter = ""
+        }
+        .onChange(of: selectedServerID) { _, serverID in
+            scope = .sessions
+            filter = ""
+            root.discoverSessions(serverID: serverID)
         }
     }
 
-    private func windowMetadata(_ window: TmuxSessionController.Window) -> AgentMetadata {
+    private var hostSelector: some View {
+        Menu {
+            ForEach(root.servers) { server in
+                Button {
+                    selectedServerID = server.id
+                } label: {
+                    Label {
+                        Text(verbatim: "\(server.name) · \(server.host)")
+                    } icon: {
+                        Image(systemName: hostMenuSymbol(for: server.id))
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "server.rack")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.mint)
+                    .frame(width: 32, height: 32)
+                    .background(Color.mint.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: selectedServer?.name ?? String(localized: "Server"))
+                        .font(.subheadline.weight(.semibold))
+                    if let server = selectedServer {
+                        Text(verbatim: "\(server.username)@\(server.host)")
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        if !isBrowsingActiveHost {
+                            Text(String(localized: "Choose a session to switch terminals"))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Spacer()
+                if isBrowsingActiveHost {
+                    Text(String(localized: "Current host"))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    private func hostMenuSymbol(for serverID: UUID) -> String {
+        if serverID == selectedServerID { return "checkmark.circle.fill" }
+        if serverID == runtime.workspace.serverID { return "terminal.fill" }
+        return "server.rack"
+    }
+
+    @ViewBuilder private var content: some View {
+        switch scope {
+        case .sessions:
+            ForEach(filteredSessions) { workspace in
+                let activeRuntime = root.runtimes[workspace.id]
+                Button {
+                    root.connect(workspaceID: workspace.id)
+                    dismiss()
+                } label: {
+                    HStack {
+                        Label {
+                            Text(verbatim: workspace.tmuxSession)
+                        } icon: {
+                            Image(systemName: workspace.id == root.activeWorkspaceID ? "terminal.fill" : "terminal")
+                        }
+                        Spacer()
+                        Text(activeRuntime?.status.title ?? String(localized: "Disconnected"))
+                            .font(.caption).foregroundStyle(.secondary)
+                        if workspace.id == root.activeWorkspaceID { Image(systemName: "checkmark") }
+                    }
+                }
+                .swipeActions {
+                    if activeRuntime != nil {
+                        Button(role: .destructive) {
+                            Task { await root.disconnect(workspaceID: workspace.id) }
+                        } label: { Label(String(localized: "Disconnect"), systemImage: "bolt.slash") }
+                    }
+                }
+            }
+        case .windows:
+            ForEach(filteredWindows) { window in
+                Button {
+                    root.selectWindow(window.id)
+                    dismiss()
+                } label: {
+                    HStack {
+                        Label {
+                            Text(verbatim: window.title)
+                        } icon: {
+                            Image(systemName: window.active ? "rectangle.inset.filled" : "rectangle")
+                        }
+                        Spacer()
+                        AgentMetadataBadge(metadata: windowMetadata(window))
+                        if window.active { Image(systemName: "checkmark") }
+                    }
+                }
+            }
+        case .panes:
+            ForEach(filteredPanes) { pane in
+                Button {
+                    root.selectPane(pane.id)
+                    dismiss()
+                } label: {
+                    HStack {
+                        Label {
+                            Text(verbatim: "%\(pane.id)").font(.body.monospaced())
+                        } icon: {
+                            Image(systemName: "square.split.2x1")
+                        }
+                        VStack(alignment: .leading) {
+                            Text(verbatim: windowTitle(for: pane))
+                            Text(verbatim: "\(pane.columns)×\(pane.rows)")
+                                .font(.caption.monospaced()).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        AgentMetadataBadge(metadata: runtime.metadata(for: pane.id))
+                        if pane.id == runtime.focusedPaneID { Image(systemName: "checkmark") }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var emptyState: some View {
+        if scope == .sessions, root.sessionDiscovery[selectedServerID] == .loading, filteredSessions.isEmpty {
+            ProgressView(String(localized: "Loading sessions…"))
+        } else if visibleItemCount == 0 {
+            ContentUnavailableView(emptyTitle, systemImage: filter.isEmpty ? "rectangle.stack.badge.minus" : "magnifyingglass")
+        }
+    }
+
+    private var emptyTitle: String {
+        filter.isEmpty ? String(localized: "Nothing here") : String(localized: "No matching results")
+    }
+    private var selectedServer: SavedServer? {
+        root.servers.first { $0.id == selectedServerID }
+    }
+    private var isBrowsingActiveHost: Bool {
+        selectedServerID == runtime.workspace.serverID
+    }
+    private var filteredSessions: [SavedWorkspace] {
+        RemoteNavigatorProjection.sessions(root.visibleWorkspaces(for: selectedServerID), matching: filter)
+    }
+    private var filteredWindows: [MoriRemoteTerminalWindow] {
+        guard isBrowsingActiveHost else { return [] }
+        return RemoteNavigatorProjection.windows(runtime.topology?.windows ?? [], matching: filter)
+    }
+    private var filteredPanes: [MoriRemoteTerminalPane] {
+        guard isBrowsingActiveHost else { return [] }
+        return RemoteNavigatorProjection.panes(
+            runtime.topology?.panes ?? [],
+            windows: runtime.topology?.windows ?? [],
+            matching: filter
+        )
+    }
+    private var visibleItemCount: Int {
+        switch scope { case .sessions: filteredSessions.count; case .windows: filteredWindows.count; case .panes: filteredPanes.count }
+    }
+    private func windowTitle(for pane: MoriRemoteTerminalPane) -> String {
+        runtime.topology?.windows.first(where: { $0.id == pane.windowID })?.title ?? String(localized: "Window")
+    }
+    private func windowMetadata(_ window: MoriRemoteTerminalWindow) -> AgentMetadata {
         runtime.topology?.panes
             .filter { $0.windowID == window.id }
             .map { runtime.metadata(for: $0.id) }
             .max { $0.state.priority < $1.state.priority } ?? .unknown
     }
-    private func dismissKeyboard() { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
-    private func copySelection() { if let text = runtime.surface()?.copySelection(), !text.isEmpty { UIPasteboard.general.string = text } }
+}
+
+private enum RemoteSharedMutation: Identifiable, Equatable {
+    case newWindow, splitHorizontal, splitVertical, closePane, closeWindow
+
+    init(_ mutation: MoriRemoteTerminalSharedMutation) {
+        self = switch mutation {
+        case .newWindow: .newWindow
+        case .splitHorizontal: .splitHorizontal
+        case .splitVertical: .splitVertical
+        case .closePane: .closePane
+        case .closeWindow: .closeWindow
+        }
+    }
+
+    var id: Self { self }
+    var value: MoriRemoteTerminalSharedMutation {
+        switch self {
+        case .newWindow: .newWindow
+        case .splitHorizontal: .splitHorizontal
+        case .splitVertical: .splitVertical
+        case .closePane: .closePane
+        case .closeWindow: .closeWindow
+        }
+    }
+    var title: String {
+        switch self {
+        case .newWindow: String(localized: "New window (shared)")
+        case .splitHorizontal: String(localized: "Split right (shared)")
+        case .splitVertical: String(localized: "Split down (shared)")
+        case .closePane: String(localized: "Close pane (shared)")
+        case .closeWindow: String(localized: "Close window (shared)")
+        }
+    }
+    var isDestructive: Bool { self == .closePane || self == .closeWindow }
 }
 
 private struct ProfileEditorView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var draft: ServerWorkspaceDraft
+    @State private var draft: ServerProfileDraft
     let existingServer: SavedServer?
-    let onSave: (ServerWorkspaceDraft) -> Void
+    let onSave: (ServerProfileDraft) -> Void
 
-    init(draft: ServerWorkspaceDraft, existingServer: SavedServer? = nil, onSave: @escaping (ServerWorkspaceDraft) -> Void) {
+    init(draft: ServerProfileDraft, existingServer: SavedServer? = nil, onSave: @escaping (ServerProfileDraft) -> Void) {
         _draft = State(initialValue: draft)
         self.existingServer = existingServer
         self.onSave = onSave
@@ -449,12 +697,6 @@ private struct ProfileEditorView: View {
                     TextField(String(localized: "Port"), text: $draft.port).keyboardType(.numberPad)
                     TextField(String(localized: "Username"), text: $draft.username)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
-                }
-                if draft.workspaceID != nil {
-                    Section(String(localized: "Workspace")) {
-                        TextField(String(localized: "Workspace name"), text: $draft.workspaceName)
-                        TextField(String(localized: "tmux session"), text: $draft.tmuxSession)
-                    }
                 }
                 Section(String(localized: "Authentication")) {
                     Picker(String(localized: "Identity"), selection: $draft.identityKind) {
@@ -475,31 +717,6 @@ private struct ProfileEditorView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(String(localized: "Save")) { onSave(draft); dismiss() }
                 }
-            }
-        }
-    }
-}
-
-private struct WorkspaceEditorView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var draft: WorkspaceDraft
-    let onSave: (WorkspaceDraft) -> Void
-
-    init(draft: WorkspaceDraft, onSave: @escaping (WorkspaceDraft) -> Void) {
-        _draft = State(initialValue: draft)
-        self.onSave = onSave
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                TextField(String(localized: "Workspace name"), text: $draft.name)
-                TextField(String(localized: "tmux session"), text: $draft.tmuxSession)
-            }
-            .navigationTitle(String(localized: "Workspace"))
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(String(localized: "Cancel"), action: dismiss.callAsFunction) }
-                ToolbarItem(placement: .confirmationAction) { Button(String(localized: "Save")) { onSave(draft); dismiss() } }
             }
         }
     }

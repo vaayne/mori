@@ -26,6 +26,13 @@ struct AgentMetadata: Equatable, Sendable {
     static let unknown = Self(state: .unknown, name: nil)
 }
 
+/// App-local projection of the facade's fixed query result. It intentionally
+/// carries no tmux-controller detail across the terminal boundary.
+struct AgentMetadataQueryResult: Sendable {
+    let succeeded: Bool
+    let body: String
+}
+
 /// Parses the one bounded, fixed-format tmux response. Pane options are
 /// untrusted remote text: state is exact-match only, and labels cannot smuggle
 /// a row/delimiter into the navigation projection.
@@ -34,14 +41,14 @@ struct AgentMetadataResponseParser: Sendable {
     static let maximumRecords = 512
     static let maximumNameLength = 64
 
-    func parse(_ body: String) -> [TmuxPaneID: AgentMetadata] {
+    func parse(_ body: String) -> [UInt64: AgentMetadata] {
         guard body.utf8.count <= Self.maximumResponseBytes else { return [:] }
         let records = body.split(separator: "\n", omittingEmptySubsequences: true)
         // Never prefix-truncate: an injected valid row can otherwise be hidden
         // after the cap, and a duplicate must invalidate the whole response.
         guard records.count <= Self.maximumRecords else { return [:] }
-        var result: [TmuxPaneID: AgentMetadata] = [:]
-        var seenPaneIDs = Set<TmuxPaneID>()
+        var result: [UInt64: AgentMetadata] = [:]
+        var seenPaneIDs = Set<UInt64>()
         for line in records {
             let fields = line.split(separator: "\t", omittingEmptySubsequences: false)
             guard let first = fields.first, let paneID = parsePaneID(first) else { continue }
@@ -52,11 +59,9 @@ struct AgentMetadataResponseParser: Sendable {
         return result
     }
 
-    private func parsePaneID(_ field: Substring) -> TmuxPaneID? {
-        guard field.first == "%", field.dropFirst().allSatisfy(\.isNumber),
-              let rawValue = UInt64(field.dropFirst())
-        else { return nil }
-        return .init(rawValue)
+    private func parsePaneID(_ field: Substring) -> UInt64? {
+        guard field.first == "%", field.dropFirst().allSatisfy(\.isNumber) else { return nil }
+        return UInt64(field.dropFirst())
     }
 
     private func normalizeState(_ field: Substring) -> MoriAgentState {
@@ -72,43 +77,32 @@ struct AgentMetadataResponseParser: Sendable {
     }
 }
 
-/// Projects response records only onto panes the active Ghostty topology owns.
+/// Projects response records only onto panes the active facade topology owns.
 /// A successful response is authoritative, so missing or cleared options erase
 /// old metadata; a failed response intentionally yields unknown instead.
 struct AgentMetadataProjection: Sendable {
-    static func merge(_ records: [TmuxPaneID: AgentMetadata], into topology: TmuxSessionController.Topology?) -> [TmuxPaneID: AgentMetadata] {
-        guard let topology else { return [:] }
+    static func merge(_ records: [UInt64: AgentMetadata], paneIDs: [UInt64]) -> [UInt64: AgentMetadata] {
         // Corrupt/native snapshots must not crash the UI. First occurrence wins,
         // matching the topology order used everywhere else in the projection.
-        var projection: [TmuxPaneID: AgentMetadata] = [:]
-        for pane in topology.panes where projection[pane.id] == nil {
-            projection[pane.id] = records[pane.id] ?? .unknown
+        var projection: [UInt64: AgentMetadata] = [:]
+        for paneID in paneIDs where projection[paneID] == nil {
+            projection[paneID] = records[paneID] ?? .unknown
         }
         return projection
     }
 }
 
-/// The size class selects surrounding chrome, never a terminal identity. Keeping
-/// this policy explicit makes rotation/split-view regressions deterministic.
-enum RemoteTerminalPresentation: Sendable {
-    enum Mode: Sendable { case compact, regular }
-    static func identity(for runtimeInstanceID: UUID, mode: Mode) -> UUID {
-        _ = mode
-        return runtimeInstanceID
-    }
-}
-
 /// A visible runtime owns one projector. It has no tmux parser or transport:
-/// the supplied query closure is the existing Ghostty-correlated controller
-/// boundary. Cancellation and the immutable instance ID reject late replies.
+/// the supplied query is the facade's fixed correlated metadata result.
+/// Cancellation and the immutable instance ID reject late replies.
 @MainActor
 final class AgentMetadataProjector {
     static let refreshInterval: Duration = .seconds(5)
 
     private let instanceID: UUID
-    private let query: (@escaping @Sendable (TmuxSessionController.CommandResult) -> Void) -> Void
+    private let query: @MainActor () async -> AgentMetadataQueryResult
     private let parser = AgentMetadataResponseParser()
-    private var topology: TmuxSessionController.Topology?
+    private var paneIDs: [UInt64] = []
     private var refreshTask: Task<Void, Never>?
     private var visible = false
     private var stopped = false
@@ -118,19 +112,19 @@ final class AgentMetadataProjector {
     /// old completion that arrives after presentation changed.
     private var queryGeneration: UInt64 = 0
 
-    private(set) var metadata: [TmuxPaneID: AgentMetadata] = [:]
+    private(set) var metadata: [UInt64: AgentMetadata] = [:]
     private(set) var lastFailure: String?
     var onChange: (@MainActor () -> Void)?
 
-    init(instanceID: UUID, query: @escaping (@escaping @Sendable (TmuxSessionController.CommandResult) -> Void) -> Void) {
+    init(instanceID: UUID, query: @escaping @MainActor () async -> AgentMetadataQueryResult) {
         self.instanceID = instanceID
         self.query = query
     }
 
-    func topologyDidChange(_ topology: TmuxSessionController.Topology) {
+    func topologyDidChange(paneIDs: [UInt64]) {
         guard !stopped else { return }
-        self.topology = topology
-        metadata = AgentMetadataProjection.merge(metadata, into: topology)
+        self.paneIDs = paneIDs
+        metadata = AgentMetadataProjection.merge(metadata, paneIDs: paneIDs)
         onChange?()
         refreshImmediately()
     }
@@ -172,25 +166,26 @@ final class AgentMetadataProjector {
     }
 
     private func refreshImmediately() {
-        guard visible, !stopped, topology != nil, !queryInFlight else { return }
+        guard visible, !stopped, !paneIDs.isEmpty, !queryInFlight else { return }
         queryInFlight = true
         let responseInstanceID = instanceID
         let responseGeneration = queryGeneration
-        query { [weak self] result in
-            Task { @MainActor in self?.receive(result, from: responseInstanceID, generation: responseGeneration) }
+        Task { [weak self] in
+            guard let self else { return }
+            let result = await self.query()
+            self.receive(result, from: responseInstanceID, generation: responseGeneration)
         }
     }
 
-    private func receive(_ result: TmuxSessionController.CommandResult, from responseInstanceID: UUID, generation: UInt64) {
+    private func receive(_ result: AgentMetadataQueryResult, from responseInstanceID: UUID, generation: UInt64) {
         guard !stopped, responseInstanceID == instanceID, generation == queryGeneration, visible else { return }
         queryInFlight = false
-        switch result.status {
-        case .success:
+        if result.succeeded {
             lastFailure = nil
-            metadata = AgentMetadataProjection.merge(parser.parse(result.body), into: topology)
-        case .skipped, .error:
+            metadata = AgentMetadataProjection.merge(parser.parse(result.body), paneIDs: paneIDs)
+        } else {
             lastFailure = result.body
-            metadata = AgentMetadataProjection.merge([:], into: topology)
+            metadata = AgentMetadataProjection.merge([:], paneIDs: paneIDs)
         }
         onChange?()
     }

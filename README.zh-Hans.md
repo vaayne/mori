@@ -57,7 +57,7 @@ brew install --cask mori
 
 ### MoriRemote
 
-MoriRemote 是 iPhone/iPad 上的 SSH 与 tmux 伴侣，不是远程桌面。它要求显式确认主机密钥，支持密码和导入的 OpenSSH 私钥，并保证移动端导航不干扰其他 tmux 客户端。服务器需要 tmux 3.2 或更高版本。本地终端历史和选择只保留在设备上；分屏、关闭与新建窗口属于共享工作区操作。
+MoriRemote 是 iPhone/iPad 上的 SSH 与 tmux 伴侣，不是远程桌面。它要求显式确认主机密钥，支持密码和导入的 OpenSSH 私钥，并保证移动端导航不干扰其他 tmux 客户端。服务器需要 tmux 3.2 或更高版本。本地终端历史和选择只保留在设备上；分屏、关闭与新建窗口属于共享工作区操作。软件键盘支持输入法组合文本；从照片或剪贴板选择的图片会通过已认证 SSH 连接上传，再以经过 shell 转义的远程路径插入终端，不会自动提交。
 
 从源码构建 MoriRemote 需要 Xcode、XcodeGen 和固定的 remux Ghostty 源码。本地任务会构建一份同时支持 macOS 与 iOS 的通用 XCFramework；CI 也只构建一次同一源码制品，并由 macOS 和 iOS job 共享。
 

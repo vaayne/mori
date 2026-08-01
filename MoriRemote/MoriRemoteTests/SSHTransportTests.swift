@@ -48,56 +48,6 @@ import Testing
         let command = try TmuxCommandBuilder.createShadow(executable: "/opt/tools/tmux", source: "project/main", runtimeID: id)
         #expect(command.contains("'project/main'")); #expect(!command.contains("refresh-client -C")); #expect(throws: TmuxCommandError.self) { _ = try TmuxCommandBuilder.createShadow(executable: "tmux", source: "bad\nkill", runtimeID: id) }; #expect(throws: TmuxCommandError.self) { _ = try TmuxCommandBuilder.cleanupPlan(executable: "tmux", source: "project/main", shadow: shadow + "x", runtimeID: id) }
     }
-    @Test("chunked inbound, sequential submissions, and EOF preserve transport lifecycle") func link() async throws {
-        let transport = TestTransport()
-        let received = Recorder()
-        let disconnected = Flag()
-        let link = TmuxSessionLink(
-            transport: transport,
-            receive: { received.add($0) },
-            disconnected: { disconnected.set() }
-        )
 
-        try await link.start()
-        await transport.push(Data("a".utf8))
-        await transport.push(Data("b".utf8))
-        for value in ["first", "second", "third"] {
-            await link.send(Data(value.utf8))
-        }
-        try await Task.sleep(for: .milliseconds(30))
-        #expect(await transport.writes() == [Data("first".utf8), Data("second".utf8), Data("third".utf8)])
-
-        await transport.finish()
-        try await Task.sleep(for: .milliseconds(30))
-        #expect(received.values() == [Data("a".utf8), Data("b".utf8)])
-        #expect(disconnected.value())
-        #expect(await transport.dispositions() == [.invalidated])
-    }
 }
 private struct Credentials: SSHCredentialReading { let values: [UUID: SSHCredential]; init(_ values: [UUID: SSHCredential]) { self.values = values }; func credential(for id: UUID) throws -> SSHCredential? { values[id] } }
-private actor TestTransport: TmuxControlTransport {
-    nonisolated let receivedBytes: AsyncThrowingStream<Data, Error>
-    private let continuation: AsyncThrowingStream<Data, Error>.Continuation
-    private var submittedWrites: [Data] = []
-    private var closes: [TmuxControlTransportCloseDisposition] = []
-
-    init() {
-        var continuation: AsyncThrowingStream<Data, Error>.Continuation!
-        receivedBytes = AsyncThrowingStream { continuation = $0 }
-        self.continuation = continuation
-    }
-
-    func start() async throws {}
-    func send(_ data: Data) async throws { submittedWrites.append(data) }
-    func isActive() async -> Bool { closes.isEmpty }
-    func close(disposition: TmuxControlTransportCloseDisposition) async {
-        closes.append(disposition)
-        continuation.finish()
-    }
-    func push(_ data: Data) { continuation.yield(data) }
-    func finish() { continuation.finish() }
-    func writes() -> [Data] { submittedWrites }
-    func dispositions() -> [TmuxControlTransportCloseDisposition] { closes }
-}
-private final class Recorder: @unchecked Sendable { private let lock = NSLock(); private var data: [Data] = []; func add(_ value: Data) { lock.withLock { data.append(value) } }; func values() -> [Data] { lock.withLock { data } } }
-private final class Flag: @unchecked Sendable { private let lock = NSLock(); private var flag = false; func set() { lock.withLock { flag = true } }; func value() -> Bool { lock.withLock { flag } } }

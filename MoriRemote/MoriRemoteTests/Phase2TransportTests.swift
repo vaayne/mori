@@ -98,6 +98,28 @@ import Testing
         #expect(root.commands()[4].contains("'kill-session'"))
     }
 
+    @Test("session discovery uses one read-only tmux child and returns its root lease")
+    func discoversSessions() async throws {
+        let runtimeID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
+        let root = FakeRoot(plans: [
+            .finished("tmux 3.2a\n"),
+            .finished("ops\nmain--mori-remote-\(runtimeID.uuidString.lowercased())\nmain\n"),
+        ])
+        let pool = SSHRootPool(idleTimeout: .milliseconds(20))
+        let discovery = SSHTmuxSessionDiscovery(
+            connector: FakeConnector(roots: [root]),
+            pool: pool,
+            poolKey: try key()
+        )
+
+        #expect(try await discovery.load() == ["main", "ops"])
+        #expect(root.commands().count == 2)
+        #expect(root.commands()[0].contains("'-V'"))
+        #expect(root.commands()[1].contains("'list-sessions'"))
+        #expect(!root.commands().contains { $0.contains("'attach-session'") })
+        try await eventually { root.closed }
+    }
+
     @Test("control child bytes reach the public transport stream")
     func forwardsControlBytes() async throws {
         let expected = Data("%session-changed $0 workspace\n".utf8)
@@ -236,6 +258,46 @@ import Testing
         let idleLease = try await pool.lease(for: try key(), connector: idleConnector)
         await idleLease.release(.reusable)
         try await eventually { idleRoot.closed }
+    }
+}
+
+private extension SSHTmuxControlTransport {
+    init(
+        connector: any SSHRootConnecting,
+        pool: SSHRootPool,
+        poolKey: SSHRootPool.Key,
+        tmuxExecutable: String = "tmux",
+        sourceSession: String,
+        runtimeID: UUID = UUID()
+    ) {
+        self.init(
+            rootSource: AuthenticatedSSHRootSource(
+                pool: pool,
+                key: poolKey,
+                connector: connector
+            ),
+            tmuxExecutable: tmuxExecutable,
+            sourceSession: sourceSession,
+            runtimeID: runtimeID
+        )
+    }
+}
+
+private extension SSHTmuxSessionDiscovery {
+    init(
+        connector: any SSHRootConnecting,
+        pool: SSHRootPool,
+        poolKey: SSHRootPool.Key,
+        tmuxExecutable: String = "tmux"
+    ) {
+        self.init(
+            rootSource: AuthenticatedSSHRootSource(
+                pool: pool,
+                key: poolKey,
+                connector: connector
+            ),
+            tmuxExecutable: tmuxExecutable
+        )
     }
 }
 

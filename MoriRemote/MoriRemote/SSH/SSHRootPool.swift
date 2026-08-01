@@ -8,9 +8,38 @@ protocol SSHChildChannel: AnyObject, Sendable {
     func close() async throws
 }
 
+typealias SSHFileUploadProgressHandler = @Sendable (Int64) async -> Void
+
+protocol SSHFileUploadSession: Sendable {
+    func ensureDirectoryExists(atPath path: String) async throws
+    func uploadFile(
+        from localURL: URL,
+        to remotePath: String,
+        progress: @escaping SSHFileUploadProgressHandler
+    ) async throws
+    func renameFile(from temporaryPath: String, to finalPath: String) async throws
+    func removeFileIfExists(atPath path: String) async throws
+    func close() async throws
+}
+
 protocol SSHRootConnection: Sendable {
     func openSessionChannel() async throws -> any SSHChildChannel
+    func openFileUploadSession() async throws -> any SSHFileUploadSession
     func close() async
+}
+
+extension SSHRootConnection {
+    func openFileUploadSession() async throws -> any SSHFileUploadSession {
+        throw SSHFileUploadError.unsupported
+    }
+}
+
+enum SSHFileUploadError: Error, Equatable, Sendable {
+    case unsupported
+    case invalidFilename
+    case localFileUnavailable
+    case operationTimedOut
+    case uploadFailed
 }
 
 protocol SSHRootConnecting: Sendable {
@@ -19,6 +48,11 @@ protocol SSHRootConnecting: Sendable {
 
 enum SSHRootPoolError: Error, Equatable, Sendable {
     case staleLease
+}
+
+enum SSHRootLeaseDisposition: Sendable {
+    case reusable
+    case invalidated
 }
 
 /// Shares authenticated SSH roots while preserving lease ownership. A generation token
@@ -91,7 +125,7 @@ actor SSHRootPool {
         }
     }
 
-    fileprivate func release(_ lease: SSHRootLease, disposition: TmuxControlTransportCloseDisposition) async {
+    fileprivate func release(_ lease: SSHRootLease, disposition: SSHRootLeaseDisposition) async {
         guard let key = lease.key, let token = lease.token else {
             await lease.root.close()
             return
@@ -196,7 +230,7 @@ struct SSHRootLease: Sendable {
         self.token = token
     }
 
-    func release(_ disposition: TmuxControlTransportCloseDisposition) async {
+    func release(_ disposition: SSHRootLeaseDisposition) async {
         let shouldRelease = releaseState.claim()
         guard shouldRelease else { return }
         await pool.release(self, disposition: disposition)

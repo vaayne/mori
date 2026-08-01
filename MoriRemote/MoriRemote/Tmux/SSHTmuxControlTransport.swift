@@ -1,16 +1,15 @@
 import Foundation
+import MoriRemoteTerminal
 
 /// The Phase 2 vertical transport. Startup mutations deliberately happen on separate
 /// no-PTY exec children: version probe, grouped shadow creation, then the long-lived
 /// `tmux -C` child. A rejected/old probe therefore cannot create a tmux session.
-actor SSHTmuxControlTransport: TmuxControlTransport {
+actor SSHTmuxControlTransport {
     nonisolated let receivedBytes: AsyncThrowingStream<Data, Error>
 
     private enum Lifecycle: Equatable { case idle, starting, started, closing, closed }
 
-    private let connector: any SSHRootConnecting
-    private let pool: SSHRootPool
-    private let poolKey: SSHRootPool.Key
+    private let rootSource: AuthenticatedSSHRootSource
     private let tmuxExecutable: String
     private let sourceSession: String
     private let runtimeID: UUID
@@ -26,16 +25,12 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
     private var lifecycle: Lifecycle = .idle
 
     init(
-        connector: any SSHRootConnecting,
-        pool: SSHRootPool,
-        poolKey: SSHRootPool.Key,
+        rootSource: AuthenticatedSSHRootSource,
         tmuxExecutable: String = "tmux",
         sourceSession: String,
         runtimeID: UUID = UUID()
     ) {
-        self.connector = connector
-        self.pool = pool
-        self.poolKey = poolKey
+        self.rootSource = rootSource
         self.tmuxExecutable = tmuxExecutable
         self.sourceSession = sourceSession
         self.runtimeID = runtimeID
@@ -44,13 +39,25 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
         self.continuation = continuation
     }
 
+    nonisolated func asTerminalTransport() -> MoriRemoteTerminalTransport {
+        MoriRemoteTerminalTransport(
+            receivedBytes: receivedBytes,
+            start: { try await self.start() },
+            send: { try await self.send($0) },
+            close: { disposition in
+                await self.close(disposition: disposition)
+            },
+            isActive: { await self.isActive() }
+        )
+    }
+
     func start() async throws {
         guard lifecycle != .closed && lifecycle != .closing else { throw SSHTmuxControlTransportError.closed }
         guard lifecycle == .idle else { throw SSHTmuxControlTransportError.alreadyStarted }
         lifecycle = .starting
 
         do {
-            let lease = try await pool.lease(for: poolKey, connector: connector)
+            let lease = try await rootSource.lease()
             guard lifecycle == .starting else {
                 // close won before this healthy shared root was installed here;
                 // return its lease to the pool instead of tearing down peers.
@@ -143,7 +150,7 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
         return await control.isActive()
     }
 
-    func close(disposition: TmuxControlTransportCloseDisposition) async {
+    func close(disposition: MoriRemoteTerminalCloseDisposition) async {
         guard lifecycle != .closed && lifecycle != .closing else { return }
         await terminate(disposition: disposition, error: nil)
     }
@@ -186,7 +193,7 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
 
     /// A mismatch is intentionally non-destructive. Root loss merely leaves an owned
     /// disposable shadow behind; it never risks killing the source workspace.
-    private func cleanupShadowIfPossible(using lease: SSHRootLease) async -> TmuxControlTransportCloseDisposition {
+    private func cleanupShadowIfPossible(using lease: SSHRootLease) async -> MoriRemoteTerminalCloseDisposition {
         guard shadowCreated else { return .reusable }
         do {
             let plan = try TmuxCommandBuilder.cleanupPlan(
@@ -206,7 +213,7 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
 
     /// Claim closing synchronously before the first await. Every caller then sees a
     /// closed transport while this method releases channels, shadow, lease, and stream.
-    private func terminate(disposition: TmuxControlTransportCloseDisposition, error: Error?) async {
+    private func terminate(disposition: MoriRemoteTerminalCloseDisposition, error: Error?) async {
         guard lifecycle != .closed && lifecycle != .closing else { return }
         lifecycle = .closing
         let control = self.control
@@ -225,7 +232,7 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
         if let lease {
             let cleanup = await cleanupShadowIfPossible(using: lease)
             if cleanup == .invalidated { finalDisposition = .invalidated }
-            await lease.release(finalDisposition)
+            await lease.release(finalDisposition == .reusable ? .reusable : .invalidated)
         }
         lifecycle = .closed
         continuation.finish(throwing: error)
