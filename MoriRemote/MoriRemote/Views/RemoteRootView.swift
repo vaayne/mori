@@ -333,7 +333,12 @@ private struct RemoteTerminalDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            MoriRemoteTerminalView(session: runtime.session, onShowSessions: { showsSessions = true })
+            MoriRemoteTerminalView(
+                session: runtime.session,
+                onShowSessions: { showsSessions = true },
+                onShowLibrary: showLibrary,
+                onSharedMutationRequest: { pendingSharedMutation = RemoteSharedMutation($0) }
+            )
                 .id(WorkspaceTerminalPresentation.identity(for: runtime.session.instanceID))
                 .background(Color.black)
         }
@@ -471,6 +476,16 @@ private struct RemoteTerminalDetailView: View {
 
 private enum RemoteSharedMutation: Identifiable, Equatable {
     case newWindow, splitHorizontal, splitVertical, closePane, closeWindow
+
+    init(_ mutation: MoriRemoteTerminalSharedMutation) {
+        self = switch mutation {
+        case .newWindow: .newWindow
+        case .splitHorizontal: .splitHorizontal
+        case .splitVertical: .splitVertical
+        case .closePane: .closePane
+        case .closeWindow: .closeWindow
+        }
+    }
 
     var id: Self { self }
     var value: MoriRemoteTerminalSharedMutation {

@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// Upstream-compatible keyboard intent. The Phase-1 bar intentionally omits
-/// composer and shortcut-marketplace actions, not terminal controls.
 enum GhosttyKeyboardChromeMode: Equatable {
     case hidden
     case system
@@ -45,25 +43,34 @@ extension EnvironmentValues {
 
 enum GhosttyPhoneChromePalette { static let dock = Color.black }
 
-/// The semantic, testable action boundary behind the retained upstream dock.
-/// It has no account, composer, or shortcut-store dependency.
+/// Testable action boundary behind the remux-style menu chrome. Mori adds
+/// categories and shared-mutation requests without importing account,
+/// shortcut-store, or composer dependencies into the terminal module.
 struct GhosttyKeyboardChromeActions {
     let showSessions: () -> Void
+    let showLibrary: () -> Void
     let showWindows: () -> Void
     let showPanes: () -> Void
     let toggleKeyboard: () -> Void
     let toggleControl: () -> Void
     let toggleAlt: () -> Void
+    let requestSharedMutation: (MoriRemoteTerminalSharedMutation) -> Void
     let sendKey: (GhosttySurfaceKeyEvent) -> Bool
 
     func perform(_ action: Action) -> Bool {
         switch action {
         case .sessions: showSessions(); return true
+        case .library: showLibrary(); return true
         case .windows: showWindows(); return true
         case .panes: showPanes(); return true
         case .keyboard: toggleKeyboard(); return true
         case .control: toggleControl(); return true
         case .alt: toggleAlt(); return true
+        case .newWindow: requestSharedMutation(.newWindow); return true
+        case .splitHorizontal: requestSharedMutation(.splitHorizontal); return true
+        case .splitVertical: requestSharedMutation(.splitVertical); return true
+        case .closePane: requestSharedMutation(.closePane); return true
+        case .closeWindow: requestSharedMutation(.closeWindow); return true
         case .escape: return sendKey(.init(keyCode: .escape))
         case .tab: return sendKey(.init(keyCode: .tab))
         case .shiftTab: return sendKey(.init(keyCode: .tab, mods: .shift))
@@ -71,6 +78,10 @@ struct GhosttyKeyboardChromeActions {
         case .arrowUp: return sendKey(.init(keyCode: .arrowUp))
         case .arrowDown: return sendKey(.init(keyCode: .arrowDown))
         case .arrowRight: return sendKey(.init(keyCode: .arrowRight))
+        case .home: return sendKey(.init(keyCode: .home))
+        case .end: return sendKey(.init(keyCode: .end))
+        case .pageUp: return sendKey(.init(keyCode: .pageUp))
+        case .pageDown: return sendKey(.init(keyCode: .pageDown))
         case .questionMark:
             return sendKey(.init(keyCode: .slash, text: "?", mods: .shift, consumedMods: .shift, unshiftedCodepoint: 0x2F))
         case .slash:
@@ -79,14 +90,19 @@ struct GhosttyKeyboardChromeActions {
     }
 
     enum Action {
-        case sessions, windows, panes, keyboard, control, alt, escape, tab, shiftTab
-        case arrowLeft, arrowUp, arrowDown, arrowRight, questionMark, slash
+        case sessions, library, windows, panes, keyboard, control, alt
+        case escape, tab, shiftTab, arrowLeft, arrowUp, arrowDown, arrowRight
+        case home, end, pageUp, pageDown, questionMark, slash
+        case newWindow, splitHorizontal, splitVertical, closePane, closeWindow
     }
 }
 
-/// The retained terminal portion of remux's keyboard chrome. It keeps Ctrl,
-/// Esc, Tab, session/window/pane selectors, and system-keyboard control.
+/// Remux's compact three-group dock with Mori's terminal keys folded into
+/// native menus. Keeping the keyboard at the upstream trailing position makes
+/// its location stable while avoiding a horizontally scrolling toolbar.
 struct GhosttyKeyboardChrome: View {
+    @Environment(\.ghosttyTerminalChromeStyle) private var chromeStyle
+
     let keyboardMode: GhosttyKeyboardChromeMode
     let isEnabled: Bool
     let isCompact: Bool
@@ -98,79 +114,141 @@ struct GhosttyKeyboardChrome: View {
 
     var body: some View {
         HStack(spacing: isCompact ? 6 : 10) {
-            group {
-                icon("keyboard", id: "terminal.keyboard", label: keyboardMode == .hidden ? "Show keyboard" : "Hide keyboard") { actions.perform(.keyboard) }
-            }
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: isCompact ? 6 : 10) {
-                    group {
-                        key("esc", id: "terminal.esc") { actions.perform(.escape) }
-                        key("tab", id: "terminal.tab") { actions.perform(.tab) }
-                        key("ctrl", id: "terminal.ctrl", active: isControlArmed) { actions.perform(.control) }
-                        key("alt", id: "terminal.alt", active: isAltArmed) { actions.perform(.alt) }
-                    }
-                    group {
-                        key("←", id: "terminal.left", label: "Left arrow") { actions.perform(.arrowLeft) }
-                        key("↑", id: "terminal.up", label: "Up arrow") { actions.perform(.arrowUp) }
-                        key("↓", id: "terminal.down", label: "Down arrow") { actions.perform(.arrowDown) }
-                        key("→", id: "terminal.right", label: "Right arrow") { actions.perform(.arrowRight) }
-                    }
-                    group {
-                        key("⇧tab", id: "terminal.shift-tab", label: "Shift Tab", width: 54) { actions.perform(.shiftTab) }
-                        key("?", id: "terminal.question-mark") { actions.perform(.questionMark) }
-                        key("/", id: "terminal.slash") { actions.perform(.slash) }
-                    }
-                    group {
-                        icon("rectangle.stack", id: "terminal.sessions", label: "Sessions") { actions.perform(.sessions) }
-                        icon("rectangle.on.rectangle", id: "terminal.windows", label: "Windows", enabled: windowCount > 0) { actions.perform(.windows) }
-                        icon("square.split.2x1", id: "terminal.panes", label: "Panes", enabled: paneCount > 0) { actions.perform(.panes) }
-                    }
-                }
-            }
+            controlGroup { menuControls }
+            controlGroup { navigationControls }
+            controlGroup { inputControls }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .contain)
     }
 
-    private func group<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        HStack(spacing: 2, content: content)
-            .padding(4)
-            .background(.thinMaterial, in: Capsule())
+    private var menuControls: some View {
+        HStack(spacing: isCompact ? 1 : 2) {
+            Menu {
+                Button { _ = actions.perform(.control) } label: {
+                    Label("Ctrl", systemImage: isControlArmed ? "checkmark" : "control")
+                }
+                Button { _ = actions.perform(.alt) } label: {
+                    Label("Alt", systemImage: isAltArmed ? "checkmark" : "option")
+                }
+            } label: {
+                menuLabel("control", active: isControlArmed || isAltArmed)
+            }
+            .accessibilityLabel(String(localized: "Modifiers"))
+            .accessibilityIdentifier("terminal.modifiers")
+
+            Menu {
+                Section {
+                    Button("Esc") { _ = actions.perform(.escape) }
+                    Button("Tab") { _ = actions.perform(.tab) }
+                    Button("Shift-Tab") { _ = actions.perform(.shiftTab) }
+                }
+                Section {
+                    Button("←  Left") { _ = actions.perform(.arrowLeft) }
+                    Button("↑  Up") { _ = actions.perform(.arrowUp) }
+                    Button("↓  Down") { _ = actions.perform(.arrowDown) }
+                    Button("→  Right") { _ = actions.perform(.arrowRight) }
+                }
+                Section {
+                    Button("Home") { _ = actions.perform(.home) }
+                    Button("End") { _ = actions.perform(.end) }
+                    Button("Page Up") { _ = actions.perform(.pageUp) }
+                    Button("Page Down") { _ = actions.perform(.pageDown) }
+                }
+                Section {
+                    Button("?") { _ = actions.perform(.questionMark) }
+                    Button("/") { _ = actions.perform(.slash) }
+                }
+            } label: {
+                menuLabel("command")
+            }
+            .accessibilityLabel(String(localized: "Terminal keys"))
+            .accessibilityIdentifier("terminal.keys")
+
+            Menu {
+                Section {
+                    Button("New window") { _ = actions.perform(.newWindow) }
+                    Button("Split right") { _ = actions.perform(.splitHorizontal) }
+                    Button("Split down") { _ = actions.perform(.splitVertical) }
+                }
+                Section {
+                    Button("Close pane", role: .destructive) { _ = actions.perform(.closePane) }
+                    Button("Close window", role: .destructive) { _ = actions.perform(.closeWindow) }
+                }
+            } label: {
+                menuLabel("terminal")
+            }
+            .accessibilityLabel(String(localized: "tmux actions"))
+            .accessibilityIdentifier("terminal.tmux-actions")
+        }
+        .disabled(!isEnabled)
     }
 
-    private func key(
-        _ title: String,
+    private var navigationControls: some View {
+        HStack(spacing: isCompact ? 1 : 2) {
+            icon("rectangle.stack", id: "terminal.sessions", label: String(localized: "Sessions")) { actions.perform(.sessions) }
+            icon("rectangle.on.rectangle", id: "terminal.windows", label: String(localized: "Windows"), enabled: windowCount > 0) { actions.perform(.windows) }
+            icon("square.split.2x1", id: "terminal.panes", label: String(localized: "Panes"), enabled: paneCount > 0) { actions.perform(.panes) }
+        }
+    }
+
+    private var inputControls: some View {
+        HStack(spacing: isCompact ? 1 : 2) {
+            icon("house", id: "terminal.home", label: String(localized: "Library"), enabled: true) { actions.perform(.library) }
+            icon("keyboard", id: "terminal.keyboard", label: keyboardMode == .hidden ? String(localized: "Show keyboard") : String(localized: "Hide keyboard"), enabled: true, active: keyboardMode == .system) { actions.perform(.keyboard) }
+        }
+    }
+
+    private func menuLabel(_ systemName: String, active: Bool = false) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 16, weight: .semibold))
+            .frame(width: dockButtonWidth, height: GhosttyKeyboardChromeSizing.dockButtonHeight)
+            .foregroundStyle(active ? chromeStyle.accent : Color.primary)
+            .background(active ? chromeStyle.accent.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: GhosttyKeyboardChromeSizing.dockButtonCornerRadius, style: .continuous))
+            .contentShape(Rectangle())
+    }
+
+    private func controlGroup<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .padding(.horizontal, isCompact ? 3 : 5)
+            .padding(.vertical, GhosttyKeyboardChromeSizing.controlGroupVerticalPadding)
+            .background(.thinMaterial, in: Capsule())
+            .overlay { Capsule().strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.75) }
+    }
+
+    private func icon(
+        _ name: String,
         id: String,
-        label: String? = nil,
+        label: String,
+        enabled: Bool = true,
         active: Bool = false,
-        width: CGFloat = GhosttyKeyboardChromeSizing.dockButtonWidth,
         action: @escaping () -> Bool
     ) -> some View {
-        Button { _ = action() } label: { Text(title).font(.system(size: 12, weight: .semibold)) }
-            .buttonStyle(ChromeButtonStyle(active: active, width: width))
-            .accessibilityLabel(label ?? title)
-            .accessibilityIdentifier(id)
-            .disabled(!isEnabled)
+        Button { _ = action() } label: {
+            Image(systemName: name).font(.system(size: 16.5, weight: .semibold))
+        }
+        .buttonStyle(ChromeButtonStyle(active: active, width: dockButtonWidth))
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(id)
+        .disabled((!isEnabled && id != "terminal.home") || !enabled)
     }
 
-    private func icon(_ name: String, id: String, label: String, enabled: Bool = true, action: @escaping () -> Bool) -> some View {
-        Button { _ = action() } label: { Image(systemName: name).font(.system(size: 16, weight: .semibold)) }
-            .buttonStyle(ChromeButtonStyle(active: id == "terminal.keyboard" && keyboardMode == .system, width: GhosttyKeyboardChromeSizing.dockButtonWidth))
-            .accessibilityLabel(label)
-            .accessibilityIdentifier(id)
-            .disabled(!isEnabled || !enabled)
+    private var dockButtonWidth: CGFloat {
+        isCompact ? GhosttyKeyboardChromeSizing.compactDockButtonWidth : GhosttyKeyboardChromeSizing.dockButtonWidth
     }
 }
 
 private struct ChromeButtonStyle: ButtonStyle {
     let active: Bool
     let width: CGFloat
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .frame(width: width, height: GhosttyKeyboardChromeSizing.dockButtonHeight)
             .foregroundStyle(active ? Color.accentColor : Color.primary)
-            .background(active ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: GhosttyKeyboardChromeSizing.dockButtonCornerRadius, style: .continuous))
+            .background(active ? Color.accentColor.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: GhosttyKeyboardChromeSizing.dockButtonCornerRadius, style: .continuous))
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .opacity(configuration.isPressed ? 0.65 : 1)
     }
 }

@@ -9,8 +9,11 @@ import UIKit
 /// sheets, and terminal keyboard chrome. Its only construction input is the
 /// adapter, so deterministic tests never need Mori SSH or persistence.
 struct GhosttyTerminalCoreView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @ObservedObject private var screen: TmuxTerminalScreenAdapter
     private let onShowSessions: () -> Void
+    private let onShowLibrary: () -> Void
+    private let onSharedMutationRequest: (MoriRemoteTerminalSharedMutation) -> Void
     @State private var terminalInputController = GhosttyTerminalInputController()
     @State private var responderHandoff = GhosttyKeyboardResponderHandoff()
     @State private var trackpadDriver = GhosttyKeyboardCursorTrackpadDriver()
@@ -22,10 +25,14 @@ struct GhosttyTerminalCoreView: View {
 
     init(
         screen: TmuxTerminalScreenAdapter,
-        onShowSessions: @escaping () -> Void = {}
+        onShowSessions: @escaping () -> Void = {},
+        onShowLibrary: @escaping () -> Void = {},
+        onSharedMutationRequest: @escaping (MoriRemoteTerminalSharedMutation) -> Void = { _ in }
     ) {
         self.screen = screen
         self.onShowSessions = onShowSessions
+        self.onShowLibrary = onShowLibrary
+        self.onSharedMutationRequest = onSharedMutationRequest
     }
 
     var body: some View {
@@ -81,18 +88,20 @@ struct GhosttyTerminalCoreView: View {
             GhosttyKeyboardChrome(
                 keyboardMode: compositionState.inputCoordinator.keyboardMode,
                 isEnabled: interaction.isInputAvailable,
-                isCompact: false,
+                isCompact: horizontalSizeClass == .compact,
                 isControlArmed: terminalInputController.isControlArmed,
                 isAltArmed: terminalInputController.isAltArmed,
                 windowCount: interaction.windowCount,
                 paneCount: interaction.paneCount,
                 actions: .init(
                     showSessions: onShowSessions,
+                    showLibrary: onShowLibrary,
                     showWindows: showWindows,
                     showPanes: showPanes,
                     toggleKeyboard: toggleKeyboard,
                     toggleControl: { terminalInputController.toggleControl() },
                     toggleAlt: { terminalInputController.toggleAlt() },
+                    requestSharedMutation: onSharedMutationRequest,
                     sendKey: sendTerminalKey
                 )
             )

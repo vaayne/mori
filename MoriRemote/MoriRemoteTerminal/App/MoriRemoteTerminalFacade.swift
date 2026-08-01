@@ -42,6 +42,12 @@ public enum MoriRemoteTerminalConnectionState: Equatable, Sendable {
     case connecting, ready, disconnected
 }
 
+enum MoriRemoteTerminalConnectionProjection {
+    static func applying(_ incoming: MoriRemoteTerminalConnectionState, hasTopology: Bool) -> MoriRemoteTerminalConnectionState {
+        incoming == .connecting && hasTopology ? .ready : incoming
+    }
+}
+
 public struct MoriRemoteTerminalPane: Identifiable, Equatable, Sendable {
     public let id: UInt64
     public let windowID: UInt64
@@ -160,7 +166,9 @@ public final class MoriRemoteTerminalSession: ObservableObject {
             lastError = nil
             publishConnectionState(.ready)
         case .attaching, .syncing:
-            publishConnectionState(.connecting)
+            // Topology proves the control client is usable. A delayed syncing
+            // callback must not regress an already rendered terminal to Connecting.
+            publishConnectionState(MoriRemoteTerminalConnectionProjection.applying(.connecting, hasTopology: topology != nil))
         case .detached, .closed:
             publishConnectionState(.disconnected)
         }
@@ -186,10 +194,27 @@ public final class MoriRemoteTerminalSession: ObservableObject {
 public struct MoriRemoteTerminalView: View {
     @ObservedObject private var session: MoriRemoteTerminalSession
     private let onShowSessions: () -> Void
-    public init(session: MoriRemoteTerminalSession, onShowSessions: @escaping () -> Void = {}) {
-        self.session = session; self.onShowSessions = onShowSessions
+    private let onShowLibrary: () -> Void
+    private let onSharedMutationRequest: (MoriRemoteTerminalSharedMutation) -> Void
+
+    public init(
+        session: MoriRemoteTerminalSession,
+        onShowSessions: @escaping () -> Void = {},
+        onShowLibrary: @escaping () -> Void = {},
+        onSharedMutationRequest: @escaping (MoriRemoteTerminalSharedMutation) -> Void = { _ in }
+    ) {
+        self.session = session
+        self.onShowSessions = onShowSessions
+        self.onShowLibrary = onShowLibrary
+        self.onSharedMutationRequest = onSharedMutationRequest
     }
+
     public var body: some View {
-        GhosttyTerminalCoreView(screen: session.screen.screenAdapter, onShowSessions: onShowSessions)
+        GhosttyTerminalCoreView(
+            screen: session.screen.screenAdapter,
+            onShowSessions: onShowSessions,
+            onShowLibrary: onShowLibrary,
+            onSharedMutationRequest: onSharedMutationRequest
+        )
     }
 }

@@ -115,6 +115,14 @@
 "Function Keys" = "功能键";
 "Home key" = "Home 键";
 "Modifiers" = "修饰键";
+"Terminal keys" = "终端按键";
+"tmux actions" = "tmux 操作";
+"New window" = "新建窗口";
+"Split right" = "向右分屏";
+"Split down" = "向下分屏";
+"Close window" = "关闭窗口";
+"Page Up" = "向上翻页";
+"Page Down" = "向下翻页";
 "Navigation" = "导航";
 "Next Pane" = "下一个面板";
 "Next pane (⌘])" = "下一个面板（⌘]）";

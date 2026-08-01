@@ -10,11 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Features
 
 - **iOS (MoriRemote)**: Rebuilt the remote companion around a secure, pane-native tmux control runtime. It supports saved workspaces, password or OpenSSH private-key authentication, explicit host-key trust, local terminal history/selection, agent status, and adaptive iPhone/iPad presentation without taking over another attached tmux client's selection or size.
-- **iOS (MoriRemote)**: Expanded the terminal shortcut bar with one-shot Ctrl and Alt, Esc, Tab, Shift-Tab, arrow keys, `?`, and `/`. The shortcut row scrolls horizontally while the keyboard toggle stays pinned at the left edge.
+- **iOS (MoriRemote)**: Restored remux’s compact three-group terminal bar. One-shot Ctrl/Alt, common terminal keys, and shared tmux actions now live in native menus; Sessions/Windows/Panes remain one-tap selectors, with Library and the keyboard toggle at the trailing edge.
 - **iOS (MoriRemote)**: Server profiles now discover their live tmux sessions after SSH login, so users choose a session from the library instead of manually creating workspace records.
 
 ### 🐛 Bug Fixes
 
+- **iOS (MoriRemote)**: Prevented a usable terminal from remaining labeled “Connecting…” when a delayed syncing callback arrives after live topology.
 - **iOS (MoriRemote)**: Fixed SSH tmux connections remaining on “Waiting for the active tmux pane” even though the remote control client had attached.
 - **iOS (MoriRemote)**: Hardened credentials to device-bound, unlocked-only Keychain storage; fenced Ghostty shutdown behind terminal-surface teardown; defer reconnects while backgrounded; and release dormant runtimes first under memory pressure.
 

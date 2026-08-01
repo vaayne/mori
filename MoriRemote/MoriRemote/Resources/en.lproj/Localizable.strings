@@ -115,6 +115,14 @@
 "Function Keys" = "Function Keys";
 "Home key" = "Home key";
 "Modifiers" = "Modifiers";
+"Terminal keys" = "Terminal Keys";
+"tmux actions" = "tmux Actions";
+"New window" = "New Window";
+"Split right" = "Split Right";
+"Split down" = "Split Down";
+"Close window" = "Close Window";
+"Page Up" = "Page Up";
+"Page Down" = "Page Down";
 "Navigation" = "Navigation";
 "Next Pane" = "Next Pane";
 "Next pane (⌘])" = "Next pane (⌘])";

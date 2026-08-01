@@ -221,7 +221,9 @@ final class ActiveWorkspaceRuntime {
     private func receive(_ state: MoriRemoteTerminalConnectionState) {
         switch state {
         case .connecting:
-            status = .connecting
+            // A late syncing notification may race the topology callback. Once
+            // topology exists, the rendered terminal is authoritative and ready.
+            if topology == nil { status = .connecting }
         case .ready:
             status = .ready
         case .disconnected:

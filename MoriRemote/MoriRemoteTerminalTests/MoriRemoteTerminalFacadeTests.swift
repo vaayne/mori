@@ -17,6 +17,17 @@ final class MoriRemoteTerminalFacadeTests: XCTestCase {
         await session.stop()
     }
 
+    func testLateSyncCannotRegressRenderedTopologyToConnecting() {
+        XCTAssertEqual(
+            MoriRemoteTerminalConnectionProjection.applying(.connecting, hasTopology: true),
+            .ready
+        )
+        XCTAssertEqual(
+            MoriRemoteTerminalConnectionProjection.applying(.connecting, hasTopology: false),
+            .connecting
+        )
+    }
+
     func testStoppedSessionReturnsFixedFailedMetadataResult() async throws {
         let session = try MoriRemoteTerminalSession(transport: inertTransport())
         await session.stop()
