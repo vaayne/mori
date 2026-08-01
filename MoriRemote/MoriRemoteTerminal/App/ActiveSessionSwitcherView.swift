@@ -2,13 +2,20 @@ import SwiftUI
 
 /// Account-free projection used by the terminal shell. Mori's profile model is
 /// intentionally adapted at the Phase-2 composition boundary, not imported.
-struct ActiveSessionSwitcherItem: Identifiable, Equatable {
-    let id: UUID
-    let sessionName: String
-    let subtitle: String
-    let runtimeState: TerminalRuntimeState
-    let isSelected: Bool
-    let lastOpenedAt: Date
+public struct ActiveSessionSwitcherItem: Identifiable, Equatable {
+    public let id: UUID
+    public let sessionName: String
+    public let subtitle: String
+    public let isSelected: Bool
+    public let lastOpenedAt: Date
+
+    public init(id: UUID, sessionName: String, subtitle: String, isSelected: Bool, lastOpenedAt: Date) {
+        self.id = id
+        self.sessionName = sessionName
+        self.subtitle = subtitle
+        self.isSelected = isSelected
+        self.lastOpenedAt = lastOpenedAt
+    }
 }
 
 enum ActiveSessionSwitcherProjection {
@@ -20,13 +27,23 @@ enum ActiveSessionSwitcherProjection {
     }
 }
 
-struct ActiveSessionSwitcherView: View {
+public struct ActiveSessionSwitcherView: View {
     @Environment(\.dismiss) private var dismiss
     let sessions: [ActiveSessionSwitcherItem]
     let onSelectSession: (UUID) -> Void
     let onDisconnectSession: (UUID) -> Void
 
-    var body: some View {
+    public init(
+        sessions: [ActiveSessionSwitcherItem],
+        onSelectSession: @escaping (UUID) -> Void,
+        onDisconnectSession: @escaping (UUID) -> Void
+    ) {
+        self.sessions = sessions
+        self.onSelectSession = onSelectSession
+        self.onDisconnectSession = onDisconnectSession
+    }
+
+    public var body: some View {
         List(ActiveSessionSwitcherProjection.items(sessions)) { session in
             Button {
                 onSelectSession(session.id)
@@ -39,7 +56,7 @@ struct ActiveSessionSwitcherView: View {
             }
             .swipeActions {
                 Button(role: .destructive) { onDisconnectSession(session.id) } label: {
-                    Label("Disconnect", systemImage: "bolt.slash")
+                    Label(String(localized: "Disconnect"), systemImage: "bolt.slash")
                 }
             }
         }

@@ -1,4 +1,5 @@
 import Foundation
+import MoriRemoteTerminal
 import Observation
 import SwiftUI
 
@@ -106,6 +107,12 @@ struct WorkspaceMemoryPressurePolicy: Sendable {
     }
 }
 
+/// Adaptive chrome may change around a workspace, but never the retained
+/// terminal-session identity. A new runtime is the only valid replacement.
+enum WorkspaceTerminalPresentation: Sendable {
+    static func identity(for sessionInstanceID: UUID) -> UUID { sessionInstanceID }
+}
+
 /// Main-actor admission fence for asynchronous connection attempts. A token is
 /// claimed before the first await, then invalidated by disconnect/delete/replacement.
 enum SSHTrustPresentation: Equatable {
@@ -139,84 +146,82 @@ struct WorkspaceConnectionAttemptLedger: Sendable {
 final class ActiveWorkspaceRuntime {
     let workspace: SavedWorkspace
     let instanceID: UUID
-    private let runtime: GhosttyTmuxRuntime
+    let session: MoriRemoteTerminalSession
     private let metadataProjector: AgentMetadataProjector
-    private let initialScrollbackLines: Int
-    private(set) var topology: TmuxSessionController.Topology?
-    var agentMetadata: [TmuxPaneID: AgentMetadata] { metadataProjector.metadata }
-    private(set) var focusedPaneID: TmuxPaneID?
+    private(set) var topology: MoriRemoteTerminalTopology?
+    var agentMetadata: [UInt64: AgentMetadata] { metadataProjector.metadata }
+    var focusedPaneID: UInt64? {
+        guard let activeWindowID = topology?.activeWindowID else { return nil }
+        return topology?.windows.first(where: { $0.id == activeWindowID })?.activePaneID
+    }
     private(set) var status: WorkspaceRuntimeStatus = .connecting
     var onTransportLoss: (@MainActor (UUID) -> Void)?
     var onChange: (@MainActor () -> Void)?
 
-    init(workspace: SavedWorkspace, settings: RemoteSettings, app: GhosttyKitRuntime, transport: any TmuxControlTransport, instanceID: UUID = UUID()) {
+    init(workspace: SavedWorkspace, settings: RemoteSettings, transport: MoriRemoteTerminalTransport, instanceID: UUID = UUID()) throws {
         self.workspace = workspace
         self.instanceID = instanceID
-        initialScrollbackLines = settings.effectiveInitialScrollbackLines
-        let runtime = GhosttyTmuxRuntime(app: app.appHandle, transport: transport, instanceID: instanceID)
-        self.runtime = runtime
-        metadataProjector = AgentMetadataProjector(instanceID: instanceID) { completion in
-            runtime.queryAgentMetadata(completion: completion)
+        session = try MoriRemoteTerminalSession(
+            transport: transport,
+            initialScrollbackLines: settings.effectiveInitialScrollbackLines,
+            instanceID: instanceID
+        )
+        metadataProjector = AgentMetadataProjector(instanceID: instanceID) { [session] in
+            let result = await session.queryAgentMetadata()
+            return .init(succeeded: result.status == .success, body: result.body)
         }
         metadataProjector.onChange = { [weak self] in self?.onChange?() }
-        runtime.onTopology = { [weak self] topology in
+        session.onTopologyChange = { [weak self] topology in
             guard let self else { return }
             self.topology = topology
-            if let focused = self.focusedPaneID, topology.panes.contains(where: { $0.id == focused }) {
-                // Keep client-local focus stable through topology updates.
-            } else {
-                self.focusedPaneID = topology.activePaneID
-            }
             self.status = .ready
-            self.metadataProjector.topologyDidChange(topology)
+            self.metadataProjector.topologyDidChange(paneIDs: topology.panes.map(\.id))
             self.onChange?()
         }
-        runtime.onState = { [weak self] state in
-            guard let self else { return }
-            switch state {
-            case .ready:
-                self.status = .ready
-                // Topology normally follows, but a ready signal without it must
-                // still dismiss the connecting presentation deterministically.
-                if self.topology == nil { self.onChange?() }
-            case .detached:
-                self.status = .disconnected(String(localized: "Connection lost."))
-                self.onChange?()
-                self.onTransportLoss?(self.instanceID)
-            case .closed: self.onChange?()
-            case .attaching: self.status = .connecting; self.onChange?()
-            }
-        }
-        // Surface registration completes asynchronously after topology. Wake
-        // SwiftUI when the real renderer arrives instead of leaving a quiet pane
-        // on the placeholder until another tmux event happens.
-        runtime.onSurface = { [weak self] _ in self?.onChange?() }
-        runtime.onInputFailed = { [weak self] _ in self?.onChange?() }
+        session.onConnectionStateChange = { [weak self] state in self?.receive(state) }
+        session.setPresentationActive(false)
     }
 
-    func start() async throws { try await runtime.start(columns: 120, rows: 40, historyLineLimit: initialScrollbackLines) }
-    func stop() async { metadataProjector.stop(); await runtime.stop() }
-    func setMetadataRefreshVisible(_ visible: Bool) { metadataProjector.setVisible(visible) }
+    func start() async throws { try await session.start() }
+    func stop() async { metadataProjector.stop(); await session.stop() }
+    func setVisible(_ visible: Bool) {
+        metadataProjector.setVisible(visible)
+        session.setPresentationActive(visible)
+    }
     func foregrounded() { metadataProjector.foregrounded() }
     func confirmTransportAfterForeground() async {
-        guard !(await runtime.isActive()) else {
-            foregrounded()
+        guard await session.isControlChannelActive() else {
+            status = .disconnected(String(localized: "Connection lost."))
+            onChange?()
+            onTransportLoss?(instanceID)
             return
         }
-        status = .disconnected(String(localized: "Connection lost."))
-        onChange?()
-        onTransportLoss?(instanceID)
+        foregrounded()
     }
-    func surface() -> TmuxPaneSurface? { focusedPaneID.flatMap(runtime.surface(for:)) }
-    func metadata(for paneID: TmuxPaneID) -> AgentMetadata { agentMetadata[paneID] ?? .unknown }
+    func metadata(for paneID: UInt64) -> AgentMetadata { agentMetadata[paneID] ?? .unknown }
     var agentSummary: AgentMetadata {
         agentMetadata.values.max { lhs, rhs in lhs.state.priority < rhs.state.priority } ?? .unknown
     }
-    func selectWindow(_ id: TmuxWindowID) { runtime.selectWindow(id) }
-    func selectPane(_ id: TmuxPaneID) { focusedPaneID = id; runtime.selectPane(id); onChange?() }
-    func split(horizontal: Bool) { runtime.mutateSharedWorkspace(horizontal ? .splitHorizontal : .splitVertical) }
-    func newWindow() { runtime.mutateSharedWorkspace(.newWindow) }
-    func closePane() { runtime.mutateSharedWorkspace(.closePane) }
+    func selectWindow(_ id: UInt64) { session.selectWindow(id) }
+    func selectPane(_ id: UInt64) { session.selectPane(id); onChange?() }
+    func performSharedMutation(_ mutation: MoriRemoteTerminalSharedMutation) { session.performSharedMutation(mutation) }
+
+    private func receive(_ state: MoriRemoteTerminalConnectionState) {
+        switch state {
+        case .connecting:
+            status = .connecting
+        case .ready:
+            status = .ready
+        case .disconnected:
+            let wasDisconnected: Bool
+            if case .disconnected = status { wasDisconnected = true } else { wasDisconnected = false }
+            status = .disconnected(String(localized: "Connection lost."))
+            // A thrown start error is already surfaced by connect(); only a
+            // post-start transport transition earns the bounded reconnect.
+            if !wasDisconnected, session.lastError == nil { onTransportLoss?(instanceID) }
+        }
+        onChange?()
+    }
 }
 
 @MainActor @Observable
@@ -251,7 +256,7 @@ final class RemoteRootModel {
     var activeRuntime: ActiveWorkspaceRuntime? { activeWorkspaceID.flatMap { runtimes[$0] } }
     var activeWorkspaces: [SavedWorkspace] { workspaces.filter { runtimes[$0.id] != nil } }
     func agentSummary(for workspaceID: UUID) -> AgentMetadata { runtimes[workspaceID]?.agentSummary ?? .unknown }
-    func metadata(for workspaceID: UUID, paneID: TmuxPaneID) -> AgentMetadata { runtimes[workspaceID]?.metadata(for: paneID) ?? .unknown }
+    func metadata(for workspaceID: UUID, paneID: UInt64) -> AgentMetadata { runtimes[workspaceID]?.metadata(for: paneID) ?? .unknown }
 
     func bootstrap() {
         guard !isLoaded, loadingTask == nil else { return }
@@ -356,7 +361,12 @@ final class RemoteRootModel {
                     sourceSession: material.0.tmuxSession,
                     runtimeID: instanceID
                 )
-                let created = ActiveWorkspaceRuntime(workspace: material.0, settings: material.3, app: try self.dependencies.terminalRuntime(), transport: transport, instanceID: instanceID)
+                let created = try ActiveWorkspaceRuntime(
+                    workspace: material.0,
+                    settings: material.3,
+                    transport: transport.asTerminalTransport(),
+                    instanceID: instanceID
+                )
                 runtime = created
                 guard self.attemptIsCurrent(attempt, workspaceID: workspaceID) else { await created.stop(); return }
                 created.onTransportLoss = { [weak self] id in self?.lost(workspaceID: workspaceID, instanceID: id) }
@@ -424,22 +434,22 @@ final class RemoteRootModel {
         deferredReconnects.remove(workspaceID)
         guard let runtime = runtimes.removeValue(forKey: workspaceID) else { return }
         if activeWorkspaceID == workspaceID { activeWorkspaceID = nil }
-        runtime.setMetadataRefreshVisible(false)
+        runtime.setVisible(false)
         await runtime.stop()
     }
 
     func disconnectActive() { if let activeWorkspaceID { Task { await disconnect(workspaceID: activeWorkspaceID) } } }
-    func selectWindow(_ id: TmuxWindowID) { activeRuntime?.selectWindow(id) }
-    func selectPane(_ id: TmuxPaneID) { activeRuntime?.selectPane(id) }
-    func split(horizontal: Bool) { activeRuntime?.split(horizontal: horizontal) }
-    func newWindow() { activeRuntime?.newWindow() }
-    func closePane() { activeRuntime?.closePane() }
+    func selectWindow(_ id: UInt64) { activeRuntime?.selectWindow(id) }
+    func selectPane(_ id: UInt64) { activeRuntime?.selectPane(id) }
+    func performSharedMutation(_ mutation: MoriRemoteTerminalSharedMutation) {
+        activeRuntime?.performSharedMutation(mutation)
+    }
     /// Scene activation is intentionally metadata-only: reconnect remains
     /// reserved for a real control-transport loss. Backgrounding stops the
     /// visible-runtime poll; foregrounding starts one immediate refresh.
     func scenePhaseChanged(_ phase: ScenePhase) {
         sceneIsActive = phase == .active
-        activeRuntime?.setMetadataRefreshVisible(sceneIsActive)
+        activeRuntime?.setVisible(sceneIsActive)
         guard sceneIsActive else { return }
         // A loss can occur in any live workspace while iOS suspends this scene.
         // Drain all deferred attempts before probing the focused one; otherwise
@@ -472,12 +482,12 @@ final class RemoteRootModel {
 
     private func activate(workspaceID: UUID) {
         guard activeWorkspaceID != workspaceID else {
-            runtimes[workspaceID]?.setMetadataRefreshVisible(sceneIsActive)
+            runtimes[workspaceID]?.setVisible(sceneIsActive)
             return
         }
-        if let activeWorkspaceID { runtimes[activeWorkspaceID]?.setMetadataRefreshVisible(false) }
+        if let activeWorkspaceID { runtimes[activeWorkspaceID]?.setVisible(false) }
         activeWorkspaceID = workspaceID
-        runtimes[workspaceID]?.setMetadataRefreshVisible(sceneIsActive)
+        runtimes[workspaceID]?.setVisible(sceneIsActive)
     }
 
     private func attemptIsCurrent(_ attempt: UUID, workspaceID: UUID) -> Bool {
@@ -489,7 +499,7 @@ final class RemoteRootModel {
             runtimes[workspaceID] = nil
             if activeWorkspaceID == workspaceID { activeWorkspaceID = nil }
         }
-        runtime.setMetadataRefreshVisible(false)
+        runtime.setVisible(false)
         await runtime.stop()
     }
 

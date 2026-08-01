@@ -12,12 +12,14 @@ final class TmuxScreenModel: ObservableObject {
     init(
         app: ghostty_app_t,
         transport: any TmuxControlTransport,
+        historyLineLimit: Int,
         baseSurfaceConfig: @escaping () -> ghostty_terminal_surface_config_s,
         paneViewTheme: @escaping () -> TerminalTheme
     ) {
         let session = TmuxTerminalSession(
             app: app,
             transport: transport,
+            historyLineLimit: historyLineLimit,
             baseSurfaceConfig: baseSurfaceConfig,
             paneViewTheme: paneViewTheme
         )
@@ -27,10 +29,15 @@ final class TmuxScreenModel: ObservableObject {
             initialViewportHandler: { [weak session] size, scale in
                 session?.updateViewportMetrics(size: size, scale: scale)
             },
-            clientSizeHandler: { _ in },
             viewportStabilityHandler: { _ in }
         )
     }
+
+    func connect() async throws {
+        try await session?.connect()
+    }
+
+    var screenAdapter: TmuxTerminalScreenAdapter { terminalScreenAdapter }
 
     func stop() async {
         terminalScreenAdapter.invalidate()

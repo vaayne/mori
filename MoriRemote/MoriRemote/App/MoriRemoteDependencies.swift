@@ -8,7 +8,6 @@ final class MoriRemoteDependencies {
     let library: RemoteLibrary
     let trustedHosts: TrustedHostStore
     let roots = SSHRootPool()
-    private var ghosttyRuntime: GhosttyKitRuntime?
 
     init(storage: MoriRemoteStorage, legacyServersURL: URL) {
         trustedHosts = storage.trustedHosts
@@ -26,12 +25,6 @@ final class MoriRemoteDependencies {
         }
     }
 
-    func terminalRuntime() throws -> GhosttyKitRuntime {
-        if let ghosttyRuntime { return ghosttyRuntime }
-        let runtime = try GhosttyKitRuntime()
-        ghosttyRuntime = runtime
-        return runtime
-    }
 }
 
 struct RemoteLibrarySnapshot: Sendable {

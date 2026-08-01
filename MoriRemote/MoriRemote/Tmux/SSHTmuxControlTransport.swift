@@ -1,9 +1,10 @@
 import Foundation
+import MoriRemoteTerminal
 
 /// The Phase 2 vertical transport. Startup mutations deliberately happen on separate
 /// no-PTY exec children: version probe, grouped shadow creation, then the long-lived
 /// `tmux -C` child. A rejected/old probe therefore cannot create a tmux session.
-actor SSHTmuxControlTransport: TmuxControlTransport {
+actor SSHTmuxControlTransport {
     nonisolated let receivedBytes: AsyncThrowingStream<Data, Error>
 
     private enum Lifecycle: Equatable { case idle, starting, started, closing, closed }
@@ -42,6 +43,18 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
         var continuation: AsyncThrowingStream<Data, Error>.Continuation!
         receivedBytes = AsyncThrowingStream { continuation = $0 }
         self.continuation = continuation
+    }
+
+    nonisolated func asTerminalTransport() -> MoriRemoteTerminalTransport {
+        MoriRemoteTerminalTransport(
+            receivedBytes: receivedBytes,
+            start: { try await self.start() },
+            send: { try await self.send($0) },
+            close: { disposition in
+                await self.close(disposition: disposition)
+            },
+            isActive: { await self.isActive() }
+        )
     }
 
     func start() async throws {
@@ -143,7 +156,7 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
         return await control.isActive()
     }
 
-    func close(disposition: TmuxControlTransportCloseDisposition) async {
+    func close(disposition: MoriRemoteTerminalCloseDisposition) async {
         guard lifecycle != .closed && lifecycle != .closing else { return }
         await terminate(disposition: disposition, error: nil)
     }
@@ -186,7 +199,7 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
 
     /// A mismatch is intentionally non-destructive. Root loss merely leaves an owned
     /// disposable shadow behind; it never risks killing the source workspace.
-    private func cleanupShadowIfPossible(using lease: SSHRootLease) async -> TmuxControlTransportCloseDisposition {
+    private func cleanupShadowIfPossible(using lease: SSHRootLease) async -> MoriRemoteTerminalCloseDisposition {
         guard shadowCreated else { return .reusable }
         do {
             let plan = try TmuxCommandBuilder.cleanupPlan(
@@ -206,7 +219,7 @@ actor SSHTmuxControlTransport: TmuxControlTransport {
 
     /// Claim closing synchronously before the first await. Every caller then sees a
     /// closed transport while this method releases channels, shadow, lease, and stream.
-    private func terminate(disposition: TmuxControlTransportCloseDisposition, error: Error?) async {
+    private func terminate(disposition: MoriRemoteTerminalCloseDisposition, error: Error?) async {
         guard lifecycle != .closed && lifecycle != .closing else { return }
         lifecycle = .closing
         let control = self.control

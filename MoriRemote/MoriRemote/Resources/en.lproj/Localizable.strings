@@ -185,7 +185,11 @@
 "Split down (shared)" = "Split Down (shared)";
 "New window (shared)" = "New Window (shared)";
 "Close pane (shared)" = "Close Pane (shared)";
+"Close window (shared)" = "Close Window (shared)";
 "Close pane" = "Close Pane";
+
+"Confirm shared workspace change" = "Confirm Shared Workspace Change";
+"This change affects every tmux client." = "This change affects every tmux client.";
 "Close shared pane?" = "Close Shared Pane?";
 "Closing this shared pane affects every tmux client." = "Closing this shared pane affects every tmux client.";
 "Confirm destructive action" = "Confirm Destructive Action";
@@ -196,6 +200,7 @@
 "Waiting for the active tmux pane." = "Waiting for the active tmux pane.";
 "Windows" = "Windows";
 "Panes" = "Panes";
+"Active workspaces" = "Active Workspaces";
 "Workspace controls" = "Workspace Controls";
 "Server" = "Server";
 "Name" = "Name";

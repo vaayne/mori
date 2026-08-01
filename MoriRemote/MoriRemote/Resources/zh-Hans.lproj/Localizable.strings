@@ -185,7 +185,11 @@
 "Split down (shared)" = "向下分屏（共享）";
 "New window (shared)" = "新建窗口（共享）";
 "Close pane (shared)" = "关闭面板（共享）";
+"Close window (shared)" = "关闭窗口（共享）";
 "Close pane" = "关闭面板";
+
+"Confirm shared workspace change" = "确认共享工作区更改";
+"This change affects every tmux client." = "此更改会影响每个 tmux 客户端。";
 "Close shared pane?" = "关闭共享面板？";
 "Closing this shared pane affects every tmux client." = "关闭此共享面板会影响所有 tmux 客户端。";
 "Confirm destructive action" = "确认破坏性操作";
@@ -196,6 +200,7 @@
 "Waiting for the active tmux pane." = "正在等待活动的 tmux 面板。";
 "Windows" = "窗口";
 "Panes" = "面板";
+"Active workspaces" = "活动工作区";
 "Workspace controls" = "工作区控制";
 "Server" = "服务器";
 "Name" = "名称";

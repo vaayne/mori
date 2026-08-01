@@ -122,33 +122,6 @@ protocol GhosttyTmuxActionModeling: ObservableObject {
     func focusAdjacentTmuxTopLevel(
         _ direction: GhosttyRuntimeSelectionDirection
     ) -> GhosttyTmuxModelActionOutcome
-
-    @discardableResult
-    func createTmuxWindow() -> GhosttyTmuxModelActionOutcome
-
-    @discardableResult
-    func splitFocusedTmuxPane(
-        _ direction: ghostty_action_split_direction_e
-    ) -> GhosttyTmuxModelActionOutcome
-
-    @discardableResult
-    func closeTmuxPane(_ id: UUID) -> GhosttyTmuxModelActionOutcome
-
-    @discardableResult
-    func closeTmuxWindow(_ id: UUID) -> GhosttyTmuxModelActionOutcome
-
-    @discardableResult
-    func enterFocusedTmuxCopyMode() -> GhosttyTmuxModelActionOutcome
-
-    // MARK: Topology action interaction effects
-
-    func createTmuxWindowInteractionEffect() -> GhosttyTmuxTopologyActionInteractionEffect
-    func splitFocusedTmuxPaneInteractionEffect() -> GhosttyTmuxTopologyActionInteractionEffect
-    func closeTmuxWindowInteractionEffect(_ id: UUID) -> GhosttyTmuxTopologyActionInteractionEffect
-    func closeTmuxPaneInteractionEffect(
-        _ id: UUID,
-        inTopLevel topLevelID: UUID
-    ) -> GhosttyTmuxTopologyActionInteractionEffect
 }
 
 @MainActor

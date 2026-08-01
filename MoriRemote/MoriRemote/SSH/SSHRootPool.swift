@@ -1,4 +1,5 @@
 import Foundation
+import MoriRemoteTerminal
 
 protocol SSHChildChannel: AnyObject, Sendable {
     var receivedBytes: AsyncThrowingStream<Data, Error> { get }
@@ -91,7 +92,7 @@ actor SSHRootPool {
         }
     }
 
-    fileprivate func release(_ lease: SSHRootLease, disposition: TmuxControlTransportCloseDisposition) async {
+    fileprivate func release(_ lease: SSHRootLease, disposition: MoriRemoteTerminalCloseDisposition) async {
         guard let key = lease.key, let token = lease.token else {
             await lease.root.close()
             return
@@ -196,7 +197,7 @@ struct SSHRootLease: Sendable {
         self.token = token
     }
 
-    func release(_ disposition: TmuxControlTransportCloseDisposition) async {
+    func release(_ disposition: MoriRemoteTerminalCloseDisposition) async {
         let shouldRelease = releaseState.claim()
         guard shouldRelease else { return }
         await pool.release(self, disposition: disposition)

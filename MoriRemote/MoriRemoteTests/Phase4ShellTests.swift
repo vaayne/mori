@@ -4,20 +4,7 @@ import Testing
 @testable import MoriRemote
 
 @Suite("Phase 4 app shell contracts") struct Phase4ShellTests {
-    @Test("input-only copy-mode cancellation is ordered but never exposed as browsing")
-    func inputModePolicy() {
-        #expect(TmuxClientCommandPolicy.isAllowed(TmuxClientCommandPolicy.cancelStaleInputMode))
-        #expect(!TmuxClientCommandPolicy.isAllowed("copy-mode -t %1"))
-        #expect(!TmuxClientCommandPolicy.isAllowed("resize-pane -Z -t %1"))
-        #expect(!TmuxClientCommandPolicy.isAllowed("refresh-client -C 80x24"))
-    }
 
-    @Test("shared mutations are explicit and bounded")
-    func sharedMutations() {
-        for mutation in [TmuxClientCommandPolicy.SharedMutation.splitHorizontal, .splitVertical, .newWindow, .closePane] {
-            #expect(TmuxClientCommandPolicy.isAllowed(TmuxClientCommandPolicy.shared(mutation)))
-        }
-    }
 
     @Test("reconnect policy retries only a transport loss once")
     func reconnectPolicy() {
@@ -176,16 +163,7 @@ import Testing
         _ = try await library.delete(serverID: serverID)
     }
 
-    @Test("terminal host replacement only reuses the same surface identity")
-    func terminalHostAttachmentPolicy() {
-        final class Surface {}
-        let first = Surface(), second = Surface()
-        let firstID = ObjectIdentifier(first)
-        #expect(!GhosttyTerminalHostAttachmentPolicy.needsReplacement(current: firstID, next: firstID))
-        #expect(GhosttyTerminalHostAttachmentPolicy.needsReplacement(current: firstID, next: ObjectIdentifier(second)))
-        #expect(GhosttyTerminalHostAttachmentPolicy.ownsPaneView(superviewIsHostScroll: true))
-        #expect(!GhosttyTerminalHostAttachmentPolicy.ownsPaneView(superviewIsHostScroll: false))
-    }
+
 }
 
 private final class MemoryProfilePasswords: CredentialStoring, @unchecked Sendable {

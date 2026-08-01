@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import MoriRemoteTerminal
 
 @MainActor
 struct RemoteRootView: View {
@@ -97,7 +98,7 @@ struct RemoteRootView: View {
 
     @ViewBuilder private var terminalDetail: some View {
         if let runtime = root.activeRuntime {
-            RemoteTerminalView(root: root, runtime: runtime, compact: sizeClass == .compact, showLibrary: { sheet = .library })
+            RemoteTerminalDetailView(root: root, runtime: runtime, compact: sizeClass == .compact, showLibrary: { sheet = .library })
         } else if sizeClass == .compact {
             NavigationStack { library }
         } else {
@@ -308,64 +309,64 @@ private struct AgentMetadataBadge: View {
 }
 
 @MainActor
-private struct RemoteTerminalView: View {
+private struct RemoteTerminalDetailView: View {
     let root: RemoteRootModel
     let runtime: ActiveWorkspaceRuntime
     let compact: Bool
     let showLibrary: () -> Void
+    @State private var showsSessions = false
     @State private var showsPanes = false
-    @State private var confirmsClosePane = false
+    @State private var pendingSharedMutation: RemoteSharedMutation?
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            if let surface = runtime.surface() {
-                TmuxPaneSurfaceView(surface: surface)
-                    .id(RemoteTerminalPresentation.identity(for: runtime.instanceID, mode: compact ? .compact : .regular))
-                    .background(Color.black)
-            } else {
-                ContentUnavailableView(runtime.status.title, systemImage: "terminal", description: Text(String(localized: "Waiting for the active tmux pane.")))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black)
-            }
+            MoriRemoteTerminalView(session: runtime.session, onShowSessions: { showsSessions = true })
+                .id(WorkspaceTerminalPresentation.identity(for: runtime.session.instanceID))
+                .background(Color.black)
         }
         .background(Color.black.ignoresSafeArea())
+        .sheet(isPresented: $showsSessions) { sessionSwitcher }
         .sheet(isPresented: $showsPanes) { panePicker }
-        .onChange(of: root.runtimeRevision) { _, _ in }
-        .confirmationDialog(String(localized: "Close shared pane?"), isPresented: $confirmsClosePane, titleVisibility: .visible) {
-            Button(String(localized: "Close pane"), role: .destructive) { root.closePane() }
+        .confirmationDialog(
+            String(localized: "Confirm shared workspace change"),
+            isPresented: sharedMutationConfirmationBinding,
+            titleVisibility: .visible
+        ) {
+            if let mutation = pendingSharedMutation {
+                Button(mutation.title, role: mutation.isDestructive ? .destructive : nil) {
+                    root.performSharedMutation(mutation.value)
+                    pendingSharedMutation = nil
+                }
+            }
         } message: {
-            Text(String(localized: "Closing this shared pane affects every tmux client."))
+            Text(String(localized: "This change affects every tmux client."))
         }
     }
 
     private var header: some View {
         HStack(spacing: 12) {
             if compact {
-                Button(action: dismissKeyboard) { Image(systemName: "keyboard.chevron.compact.down") }
-                    .accessibilityLabel(String(localized: "Dismiss keyboard"))
                 Button(action: showLibrary) { Image(systemName: "sidebar.left") }
                     .accessibilityLabel(String(localized: "Show library"))
             }
             Button { showsPanes = true } label: {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(verbatim: runtime.topology?.sessionName ?? runtime.workspace.name)
-                        .lineLimit(1)
+                    Text(verbatim: runtime.workspace.name).lineLimit(1)
                     HStack(spacing: 6) {
                         Text(runtime.status.title).font(.caption).foregroundStyle(.secondary)
-                        AgentMetadataBadge(metadata: runtime.metadata(for: runtime.focusedPaneID ?? TmuxPaneID(0)))
+                        AgentMetadataBadge(metadata: runtime.metadata(for: runtime.focusedPaneID ?? 0))
                     }
                 }
             }
             Spacer()
             Menu {
-                Button(String(localized: "Split right (shared)")) { root.split(horizontal: true) }
-                Button(String(localized: "Split down (shared)")) { root.split(horizontal: false) }
-                Button(String(localized: "New window (shared)")) { root.newWindow() }
-                Button(String(localized: "Close pane (shared)"), role: .destructive) { confirmsClosePane = true }
+                Button(String(localized: "Split right (shared)")) { pendingSharedMutation = .splitHorizontal }
+                Button(String(localized: "Split down (shared)")) { pendingSharedMutation = .splitVertical }
+                Button(String(localized: "New window (shared)")) { pendingSharedMutation = .newWindow }
+                Button(String(localized: "Close pane (shared)"), role: .destructive) { pendingSharedMutation = .closePane }
+                Button(String(localized: "Close window (shared)"), role: .destructive) { pendingSharedMutation = .closeWindow }
             } label: { Image(systemName: "rectangle.3.group") }
-            Button(action: copySelection) { Image(systemName: "doc.on.doc") }
-                .accessibilityLabel(String(localized: "Copy selection"))
             Button(action: root.disconnectActive) { Image(systemName: "power") }
                 .accessibilityLabel(String(localized: "Disconnect"))
         }
@@ -375,15 +376,46 @@ private struct RemoteTerminalView: View {
         .background(Color(white: 0.12))
     }
 
+    private var sharedMutationConfirmationBinding: Binding<Bool> {
+        .init(get: { pendingSharedMutation != nil }, set: { if !$0 { pendingSharedMutation = nil } })
+    }
+
+    private var sessionSwitcher: some View {
+        NavigationStack {
+            ActiveSessionSwitcherView(
+                sessions: root.activeWorkspaces.map { workspace in
+                    let activeRuntime = root.runtimes[workspace.id]
+                    return ActiveSessionSwitcherItem(
+                        id: workspace.id,
+                        sessionName: workspace.name,
+                        subtitle: activeRuntime?.status.title ?? String(localized: "Disconnected"),
+                        isSelected: workspace.id == root.activeWorkspaceID,
+                        lastOpenedAt: workspace.lastConnectedAt ?? .distantPast
+                    )
+                },
+                onSelectSession: { root.connect(workspaceID: $0) },
+                onDisconnectSession: { workspaceID in
+                    Task { await root.disconnect(workspaceID: workspaceID) }
+                }
+            )
+            .navigationTitle(String(localized: "Active workspaces"))
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(String(localized: "Done")) { showsSessions = false }
+                }
+            }
+        }
+    }
+
     private var panePicker: some View {
         NavigationStack {
             List {
                 Section(String(localized: "Windows")) {
-                    ForEach(runtime.topology?.windows ?? [], id: \.id) { window in
+                    ForEach(runtime.topology?.windows ?? []) { window in
                         Button { root.selectWindow(window.id) } label: {
                             HStack {
                                 Label {
-                                    Text(verbatim: window.name)
+                                    Text(verbatim: window.title)
                                 } icon: {
                                     Image(systemName: window.active ? "rectangle.inset.filled" : "rectangle")
                                 }
@@ -394,17 +426,17 @@ private struct RemoteTerminalView: View {
                     }
                 }
                 Section(String(localized: "Panes")) {
-                    ForEach(runtime.topology?.panes ?? [], id: \.id) { pane in
+                    ForEach(runtime.topology?.panes ?? []) { pane in
                         Button {
                             root.selectPane(pane.id)
                             showsPanes = false
                         } label: {
                             HStack {
-                                Text(verbatim: "%\(pane.id.rawValue)")
+                                Text(verbatim: "%\(pane.id)")
                                     .font(.body.monospaced())
                                 AgentMetadataBadge(metadata: runtime.metadata(for: pane.id))
                                 Spacer()
-                                Text(verbatim: "\(pane.width)×\(pane.height)")
+                                Text(verbatim: "\(pane.columns)×\(pane.rows)")
                                     .font(.caption.monospaced())
                                     .foregroundStyle(.secondary)
                             }
@@ -417,14 +449,37 @@ private struct RemoteTerminalView: View {
         }
     }
 
-    private func windowMetadata(_ window: TmuxSessionController.Window) -> AgentMetadata {
+    private func windowMetadata(_ window: MoriRemoteTerminalWindow) -> AgentMetadata {
         runtime.topology?.panes
             .filter { $0.windowID == window.id }
             .map { runtime.metadata(for: $0.id) }
             .max { $0.state.priority < $1.state.priority } ?? .unknown
     }
-    private func dismissKeyboard() { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
-    private func copySelection() { if let text = runtime.surface()?.copySelection(), !text.isEmpty { UIPasteboard.general.string = text } }
+}
+
+private enum RemoteSharedMutation: Identifiable, Equatable {
+    case newWindow, splitHorizontal, splitVertical, closePane, closeWindow
+
+    var id: Self { self }
+    var value: MoriRemoteTerminalSharedMutation {
+        switch self {
+        case .newWindow: .newWindow
+        case .splitHorizontal: .splitHorizontal
+        case .splitVertical: .splitVertical
+        case .closePane: .closePane
+        case .closeWindow: .closeWindow
+        }
+    }
+    var title: String {
+        switch self {
+        case .newWindow: String(localized: "New window (shared)")
+        case .splitHorizontal: String(localized: "Split right (shared)")
+        case .splitVertical: String(localized: "Split down (shared)")
+        case .closePane: String(localized: "Close pane (shared)")
+        case .closeWindow: String(localized: "Close window (shared)")
+        }
+    }
+    var isDestructive: Bool { self == .closePane || self == .closeWindow }
 }
 
 private struct ProfileEditorView: View {

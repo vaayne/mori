@@ -120,18 +120,18 @@ struct GhosttyTerminalCoreView: View {
                     session: previews,
                     projection: screen.windowSelectionSheetRenderProjection(),
                     sessionName: "tmux",
-                    onCreateWindow: { _ = screen.createTmuxWindow() },
+                    onCreateWindow: nil,
                     onSelect: { _ = screen.focusTmuxTopLevel($0) },
-                    onRemoveWindow: { _ = screen.closeTmuxWindow($0) }
+                    onRemoveWindow: { _ in }
                 )
             case .panes(let topLevelID, let previews):
                 GhosttyPaneSelectionSheet(
                     session: previews,
                     projection: screen.paneSelectionSheetRenderProjection(topLevelID: topLevelID),
-                    onSplitPane: { _ = screen.splitFocusedTmuxPane(ghostty_action_split_direction_e(rawValue: 0)) },
+                    onSplitPane: nil,
                     onStackPane: nil,
                     onSelect: { _ = screen.focusTmuxPane($0) },
-                    onRemovePane: { _ = screen.closeTmuxPane($0) }
+                    onRemovePane: { _ in }
                 )
             }
         }
@@ -198,7 +198,8 @@ struct GhosttyTerminalCoreView: View {
             text,
             submit: { screen.sendInputToFocusedSurface($0).isAccepted },
             schedulePrefixFlush: schedulePrefixFlush(token:),
-            enterCopyMode: { screen.enterFocusedTmuxCopyMode().isHandled }
+            // Mori selection is renderer-local; never enter server copy mode.
+            enterCopyMode: { false }
         )
     }
 

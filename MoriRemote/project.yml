@@ -21,6 +21,7 @@ targets:
     sources:
       - path: MoriRemote
     dependencies:
+      - target: MoriRemoteTerminal
       - package: Citadel
         product: Citadel
       - package: NIO
@@ -29,18 +30,13 @@ targets:
         product: NIOPosix
       - package: NIOSSH
         product: NIOSSH
-      # Static iOS framework: link only; do not embed/sign it into the app bundle.
-      - framework: ../Frameworks/GhosttyKit.xcframework
-        embed: false
     settings:
       base:
         PRODUCT_NAME: MoriRemote
         PRODUCT_BUNDLE_IDENTIFIER: com.vaayne.mori-remote
-        # Force-load one inert ABI symbol: validate linkage without changing runtime flow.
         OTHER_LDFLAGS:
           - $(inherited)
           - -lc++
-          - -Wl,-u,_ghostty_tmux_client_config_new
         INFOPLIST_FILE: MoriRemote/Info.plist
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
@@ -96,9 +92,8 @@ targets:
         OTHER_LDFLAGS:
           - $(inherited)
           - -lc++
-        # Phase 2 links this archive into MoriRemote. Keep it static now: the
-        # app will then be the single bundle consumer of GhosttyKit, with no
-        # second embedded terminal dylib.
+        # The archive contains the sole native Ghostty owner used by MoriRemote.
+        # It is linked statically, never embedded as a second terminal dylib.
         MACH_O_TYPE: staticlib
   MoriRemoteTerminalTests:
     type: bundle.unit-test

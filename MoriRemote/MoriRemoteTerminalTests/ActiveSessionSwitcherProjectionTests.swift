@@ -19,7 +19,6 @@ final class ActiveSessionSwitcherProjectionTests: XCTestCase {
             id: UUID(),
             sessionName: name,
             subtitle: "Mori",
-            runtimeState: .connected,
             isSelected: selected,
             lastOpenedAt: Date(timeIntervalSince1970: opened)
         )

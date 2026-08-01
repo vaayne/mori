@@ -29,7 +29,6 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
     private var activeManagedSurface: GhosttyManagedSurface?
     private var activeManagedPaneID: TmuxPaneID?
     private var initialViewportHandler: ((CGSize, CGFloat) -> Void)?
-    private var clientSizeHandler: ((TmuxSessionController.ClientSize) -> Void)?
     private var viewportStabilityHandler: ((Bool) -> Void)?
     private var cachedTopologySnapshot = GhosttyRuntimeSurfaceTopologySnapshot.empty
     private var panePreviewCache = TmuxPanePreviewImageCache(
@@ -47,13 +46,11 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
     func activate(
         session: TmuxTerminalSession,
         initialViewportHandler: @escaping (CGSize, CGFloat) -> Void,
-        clientSizeHandler: @escaping (TmuxSessionController.ClientSize) -> Void,
         viewportStabilityHandler: @escaping (Bool) -> Void
     ) {
         self.session = session
         self.controller = session.controller
         self.initialViewportHandler = initialViewportHandler
-        self.clientSizeHandler = clientSizeHandler
         self.viewportStabilityHandler = viewportStabilityHandler
 
         session.$state
@@ -107,7 +104,6 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
         session = nil
         controller = nil
         initialViewportHandler = nil
-        clientSizeHandler = nil
         viewportStabilityHandler = nil
         latestTopology = nil
         cachedTopologySnapshot = Self.emptyTopologySnapshot
@@ -115,9 +111,6 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
 
     func terminalConfigurationDidChange() {
         clearPanePreviewCache(reason: "appearance-change")
-        if let activeManagedSurface {
-            reportClientSizeIfActive(activeManagedSurface)
-        }
     }
 
     func tmuxPaneID(for surfaceID: UUID) -> TmuxPaneID? {
@@ -210,7 +203,7 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
             panePreviewCache.remove(paneID)
         }
         let wasAlreadyWrapped = paneSurface.managedSurface != nil
-        let managed = paneSurface.screenSurface { [weak self, weak paneSurface] managed, size, _ in
+        let managed = paneSurface.screenSurface { [weak paneSurface] managed, size, _ in
             guard size.width > 1, size.height > 1 else { return }
             GhosttyRuntimeTrace.flowEventOnce(
                 GhosttyRuntimeTrace.paneSwitchFlow,
@@ -222,7 +215,6 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
                     "width": "\(size.width)",
                 ]
             )
-            self?.reportClientSizeIfActive(managed)
         }
         activeManagedSurface = managed
         activeManagedPaneID = paneID
@@ -250,15 +242,6 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
         activeManagedSurface
     }
 
-    private func reportClientSizeIfActive(_ managed: GhosttyManagedSurface) {
-        guard activeManagedSurface === managed else { return }
-        let size = managed.controlSurface.currentSize()
-        guard size.columns >= 2, size.rows >= 2 else { return }
-        clientSizeHandler?(TmuxSessionController.ClientSize(
-            cols: UInt32(size.columns),
-            rows: UInt32(size.rows)
-        ))
-    }
 
     // MARK: Command failures
 
@@ -283,15 +266,9 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
 
     private static func failureLabel(for request: TmuxSessionController.Request) -> String {
         switch request {
-        case .newWindow: "new window"
-        case .splitPane: "split pane"
-        case .closePane: "close pane"
-        case .closeWindow: "close window"
         case .selectWindow: "select window"
         case .selectPane: "select pane"
-        case .zoomPane: "zoom pane"
-        case .copyMode: "copy mode"
-        case .setClientSize: "resize"
+        case .sharedMutation: "shared workspace action"
         case .sendInput: "input"
         }
     }
@@ -562,6 +539,12 @@ extension TmuxTerminalScreenAdapter: GhosttyTerminalScreenModeling {
 
     // MARK: tmux topology actions
 
+    func performSharedMutation(_ mutation: TmuxSessionController.SharedMutation) -> GhosttyTmuxModelActionOutcome {
+        guard let controller else { return .missingTarget(.host) }
+        controller.requestSharedMutation(mutation)
+        return .queued
+    }
+
     func focusTmuxPane(_ id: UUID) -> GhosttyTmuxModelActionOutcome {
         guard let paneID = identities.paneID(for: id), let controller else {
             GhosttyRuntimeTrace.flowEventIfActive(
@@ -638,77 +621,16 @@ extension TmuxTerminalScreenAdapter: GhosttyTerminalScreenModeling {
         )
     }
 
-    func createTmuxWindow() -> GhosttyTmuxModelActionOutcome {
-        guard let controller else { return .missingTarget(.host) }
-        controller.requestNewWindow()
-        return .queued
-    }
 
-    func splitFocusedTmuxPane(
-        _ direction: ghostty_action_split_direction_e
-    ) -> GhosttyTmuxModelActionOutcome {
-        guard let controller, let paneSurface = session?.paneSurface else {
-            return .missingTarget(.focusedPane)
-        }
-        controller.requestSplit(
-            paneID: paneSurface.paneID,
-            direction: TmuxSessionController.SplitDirection(actionDirection: direction),
-            zoom: true
-        )
-        return .queued
-    }
 
-    func closeTmuxPane(_ id: UUID) -> GhosttyTmuxModelActionOutcome {
-        guard let paneID = identities.paneID(for: id), let controller else {
-            return .missingTarget(.pane(id))
-        }
-        controller.requestClosePane(paneID: paneID)
-        return .queued
-    }
 
-    func closeTmuxWindow(_ id: UUID) -> GhosttyTmuxModelActionOutcome {
-        guard let windowID = identities.windowID(for: id), let controller else {
-            return .missingTarget(.window(id))
-        }
-        controller.requestCloseWindow(windowID: windowID)
-        return .queued
-    }
 
-    func enterFocusedTmuxCopyMode() -> GhosttyTmuxModelActionOutcome {
-        guard let controller, let paneSurface = session?.paneSurface else {
-            return .missingTarget(.focusedPane)
-        }
-        controller.requestCopyMode(paneID: paneSurface.paneID)
-        return .queued
-    }
 
     // MARK: Selection sheet projections
 
-    func createTmuxWindowInteractionEffect() -> GhosttyTmuxTopologyActionInteractionEffect {
-        GhosttyTerminalPresentationProjector.createTmuxWindowInteractionEffect()
-    }
 
-    func splitFocusedTmuxPaneInteractionEffect() -> GhosttyTmuxTopologyActionInteractionEffect {
-        GhosttyTerminalPresentationProjector.splitFocusedTmuxPaneInteractionEffect()
-    }
 
-    func closeTmuxWindowInteractionEffect(_ id: UUID) -> GhosttyTmuxTopologyActionInteractionEffect {
-        GhosttyTerminalPresentationProjector.closeTmuxWindowInteractionEffect(
-            id,
-            snapshot: topologySnapshot
-        )
-    }
 
-    func closeTmuxPaneInteractionEffect(
-        _ id: UUID,
-        inTopLevel topLevelID: UUID
-    ) -> GhosttyTmuxTopologyActionInteractionEffect {
-        GhosttyTerminalPresentationProjector.closeTmuxPaneInteractionEffect(
-            id,
-            inTopLevel: topLevelID,
-            snapshot: topologySnapshot
-        )
-    }
 
     func windowSheetPresentationProjection() -> GhosttyWindowSheetPresentationProjection? {
         GhosttyTerminalPresentationProjector.windowSheetPresentationProjection(
@@ -789,19 +711,8 @@ extension TmuxSessionController.CloseReason {
         case .unsupportedVersion(let version):
             TerminalDisconnectReason(
                 kind: .runtime,
-                message: "unsupported tmux version \(version) (requires 3.1+)"
+                message: "unsupported tmux version \(version) (requires 3.2+)"
             )
-        }
-    }
-}
-
-private extension TmuxSessionController.SplitDirection {
-    init(actionDirection: ghostty_action_split_direction_e) {
-        switch actionDirection {
-        case GHOSTTY_SPLIT_DIRECTION_LEFT: self = .left
-        case GHOSTTY_SPLIT_DIRECTION_UP: self = .up
-        case GHOSTTY_SPLIT_DIRECTION_DOWN: self = .down
-        default: self = .right
         }
     }
 }

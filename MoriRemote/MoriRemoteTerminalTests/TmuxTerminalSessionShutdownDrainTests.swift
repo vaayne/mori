@@ -64,51 +64,6 @@ final class TmuxTerminalSessionShutdownDrainTests: XCTestCase {
         await session.shutdown()
     }
 
-    func testSameWindowSelectionSuppressesDuplicateZoomForIntermediateTopology() async throws {
-        let runtime = try GhosttyKitRuntime()
-        let session = makeSession(runtime: runtime)
-        session.handleTopology(twoPaneSnapshot(activePaneID: 10, zoomed: false))
-
-        session.prepareForPaneSelection(paneID: 11)
-        session.handleStateForTesting(.ready)
-        session.handleTopology(twoPaneSnapshot(activePaneID: 11, zoomed: false))
-        try await Task.sleep(for: .milliseconds(50))
-
-        XCTAssertEqual(session.pendingPaneIDForTesting, 11)
-        XCTAssertEqual(session.zoomRequestedPaneIDForTesting, 11)
-        XCTAssertNil(session.lastFailedRequest, "intermediate topology must not enqueue a second zoom")
-        await session.shutdown()
-    }
-
-    func testCrossWindowSelectionSuppressesDuplicateZoomForIntermediateTopology() async throws {
-        let runtime = try GhosttyKitRuntime()
-        let session = makeSession(runtime: runtime)
-        session.handleTopology(crossWindowSnapshot(activeWindowID: 1, targetActivePaneID: 20))
-
-        session.prepareForPaneSelection(paneID: 21)
-        session.handleStateForTesting(.ready)
-        session.handleTopology(crossWindowSnapshot(activeWindowID: 2, targetActivePaneID: 21))
-        try await Task.sleep(for: .milliseconds(50))
-
-        XCTAssertEqual(session.pendingPaneIDForTesting, 21)
-        XCTAssertEqual(session.zoomRequestedPaneIDForTesting, 21)
-        XCTAssertNil(session.lastFailedRequest, "group intermediate topology must not toggle zoom again")
-        await session.shutdown()
-    }
-
-    func testSelectionFailureClearsPendingZoomIntent() async throws {
-        let runtime = try GhosttyKitRuntime()
-        let session = makeSession(runtime: runtime)
-        session.handleTopology(twoPaneSnapshot(activePaneID: 10, zoomed: false))
-        session.prepareForPaneSelection(paneID: 11)
-
-        session.handleRequestFailedForTesting(.selectPane)
-
-        XCTAssertNil(session.pendingPaneIDForTesting)
-        XCTAssertNil(session.zoomRequestedPaneIDForTesting)
-        await session.shutdown()
-    }
-
     func testActivePaneRollbackRemainsPendingAcrossIntermediateTopology() async throws {
         let runtime = try GhosttyKitRuntime()
         let session = makeSession(runtime: runtime)

@@ -81,7 +81,6 @@ final class TmuxTerminalScreenAdapterTests: XCTestCase {
         adapter.activate(
             session: session,
             initialViewportHandler: { _, _ in },
-            clientSizeHandler: { _ in },
             viewportStabilityHandler: { _ in }
         )
 
@@ -131,7 +130,6 @@ final class TmuxTerminalScreenAdapterTests: XCTestCase {
         adapter.activate(
             session: session,
             initialViewportHandler: { _, _ in },
-            clientSizeHandler: { _ in },
             viewportStabilityHandler: { _ in }
         )
 

@@ -1,3 +1,4 @@
+import MoriRemoteTerminal
 import SwiftUI
 import UIKit
 
@@ -10,7 +11,7 @@ struct MoriRemoteApp: App {
             Group {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--ghostty-terminal-probe") {
-                    GhosttyTerminalProbe()
+                    MoriRemoteTerminalProbe()
                 } else {
                     RemoteRootView(root: root)
                 }
