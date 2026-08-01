@@ -548,6 +548,14 @@ final class RemoteRootModel {
     func performSharedMutation(_ mutation: MoriRemoteTerminalSharedMutation) {
         activeRuntime?.performSharedMutation(mutation)
     }
+
+    func imageUploader(for workspaceID: UUID) -> MoriRemoteTerminalImageUploader {
+        SSHImageUploadService(
+            library: dependencies.library,
+            roots: dependencies.roots,
+            trustedHosts: dependencies.trustedHosts
+        ).uploader(for: workspaceID)
+    }
     /// Scene activation is intentionally metadata-only: reconnect remains
     /// reserved for a real control-transport loss. Backgrounding stops the
     /// visible-runtime poll; foregrounding starts one immediate refresh.

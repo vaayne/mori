@@ -339,6 +339,7 @@ private struct RemoteTerminalDetailView: View {
             MoriRemoteTerminalView(
                 session: runtime.session,
                 isInputSuspended: isInputSuspended || showsNavigator,
+                imageUploader: root.imageUploader(for: runtime.workspace.id),
                 onShowNavigator: {
                     root.discoverSessions(serverID: runtime.workspace.serverID)
                     showsNavigator = true

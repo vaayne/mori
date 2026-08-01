@@ -187,8 +187,157 @@ final class CitadelSSHRootConnection: SSHRootConnection, @unchecked Sendable {
         return CitadelControlChannel(child)
     }
 
+    func openFileUploadSession() async throws -> any SSHFileUploadSession {
+        let sftp = try await SSHUploadTimeout.run(
+            timeout: .seconds(15),
+            operation: { [channel] in
+                try await SFTPClient.open(overAuthenticatedSSHChannel: channel)
+            },
+            cleanupLateSuccess: { sftp in try? await sftp.close() }
+        )
+        return CitadelSFTPFileUploadSession(sftp: sftp)
+    }
+
     func close() async {
         try? await channel.close()
+    }
+}
+
+final class CitadelSFTPFileUploadSession: SSHFileUploadSession, @unchecked Sendable {
+    private static let chunkSize = 4 * 1024 * 1024
+    private static let maxInFlightWrites = 64
+    private enum State: Equatable { case open, closing, timedOut, closed }
+    private let sftp: SFTPClient
+    private let closeLock = NSLock()
+    private var state = State.open
+
+    init(sftp: SFTPClient) {
+        self.sftp = sftp
+    }
+
+    func ensureDirectoryExists(atPath path: String) async throws {
+        do {
+            _ = try await operation { try await self.sftp.getAttributes(at: path) }
+        } catch where isNoSuchFile(error) {
+            do {
+                try await operation { try await self.sftp.createDirectory(atPath: path) }
+            } catch {
+                do {
+                    _ = try await operation { try await self.sftp.getAttributes(at: path) }
+                } catch {
+                    throw error
+                }
+            }
+        }
+    }
+
+    func uploadFile(
+        from localURL: URL,
+        to remotePath: String,
+        progress: @escaping SSHFileUploadProgressHandler
+    ) async throws {
+        let localFile = try FileHandle(forReadingFrom: localURL)
+        defer { try? localFile.close() }
+        let remoteFile = try await operation {
+            try await self.sftp.openFile(filePath: remotePath, flags: [.write, .create, .truncate])
+        }
+        do {
+            var offset: UInt64 = 0
+            while true {
+                try Task.checkCancellation()
+                let data = try localFile.read(upToCount: Self.chunkSize) ?? Data()
+                guard !data.isEmpty else { break }
+                var buffer = ByteBufferAllocator().buffer(capacity: data.count)
+                buffer.writeBytes(data)
+                let writeBuffer = buffer
+                let writeOffset = offset
+                try await operation {
+                    try await remoteFile.writePipelined(
+                        writeBuffer,
+                        at: writeOffset,
+                        maxInFlight: Self.maxInFlightWrites
+                    )
+                }
+                offset += UInt64(data.count)
+                await progress(Int64(min(offset, UInt64(Int64.max))))
+            }
+            try await operation { try await remoteFile.close() }
+        } catch {
+            try? await remoteFile.close()
+            throw error
+        }
+    }
+
+    func renameFile(from temporaryPath: String, to finalPath: String) async throws {
+        try await operation { try await self.sftp.rename(at: temporaryPath, to: finalPath) }
+    }
+
+    func removeFileIfExists(atPath path: String) async throws {
+        do {
+            try await operation { try await self.sftp.remove(at: path) }
+        } catch where isNoSuchFile(error) {
+            return
+        }
+    }
+
+    func close() async throws {
+        let action = closeLock.withLock { () -> State in
+            let previous = state
+            if previous == .open { state = .closing }
+            return previous
+        }
+        switch action {
+        case .closed:
+            return
+        case .timedOut, .closing:
+            throw SSHFileUploadError.operationTimedOut
+        case .open:
+            do {
+                try await SSHUploadTimeout.run(
+                    timeout: .seconds(15),
+                    operation: { try await self.sftp.close() },
+                    onTimeout: { self.invalidateAfterTimeout() }
+                )
+                closeLock.withLock { state = .closed }
+            } catch {
+                invalidateAfterTimeout()
+                throw error
+            }
+        }
+    }
+
+    private func operation<Value: Sendable>(
+        _ body: @escaping @Sendable () async throws -> Value
+    ) async throws -> Value {
+        guard closeLock.withLock({ state == .open }) else {
+            throw SSHFileUploadError.operationTimedOut
+        }
+        do {
+            return try await SSHUploadTimeout.run(
+                timeout: .seconds(15),
+                operation: body,
+                onTimeout: { self.invalidateAfterTimeout() }
+            )
+        } catch is CancellationError {
+            invalidateAfterTimeout()
+            throw CancellationError()
+        }
+    }
+
+    private func invalidateAfterTimeout() {
+        let shouldClose = closeLock.withLock { () -> Bool in
+            guard state == .open || state == .closing else { return false }
+            state = .timedOut
+            return true
+        }
+        guard shouldClose else { return }
+        let sftp = self.sftp
+        Task { try? await sftp.close() }
+    }
+
+    private func isNoSuchFile(_ error: Error) -> Bool {
+        guard let status = error as? SFTPMessage.Status else { return false }
+        return status.errorCode == .noSuchFile
     }
 }
 

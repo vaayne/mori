@@ -6,6 +6,7 @@ struct GhosttyKeypadSheet: View {
 
     let isControlArmed: Bool
     let isAltArmed: Bool
+    let onAddImage: (() -> Void)?
     let actions: GhosttyKeyboardChromeActions
 
     private let compactColumns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
@@ -16,6 +17,15 @@ struct GhosttyKeypadSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     modifierRow
+                    if let onAddImage {
+                        Button(action: onAddImage) {
+                            Label(String(localized: "Add image"), systemImage: "photo.on.rectangle")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(KeypadButtonStyle(active: false, accent: chromeStyle.accent))
+                        .accessibilityIdentifier("terminal.keypad.add-image")
+                    }
                     keySection(String(localized: "Essential"), items: essentialKeys, columns: compactColumns)
                     keySection(String(localized: "Process"), items: processKeys, columns: compactColumns)
                     keySection(String(localized: "Edit line"), items: editingKeys, columns: editColumns)

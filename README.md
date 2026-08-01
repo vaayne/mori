@@ -62,7 +62,9 @@ uses explicit host-key confirmation, supports passwords or imported OpenSSH
 private keys, and keeps mobile navigation isolated from other tmux clients.
 It requires tmux 3.2 or newer on the server. Local terminal history and
 selection stay on the device; split, close, and new-window actions are shared
-workspace mutations.
+workspace mutations. The software keyboard supports IME composition. Images
+chosen from Photos or the clipboard are uploaded through the authenticated SSH
+connection, then inserted as a shell-escaped remote path without auto-submit.
 
 Building MoriRemote from source requires Xcode, XcodeGen, and the pinned remux
 Ghostty source. The local task builds one universal macOS + iOS XCFramework;

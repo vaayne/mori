@@ -108,14 +108,22 @@ struct GhosttyKeyboardChromeActions {
 /// A single input accessory strip: four stable targets, no localized label
 /// can distort the terminal viewport or move the keyboard control.
 struct GhosttyKeyboardChrome: View {
+    private enum PresentedSheet: String, Identifiable {
+        case keypad, image
+        var id: Self { self }
+    }
+
     @Environment(\.ghosttyTerminalChromeStyle) private var chromeStyle
-    @State private var showsKeypad = false
+    @State private var presentedSheet: PresentedSheet?
 
     let keyboardMode: GhosttyKeyboardChromeMode
     let isEnabled: Bool
     let isCompact: Bool
     let isControlArmed: Bool
     let isAltArmed: Bool
+    let imageUploader: MoriRemoteTerminalImageUploader?
+    let insertImagePath: (String) -> Bool
+    let onImagePresentationChange: (Bool) -> Void
     let actions: GhosttyKeyboardChromeActions
 
     var body: some View {
@@ -125,7 +133,7 @@ struct GhosttyKeyboardChrome: View {
                 id: "terminal.keypad",
                 label: String(localized: "Keypad"),
                 active: isControlArmed || isAltArmed
-            ) { showsKeypad = true }
+            ) { presentedSheet = .keypad }
 
             Menu {
                 Section {
@@ -165,14 +173,31 @@ struct GhosttyKeyboardChrome: View {
         .overlay(alignment: .top) { Divider().opacity(0.7) }
         .preferredColorScheme(.dark)
         .accessibilityElement(children: .contain)
-        .sheet(isPresented: $showsKeypad) {
-            GhosttyKeypadSheet(
-                isControlArmed: isControlArmed,
-                isAltArmed: isAltArmed,
-                actions: actions
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+        .onChange(of: presentedSheet) { _, sheet in
+            onImagePresentationChange(sheet == .image)
+        }
+        .onDisappear { onImagePresentationChange(false) }
+        .sheet(item: $presentedSheet) { sheet in
+            switch sheet {
+            case .keypad:
+                GhosttyKeypadSheet(
+                    isControlArmed: isControlArmed,
+                    isAltArmed: isAltArmed,
+                    onAddImage: imageUploader == nil ? nil : { presentedSheet = .image },
+                    actions: actions
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            case .image:
+                if let imageUploader {
+                    GhosttyImageAttachmentSheet(
+                        uploader: imageUploader,
+                        insertPath: insertImagePath
+                    )
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                }
+            }
         }
     }
 

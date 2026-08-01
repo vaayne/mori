@@ -9,9 +9,38 @@ protocol SSHChildChannel: AnyObject, Sendable {
     func close() async throws
 }
 
+typealias SSHFileUploadProgressHandler = @Sendable (Int64) async -> Void
+
+protocol SSHFileUploadSession: Sendable {
+    func ensureDirectoryExists(atPath path: String) async throws
+    func uploadFile(
+        from localURL: URL,
+        to remotePath: String,
+        progress: @escaping SSHFileUploadProgressHandler
+    ) async throws
+    func renameFile(from temporaryPath: String, to finalPath: String) async throws
+    func removeFileIfExists(atPath path: String) async throws
+    func close() async throws
+}
+
 protocol SSHRootConnection: Sendable {
     func openSessionChannel() async throws -> any SSHChildChannel
+    func openFileUploadSession() async throws -> any SSHFileUploadSession
     func close() async
+}
+
+extension SSHRootConnection {
+    func openFileUploadSession() async throws -> any SSHFileUploadSession {
+        throw SSHFileUploadError.unsupported
+    }
+}
+
+enum SSHFileUploadError: Error, Equatable, Sendable {
+    case unsupported
+    case invalidFilename
+    case localFileUnavailable
+    case operationTimedOut
+    case uploadFailed
 }
 
 protocol SSHRootConnecting: Sendable {

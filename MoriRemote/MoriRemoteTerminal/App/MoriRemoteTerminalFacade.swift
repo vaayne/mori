@@ -87,6 +87,27 @@ public enum MoriRemoteTerminalSharedMutation: Sendable {
     case newWindow, splitHorizontal, splitVertical, closePane, closeWindow
 }
 
+/// App-owned SSH uploads an image and returns the shell-visible remote path.
+/// The terminal module owns picker/staging UI but never credentials or roots.
+public struct MoriRemoteTerminalImageUploader: Sendable {
+    public typealias ProgressHandler = @Sendable (Int64, Int64) async -> Void
+    private let uploadHandler: @Sendable (URL, String, @escaping ProgressHandler) async throws -> String
+
+    public init(
+        upload: @escaping @Sendable (URL, String, @escaping ProgressHandler) async throws -> String
+    ) {
+        uploadHandler = upload
+    }
+
+    public func upload(
+        localURL: URL,
+        filename: String,
+        progress: @escaping ProgressHandler
+    ) async throws -> String {
+        try await uploadHandler(localURL, filename, progress)
+    }
+}
+
 /// The sole public native-terminal owner. It retains GhosttyKitRuntime before
 /// constructing the tmux client, so callers cannot repeat an uninitialized
 /// native harness or leak Ghostty handles into the application target.
@@ -200,17 +221,20 @@ public final class MoriRemoteTerminalSession: ObservableObject {
 public struct MoriRemoteTerminalView: View {
     @ObservedObject private var session: MoriRemoteTerminalSession
     private let isInputSuspended: Bool
+    private let imageUploader: MoriRemoteTerminalImageUploader?
     private let onShowNavigator: () -> Void
     private let onSharedMutationRequest: (MoriRemoteTerminalSharedMutation) -> Void
 
     public init(
         session: MoriRemoteTerminalSession,
         isInputSuspended: Bool = false,
+        imageUploader: MoriRemoteTerminalImageUploader? = nil,
         onShowNavigator: @escaping () -> Void = {},
         onSharedMutationRequest: @escaping (MoriRemoteTerminalSharedMutation) -> Void = { _ in }
     ) {
         self.session = session
         self.isInputSuspended = isInputSuspended
+        self.imageUploader = imageUploader
         self.onShowNavigator = onShowNavigator
         self.onSharedMutationRequest = onSharedMutationRequest
     }
@@ -219,6 +243,7 @@ public struct MoriRemoteTerminalView: View {
         GhosttyTerminalCoreView(
             screen: session.screen.screenAdapter,
             isInputSuspended: isInputSuspended,
+            imageUploader: imageUploader,
             onShowNavigator: onShowNavigator,
             onSharedMutationRequest: onSharedMutationRequest
         )

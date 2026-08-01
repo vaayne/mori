@@ -772,6 +772,57 @@ final class GhosttyTerminalResponderViewTests: XCTestCase {
     }
 
     @MainActor
+    func testIMECompositionCommitsOnlyFinalText() throws {
+        let view = GhosttyTerminalResponderUIView(trackpadDriver: GhosttyKeyboardCursorTrackpadDriver())
+        var receivedText: [String] = []
+        view.update(
+            isEnabled: true,
+            wantsFirstResponder: true,
+            activationToken: 1,
+            sendText: { receivedText.append($0); return true },
+            sendPaste: { _ in true },
+            sendKeyEvent: { _ in true }
+        )
+
+        view.setMarkedText("ni", selectedRange: NSRange(location: 2, length: 0))
+        XCTAssertTrue(receivedText.isEmpty)
+        XCTAssertNotNil(view.markedTextRange)
+        let document = try XCTUnwrap(view.textRange(from: view.beginningOfDocument, to: view.endOfDocument))
+        XCTAssertEqual(view.text(in: document), "ni")
+
+        view.insertText("你")
+        XCTAssertEqual(receivedText, ["你"])
+        XCTAssertNil(view.markedTextRange)
+
+        view.setMarkedText("好", selectedRange: NSRange(location: 1, length: 0))
+        view.unmarkText()
+        view.unmarkText()
+        XCTAssertEqual(receivedText, ["你", "好"], "unmark must commit the composition exactly once")
+    }
+
+    @MainActor
+    func testBackspaceClearsIMECompositionBeforeSendingTerminalBackspace() {
+        let view = GhosttyTerminalResponderUIView(trackpadDriver: GhosttyKeyboardCursorTrackpadDriver())
+        var receivedEvents: [GhosttySurfaceKeyEvent] = []
+        view.update(
+            isEnabled: true,
+            wantsFirstResponder: true,
+            activationToken: 1,
+            sendText: { _ in true },
+            sendPaste: { _ in true },
+            sendKeyEvent: { receivedEvents.append($0); return true }
+        )
+
+        view.setMarkedText("zhong", selectedRange: NSRange(location: 5, length: 0))
+        view.deleteBackward()
+        XCTAssertNil(view.markedTextRange)
+        XCTAssertTrue(receivedEvents.isEmpty)
+
+        view.deleteBackward()
+        XCTAssertEqual(receivedEvents, [.init(keyCode: .backspace)])
+    }
+
+    @MainActor
     func testFloatingCursorCrossingFirstTierEmitsArrowAndPublishesTier() {
         let view = GhosttyTerminalResponderUIView(trackpadDriver: GhosttyKeyboardCursorTrackpadDriver())
         var receivedEvents: [GhosttySurfaceKeyEvent] = []

@@ -134,6 +134,9 @@ final class GhosttyTerminalResponderUIView: UIView, UIKeyInput, UITextInputTrait
     private var trackpadFeedbackHandler: ((GhosttyKeyboardCursorTrackpad.FeedbackState) -> Void)?
     private var firstResponderStateHandler: ((Bool) -> Void)?
     private var lastReportedFirstResponderState: Bool?
+    /// IME composition is local until UIKit commits it. Sending marked pinyin
+    /// into the PTY would duplicate every intermediate candidate.
+    var markedTextStorage = ""
     private let trackpadDriver: GhosttyKeyboardCursorTrackpadDriver
     private let pasteboardString: () -> String?
     lazy var floatingCursorTokenizer: UITextInputTokenizer =
@@ -199,6 +202,7 @@ final class GhosttyTerminalResponderUIView: UIView, UIKeyInput, UITextInputTrait
         }
 
         if !isEnabled {
+            clearMarkedText()
             cancelTrackpadGestureIfActive(reason: "disabled")
             pendingFirstResponderRequest = false
             self.activationToken = activationToken
@@ -225,6 +229,7 @@ final class GhosttyTerminalResponderUIView: UIView, UIKeyInput, UITextInputTrait
     }
 
     func insertText(_ text: String) {
+        clearMarkedText()
         submitTextInput(text, source: "insertText")
     }
 
@@ -367,6 +372,10 @@ final class GhosttyTerminalResponderUIView: UIView, UIKeyInput, UITextInputTrait
 
     func deleteBackward() {
         guard isInputEnabled else { return }
+        if !markedTextStorage.isEmpty {
+            clearMarkedText()
+            return
+        }
         GhosttyRuntimeTrace.diagnostics(
             "responder.deleteBackward firstResponder=\(isFirstResponder) token=\(activationToken)"
         )

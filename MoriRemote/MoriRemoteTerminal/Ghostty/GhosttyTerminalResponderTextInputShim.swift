@@ -4,11 +4,10 @@ import UIKit
 // the spacebar long-press floating-cursor gesture (`beginFloatingCursor` /
 // `updateFloatingCursor` / `endFloatingCursor`). The terminal has no editable
 // document, so this file provides safe stubs over a virtual one-character
-// document. Everything here exists solely to keep UIKit's protocol-required
-// calls happy without surfacing autocorrect, marked text, an edit menu, or
-// other text-input behaviors. UIKit may still deliver committed software
-// keyboard input through `replace(_:withText:)`, so committed replacement text
-// is forwarded to the same terminal path as `insertText`.
+// document. Marked text stays local while an IME builds candidates; only
+// `insertText`, `replace`, or `unmarkText` commits bytes to the terminal. This
+// prevents intermediate pinyin from leaking into the PTY or being duplicated
+// when the user chooses a Chinese candidate.
 
 /// Stub UITextPosition backed by an integer offset in a virtual document of
 /// length 1.
@@ -44,7 +43,13 @@ extension GhosttyTerminalResponderUIView: UITextInput {
         set { _ = newValue }
     }
 
-    var markedTextRange: UITextRange? { nil }
+    var markedTextRange: UITextRange? {
+        guard !markedTextStorage.isEmpty else { return nil }
+        return GhosttyVirtualTextRange(
+            from: GhosttyVirtualTextPosition(offset: 0),
+            to: GhosttyVirtualTextPosition(offset: 1)
+        )
+    }
     var markedTextStyle: [NSAttributedString.Key: Any]? {
         get { nil }
         set { _ = newValue }
@@ -68,21 +73,44 @@ extension GhosttyTerminalResponderUIView: UITextInput {
             return nil
         }
 
-        // Keep the virtual document coherent so UIKit sees one deletable
-        // character and drives its native Backspace repeat behavior.
-        return range.isEmpty ? "" : " "
+        guard !range.isEmpty else { return "" }
+        // The whole composition is represented by one virtual character. When
+        // there is no composition, preserve the old sentinel so UIKit keeps
+        // native Backspace repeat behavior.
+        return markedTextStorage.isEmpty ? " " : markedTextStorage
     }
 
     func replace(_ range: UITextRange, withText text: String) {
         _ = range
+        clearMarkedText()
         submitTextInput(text, source: "replaceText")
     }
 
     func setMarkedText(_ markedText: String?, selectedRange: NSRange) {
-        _ = (markedText, selectedRange)
+        _ = selectedRange
+        updateMarkedText(markedText ?? "")
     }
 
-    func unmarkText() {}
+    func unmarkText() {
+        let committed = markedTextStorage
+        clearMarkedText()
+        guard !committed.isEmpty else { return }
+        submitTextInput(committed, source: "unmarkText")
+    }
+
+    func clearMarkedText() {
+        guard !markedTextStorage.isEmpty else { return }
+        updateMarkedText("")
+    }
+
+    private func updateMarkedText(_ text: String) {
+        guard markedTextStorage != text else { return }
+        inputDelegate?.textWillChange(self)
+        inputDelegate?.selectionWillChange(self)
+        markedTextStorage = text
+        inputDelegate?.selectionDidChange(self)
+        inputDelegate?.textDidChange(self)
+    }
 
     func textRange(from fromPosition: UITextPosition, to toPosition: UITextPosition) -> UITextRange? {
         guard

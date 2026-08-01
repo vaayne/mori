@@ -14,6 +14,7 @@ struct GhosttyTerminalCoreView: View {
     private let onShowNavigator: () -> Void
     private let onSharedMutationRequest: (MoriRemoteTerminalSharedMutation) -> Void
     private let isInputSuspended: Bool
+    private let imageUploader: MoriRemoteTerminalImageUploader?
     @State private var terminalInputController = GhosttyTerminalInputController()
     @State private var responderHandoff = GhosttyKeyboardResponderHandoff()
     @State private var trackpadDriver = GhosttyKeyboardCursorTrackpadDriver()
@@ -21,15 +22,18 @@ struct GhosttyTerminalCoreView: View {
     @State private var compositionState = GhosttyTerminalCompositionState()
     @State private var prefixFlushTask: Task<Void, Never>?
     @State private var sessionGeneration: UInt64 = 0
+    @State private var isImageAttachmentPresented = false
 
     init(
         screen: TmuxTerminalScreenAdapter,
         isInputSuspended: Bool = false,
+        imageUploader: MoriRemoteTerminalImageUploader? = nil,
         onShowNavigator: @escaping () -> Void = {},
         onSharedMutationRequest: @escaping (MoriRemoteTerminalSharedMutation) -> Void = { _ in }
     ) {
         self.screen = screen
         self.isInputSuspended = isInputSuspended
+        self.imageUploader = imageUploader
         self.onShowNavigator = onShowNavigator
         self.onSharedMutationRequest = onSharedMutationRequest
     }
@@ -39,7 +43,7 @@ struct GhosttyTerminalCoreView: View {
         let interaction = projection.interaction
         let isInputAvailable = GhosttyTerminalInputAvailabilityProjection(
             isTerminalReady: interaction.isInputAvailable,
-            isSuspended: isInputSuspended
+            isSuspended: isInputSuspended || isImageAttachmentPresented
         ).isInputAvailable
         ZStack(alignment: .bottom) {
             Color.black.ignoresSafeArea()
@@ -94,6 +98,9 @@ struct GhosttyTerminalCoreView: View {
                 isCompact: horizontalSizeClass == .compact,
                 isControlArmed: terminalInputController.isControlArmed,
                 isAltArmed: terminalInputController.isAltArmed,
+                imageUploader: imageUploader,
+                insertImagePath: insertUploadedImagePath,
+                onImagePresentationChange: { isImageAttachmentPresented = $0 },
                 actions: .init(
                     showNavigator: onShowNavigator,
                     toggleKeyboard: toggleKeyboard,
@@ -106,19 +113,19 @@ struct GhosttyTerminalCoreView: View {
             )
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) {
-            guard !isInputSuspended else { return }
+            guard !isTerminalInputSuspended else { return }
             updateKeyboardVisibility(with: $0)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
-            guard !isInputSuspended else { return }
+            guard !isTerminalInputSuspended else { return }
             completeKeyboardTransition(for: .shown)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
-            guard !isInputSuspended else { return }
+            guard !isTerminalInputSuspended else { return }
             completeKeyboardTransition(for: .hidden)
         }
         .onDisappear { cancelTransientInput() }
-        .onChange(of: isInputSuspended) { _, isSuspended in
+        .onChange(of: isTerminalInputSuspended) { _, isSuspended in
             if isSuspended { cancelTransientInput() }
         }
         .onChange(of: screen.stateTraceLabel) { oldState, newState in
@@ -177,7 +184,7 @@ struct GhosttyTerminalCoreView: View {
             keyboardMode: compositionState.inputCoordinator.keyboardMode,
             isDismissSystemKeyboardRequested: compositionState.inputCoordinator.isDismissSystemKeyboardRequested,
             isInputAvailable: isTerminalInputAvailable,
-            isSelectionSheetPresented: isInputSuspended,
+            isSelectionSheetPresented: isTerminalInputSuspended,
             isAwaitingSystemKeyboardPresentation: compositionState.keyboardTransitionCoordinator.isAwaitingSystemKeyboardPresentation,
             isSceneActive: true
         )
@@ -239,7 +246,17 @@ struct GhosttyTerminalCoreView: View {
 
     private func sendTerminalPaste(_ text: String) -> Bool {
         guard isTerminalInputAvailable else { return false }
-        return terminalInputController.performPaste(
+        return performTerminalPaste(text)
+    }
+
+    /// The image sheet intentionally suspends ordinary responder input. Its
+    /// confirmed upload is the sole input allowed through that suspension.
+    private func insertUploadedImagePath(_ text: String) -> Bool {
+        performTerminalPaste(text)
+    }
+
+    private func performTerminalPaste(_ text: String) -> Bool {
+        terminalInputController.performPaste(
             text,
             submitPendingPrefix: { screen.sendInputToFocusedSurface($0).isAccepted },
             sendPaste: { screen.sendPasteToFocusedSurface($0).isAccepted }
@@ -255,10 +272,14 @@ struct GhosttyTerminalCoreView: View {
         )
     }
 
+    private var isTerminalInputSuspended: Bool {
+        isInputSuspended || isImageAttachmentPresented
+    }
+
     private var isTerminalInputAvailable: Bool {
         GhosttyTerminalInputAvailabilityProjection(
             isTerminalReady: screen.terminalInteractionProjection.isInputAvailable,
-            isSuspended: isInputSuspended
+            isSuspended: isTerminalInputSuspended
         ).isInputAvailable
     }
 }
