@@ -74,6 +74,49 @@ targets:
           ditto "$SRCROOT/../THIRD_PARTY_NOTICES.md" "$destination/THIRD_PARTY_NOTICES.md"
           rm -rf "$destination/THIRD_PARTY_LICENSES"
           ditto "$SRCROOT/../THIRD_PARTY_LICENSES" "$destination/THIRD_PARTY_LICENSES"
+  MoriRemoteTerminal:
+    type: framework
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: MoriRemoteTerminal
+    dependencies:
+      # The transplant target deliberately links no upstream app package. Its
+      # only binary dependency is Mori's pinned universal GhosttyKit artifact.
+      - framework: ../Frameworks/GhosttyKit.xcframework
+        embed: false
+    settings:
+      base:
+        PRODUCT_NAME: MoriRemoteTerminal
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        GENERATE_INFOPLIST_FILE: YES
+        EXCLUDED_ARCHS[sdk=iphonesimulator*]: x86_64
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -lc++
+        # Phase 2 links this archive into MoriRemote. Keep it static now: the
+        # app will then be the single bundle consumer of GhosttyKit, with no
+        # second embedded terminal dylib.
+        MACH_O_TYPE: staticlib
+  MoriRemoteTerminalTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: MoriRemoteTerminalTests
+    dependencies:
+      - target: MoriRemoteTerminal
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
+        # Static terminal archive exposes GhosttyKit C++ symbols to XCTest.
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -lc++
   MoriRemoteTests:
     type: bundle.unit-test
     platform: iOS
@@ -97,3 +140,4 @@ schemes:
     test:
       targets:
         - MoriRemoteTests
+        - MoriRemoteTerminalTests

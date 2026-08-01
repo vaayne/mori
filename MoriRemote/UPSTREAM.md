@@ -1,59 +1,87 @@
-# MoriRemote remux upstreams
+# MoriRemote terminal transplant upstreams
 
-## Mori-built universal GhosttyKit
+## Pinned source
 
-Mori builds one **untracked** `Frameworks/GhosttyKit.xcframework` from the
-pinned remux Ghostty source. It contains the universal macOS slice and the iOS
-arm64 device and simulator slices; both Mori and MoriRemote link that one
-framework without embedding it in either app bundle.
+The Phase-1 terminal transplant is derived from `h3nock/remux` commit
+[`b3a3e5f5dfa4759ab189e203b9a03749e821540c`](https://github.com/h3nock/remux/tree/b3a3e5f5dfa4759ab189e203b9a03749e821540c), inspected from `/tmp/remux-scout`.
 
-| Field | Value |
-| --- | --- |
-| Source repository | <https://github.com/h3nock/remux-ghostty> |
-| Source commit | `aeb8f73790946d9c9ad175b3dafaec9911ef36bb` |
-| Upstream Ghostty base | `b213a72c03b427607b43c89ff4223a7baa079fe8` |
-| Added remux ABI | `ghostty_tmux_client_*` |
-| Reference application | <https://github.com/h3nock/remux> at `b3a3e5f5dfa4759ab189e203b9a03749e821540c` |
+`MoriRemoteTerminal` is a separate iOS 17 **static framework** target
+(`MACH_O_TYPE = staticlib`). It links only Mori's
+`../Frameworks/GhosttyKit.xcframework`; it has no package dependency and is
+not yet instantiated by the production SSH shell. This is not a permanent
+binary-distribution mechanism: Phase 2 links this archive into `MoriRemote`,
+removes `GhosttyKit` from the app target's direct dependencies, and makes the
+app the sole bundle consumer of GhosttyKit. A static framework is the first
+correct rung because it supplies a module boundary now without embedding a
+second dynamic terminal binary later.
 
-`scripts/build-ghostty.sh --universal` builds the framework with
-`ReleaseFast`; `scripts/verify-ghosttykit.sh` fails closed unless its provenance
-matches the pinned source and generated framework content digest, the macOS and
-iOS arm64 slices are present, iOS minimum OS is at most 17, and the custom tmux
-ABI compiles and exports from all slices. CI and `release-ios.yml` build this artifact through the reusable
-`build-ghosttykit.yml` workflow and download it only from that same workflow
-run. There is no third-party prebuilt or mirror fallback.
+## Imported source boundary
 
-The framework derives from Ghostty as modified by `h3nock/remux-ghostty`.
-Ghostty and the adapted remux source are MIT licensed; complete distributed
-notices are in [`../THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
+The framework preserves upstream file and directory names for the terminal
+core:
 
-## Citadel / NIOSSH package identity (Phase 2)
+- `Tmux/`: identity, viewport, control protocol/link, session controller,
+  terminal session, pane surface, screen adapter/model, pane preview cache,
+  runtime trace, and deterministic test transport.
+- `Ghostty/`: runtime/control and managed surfaces, pane/local viewport and
+  scroll physics, key/mouse/scroll mappings, responder/text-input/focus/input
+  coordination, modifier state, keyboard visibility/trackpad, the retained
+  Ctrl/Esc/Tab/session/window/pane/system-keyboard chrome, preview layout,
+  topology/selection projections, selection sheets, and
+  `GhosttyTerminalCoreView` (the minimal upstream-derived composition root).
+- `App/ActiveSessionSwitcherView.swift`: an account-free active-session
+  switcher projection and view.
+- `Domain/TerminalSettings.swift`: terminal appearance only.
 
-MoriRemote pins h3nock/Citadel at `1d0eadd81d0a521b00ede6663c8b3301f5fc252e`.
-Citadel pins h3nock's `swift-nio-ssh` fork at
-`7588777b8f6439efa1a33117f86cb2729abd864c`. MoriRemote no longer links the legacy `MoriSSH` package. The fork remains a
-direct MoriRemote dependency because Citadel uses that exact `NIOSSH` module;
-macOS package resolution is independent and must not be changed as a side
-effect of an iOS artifact update.
+The paired `MoriRemoteTerminalTests` target ports the matching upstream tests
+for controller/session/link/adapter teardown, scrolling and viewport state,
+responder and keyboard input, modifier state, selection projections, and the
+active-session switcher.
 
-## Phase 3 Ghostty tmux core slice
+## Explicit Phase-1 exclusions
 
-The reference is `h3nock/remux` commit
-`b3a3e5f5dfa4759ab189e203b9a03749e821540c`. The initial Mori adaptation is
-intentionally limited to the native runtime and control boundary:
+No files from remux account/profile repositories, SSH services/transports,
+SFTP/live forwarding, terminal preview, attachments, composer/voice, or
+shortcut marketplace/editor are linked into `MoriRemoteTerminal`.
 
-| Mori production file | Upstream production reference | Upstream test reference | Mori coverage / deviation |
+`TmuxControlTransport` is a small protocol-only seam. It deliberately omits
+remux SFTP and live-forward provider protocols. The deterministic transport is
+retained solely as a terminal-core test fixture.
+
+## Required adaptations and iOS 17 deviations
+
+| Area | Change | Why |
+| --- | --- | --- |
+| `TmuxScreenModel.swift` | Reduced to injected `ghostty_app_t` + `TmuxControlTransport` composition. | Upstream constructs account targets, runtime status reporting, and preview services; those are Phase 2+ concerns. |
+| `TmuxControlTransport.swift` | Protocol-only; removes SFTP/live-forward refinements. | Keeps the core independent of SSH/Citadel and forwarding. |
+| `GhosttyTerminalDisconnectReasonClassifier.swift` | Transport-agnostic classifier. | No Phase-1 dependency on NIO, SSH errors, or host-trust types. |
+| Runtime status types | Local terminal-only `TerminalRuntimeState` / disconnect vocabulary. | Avoids importing remux connection/account domain objects. |
+| `GhosttySingleViewportView.swift` | 850-line subtractive adaptation of upstream's 883-line viewport. It retains local text-selection long press/update/end, selection handles and endpoint drag, selection-geometry recovery, copy edit-menu, surface tap/focus, horizontal window swipe, and mouse routing. | Preview candidate resolution/action is removed; copy remains. Picker sheets are topology UI, not text selection. |
+| `GhosttyKeyboardChrome.swift` | Retains the actionable Ctrl/Esc/Tab, session/window/pane selectors, and system keyboard controls; removes composer and shortcut-store actions. | Those excluded surfaces require domains explicitly outside Phase 1. |
+| `GhosttyTerminalCompositionState.swift` + `GhosttyTerminalCoreView.swift` | Small upstream-derived composition root over `TmuxTerminalScreenAdapter`; consumes keyboard notifications, visibility projection, viewport holds, responder callbacks, delayed prefix flush, viewport, text selection, cursor-trackpad HUD, chrome, and picker sheets. | No SSH construction or persistence dependency. |
+| `ActiveSessionSwitcherView.swift` | Uses `UUID`/title/subtitle DTOs and select/disconnect callbacks. | Prevents profile/repository types from entering terminal core. |
+| iOS 17 | Keeps `#available(iOS 26, *)` styling fallback in upstream selection UI; terminal framework deployment target is `17.0`. | Upstream source uses no required iOS 18 API in this closed slice. |
+
+## Test provenance
+
+The following table records the pinned upstream tests reviewed for each production
+area and the local equivalent. “Adapted” means the assertion remains but was
+made deterministic or detached from excluded remux domains.
+
+| Production area | Pinned remux tests reviewed | MoriRemoteTerminalTests | Untranslated gap |
 | --- | --- | --- | --- |
-| `Ghostty/GhosttyKitRuntime.swift` | `Ghostty/GhosttyKitRuntime.swift` | `GhosttyKitRuntimeTests.swift` | iOS 17 runtime/app ownership only; settings/theme warmup is deferred with the shell. |
-| `Tmux/TmuxSessionController.swift` | `Tmux/TmuxSessionController.swift` | `TmuxSessionControllerClientSizeTests.swift` | One writer queue owns every client call, parser action, command token, outbound consume, native surface notification, topology revision, and retained canonical terminal. `Phase3RuntimeTests` translates the local history, topology projection, command admission, tracked-input failure, shutdown, and surface-fence contracts. Deliberately omits upstream `refresh-client -C`, `resize-pane -Z`, zoom, and server copy-mode commands. |
-| `Tmux/TmuxControl.swift` | `Tmux/TmuxSessionLink.swift` | `TmuxSessionLinkWriteFailureTests.swift` | Adds a narrow `beforeReceive` gate: the client is created after SSH attach but before inbound pumping, preventing startup bytes from bypassing Ghostty. `DeterministicTmuxControlTransport` adds delayed chunks, terminal errors, and captured writes for those tests. |
-| `Ghostty/GhosttyTmuxRuntime.swift` | `Tmux/TmuxTerminalSession.swift` | `GhosttyRuntimeSurfaceTopologySnapshotTests.swift` | One-shot runtime composition, callback instance fence, and stop order (link → every unregister fence → controller shutdown). `GhosttyRuntimeCallbackGate` is tested as a pure projection because a fabricated C surface would make a false ABI claim. |
-| `Ghostty/GhosttyTerminalProbe.swift` | debug terminal fixture patterns | n/a | DEBUG-only deterministic route (`--ghostty-terminal-probe`); it does not replace the production root or require credentials. |
+| tmux client/session/link/adapter | `TmuxSessionControllerClientSizeTests.swift`, `TmuxTerminalScreenAdapterTests.swift`, `TmuxTerminalSessionShutdownDrainTests.swift` | Same filenames | SSH transport integration deliberately excluded. |
+| responder, text input and paste | `GhosttyTerminalResponderViewTests.swift`, `GhosttyTerminalInputCoordinatorTests.swift` | Same filenames | Simulator-global `UIPasteboard` integration replaced by injected deterministic source; routing remains tested. |
+| keyboard visibility and viewport continuity | `GhosttyKeyboardVisibilityProjectionTests.swift` | `GhosttyKeyboardVisibilityProjectionTests.swift`, `GhosttyTerminalViewportCoordinatorTests.swift`, `GhosttyTerminalCompositionStateTests.swift` | No device keyboard-animation screenshot test. |
+| delayed tmux prefix input | `GhosttyTerminalInputCoordinatorTests.swift` | `GhosttyTerminalInputCoordinatorTests.swift`, `GhosttyTerminalPrefixFlushLifecycleTests.swift` | Scheduler wall-clock timing is not asserted; token fencing and flush routing are deterministic. |
+| local terminal selection/copy/gesture | `GhosttyKitControlSurfaceTests.swift`, `GhosttySurfaceMouseEventTests.swift`, `GhosttySurfaceScrollGestureTests.swift` | Same filenames | No end-to-end UIKit edit-menu presentation test; selection geometry, text decoding, mouse/tap and gesture reducers are deterministic. Preview-menu assertion is excluded with preview. |
+| keyboard chrome | `GhosttyKeyboardChromeModeTests.swift` | `GhosttyKeyboardChromeModeTests.swift`, `GhosttyKeyboardChromeActionsTests.swift` | SwiftUI pixel/snapshot tests are not imported. |
+| composition root | `GhosttySurfaceScreen.swift` (production call graph reviewed) | `GhosttyTerminalCoreViewTests.swift`, `GhosttyTerminalCompositionStateTests.swift` | Composer, attachments, shortcut UI and account actions deliberately excluded. |
 
-The upstream managed surface, responder, input, viewport, and scrolling files
-were reviewed but not copied wholesale. `Ghostty/GhosttyPaneSurface.swift`
-provides the local-only iOS 17 adaptation: CAMetal rendering, native surface
-registration fences, hardware/software keyboard and IME input, paste,
-selection/copy, and bounded local scrolling. It deliberately omits remux's
-server zoom, server copy-mode browsing, and viewport resize commands because
-those would violate MoriRemote's isolated-client invariants.
+## GhosttyKit provenance
+
+Mori builds one untracked `Frameworks/GhosttyKit.xcframework` from the pinned
+remux Ghostty source. It includes iOS arm64 device/simulator slices and exposes
+the `ghostty_tmux_client_*` ABI used by the upstream controller. See
+`ghosttykit-lock.json` and `scripts/verify-ghosttykit.sh` for the artifact
+provenance and ABI checks.
