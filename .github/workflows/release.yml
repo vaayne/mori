@@ -118,14 +118,54 @@ jobs:
           name: appcast
           path: mori-appcast.xml
 
-      - name: Create GitHub Release
+      - name: Verify release event tag ownership
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" == v* ]]
+          [[ "$(git rev-parse "$GITHUB_REF_NAME^{commit}")" == "$GITHUB_SHA" ]] || {
+            echo "Release event tag does not resolve to the checked-out commit." >&2
+            exit 1
+          }
 
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            Mori-*-macos-arm64.zip
-            Mori-*-macos-arm64.dmg
-          generate_release_notes: true
+      - name: Create and verify draft release
+        id: release-draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          output="$(bash scripts/github-release-draft.sh --create-draft \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag "$GITHUB_REF_NAME" \
+            --target "$GITHUB_SHA" \
+            --title "Mori $VERSION" \
+            --generate-notes \
+            --make-latest true \
+            --require-immutable \
+            --asset "Mori-${VERSION}-macos-arm64.zip" \
+            --asset "Mori-${VERSION}-macos-arm64.dmg")"
+          release_id="${output#release_id=}"
+          [[ "$release_id" =~ ^[0-9]+$ ]]
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Publish complete immutable release
+        id: release-publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash scripts/github-release-draft.sh --publish-draft \
+            --repo "$GITHUB_REPOSITORY" \
+            --release-id "${{ steps.release-draft.outputs.release_id }}" \
+            --require-immutable
+
+      - name: Delete incomplete draft release
+        if: failure() && steps.release-draft.outputs.release_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash scripts/github-release-draft.sh --cleanup-draft \
+            --repo "$GITHUB_REPOSITORY" \
+            --release-id "${{ steps.release-draft.outputs.release_id }}"
 
       - name: Cleanup keychain
         if: always()

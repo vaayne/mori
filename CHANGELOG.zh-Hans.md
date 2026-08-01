@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### 🔧 CI/CD
+
+- **GhosttyKit**：从固定的 remux Ghostty 源码构建一份通用 macOS + iOS framework，并在复用前校验其来源、平台 slice、构建模式和 tmux ABI。
+
 ## [0.7.0] - 2026-07-31
 
 ### ✨ 新功能

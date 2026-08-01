@@ -1,0 +1,49 @@
+name: Release Draft Preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-draft-preflight
+  cancel-in-progress: false
+
+jobs:
+  draft-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Create, download, verify, and delete a multi-asset draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="release-draft-preflight-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          assets="$RUNNER_TEMP/release-draft-preflight-assets"
+          mkdir -p "$assets"
+          python3 - "$assets/${tag}.zip" <<'PY'
+          import sys
+          import zipfile
+          with zipfile.ZipFile(sys.argv[1], "w", compression=zipfile.ZIP_DEFLATED) as archive:
+              archive.writestr("preflight.txt", "Mori release draft preflight\n")
+          PY
+          python3 - "$assets/${tag}.manifest.json" "$tag" <<'PY'
+          import json
+          import sys
+          with open(sys.argv[1], "w", encoding="utf-8") as stream:
+              json.dump({"schemaVersion": 1, "tag": sys.argv[2]}, stream)
+          PY
+          bash scripts/github-release-draft.sh --preflight \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag "$tag" \
+            --target "$GITHUB_SHA" \
+            --title "Mori release draft preflight $tag" \
+            --make-latest false \
+            --download-assets \
+            --asset "$assets/${tag}.zip" \
+            --asset "$assets/${tag}.manifest.json"

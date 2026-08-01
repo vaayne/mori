@@ -66,8 +66,24 @@ run = "cd Packages/MoriTerminal && swift run MoriTerminalTests"
 run = "cd Packages/MoriUI && swift run MoriUITests"
 
 [tasks."build:ghostty"]
-description = "Build GhosttyKit XCFramework from source"
+description = "Build the macOS GhosttyKit XCFramework from the pinned remux source"
 run = "bash scripts/build-ghostty.sh"
+
+[tasks."build:ghostty-universal"]
+description = "Build the universal macOS + iOS GhosttyKit XCFramework from the pinned remux source"
+run = "bash scripts/build-ghostty.sh --universal"
+
+[tasks."test:ghosttykit-contract"]
+description = "Run offline adversarial GhosttyKit lock and source-contract fixtures"
+run = "bash scripts/tests/test-ghosttykit-contract.sh"
+
+[tasks."test:release-workflows"]
+description = "Verify immutable-safe GitHub release draft flows offline"
+run = "bash scripts/tests/test-release-workflows.sh"
+
+[tasks."test:ghosttykit-verify"]
+description = "Prove the universal GhosttyKit verifier rejects framework tampering"
+run = "bash scripts/tests/test-ghosttykit-verify.sh"
 
 [tasks.bundle]
 description = "Build release and create Mori.app bundle"
