@@ -677,11 +677,11 @@ private enum RemoteSharedMutation: Identifiable, Equatable {
 
 private struct ProfileEditorView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var draft: ServerWorkspaceDraft
+    @State private var draft: ServerProfileDraft
     let existingServer: SavedServer?
-    let onSave: (ServerWorkspaceDraft) -> Void
+    let onSave: (ServerProfileDraft) -> Void
 
-    init(draft: ServerWorkspaceDraft, existingServer: SavedServer? = nil, onSave: @escaping (ServerWorkspaceDraft) -> Void) {
+    init(draft: ServerProfileDraft, existingServer: SavedServer? = nil, onSave: @escaping (ServerProfileDraft) -> Void) {
         _draft = State(initialValue: draft)
         self.existingServer = existingServer
         self.onSave = onSave

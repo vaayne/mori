@@ -3,64 +3,35 @@ import MoriRemoteTerminal
 import Observation
 import SwiftUI
 
-struct WorkspaceDraft: Identifiable, Sendable {
+struct ServerProfileDraft: Identifiable, Sendable {
     let id: UUID
-    let serverID: UUID
-    var name: String
-    var tmuxSession: String
-
-    init(serverID: UUID, workspace: SavedWorkspace? = nil) {
-        id = workspace?.id ?? UUID()
-        self.serverID = serverID
-        name = workspace?.name ?? "main"
-        tmuxSession = workspace?.tmuxSession ?? "main"
-    }
-
-    func record() throws -> SavedWorkspace {
-        try SavedWorkspace(id: id, serverID: serverID, name: name, tmuxSession: tmuxSession).validated()
-    }
-}
-
-struct ServerWorkspaceDraft: Identifiable, Sendable {
-    let id: UUID
-    /// Nil means an existing server edit: profile edits must not invent or
-    /// overwrite an arbitrary workspace belonging to that server.
-    let workspaceID: UUID?
     let serverLastConnectedAt: Date?
-    let workspaceLastConnectedAt: Date?
     var serverName: String
     var host: String
     var port: String
     var username: String
-    var workspaceName: String
-    var tmuxSession: String
     var identityKind: SSHIdentityKind
     var password: String
     var privateKey: String
     var passphrase: String
 
-    init(server: SavedServer? = nil, workspace: SavedWorkspace? = nil, identity: SSHIdentity? = nil) {
+    init(server: SavedServer? = nil, identity: SSHIdentity? = nil) {
         id = server?.id ?? UUID()
-        workspaceID = workspace?.id
         serverLastConnectedAt = server?.lastConnectedAt
-        workspaceLastConnectedAt = workspace?.lastConnectedAt
         serverName = server?.name ?? ""
         host = server?.host ?? ""
         port = String(server?.port ?? 22)
         username = server?.username ?? ""
-        workspaceName = workspace?.name ?? "main"
-        tmuxSession = workspace?.tmuxSession ?? "main"
         identityKind = identity?.kind ?? .password
         password = ""
         privateKey = ""
         passphrase = ""
     }
 
-    func records(existingIdentityID: UUID? = nil) throws -> (SavedServer, SavedWorkspace?, SSHIdentity, ProfileCredential?) {
+    func records(existingIdentityID: UUID? = nil) throws -> (SavedServer, SSHIdentity, ProfileCredential?) {
         guard let port = Int(port) else { throw SavedModelValidationError.invalidPort }
         let identityID = existingIdentityID ?? id
         let server = SavedServer(id: id, name: serverName, host: host, port: port, username: username, identityID: identityID, lastConnectedAt: serverLastConnectedAt)
-        let workspace = try workspaceID.map { try SavedWorkspace(id: $0, serverID: id, name: workspaceName, tmuxSession: tmuxSession, lastConnectedAt: workspaceLastConnectedAt).validated() }
         let identity = SSHIdentity(id: identityID, serverID: id, kind: identityKind, label: identityKind == .password ? "password" : "private key")
         let credential: ProfileCredential?
         switch identityKind {
@@ -68,7 +39,7 @@ struct ServerWorkspaceDraft: Identifiable, Sendable {
         case .privateKey:
             credential = privateKey.isEmpty ? nil : .privateKey(.init(privateKeyPEM: privateKey, passphrase: passphrase.isEmpty ? nil : passphrase))
         }
-        return (try server.validated(), workspace, try identity.validated(), credential)
+        return (try server.validated(), try identity.validated(), credential)
     }
 }
 
@@ -321,12 +292,12 @@ final class RemoteRootModel {
         }
     }
 
-    func save(_ draft: ServerWorkspaceDraft, existingServer: SavedServer? = nil) {
+    func save(_ draft: ServerProfileDraft, existingServer: SavedServer? = nil) {
         Task {
             do {
                 let currentIdentity = existingServer.flatMap { server in identities.first { $0.id == server.identityID } }
                 let records = try draft.records(existingIdentityID: currentIdentity?.id)
-                let snapshot = try await dependencies.library.save(server: records.0, workspace: records.1, identity: records.2, credential: records.3)
+                let snapshot = try await dependencies.library.save(server: records.0, identity: records.1, credential: records.2)
                 apply(snapshot)
                 discoverSessions(serverID: records.0.id)
             } catch { errorMessage = error.localizedDescription }
@@ -358,26 +329,6 @@ final class RemoteRootModel {
             } catch {
                 self.sessionDiscovery[serverID] = .failed(error.localizedDescription)
             }
-        }
-    }
-
-    func save(_ draft: WorkspaceDraft) {
-        Task {
-            do {
-                let snapshot = try await dependencies.library.save(workspace: draft.record())
-                apply(snapshot)
-            } catch { errorMessage = error.localizedDescription }
-        }
-    }
-
-    func delete(workspace: SavedWorkspace) {
-        connectionAttempts.cancel(workspaceID: workspace.id)
-        Task {
-            do {
-                await disconnect(workspaceID: workspace.id)
-                let snapshot = try await dependencies.library.delete(workspaceID: workspace.id)
-                apply(snapshot)
-            } catch { errorMessage = error.localizedDescription }
         }
     }
 

@@ -49,30 +49,16 @@ import MoriRemoteTerminal
         #expect(observation.didChange)
     }
 
-    @Test("workspace draft owns a distinct record and rejects unsafe sessions")
-    func workspaceDraftValidation() throws {
-        let serverID = UUID()
-        var draft = WorkspaceDraft(serverID: serverID)
-        draft.name = "Logs"
-        draft.tmuxSession = "logs"
-        let workspace = try draft.record()
-        #expect(workspace.serverID == serverID)
-        #expect(workspace.id != serverID)
-        draft.tmuxSession = "bad\nname"
-        #expect(throws: SavedModelValidationError.invalidTmuxSession) { try draft.record() }
-    }
-
     @Test("new profile draft saves only the server and identity")
     func profileDraftValidation() throws {
-        var draft = ServerWorkspaceDraft()
+        var draft = ServerProfileDraft()
         draft.serverName = "Build"
         draft.host = "build.example"
         draft.port = "22"
         draft.username = "mori"
         let records = try draft.records()
-        #expect(records.1 == nil)
-        #expect(records.0.identityID == records.2.id)
-        #expect(records.2.serverID == records.0.id)
+        #expect(records.0.identityID == records.1.id)
+        #expect(records.1.serverID == records.0.id)
     }
 
     @Test("tmux discovery lists source sessions and hides MoriRemote shadows")
@@ -93,7 +79,8 @@ import MoriRemoteTerminal
         let server = SavedServer(id: serverID, name: "Build", host: "build.example", username: "mori", identityID: serverID)
         let identity = SSHIdentity(id: serverID, serverID: serverID, kind: .password)
         let main = SavedWorkspace(id: workspaceID, serverID: serverID, name: "Main", tmuxSession: "main")
-        _ = try await library.save(server: server, workspace: main, identity: identity, credential: nil)
+        _ = try await library.save(server: server, identity: identity, credential: nil)
+        _ = try storage.workspaces.insertIfAbsent(main)
 
         let first = try await library.synchronizeDiscoveredSessions(serverID: serverID, names: ["main", "ops"])
         #expect(first.workspaces.first(where: { $0.tmuxSession == "main" })?.id == workspaceID)
@@ -140,19 +127,19 @@ import MoriRemoteTerminal
         #expect(!attempts.isCurrent(replacement, for: workspace))
     }
 
-    @Test("profile edits preserve the selected workspace identity and recency")
-    func profileDraftPreservesWorkspace() throws {
-        let serverID = UUID(), workspaceID = UUID(), identityID = UUID()
+    @Test("profile drafts preserve server identity and recency")
+    func profileDraftPreservesServer() throws {
+        let serverID = UUID(), identityID = UUID()
         let date = Date(timeIntervalSince1970: 123)
         let server = SavedServer(id: serverID, name: "Build", host: "build.example", username: "mori", identityID: identityID, lastConnectedAt: date)
-        let workspace = SavedWorkspace(id: workspaceID, serverID: serverID, name: "Build", tmuxSession: "build", lastConnectedAt: date)
-        let draft = ServerWorkspaceDraft(server: server, workspace: workspace, identity: SSHIdentity(id: identityID, serverID: serverID, kind: .password))
+        let draft = ServerProfileDraft(
+            server: server,
+            identity: SSHIdentity(id: identityID, serverID: serverID, kind: .password)
+        )
         let records = try draft.records(existingIdentityID: identityID)
-        #expect(records.1?.id == workspaceID)
+        #expect(records.0.id == serverID)
         #expect(records.0.lastConnectedAt == date)
-        #expect(records.1?.lastConnectedAt == date)
-        let serverOnly = ServerWorkspaceDraft(server: server, identity: SSHIdentity(id: identityID, serverID: serverID, kind: .password))
-        #expect(try serverOnly.records(existingIdentityID: identityID).1 == nil)
+        #expect(records.1.id == identityID)
     }
 
     @Test("profile persistence preserves recency and never inserts a server-edit workspace")
@@ -166,17 +153,13 @@ import MoriRemoteTerminal
         let originalServer = SavedServer(id: serverID, name: "Build", host: "build.example", username: "mori", identityID: identityID, lastConnectedAt: date)
         let originalWorkspace = SavedWorkspace(id: workspaceID, serverID: serverID, name: "Build", tmuxSession: "build", lastConnectedAt: date)
         let identity = SSHIdentity(id: identityID, serverID: serverID, kind: .password)
-        _ = try await library.save(server: originalServer, workspace: originalWorkspace, identity: identity, credential: nil)
+        _ = try await library.save(server: originalServer, identity: identity, credential: nil)
+        _ = try storage.workspaces.insertIfAbsent(originalWorkspace)
         let editedServer = SavedServer(id: serverID, name: "Renamed", host: "build.example", username: "mori", identityID: identityID)
-        let editedWorkspace = SavedWorkspace(id: workspaceID, serverID: serverID, name: "Renamed", tmuxSession: "build")
-        let snapshot = try await library.save(server: editedServer, workspace: editedWorkspace, identity: identity, credential: nil)
+        let snapshot = try await library.save(server: editedServer, identity: identity, credential: nil)
         #expect(snapshot.servers.first?.lastConnectedAt == date)
-        #expect(snapshot.workspaces == [SavedWorkspace(id: workspaceID, serverID: serverID, name: "Renamed", tmuxSession: "build", lastConnectedAt: date)])
-        _ = try await library.save(server: editedServer, workspace: nil, identity: identity, credential: nil)
-        let workspaceOnlyEdit = SavedWorkspace(id: workspaceID, serverID: serverID, name: "Workspace only", tmuxSession: "build")
-        let workspaceSnapshot = try await library.save(workspace: workspaceOnlyEdit)
-        #expect(workspaceSnapshot.workspaces == [SavedWorkspace(id: workspaceID, serverID: serverID, name: "Workspace only", tmuxSession: "build", lastConnectedAt: date)])
-        #expect((try await library.reload()).workspaces.count == 1)
+        #expect(snapshot.workspaces == [originalWorkspace])
+        #expect((try await library.reload()).workspaces == [originalWorkspace])
     }
 
     @Test("stale SSH trust challenges become localized errors rather than disappearing")
@@ -233,7 +216,8 @@ import MoriRemoteTerminal
         let workspace = SavedWorkspace(id: UUID(), serverID: serverID, name: "Build", tmuxSession: "build")
         let privateKey = SSHPrivateKeyInspector.generateEd25519(comment: "audit").privateKeyPEM
         let passphrase = "phase6-passphrase"
-        _ = try await library.save(server: server, workspace: workspace, identity: identity, credential: .privateKey(.init(privateKeyPEM: privateKey, passphrase: passphrase)))
+        _ = try await library.save(server: server, identity: identity, credential: .privateKey(.init(privateKeyPEM: privateKey, passphrase: passphrase)))
+        _ = try storage.workspaces.insertIfAbsent(workspace)
         let persisted = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "json" }
             .reduce(into: "") { $0 += (try? String(contentsOf: $1, encoding: .utf8)) ?? "" }
