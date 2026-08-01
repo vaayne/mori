@@ -187,9 +187,7 @@ enum SSHImageUploadTransfer {
 }
 
 struct SSHImageUploadService: Sendable {
-    let library: RemoteLibrary
-    let roots: SSHRootPool
-    let trustedHosts: TrustedHostStore
+    let sshRoots: SSHRootAccess
 
     func uploader(for workspaceID: UUID) -> MoriRemoteTerminalImageUploader {
         MoriRemoteTerminalImageUploader { localURL, filename, progress in
@@ -213,21 +211,8 @@ struct SSHImageUploadService: Sendable {
             throw SSHFileUploadError.localFileUnavailable
         }
         let totalBytes = (try FileManager.default.attributesOfItem(atPath: localURL.path)[.size] as? NSNumber)?.int64Value ?? 0
-        let material = try await library.connectionMaterial(for: workspaceID)
-        let auth = try await library.resolveAuth(server: material.1, identity: material.2, settings: material.3)
-        let endpoint = try CanonicalEndpoint(host: material.1.host, port: material.1.port)
-        let key = SSHRootPool.Key(
-            serverID: material.1.id,
-            endpoint: endpoint,
-            username: material.1.username,
-            authenticationFingerprint: auth.rootPoolFingerprint
-        )
-        let connector = CitadelSSHRootConnector(
-            server: material.1,
-            auth: auth,
-            trust: SSHHostTrustResolver(store: trustedHosts)
-        )
-        let lease = try await roots.lease(for: key, connector: connector)
+        let access = try await sshRoots.workspace(workspaceID)
+        let lease = try await access.root.lease()
         let session: any SSHFileUploadSession
         do {
             session = try await lease.root.openFileUploadSession()

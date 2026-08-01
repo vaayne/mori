@@ -9,9 +9,7 @@ actor SSHTmuxControlTransport {
 
     private enum Lifecycle: Equatable { case idle, starting, started, closing, closed }
 
-    private let connector: any SSHRootConnecting
-    private let pool: SSHRootPool
-    private let poolKey: SSHRootPool.Key
+    private let rootSource: AuthenticatedSSHRootSource
     private let tmuxExecutable: String
     private let sourceSession: String
     private let runtimeID: UUID
@@ -27,16 +25,12 @@ actor SSHTmuxControlTransport {
     private var lifecycle: Lifecycle = .idle
 
     init(
-        connector: any SSHRootConnecting,
-        pool: SSHRootPool,
-        poolKey: SSHRootPool.Key,
+        rootSource: AuthenticatedSSHRootSource,
         tmuxExecutable: String = "tmux",
         sourceSession: String,
         runtimeID: UUID = UUID()
     ) {
-        self.connector = connector
-        self.pool = pool
-        self.poolKey = poolKey
+        self.rootSource = rootSource
         self.tmuxExecutable = tmuxExecutable
         self.sourceSession = sourceSession
         self.runtimeID = runtimeID
@@ -63,7 +57,7 @@ actor SSHTmuxControlTransport {
         lifecycle = .starting
 
         do {
-            let lease = try await pool.lease(for: poolKey, connector: connector)
+            let lease = try await rootSource.lease()
             guard lifecycle == .starting else {
                 // close won before this healthy shared root was installed here;
                 // return its lease to the pool instead of tearing down peers.

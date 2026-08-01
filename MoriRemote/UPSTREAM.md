@@ -40,8 +40,9 @@ live forwarding, pane-preview/selection sheets, full composer/voice, generic
 file attachments, or shortcut marketplace/editor are linked into
 `MoriRemoteTerminal`. Image input is the deliberate exception: the terminal
 module owns photo/clipboard staging and preview UI, while a narrow
-`MoriRemoteTerminalImageUploader` facade delegates the authenticated SFTP
-upload to Mori's app-owned SSH root pool.
+`MoriRemoteTerminalImageUploader` delegates authenticated SFTP upload through
+Mori's app-owned `SSHRootAccess`, the same concrete root recipe used by session
+discovery and terminal control. Each operation still owns its exact TOFU retry.
 
 `TmuxControlTransport` remains a terminal-internal protocol-only seam. The app
 crosses it only through `MoriRemoteTerminalTransport`, whose byte lifecycle

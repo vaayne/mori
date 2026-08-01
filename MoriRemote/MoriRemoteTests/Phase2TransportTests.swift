@@ -261,6 +261,46 @@ import Testing
     }
 }
 
+private extension SSHTmuxControlTransport {
+    init(
+        connector: any SSHRootConnecting,
+        pool: SSHRootPool,
+        poolKey: SSHRootPool.Key,
+        tmuxExecutable: String = "tmux",
+        sourceSession: String,
+        runtimeID: UUID = UUID()
+    ) {
+        self.init(
+            rootSource: AuthenticatedSSHRootSource(
+                pool: pool,
+                key: poolKey,
+                connector: connector
+            ),
+            tmuxExecutable: tmuxExecutable,
+            sourceSession: sourceSession,
+            runtimeID: runtimeID
+        )
+    }
+}
+
+private extension SSHTmuxSessionDiscovery {
+    init(
+        connector: any SSHRootConnecting,
+        pool: SSHRootPool,
+        poolKey: SSHRootPool.Key,
+        tmuxExecutable: String = "tmux"
+    ) {
+        self.init(
+            rootSource: AuthenticatedSSHRootSource(
+                pool: pool,
+                key: poolKey,
+                connector: connector
+            ),
+            tmuxExecutable: tmuxExecutable
+        )
+    }
+}
+
 private final class TrustSequencingConnector: @unchecked Sendable {
     let server: SavedServer
     let trust: SSHHostTrustResolver

@@ -3,13 +3,11 @@ import Foundation
 /// Lists source sessions through the same authenticated root pool as terminal
 /// runtimes. Discovery never creates, attaches, resizes, or switches a tmux client.
 struct SSHTmuxSessionDiscovery: Sendable {
-    let connector: any SSHRootConnecting
-    let pool: SSHRootPool
-    let poolKey: SSHRootPool.Key
+    let rootSource: AuthenticatedSSHRootSource
     var tmuxExecutable = "tmux"
 
     func load() async throws -> [String] {
-        let lease = try await pool.lease(for: poolKey, connector: connector)
+        let lease = try await rootSource.lease()
         do {
             let version = try await run(
                 command: TmuxCommandBuilder.preflight(executable: tmuxExecutable),

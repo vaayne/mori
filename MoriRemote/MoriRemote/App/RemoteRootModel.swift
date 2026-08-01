@@ -339,24 +339,8 @@ final class RemoteRootModel {
         Task { [weak self] in
             guard let self else { return }
             do {
-                let material = try await self.dependencies.library.discoveryMaterial(for: serverID)
-                let auth = try await self.dependencies.library.resolveAuth(server: material.0, identity: material.1, settings: material.2)
-                let endpoint = try CanonicalEndpoint(host: material.0.host, port: material.0.port)
-                let key = SSHRootPool.Key(
-                    serverID: material.0.id,
-                    endpoint: endpoint,
-                    username: material.0.username,
-                    authenticationFingerprint: auth.rootPoolFingerprint
-                )
-                let names = try await SSHTmuxSessionDiscovery(
-                    connector: CitadelSSHRootConnector(
-                        server: material.0,
-                        auth: auth,
-                        trust: SSHHostTrustResolver(store: self.dependencies.trustedHosts)
-                    ),
-                    pool: self.dependencies.roots,
-                    poolKey: key
-                ).load()
+                let root = try await self.dependencies.sshRoots.server(serverID)
+                let names = try await SSHTmuxSessionDiscovery(rootSource: root).load()
                 let snapshot = try await self.dependencies.library.synchronizeDiscoveredSessions(serverID: serverID, names: names)
                 self.apply(snapshot)
                 self.discoveredSessionNames[serverID] = Set(names)
@@ -440,23 +424,17 @@ final class RemoteRootModel {
             guard let self else { return }
             var runtime: ActiveWorkspaceRuntime?
             do {
-                let material = try await self.dependencies.library.connectionMaterial(for: workspaceID)
+                let access = try await self.dependencies.sshRoots.workspace(workspaceID)
                 guard self.attemptIsCurrent(attempt, workspaceID: workspaceID) else { return }
-                let auth = try await self.dependencies.library.resolveAuth(server: material.1, identity: material.2, settings: material.3)
-                guard self.attemptIsCurrent(attempt, workspaceID: workspaceID) else { return }
-                let endpoint = try CanonicalEndpoint(host: material.1.host, port: material.1.port)
-                let key = SSHRootPool.Key(serverID: material.1.id, endpoint: endpoint, username: material.1.username, authenticationFingerprint: auth.rootPoolFingerprint)
                 let instanceID = UUID()
                 let transport = SSHTmuxControlTransport(
-                    connector: CitadelSSHRootConnector(server: material.1, auth: auth, trust: SSHHostTrustResolver(store: self.dependencies.trustedHosts)),
-                    pool: self.dependencies.roots,
-                    poolKey: key,
-                    sourceSession: material.0.tmuxSession,
+                    rootSource: access.root,
+                    sourceSession: access.workspace.tmuxSession,
                     runtimeID: instanceID
                 )
                 let created = try ActiveWorkspaceRuntime(
-                    workspace: material.0,
-                    settings: material.3,
+                    workspace: access.workspace,
+                    settings: access.settings,
                     transport: transport.asTerminalTransport(),
                     instanceID: instanceID
                 )
@@ -539,11 +517,7 @@ final class RemoteRootModel {
     }
 
     func imageUploader(for workspaceID: UUID) -> MoriRemoteTerminalImageUploader {
-        SSHImageUploadService(
-            library: dependencies.library,
-            roots: dependencies.roots,
-            trustedHosts: dependencies.trustedHosts
-        ).uploader(for: workspaceID)
+        SSHImageUploadService(sshRoots: dependencies.sshRoots).uploader(for: workspaceID)
     }
     /// Scene activation is intentionally metadata-only: reconnect remains
     /// reserved for a real control-transport loss. Backgrounding stops the

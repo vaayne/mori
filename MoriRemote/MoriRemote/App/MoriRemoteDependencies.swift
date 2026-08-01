@@ -6,13 +6,17 @@ import Foundation
 @MainActor
 final class MoriRemoteDependencies {
     let library: RemoteLibrary
-    let trustedHosts: TrustedHostStore
-    let roots = SSHRootPool()
+    let sshRoots: SSHRootAccess
 
     init(storage: MoriRemoteStorage, legacyServersURL: URL) {
-        trustedHosts = storage.trustedHosts
         let migrator = LegacyServerMigrator(storage: storage, legacyServersURL: legacyServersURL)
-        library = RemoteLibrary(storage: storage, migrator: migrator)
+        let library = RemoteLibrary(storage: storage, migrator: migrator)
+        self.library = library
+        sshRoots = SSHRootAccess(
+            library: library,
+            pool: SSHRootPool(),
+            trustedHosts: storage.trustedHosts
+        )
     }
 
     static func live() -> MoriRemoteDependencies {
