@@ -50,6 +50,10 @@
 "No Servers" = "No Servers";
 "No matches for “%@”" = "No matches for “%@”";
 "No tmux sessions" = "No tmux sessions";
+"Load sessions" = "Load Sessions";
+"Loading sessions…" = "Loading Sessions…";
+"Refresh sessions" = "Refresh Sessions";
+"Session discovery failed" = "Couldn’t Load Sessions";
 "Not Connected" = "Not Connected";
 "Offline" = "Offline";
 "Opening shell…" = "Opening shell…";
@@ -170,10 +174,12 @@
 "Choose a saved workspace to open its terminal." = "Choose a saved workspace to open its terminal.";
 "No saved servers" = "No Saved Servers";
 "No matching workspaces" = "No Matching Workspaces";
+"No matching sessions" = "No Matching Sessions";
 "Add a server and workspace to begin." = "Add a server and workspace to begin.";
 "Edit server" = "Edit Server";
 "Delete server" = "Delete Server";
 "Filter servers and workspaces" = "Filter servers and workspaces";
+"Filter servers and sessions" = "Filter servers and sessions";
 "Settings" = "Settings";
 "Add server" = "Add Server";
 "Connection lost." = "Connection lost.";

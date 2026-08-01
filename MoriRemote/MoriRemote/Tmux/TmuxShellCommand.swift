@@ -78,6 +78,10 @@ enum TmuxCommandBuilder {
 
     static func preflight(executable: String) throws -> String { try command(executable: executable, arguments: ["-V"]) }
 
+    static func listSessions(executable: String) throws -> String {
+        try command(executable: executable, arguments: ["list-sessions", "-F", "#{session_name}"])
+    }
+
     static func requireSupportedVersion(_ output: String) throws {
         guard let version = TmuxVersion.parse(output) else { throw TmuxCommandError.malformedVersion }
         guard version >= .init(major: 3, minor: 2) else { throw TmuxCommandError.unsupportedVersion }
@@ -122,5 +126,21 @@ enum TmuxCommandBuilder {
 
     private static func validate(_ value: String) throws {
         guard !value.contains(where: { $0 == "\n" || $0 == "\r" || $0 == "\0" }) else { throw TmuxCommandError.unsafeArgument }
+    }
+}
+
+struct TmuxSessionList: Equatable, Sendable {
+    let names: [String]
+
+    static func parse(_ output: String) -> TmuxSessionList {
+        let names = Set(output.split(whereSeparator: \.isNewline).map(String.init))
+            .filter { !$0.isEmpty && !isMoriRemoteShadow($0) }
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+        return TmuxSessionList(names: names)
+    }
+
+    private static func isMoriRemoteShadow(_ name: String) -> Bool {
+        guard let marker = name.range(of: "--mori-remote-", options: .backwards) else { return false }
+        return UUID(uuidString: String(name[marker.upperBound...])) != nil
     }
 }

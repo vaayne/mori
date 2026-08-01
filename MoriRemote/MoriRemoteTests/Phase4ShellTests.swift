@@ -28,21 +28,44 @@ import Testing
         #expect(throws: SavedModelValidationError.invalidTmuxSession) { try draft.record() }
     }
 
-    @Test("profile draft keeps server identity and rejects unsafe sessions")
+    @Test("new profile draft saves only the server and identity")
     func profileDraftValidation() throws {
         var draft = ServerWorkspaceDraft()
         draft.serverName = "Build"
         draft.host = "build.example"
         draft.port = "22"
         draft.username = "mori"
-        draft.workspaceName = "Build"
-        draft.tmuxSession = "build"
         let records = try draft.records()
-        #expect(records.0.id == records.1?.serverID)
+        #expect(records.1 == nil)
         #expect(records.0.identityID == records.2.id)
         #expect(records.2.serverID == records.0.id)
-        draft.tmuxSession = "bad\nname"
-        #expect(throws: SavedModelValidationError.invalidTmuxSession) { try draft.records() }
+    }
+
+    @Test("tmux discovery lists source sessions and hides MoriRemote shadows")
+    func tmuxSessionDiscoveryProjection() throws {
+        let shadowID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
+        let output = "zeta\nmain\nmain--mori-remote-\(shadowID.uuidString.lowercased())\nalpha\nmain\n"
+        #expect(TmuxSessionList.parse(output).names == ["alpha", "main", "zeta"])
+        #expect(try TmuxCommandBuilder.listSessions(executable: "tmux").contains("'list-sessions' '-F' '#{session_name}'"))
+    }
+
+    @Test("discovered sessions reuse saved identities and add only missing sessions")
+    func synchronizeDiscoveredSessions() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let storage = MoriRemoteStorage(root: root)
+        let library = RemoteLibrary(storage: storage, migrator: LegacyServerMigrator(storage: storage, legacyServersURL: root.appendingPathComponent("legacy.json")))
+        let serverID = UUID(), workspaceID = UUID()
+        let server = SavedServer(id: serverID, name: "Build", host: "build.example", username: "mori", identityID: serverID)
+        let identity = SSHIdentity(id: serverID, serverID: serverID, kind: .password)
+        let main = SavedWorkspace(id: workspaceID, serverID: serverID, name: "Main", tmuxSession: "main")
+        _ = try await library.save(server: server, workspace: main, identity: identity, credential: nil)
+
+        let first = try await library.synchronizeDiscoveredSessions(serverID: serverID, names: ["main", "ops"])
+        #expect(first.workspaces.first(where: { $0.tmuxSession == "main" })?.id == workspaceID)
+        #expect(Set(first.workspaces.map(\.tmuxSession)) == ["main", "ops"])
+        let second = try await library.synchronizeDiscoveredSessions(serverID: serverID, names: ["main", "ops"])
+        #expect(second.workspaces.count == 2)
     }
 
     @Test("connection attempt admission is synchronous and stale tokens cannot finish")

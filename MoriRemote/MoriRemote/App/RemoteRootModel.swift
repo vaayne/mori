@@ -41,7 +41,7 @@ struct ServerWorkspaceDraft: Identifiable, Sendable {
 
     init(server: SavedServer? = nil, workspace: SavedWorkspace? = nil, identity: SSHIdentity? = nil) {
         id = server?.id ?? UUID()
-        workspaceID = workspace?.id ?? (server == nil ? UUID() : nil)
+        workspaceID = workspace?.id
         serverLastConnectedAt = server?.lastConnectedAt
         workspaceLastConnectedAt = workspace?.lastConnectedAt
         serverName = server?.name ?? ""
@@ -70,6 +70,18 @@ struct ServerWorkspaceDraft: Identifiable, Sendable {
         }
         return (try server.validated(), workspace, try identity.validated(), credential)
     }
+}
+
+enum ServerSessionDiscoveryStatus: Equatable, Sendable {
+    case idle
+    case loading
+    case loaded
+    case failed(String)
+}
+
+enum PendingSSHTrustAction: Equatable, Sendable {
+    case connect(UUID)
+    case discover(UUID)
 }
 
 enum WorkspaceRuntimeStatus: Equatable {
@@ -241,12 +253,14 @@ final class RemoteRootModel {
     private(set) var identities: [SSHIdentity] = []
     private(set) var settings = RemoteSettings.default
     private(set) var runtimes: [UUID: ActiveWorkspaceRuntime] = [:]
+    private(set) var sessionDiscovery: [UUID: ServerSessionDiscoveryStatus] = [:]
+    private var discoveredSessionNames: [UUID: Set<String>] = [:]
     var activeWorkspaceID: UUID?
     var pendingTrust: SSHHostTrustChallenge?
     var errorMessage: String?
     var migrationReport: LegacyMigrationReport?
     var runtimeRevision = 0
-    private var pendingTrustWorkspaceID: UUID?
+    private var pendingTrustAction: PendingSSHTrustAction?
     private(set) var isLoaded = false
     var libraryLoadError: String? { bootstrapFailure }
     var isBootstrapping: Bool { loadingTask != nil }
@@ -255,6 +269,24 @@ final class RemoteRootModel {
 
     var activeRuntime: ActiveWorkspaceRuntime? { activeWorkspaceID.flatMap { runtimes[$0] } }
     var activeWorkspaces: [SavedWorkspace] { workspaces.filter { runtimes[$0.id] != nil } }
+    func visibleWorkspaces(for serverID: UUID) -> [SavedWorkspace] {
+        let discovered = discoveredSessionNames[serverID]
+        let candidates = workspaces.filter {
+            $0.serverID == serverID && (discovered == nil || discovered?.contains($0.tmuxSession) == true)
+        }
+        return Dictionary(grouping: candidates, by: \.tmuxSession)
+            .values
+            .compactMap { duplicates in
+                duplicates.max { lhs, rhs in
+                    let lhsActive = runtimes[lhs.id] != nil
+                    let rhsActive = runtimes[rhs.id] != nil
+                    if lhsActive != rhsActive { return !lhsActive && rhsActive }
+                    return (lhs.lastConnectedAt ?? .distantPast, lhs.id.uuidString)
+                        < (rhs.lastConnectedAt ?? .distantPast, rhs.id.uuidString)
+                }
+            }
+            .sorted { $0.tmuxSession.localizedStandardCompare($1.tmuxSession) == .orderedAscending }
+    }
     func agentSummary(for workspaceID: UUID) -> AgentMetadata { runtimes[workspaceID]?.agentSummary ?? .unknown }
     func metadata(for workspaceID: UUID, paneID: UInt64) -> AgentMetadata { runtimes[workspaceID]?.metadata(for: paneID) ?? .unknown }
 
@@ -280,7 +312,52 @@ final class RemoteRootModel {
                 let records = try draft.records(existingIdentityID: currentIdentity?.id)
                 let snapshot = try await dependencies.library.save(server: records.0, workspace: records.1, identity: records.2, credential: records.3)
                 apply(snapshot)
+                discoverSessions(serverID: records.0.id)
             } catch { errorMessage = error.localizedDescription }
+        }
+    }
+
+    func discoverSessions(serverID: UUID) {
+        guard sessionDiscovery[serverID] != .loading else { return }
+        sessionDiscovery[serverID] = .loading
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let material = try await self.dependencies.library.discoveryMaterial(for: serverID)
+                let auth = try await self.dependencies.library.resolveAuth(server: material.0, identity: material.1, settings: material.2)
+                let endpoint = try CanonicalEndpoint(host: material.0.host, port: material.0.port)
+                let key = SSHRootPool.Key(
+                    serverID: material.0.id,
+                    endpoint: endpoint,
+                    username: material.0.username,
+                    authenticationFingerprint: auth.rootPoolFingerprint
+                )
+                let names = try await SSHTmuxSessionDiscovery(
+                    connector: CitadelSSHRootConnector(
+                        server: material.0,
+                        auth: auth,
+                        trust: SSHHostTrustResolver(store: self.dependencies.trustedHosts)
+                    ),
+                    pool: self.dependencies.roots,
+                    poolKey: key
+                ).load()
+                let snapshot = try await self.dependencies.library.synchronizeDiscoveredSessions(serverID: serverID, names: names)
+                self.apply(snapshot)
+                self.discoveredSessionNames[serverID] = Set(names)
+                self.sessionDiscovery[serverID] = .loaded
+            } catch let error as SSHHostTrustError {
+                switch SSHTrustPresentation.resolve(error) {
+                case let .challenge(challenge):
+                    self.errorMessage = nil
+                    self.pendingTrust = challenge
+                    self.pendingTrustAction = .discover(serverID)
+                    self.sessionDiscovery[serverID] = .idle
+                case let .error(message):
+                    self.sessionDiscovery[serverID] = .failed(message)
+                }
+            } catch {
+                self.sessionDiscovery[serverID] = .failed(error.localizedDescription)
+            }
         }
     }
 
@@ -396,10 +473,10 @@ final class RemoteRootModel {
                 case let .challenge(challenge):
                     self.errorMessage = nil
                     self.pendingTrust = challenge
-                    self.pendingTrustWorkspaceID = workspaceID
+                    self.pendingTrustAction = .connect(workspaceID)
                 case let .error(message):
                     self.pendingTrust = nil
-                    self.pendingTrustWorkspaceID = nil
+                    self.pendingTrustAction = nil
                     self.errorMessage = message
                 }
             } catch {
@@ -413,18 +490,22 @@ final class RemoteRootModel {
 
     func dismissTrust() {
         pendingTrust = nil
-        pendingTrustWorkspaceID = nil
+        pendingTrustAction = nil
     }
 
     func confirmTrust(_ challenge: SSHHostTrustChallenge, replaceChanged: Bool) {
         Task {
             do {
                 try await dependencies.library.trust(challenge, replaceChanged: replaceChanged)
-                let workspaceID = pendingTrustWorkspaceID
+                let action = pendingTrustAction
                 pendingTrust = nil
-                pendingTrustWorkspaceID = nil
+                pendingTrustAction = nil
                 errorMessage = nil
-                if let workspaceID { connect(workspaceID: workspaceID) }
+                switch action {
+                case let .connect(workspaceID): connect(workspaceID: workspaceID)
+                case let .discover(serverID): discoverSessions(serverID: serverID)
+                case nil: break
+                }
             } catch { errorMessage = error.localizedDescription }
         }
     }

@@ -11,6 +11,7 @@
 
 - **iOS（MoriRemote）**：远程伴侣已重构为安全、以 pane 为原生单位的 tmux 控制运行时。支持保存工作区、密码或 OpenSSH 私钥认证、显式主机密钥信任、本地终端历史/选择、agent 状态，以及自适应 iPhone/iPad 界面；不会接管其他已连接 tmux 客户端的选择或尺寸。
 - **iOS（MoriRemote）**：终端快捷键条新增一次性 Ctrl/Alt、Esc、Tab、Shift-Tab、方向键、`?` 和 `/`。快捷键区域可横向滚动，键盘开关固定在最左侧。
+- **iOS（MoriRemote）**：服务器配置现在会在 SSH 登录后自动发现实时 tmux 会话，用户直接从资料库选择，不再需要手动创建工作区记录。
 
 ### 🐛 问题修复
 

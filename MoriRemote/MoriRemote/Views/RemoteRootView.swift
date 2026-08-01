@@ -46,11 +46,6 @@ struct RemoteRootView: View {
                 }
             case .settings:
                 RemoteSettingsView(settings: root.settings, onSave: root.save(settings:))
-            case let .workspace(serverID, workspaceID):
-                WorkspaceEditorView(
-                    draft: .init(serverID: serverID, workspace: workspaceID.flatMap { id in root.workspaces.first { $0.id == id } }),
-                    onSave: root.save
-                )
             case .library:
                 NavigationStack { library }
             }
@@ -60,8 +55,6 @@ struct RemoteRootView: View {
                 switch action {
                 case let .server(server, _):
                     Button(String(localized: "Delete"), role: .destructive) { root.delete(server); pendingConfirmation = nil }
-                case let .workspace(workspace):
-                    Button(String(localized: "Delete"), role: .destructive) { root.delete(workspace: workspace); pendingConfirmation = nil }
                 }
             }
         } message: {
@@ -113,7 +106,8 @@ struct RemoteRootView: View {
     private var library: some View {
         RemoteLibraryView(
             servers: root.servers,
-            workspaces: root.workspaces,
+            workspacesByServer: Dictionary(uniqueKeysWithValues: root.servers.map { ($0.id, root.visibleWorkspaces(for: $0.id)) }),
+            sessionDiscovery: root.sessionDiscovery,
             activeWorkspaceIDs: Set(root.activeWorkspaces.map(\.id)),
             agentSummaries: Dictionary(uniqueKeysWithValues: root.activeWorkspaces.map { ($0.id, root.agentSummary(for: $0.id)) }),
             migrationReport: root.migrationReport,
@@ -124,9 +118,7 @@ struct RemoteRootView: View {
             onAdd: { sheet = .add },
             onEdit: { sheet = .edit($0.id) },
             onDelete: { server in pendingConfirmation = .server(server, workspaceCount: root.workspaces.filter { $0.serverID == server.id }.count) },
-            onAddWorkspace: { sheet = .workspace(serverID: $0, workspaceID: nil) },
-            onEditWorkspace: { sheet = .workspace(serverID: $0.serverID, workspaceID: $0.id) },
-            onDeleteWorkspace: { pendingConfirmation = .workspace($0) },
+            onRefreshSessions: { root.discoverSessions(serverID: $0) },
             onSettings: { sheet = .settings }
         )
     }
@@ -148,33 +140,26 @@ struct RemoteRootView: View {
 
 private enum RemoteDestructiveAction: Identifiable {
     case server(SavedServer, workspaceCount: Int)
-    case workspace(SavedWorkspace)
 
     var id: UUID {
-        switch self {
-        case let .server(server, _): server.id
-        case let .workspace(workspace): workspace.id
-        }
+        switch self { case let .server(server, _): server.id }
     }
 
     var message: String {
         switch self {
         case let .server(_, workspaceCount):
             String(format: String(localized: "Deleting this server also deletes %lld workspaces and their saved credentials."), workspaceCount)
-        case .workspace:
-            String(localized: "Deleting this workspace disconnects it and cannot be undone.")
         }
     }
 }
 
 private enum RemoteSheet: Identifiable {
-    case add, edit(UUID), settings, workspace(serverID: UUID, workspaceID: UUID?), library
+    case add, edit(UUID), settings, library
     var id: String {
         switch self {
         case .add: "add"
         case let .edit(id): "edit-\(id)"
         case .settings: "settings"
-        case let .workspace(serverID, workspaceID): "workspace-\(serverID)-\(workspaceID?.uuidString ?? "new")"
         case .library: "library"
         }
     }
@@ -182,7 +167,8 @@ private enum RemoteSheet: Identifiable {
 
 private struct RemoteLibraryView: View {
     let servers: [SavedServer]
-    let workspaces: [SavedWorkspace]
+    let workspacesByServer: [UUID: [SavedWorkspace]]
+    let sessionDiscovery: [UUID: ServerSessionDiscoveryStatus]
     let activeWorkspaceIDs: Set<UUID>
     let agentSummaries: [UUID: AgentMetadata]
     let migrationReport: LegacyMigrationReport?
@@ -190,9 +176,7 @@ private struct RemoteLibraryView: View {
     let onAdd: () -> Void
     let onEdit: (SavedServer) -> Void
     let onDelete: (SavedServer) -> Void
-    let onAddWorkspace: (UUID) -> Void
-    let onEditWorkspace: (SavedWorkspace) -> Void
-    let onDeleteWorkspace: (SavedWorkspace) -> Void
+    let onRefreshSessions: (UUID) -> Void
     let onSettings: () -> Void
     @State private var filter = ""
 
@@ -206,15 +190,15 @@ private struct RemoteLibraryView: View {
             }
             if filteredServers.isEmpty {
                 ContentUnavailableView(
-                    filter.isEmpty ? String(localized: "No saved servers") : String(localized: "No matching workspaces"),
+                    filter.isEmpty ? String(localized: "No saved servers") : String(localized: "No matching sessions"),
                     systemImage: "server.rack",
-                    description: Text(String(localized: "Add a server and workspace to begin."))
+                    description: Text(String(localized: "Add a server to get started."))
                 )
                 .listRowBackground(Color.clear)
             }
             ForEach(filteredServers) { server in
                 Section {
-                    ForEach(workspaces.filter { $0.serverID == server.id && matches($0) }) { workspace in
+                    ForEach((workspacesByServer[server.id] ?? []).filter(matches)) { workspace in
                         Button { onConnect(workspace.id) } label: {
                             HStack {
                                 Image(systemName: activeWorkspaceIDs.contains(workspace.id) ? "terminal.fill" : "terminal")
@@ -233,17 +217,18 @@ private struct RemoteLibraryView: View {
                                 }
                             }
                         }
-                        .contextMenu {
-                            Button(String(localized: "Edit workspace"), action: { onEditWorkspace(workspace) })
-                            Button(String(localized: "Delete workspace"), role: .destructive, action: { onDeleteWorkspace(workspace) })
-                        }
                     }
-                    Button(String(localized: "Add workspace"), systemImage: "plus") { onAddWorkspace(server.id) }
+                    discoveryRow(for: server)
                 } header: {
                     HStack {
                         Text(verbatim: server.name)
                         Spacer()
                         Text(verbatim: "\(server.username)@\(server.host)")
+                        Button { onRefreshSessions(server.id) } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(String(localized: "Refresh sessions"))
                     }
                 }
                 .contextMenu {
@@ -252,18 +237,45 @@ private struct RemoteLibraryView: View {
                 }
             }
         }
-        .searchable(text: $filter, prompt: String(localized: "Filter servers and workspaces"))
+        .searchable(text: $filter, prompt: String(localized: "Filter servers and sessions"))
         .toolbar {
             ToolbarItem(placement: .topBarLeading) { Button(String(localized: "Settings"), systemImage: "gear", action: onSettings) }
             ToolbarItem(placement: .topBarTrailing) { Button(String(localized: "Add server"), systemImage: "plus", action: onAdd) }
         }
     }
 
+    @ViewBuilder private func discoveryRow(for server: SavedServer) -> some View {
+        switch sessionDiscovery[server.id] ?? .idle {
+        case .idle:
+            Button(String(localized: "Load sessions"), systemImage: "arrow.clockwise") { onRefreshSessions(server.id) }
+        case .loading:
+            HStack { ProgressView(); Text(String(localized: "Loading sessions…")) }
+                .foregroundStyle(.secondary)
+        case .loaded:
+            if (workspacesByServer[server.id] ?? []).isEmpty {
+                Label(String(localized: "No tmux sessions"), systemImage: "terminal")
+                    .foregroundStyle(.secondary)
+            }
+        case let .failed(message):
+            Button { onRefreshSessions(server.id) } label: {
+                VStack(alignment: .leading) {
+                    Label(String(localized: "Session discovery failed"), systemImage: "exclamationmark.triangle")
+                    Text(verbatim: message).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
     private var filteredServers: [SavedServer] {
-        servers.filter { server in workspaces.contains { $0.serverID == server.id && matches($0) } }
+        servers.filter { server in
+            filter.isEmpty
+                || server.name.localizedCaseInsensitiveContains(filter)
+                || server.host.localizedCaseInsensitiveContains(filter)
+                || (workspacesByServer[server.id] ?? []).contains(where: matches)
+        }
     }
     private func matches(_ workspace: SavedWorkspace) -> Bool {
-        filter.isEmpty || workspace.name.localizedCaseInsensitiveContains(filter) || workspace.tmuxSession.localizedCaseInsensitiveContains(filter) || servers.first(where: { $0.id == workspace.serverID })?.name.localizedCaseInsensitiveContains(filter) == true
+        filter.isEmpty || workspace.name.localizedCaseInsensitiveContains(filter) || workspace.tmuxSession.localizedCaseInsensitiveContains(filter)
     }
 }
 
@@ -505,12 +517,6 @@ private struct ProfileEditorView: View {
                     TextField(String(localized: "Username"), text: $draft.username)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                 }
-                if draft.workspaceID != nil {
-                    Section(String(localized: "Workspace")) {
-                        TextField(String(localized: "Workspace name"), text: $draft.workspaceName)
-                        TextField(String(localized: "tmux session"), text: $draft.tmuxSession)
-                    }
-                }
                 Section(String(localized: "Authentication")) {
                     Picker(String(localized: "Identity"), selection: $draft.identityKind) {
                         Text(String(localized: "Password")).tag(SSHIdentityKind.password)
@@ -530,31 +536,6 @@ private struct ProfileEditorView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(String(localized: "Save")) { onSave(draft); dismiss() }
                 }
-            }
-        }
-    }
-}
-
-private struct WorkspaceEditorView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var draft: WorkspaceDraft
-    let onSave: (WorkspaceDraft) -> Void
-
-    init(draft: WorkspaceDraft, onSave: @escaping (WorkspaceDraft) -> Void) {
-        _draft = State(initialValue: draft)
-        self.onSave = onSave
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                TextField(String(localized: "Workspace name"), text: $draft.name)
-                TextField(String(localized: "tmux session"), text: $draft.tmuxSession)
-            }
-            .navigationTitle(String(localized: "Workspace"))
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(String(localized: "Cancel"), action: dismiss.callAsFunction) }
-                ToolbarItem(placement: .confirmationAction) { Button(String(localized: "Save")) { onSave(draft); dismiss() } }
             }
         }
     }

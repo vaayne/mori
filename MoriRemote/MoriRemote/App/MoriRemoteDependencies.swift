@@ -189,6 +189,29 @@ actor RemoteLibrary {
         try SSHHostTrustResolver(store: storage.trustedHosts).explicitlyTrust(challenge, replaceChanged: replaceChanged)
     }
 
+    func synchronizeDiscoveredSessions(serverID: UUID, names: [String]) throws -> RemoteLibrarySnapshot {
+        guard try storage.servers.all().contains(where: { $0.id == serverID }) else {
+            throw PersistenceError.notFound(serverID)
+        }
+        var existingNames = Set(try storage.workspaces.all().filter { $0.serverID == serverID }.map(\.tmuxSession))
+        for name in names where !existingNames.contains(name) {
+            let workspace = try SavedWorkspace(serverID: serverID, name: name, tmuxSession: name).validated()
+            _ = try storage.workspaces.insertIfAbsent(workspace)
+            existingNames.insert(name)
+        }
+        return try snapshot(migration: nil)
+    }
+
+    func discoveryMaterial(for serverID: UUID) throws -> (SavedServer, SSHIdentity, RemoteSettings) {
+        guard let server = try storage.servers.all().first(where: { $0.id == serverID }) else {
+            throw PersistenceError.notFound(serverID)
+        }
+        guard let identity = try storage.identities.all().first(where: { $0.id == server.identityID }) else {
+            throw SSHAuthResolverError.missingIdentity(server.identityID)
+        }
+        return (server, identity, try storage.settings.load(or: .default))
+    }
+
     func connectionMaterial(for workspaceID: UUID) throws -> (SavedWorkspace, SavedServer, SSHIdentity, RemoteSettings) {
         let workspaces = try storage.workspaces.all()
         guard let workspace = workspaces.first(where: { $0.id == workspaceID }) else { throw PersistenceError.notFound(workspaceID) }

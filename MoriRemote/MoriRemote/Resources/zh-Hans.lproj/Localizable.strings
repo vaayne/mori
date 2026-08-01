@@ -50,6 +50,10 @@
 "Filter sessions" = "筛选会话";
 "No matches for “%@”" = "没有匹配“%@”的结果";
 "No tmux sessions" = "没有 tmux 会话";
+"Load sessions" = "加载会话";
+"Loading sessions…" = "正在加载会话…";
+"Refresh sessions" = "刷新会话";
+"Session discovery failed" = "无法加载会话";
 "Not Connected" = "未连接";
 "Offline" = "离线";
 "Opening shell…" = "正在打开 shell…";
@@ -170,10 +174,12 @@
 "Choose a saved workspace to open its terminal." = "选择一个已保存的工作区以打开终端。";
 "No saved servers" = "没有已保存的服务器";
 "No matching workspaces" = "没有匹配的工作区";
+"No matching sessions" = "没有匹配的会话";
 "Add a server and workspace to begin." = "添加服务器和工作区后即可开始。";
 "Edit server" = "编辑服务器";
 "Delete server" = "删除服务器";
 "Filter servers and workspaces" = "筛选服务器和工作区";
+"Filter servers and sessions" = "筛选服务器和会话";
 "Settings" = "设置";
 "Add server" = "添加服务器";
 "Connection lost." = "连接已中断。";
