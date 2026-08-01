@@ -20,25 +20,24 @@ The framework preserves upstream file and directory names for the terminal
 core:
 
 - `Tmux/`: identity, viewport, control protocol/link, session controller,
-  terminal session, pane surface, screen adapter/model, pane preview cache,
-  runtime trace, and deterministic test transport.
+  terminal session, pane surface, screen adapter/model, runtime trace, and
+  deterministic test transport.
 - `Ghostty/`: runtime/control and managed surfaces, pane/local viewport and
   scroll physics, key/mouse/scroll mappings, responder/text-input/focus/input
-  coordination, modifier state, keyboard visibility/trackpad, compact keypad
-  and system-keyboard chrome, preview layout, topology/selection projections,
-  selection sheets, and `GhosttyTerminalCoreView` (the minimal
-  upstream-derived composition root).
+  coordination, modifier state, keyboard visibility/trackpad, compact keypad,
+  system-keyboard chrome, topology projection, and `GhosttyTerminalCoreView`
+  (the minimal upstream-derived composition root).
 - `Domain/TerminalSettings.swift`: terminal appearance only.
 
 The paired `MoriRemoteTerminalTests` target ports the matching upstream tests
 for controller/session/link/adapter teardown, scrolling and viewport state,
-responder and keyboard input, modifier state, and selection projections.
+responder and keyboard input, modifier state, and local text selection.
 
 ## Explicit exclusions
 
 No files from remux account/profile repositories, SSH services/transports,
-live forwarding, terminal preview, full composer/voice, generic file
-attachments, or shortcut marketplace/editor are linked into
+live forwarding, pane-preview/selection sheets, full composer/voice, generic
+file attachments, or shortcut marketplace/editor are linked into
 `MoriRemoteTerminal`. Image input is the deliberate exception: the terminal
 module owns photo/clipboard staging and preview UI, while a narrow
 `MoriRemoteTerminalImageUploader` facade delegates the authenticated SFTP
@@ -62,11 +61,12 @@ transport remains solely a terminal-core test fixture.
 | `App/MoriRemoteTerminalFacade.swift` | Public deep facade owns `GhosttyKitRuntime` + screen model, exposes state/topology, fixed metadata results, labeled shared mutations, presentation lifecycle, type-erased SSH byte lifecycle closures, and one typed image-uploader closure. | App code retains Citadel/trust/persistence/SFTP without importing GhosttyKit or terminal controller/surface types. |
 | `GhosttyTerminalDisconnectReasonClassifier.swift` | Transport-agnostic classifier. | No Phase-1 dependency on NIO, SSH errors, or host-trust types. |
 | Runtime status types | Local terminal-only `TerminalRuntimeState` / disconnect vocabulary. | Avoids importing remux connection/account domain objects. |
-| `GhosttySingleViewportView.swift` | 850-line subtractive adaptation of upstream's 883-line viewport. It retains local text-selection long press/update/end, selection handles and endpoint drag, selection-geometry recovery, copy edit-menu, surface tap/focus, horizontal window swipe, and mouse routing. | Preview candidate resolution/action is removed; copy remains. Picker sheets are topology UI, not text selection. |
+| `GhosttySingleViewportView.swift` | Subtractive adaptation of upstream's viewport. It retains local text-selection long press/update/end, selection handles and endpoint drag, selection-geometry recovery, copy edit-menu, surface tap/focus, horizontal window swipe, and mouse routing. | Preview candidate resolution/action is removed; copy remains. Mori's app-owned Navigator is the only window/pane browser. |
 | `TmuxPaneSurface.swift` + `GhosttyPublishedFrameObserver.swift` | Adds a post-publication interaction-state refresh when Ghostty replaces the renderer layer contents. | The pinned upstream callback polls scrollbar state immediately after `terminalChanged`, before the renderer necessarily applies new output. Without the completed-frame refresh, UIKit can retain an undersized local scroll document and stop above the true bottom. |
 | `GhosttyKeyboardChrome.swift` + `GhosttyKeypadSheet.swift` + `GhosttyImageAttachmentSheet.swift` | Keeps remux's trailing keyboard placement in a slim four-icon input accessory, combines terminal shortcuts in one categorized keypad, and exposes remux-derived photo/clipboard image staging from that panel. App-owned and image-picker modal presentation suspends the hidden terminal responder. | Stable controls avoid localized-label drift; responder suspension protects text fields and system pickers; confirmed images upload through the typed facade and insert only an escaped path. Full composer/voice and shortcut-store domains remain excluded. |
 | `GhosttyTerminalCompositionState.swift` + `GhosttyTerminalCoreView.swift` | Small upstream-derived composition root over `TmuxTerminalScreenAdapter`; consumes keyboard notifications, visibility projection, viewport holds, responder callbacks, delayed prefix flush, viewport, text selection, cursor-trackpad HUD, and chrome. | Host/session/window/pane navigation belongs to Mori's app boundary, where server discovery and metadata already live. |
-| iOS 17 | Keeps `#available(iOS 26, *)` styling fallback in upstream selection UI; terminal framework deployment target is `17.0`. | Upstream source uses no required iOS 18 API in this closed slice. |
+| Upstream pane preview and selection sheets | Removed after the final app-owned searchable Navigator replaced them. Renderer-frame publication remains only for safe surface presentation and post-frame scroll-state refresh; no pixel copy/cache or temporary picker-grid resize remains. | Two navigation concepts created dead UI and substantial IOSurface lifecycle machinery with no production caller. |
+| iOS 17 | Terminal framework deployment target remains `17.0`. | The closed source slice uses no required iOS 18 API. |
 
 ## Test provenance
 

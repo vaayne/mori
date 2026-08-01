@@ -401,33 +401,9 @@ final class TmuxTerminalSession: ObservableObject {
                 return
             }
         }
-        surfacesByPaneID[paneID]?.cancelPickerCaptureForPresentation()
         cancelPendingPresentation()
         pendingPaneID = paneID
         unpublishPane()
-    }
-
-    func capturePickerPreview(
-        paneID: TmuxPaneID,
-        columns: UInt32,
-        rows: UInt32,
-        budget: GhosttyPanePreviewSession.PixelBudget
-    ) async -> GhosttyPanePreviewSession.RenderedPreview? {
-        guard !isShutDown,
-              state == .ready,
-              livePaneIDs.contains(paneID),
-              let surface = surfacesByPaneID[paneID],
-              !surface.isClosing
-        else { return nil }
-        return await surface.capturePickerPreview(
-            columns: columns,
-            rows: rows,
-            budget: budget
-        )
-    }
-
-    func cancelPickerPreview(paneID: TmuxPaneID) {
-        surfacesByPaneID[paneID]?.cancelPickerCaptureForPresentation()
     }
 
     private func presentActivePane(from snapshot: TmuxSessionController.TopologySnapshot) {

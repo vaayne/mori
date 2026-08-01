@@ -2,9 +2,9 @@ import CoreGraphics
 import Foundation
 import GhosttyKit
 
-/// The model surface `GhosttySurfaceScreen` renders against: projections of
-/// terminal readiness/topology, focused-surface input routing, tmux topology
-/// actions, and the selection-sheet/preview plumbing.
+/// The model surface `GhosttyTerminalCoreView` renders against: projections
+/// of terminal readiness/topology, focused-surface input routing, and tmux
+/// topology actions.
 ///
 /// The tmux session stack implements it (`TmuxTerminalScreenAdapter`). The
 /// screen owns presentation behavior only; everything engine-specific flows
@@ -125,30 +125,8 @@ protocol GhosttyTmuxActionModeling: ObservableObject {
 }
 
 @MainActor
-protocol GhosttyTmuxSelectionModeling: ObservableObject {
-    func makePanePreviewSession(
-        leafIDs: [UUID],
-        previewSizing: GhosttyPanePreviewSession.PreviewSizing
-    ) -> GhosttyPanePreviewSession
-
-    // MARK: Selection sheets
-
-    func windowSheetPresentationProjection() -> GhosttyWindowSheetPresentationProjection?
-    func selectedPaneSheetPresentationProjection() -> GhosttyPaneSheetPresentationProjection?
-    func paneCount(topLevelID: UUID) -> Int
-    func paneSelectionSheetTopologyProjection(
-        topLevelID: UUID?
-    ) -> GhosttyPaneSelectionSheetTopologyProjection
-    func windowSelectionSheetRenderProjection() -> GhosttyWindowSelectionSheetRenderProjection
-    func paneSelectionSheetRenderProjection(
-        topLevelID: UUID
-    ) -> GhosttyPaneSelectionSheetRenderProjection
-}
-
-@MainActor
 protocol GhosttyTerminalScreenModeling:
     GhosttyTerminalRenderingModeling,
     GhosttyTerminalInputModeling,
-    GhosttyTmuxActionModeling,
-    GhosttyTmuxSelectionModeling
+    GhosttyTmuxActionModeling
 {}

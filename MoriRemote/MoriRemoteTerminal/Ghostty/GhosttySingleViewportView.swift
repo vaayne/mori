@@ -2,8 +2,8 @@ import GhosttyKit
 import SwiftUI
 import UIKit
 
-/// Hosts the single terminal surface presented by Remux. Pane/window topology belongs to
-/// the picker model; it never participates in viewport layout.
+/// Hosts the single terminal surface presented by MoriRemote. Pane/window
+/// topology belongs to the app-owned Navigator, never viewport layout.
 struct GhosttySingleViewportView: View {
     let surfaceLookup: GhosttyManagedSurfaceLookup
     let projection: GhosttyTerminalViewportPresentationProjection

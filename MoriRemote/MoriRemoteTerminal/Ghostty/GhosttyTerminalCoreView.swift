@@ -5,8 +5,8 @@ import UIKit
 /// Minimal composition root derived from remux's `GhosttySurfaceScreen`.
 ///
 /// It binds one `TmuxTerminalScreenAdapter` to the active viewport, text
-/// responder, input coordinator, cursor-trackpad HUD, upstream selector
-/// sheets, and terminal keyboard chrome. Its only construction input is the
+/// responder, input coordinator, cursor-trackpad HUD, and terminal keyboard
+/// chrome. Its only construction input is the
 /// adapter, so deterministic tests never need Mori SSH or persistence.
 struct GhosttyTerminalCoreView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
