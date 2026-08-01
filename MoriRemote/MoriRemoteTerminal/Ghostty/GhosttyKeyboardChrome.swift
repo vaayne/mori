@@ -121,13 +121,12 @@ struct GhosttyKeyboardChrome: View {
                         key("?", id: "terminal.question-mark") { actions.perform(.questionMark) }
                         key("/", id: "terminal.slash") { actions.perform(.slash) }
                     }
+                    group {
+                        icon("rectangle.stack", id: "terminal.sessions", label: "Sessions") { actions.perform(.sessions) }
+                        icon("rectangle.on.rectangle", id: "terminal.windows", label: "Windows", enabled: windowCount > 0) { actions.perform(.windows) }
+                        icon("square.split.2x1", id: "terminal.panes", label: "Panes", enabled: paneCount > 0) { actions.perform(.panes) }
+                    }
                 }
-            }
-
-            group {
-                icon("rectangle.stack", id: "terminal.sessions", label: "Sessions") { actions.perform(.sessions) }
-                icon("rectangle.on.rectangle", id: "terminal.windows", label: "Windows", enabled: windowCount > 0) { actions.perform(.windows) }
-                icon("square.split.2x1", id: "terminal.panes", label: "Panes", enabled: paneCount > 0) { actions.perform(.panes) }
             }
         }
         .frame(maxWidth: .infinity)
