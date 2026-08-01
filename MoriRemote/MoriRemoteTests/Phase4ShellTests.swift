@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Security
 import Testing
 import MoriRemoteTerminal
@@ -14,6 +15,38 @@ import MoriRemoteTerminal
         #expect(!policy.mayReconnect(status: .disconnected("lost"), attempts: 1))
         #expect(!policy.mayReconnect(status: .ready, attempts: 0))
         #expect(!policy.mayReconnect(status: .connecting, attempts: 0))
+    }
+
+    @Test("runtime state changes invalidate direct observers")
+    @MainActor
+    func runtimeObservation() async throws {
+        let workspace = try SavedWorkspace(
+            serverID: UUID(),
+            name: "main",
+            tmuxSession: "main"
+        ).validated()
+        let bytes = AsyncThrowingStream<Data, Error> { $0.finish() }
+        let runtime = try ActiveWorkspaceRuntime(
+            workspace: workspace,
+            settings: .default,
+            transport: .init(
+                receivedBytes: bytes,
+                start: {},
+                send: { _ in },
+                close: { _ in },
+                isActive: { false }
+            )
+        )
+        let observation = ObservationFlag()
+        withObservationTracking {
+            _ = runtime.status
+        } onChange: {
+            observation.markChanged()
+        }
+
+        await runtime.stop()
+
+        #expect(observation.didChange)
     }
 
     @Test("workspace draft owns a distinct record and rejects unsafe sessions")
@@ -210,6 +243,14 @@ import MoriRemoteTerminal
     }
 
 
+}
+
+private final class ObservationFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var changed = false
+
+    var didChange: Bool { lock.withLock { changed } }
+    func markChanged() { lock.withLock { changed = true } }
 }
 
 private final class MemoryProfilePasswords: CredentialStoring, @unchecked Sendable {

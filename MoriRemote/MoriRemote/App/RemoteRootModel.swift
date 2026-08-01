@@ -108,14 +108,12 @@ enum PendingSSHTrustAction: Equatable, Sendable {
 enum WorkspaceRuntimeStatus: Equatable {
     case connecting
     case ready
-    case reconnecting
     case disconnected(String)
 
     var title: String {
         switch self {
         case .connecting: String(localized: "Connecting…")
         case .ready: String(localized: "Connected")
-        case .reconnecting: String(localized: "Reconnecting…")
         case .disconnected: String(localized: "Disconnected")
         }
     }
@@ -142,10 +140,6 @@ struct WorkspaceMemoryPressurePolicy: Sendable {
 
 /// Adaptive chrome may change around a workspace, but never the retained
 /// terminal-session identity. A new runtime is the only valid replacement.
-enum WorkspaceTerminalPresentation: Sendable {
-    static func identity(for sessionInstanceID: UUID) -> UUID { sessionInstanceID }
-}
-
 /// Main-actor admission fence for asynchronous connection attempts. A token is
 /// claimed before the first await, then invalidated by disconnect/delete/replacement.
 enum SSHTrustPresentation: Equatable {
@@ -175,21 +169,24 @@ struct WorkspaceConnectionAttemptLedger: Sendable {
     mutating func cancel(workspaceID: UUID) { tokens[workspaceID] = nil }
 }
 
-@MainActor
+@MainActor @Observable
 final class ActiveWorkspaceRuntime {
     let workspace: SavedWorkspace
     let instanceID: UUID
     let session: MoriRemoteTerminalSession
     private let metadataProjector: AgentMetadataProjector
+    private var metadataRevision: UInt64 = 0
     private(set) var topology: MoriRemoteTerminalTopology?
-    var agentMetadata: [UInt64: AgentMetadata] { metadataProjector.metadata }
+    var agentMetadata: [UInt64: AgentMetadata] {
+        _ = metadataRevision
+        return metadataProjector.metadata
+    }
     var focusedPaneID: UInt64? {
         guard let activeWindowID = topology?.activeWindowID else { return nil }
         return topology?.windows.first(where: { $0.id == activeWindowID })?.activePaneID
     }
     private(set) var status: WorkspaceRuntimeStatus = .connecting
     var onTransportLoss: (@MainActor (UUID) -> Void)?
-    var onChange: (@MainActor () -> Void)?
 
     init(workspace: SavedWorkspace, settings: RemoteSettings, transport: MoriRemoteTerminalTransport, instanceID: UUID = UUID()) throws {
         self.workspace = workspace
@@ -203,13 +200,12 @@ final class ActiveWorkspaceRuntime {
             let result = await session.queryAgentMetadata()
             return .init(succeeded: result.status == .success, body: result.body)
         }
-        metadataProjector.onChange = { [weak self] in self?.onChange?() }
+        metadataProjector.onChange = { [weak self] in self?.metadataRevision &+= 1 }
         session.onTopologyChange = { [weak self] topology in
             guard let self else { return }
             self.topology = topology
             self.status = .ready
             self.metadataProjector.topologyDidChange(paneIDs: topology.panes.map(\.id))
-            self.onChange?()
         }
         session.onConnectionStateChange = { [weak self] state in self?.receive(state) }
         session.setPresentationActive(false)
@@ -225,7 +221,6 @@ final class ActiveWorkspaceRuntime {
     func confirmTransportAfterForeground() async {
         guard await session.isControlChannelActive() else {
             status = .disconnected(String(localized: "Connection lost."))
-            onChange?()
             onTransportLoss?(instanceID)
             return
         }
@@ -236,7 +231,7 @@ final class ActiveWorkspaceRuntime {
         agentMetadata.values.max { lhs, rhs in lhs.state.priority < rhs.state.priority } ?? .unknown
     }
     func selectWindow(_ id: UInt64) { session.selectWindow(id) }
-    func selectPane(_ id: UInt64) { session.selectPane(id); onChange?() }
+    func selectPane(_ id: UInt64) { session.selectPane(id) }
     func performSharedMutation(_ mutation: MoriRemoteTerminalSharedMutation) { session.performSharedMutation(mutation) }
 
     private func receive(_ state: MoriRemoteTerminalConnectionState) {
@@ -255,7 +250,6 @@ final class ActiveWorkspaceRuntime {
             // post-start transport transition earns the bounded reconnect.
             if !wasDisconnected, session.lastError == nil { onTransportLoss?(instanceID) }
         }
-        onChange?()
     }
 }
 
@@ -282,7 +276,6 @@ final class RemoteRootModel {
     var pendingTrust: SSHHostTrustChallenge?
     var errorMessage: String?
     var migrationReport: LegacyMigrationReport?
-    var runtimeRevision = 0
     private var pendingTrustAction: PendingSSHTrustAction?
     private(set) var isLoaded = false
     var libraryLoadError: String? { bootstrapFailure }
@@ -470,10 +463,6 @@ final class RemoteRootModel {
                 runtime = created
                 guard self.attemptIsCurrent(attempt, workspaceID: workspaceID) else { await created.stop(); return }
                 created.onTransportLoss = { [weak self] id in self?.lost(workspaceID: workspaceID, instanceID: id) }
-                created.onChange = { [weak self, weak created] in
-                    guard let self, self.runtimes[workspaceID] === created else { return }
-                    self.runtimeRevision &+= 1
-                }
                 self.runtimes[workspaceID] = created
                 // An automatic reconnect must not steal focus from another
                 // healthy workspace. If the lost workspace was focused,

@@ -346,7 +346,7 @@ private struct RemoteTerminalDetailView: View {
                 },
                 onSharedMutationRequest: { pendingSharedMutation = RemoteSharedMutation($0) }
             )
-                .id(WorkspaceTerminalPresentation.identity(for: runtime.session.instanceID))
+                .id(runtime.instanceID)
                 .background(Color.black)
         }
         .background(Color.black.ignoresSafeArea())

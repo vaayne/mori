@@ -3,14 +3,6 @@ import Testing
 @testable import MoriRemote
 
 @Suite("Terminal facade ownership") struct Phase6TerminalOwnershipTests {
-    @Test("adaptive workspace chrome retains its terminal session identity")
-    func workspaceSessionIdentity() {
-        let session = UUID()
-        #expect(WorkspaceTerminalPresentation.identity(for: session) == session)
-        #expect(WorkspaceTerminalPresentation.identity(for: session) == session)
-        #expect(WorkspaceTerminalPresentation.identity(for: UUID()) != session)
-    }
-
     @Test("app target has no direct native terminal owner or Ghostty link")
     func oneOwnerInvariant() throws {
         let remoteRoot = URL(fileURLWithPath: #filePath)
