@@ -46,6 +46,7 @@ final class TmuxPaneSurface {
     private var presentationTask: Task<Void, Never>?
     private var presentationGeneration: UInt64 = 0
     private let previewRelay = PreviewRelay()
+    private let publishedFrameObserver = GhosttyPublishedFrameObserver()
     private var canonicalViewportMetrics: GhosttySurfaceDisplayMetrics
     private var appliedDisplayMetrics: GhosttySurfaceDisplayMetrics
 
@@ -348,6 +349,7 @@ final class TmuxPaneSurface {
         )
         managed.onDisplayUpdate = onDisplayUpdate
         managedSurface = managed
+        installPublishedFrameInteractionObservation()
         applyPresentationActivity()
         return managed
     }
@@ -356,6 +358,7 @@ final class TmuxPaneSurface {
         guard lifecycle != .closed, lifecycle != .closing else { return }
         self.presented = presented
         if presented {
+            installPublishedFrameInteractionObservation()
             // A warm revisit may attach its retained genuine frame before a
             // newer viewport-sized frame arrives. Resize first, then make the
             // already-published pane surface visible and interactive.
@@ -488,6 +491,7 @@ final class TmuxPaneSurface {
             return
         }
         lifecycle = .replacing
+        publishedFrameObserver.invalidate()
         // This call is the single replacement attempt for the triggering
         // failure/settings change. Failures inside it return through
         // completion; they must not recursively schedule another attempt.
@@ -571,6 +575,7 @@ final class TmuxPaneSurface {
                 lifecycle = .active
                 rendererFailureReported = false
                 managedSurface?.replaceControlSurface(wrapper)
+                installPublishedFrameInteractionObservation()
                 completion(.replaced)
             }
         }
@@ -606,6 +611,7 @@ final class TmuxPaneSurface {
         guard lifecycle != .closing else { return }
         let wasReplacing = lifecycle == .replacing
         lifecycle = .closing
+        publishedFrameObserver.invalidate()
         cancelPresentationPreparation()
         previewRelay.pane = nil
         failureRelay.pane = nil
@@ -737,6 +743,14 @@ final class TmuxPaneSurface {
         return .init(image: image, source: source)
     }
 
+    private func installPublishedFrameInteractionObservation() {
+        guard lifecycle == .active,
+              let managedSurface,
+              let rendererLayer = GhosttyIOSurfaceFrame.rendererLayer(in: view.layer)
+        else { return }
+        publishedFrameObserver.observe(rendererLayer, target: managedSurface)
+    }
+
     private func rendererDidFail() {
         guard lifecycle == .active, !rendererFailureReported else { return }
         rendererFailureReported = true
@@ -756,6 +770,7 @@ final class TmuxPaneSurface {
 
     private func destroyUnregisteredRenderer() {
         lifecycle = .closed
+        publishedFrameObserver.invalidate()
         cancelPresentationPreparation()
         previewRelay.pane = nil
         failureRelay.pane = nil
