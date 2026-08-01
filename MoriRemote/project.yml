@@ -21,7 +21,10 @@ targets:
     sources:
       - path: MoriRemote
     dependencies:
+      # This target is a static framework: link its archive into the app but
+      # never copy a synthetic framework bundle into the signed payload.
       - target: MoriRemoteTerminal
+        embed: false
       - package: Citadel
         product: Citadel
       - package: NIO

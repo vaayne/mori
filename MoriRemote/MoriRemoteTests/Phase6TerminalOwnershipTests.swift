@@ -47,6 +47,7 @@ import Testing
         let appTarget = try #require(project.components(separatedBy: "  MoriRemoteTerminal:").first)
         #expect(!appTarget.contains("GhosttyKit.xcframework"))
         #expect(!appTarget.contains("ghostty_tmux_client_config_new"))
+        #expect(appTarget.contains("- target: MoriRemoteTerminal\n        embed: false"))
     }
 
     private func recursiveSwiftFiles(at url: URL) throws -> [URL] {
