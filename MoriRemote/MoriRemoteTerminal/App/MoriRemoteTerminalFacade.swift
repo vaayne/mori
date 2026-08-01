@@ -53,6 +53,9 @@ public struct MoriRemoteTerminalPane: Identifiable, Equatable, Sendable {
     public let windowID: UInt64
     public let columns: UInt32
     public let rows: UInt32
+    public init(id: UInt64, windowID: UInt64, columns: UInt32, rows: UInt32) {
+        self.id = id; self.windowID = windowID; self.columns = columns; self.rows = rows
+    }
 }
 
 public struct MoriRemoteTerminalWindow: Identifiable, Equatable, Sendable {
@@ -60,6 +63,9 @@ public struct MoriRemoteTerminalWindow: Identifiable, Equatable, Sendable {
     public let title: String
     public let active: Bool
     public let activePaneID: UInt64?
+    public init(id: UInt64, title: String, active: Bool, activePaneID: UInt64?) {
+        self.id = id; self.title = title; self.active = active; self.activePaneID = activePaneID
+    }
 }
 
 public struct MoriRemoteTerminalTopology: Equatable, Sendable {
@@ -193,27 +199,23 @@ public final class MoriRemoteTerminalSession: ObservableObject {
 
 public struct MoriRemoteTerminalView: View {
     @ObservedObject private var session: MoriRemoteTerminalSession
-    private let onShowSessions: () -> Void
-    private let onShowLibrary: () -> Void
+    private let onShowNavigator: () -> Void
     private let onSharedMutationRequest: (MoriRemoteTerminalSharedMutation) -> Void
 
     public init(
         session: MoriRemoteTerminalSession,
-        onShowSessions: @escaping () -> Void = {},
-        onShowLibrary: @escaping () -> Void = {},
+        onShowNavigator: @escaping () -> Void = {},
         onSharedMutationRequest: @escaping (MoriRemoteTerminalSharedMutation) -> Void = { _ in }
     ) {
         self.session = session
-        self.onShowSessions = onShowSessions
-        self.onShowLibrary = onShowLibrary
+        self.onShowNavigator = onShowNavigator
         self.onSharedMutationRequest = onSharedMutationRequest
     }
 
     public var body: some View {
         GhosttyTerminalCoreView(
             screen: session.screen.screenAdapter,
-            onShowSessions: onShowSessions,
-            onShowLibrary: onShowLibrary,
+            onShowNavigator: onShowNavigator,
             onSharedMutationRequest: onSharedMutationRequest
         )
     }

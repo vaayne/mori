@@ -47,10 +47,7 @@ enum GhosttyPhoneChromePalette { static let dock = Color.black }
 /// categories and shared-mutation requests without importing account,
 /// shortcut-store, or composer dependencies into the terminal module.
 struct GhosttyKeyboardChromeActions {
-    let showSessions: () -> Void
-    let showLibrary: () -> Void
-    let showWindows: () -> Void
-    let showPanes: () -> Void
+    let showNavigator: () -> Void
     let toggleKeyboard: () -> Void
     let toggleControl: () -> Void
     let toggleAlt: () -> Void
@@ -60,10 +57,7 @@ struct GhosttyKeyboardChromeActions {
 
     func perform(_ action: Action) -> Bool {
         switch action {
-        case .sessions: showSessions(); return true
-        case .library: showLibrary(); return true
-        case .windows: showWindows(); return true
-        case .panes: showPanes(); return true
+        case .navigator: showNavigator(); return true
         case .keyboard: toggleKeyboard(); return true
         case .control: toggleControl(); return true
         case .alt: toggleAlt(); return true
@@ -103,7 +97,7 @@ struct GhosttyKeyboardChromeActions {
     }
 
     enum Action {
-        case sessions, library, windows, panes, keyboard, control, alt
+        case navigator, keyboard, control, alt
         case escape, tab, shiftTab, arrowLeft, arrowUp, arrowDown, arrowRight
         case home, end, pageUp, pageDown, questionMark, slash
         case ctrlC, ctrlD, ctrlZ, ctrlL, ctrlA, ctrlE, ctrlR, ctrlU, ctrlK, ctrlW, altB, altF
@@ -116,85 +110,43 @@ struct GhosttyKeyboardChromeActions {
 /// its location stable while avoiding a horizontally scrolling toolbar.
 struct GhosttyKeyboardChrome: View {
     @Environment(\.ghosttyTerminalChromeStyle) private var chromeStyle
+    @State private var showsKeypad = false
 
     let keyboardMode: GhosttyKeyboardChromeMode
     let isEnabled: Bool
     let isCompact: Bool
     let isControlArmed: Bool
     let isAltArmed: Bool
-    let windowCount: Int
-    let paneCount: Int
     let actions: GhosttyKeyboardChromeActions
 
     var body: some View {
         HStack(spacing: isCompact ? 6 : 10) {
             controlGroup { menuControls }
-            controlGroup { navigationControls }
-            controlGroup { inputControls }
+            controlGroup { navigatorControl }
+            controlGroup { keyboardControl }
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .contain)
+        .sheet(isPresented: $showsKeypad) {
+            GhosttyKeypadSheet(
+                isControlArmed: isControlArmed,
+                isAltArmed: isAltArmed,
+                actions: actions
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     private var menuControls: some View {
         HStack(spacing: isCompact ? 1 : 2) {
-            Menu {
-                Button { _ = actions.perform(.control) } label: {
-                    Label("Ctrl", systemImage: isControlArmed ? "checkmark" : "control")
-                }
-                Button { _ = actions.perform(.alt) } label: {
-                    Label("Alt", systemImage: isAltArmed ? "checkmark" : "option")
-                }
-                Section("Common shortcuts") {
-                    Button("Ctrl-C · Interrupt") { _ = actions.perform(.ctrlC) }
-                    Button("Ctrl-D · End input") { _ = actions.perform(.ctrlD) }
-                    Button("Ctrl-Z · Suspend") { _ = actions.perform(.ctrlZ) }
-                    Button("Ctrl-L · Clear") { _ = actions.perform(.ctrlL) }
-                    Button("Ctrl-R · History search") { _ = actions.perform(.ctrlR) }
-                }
-                Section("Line editing") {
-                    Button("Ctrl-A · Line start") { _ = actions.perform(.ctrlA) }
-                    Button("Ctrl-E · Line end") { _ = actions.perform(.ctrlE) }
-                    Button("Ctrl-U · Delete to start") { _ = actions.perform(.ctrlU) }
-                    Button("Ctrl-K · Delete to end") { _ = actions.perform(.ctrlK) }
-                    Button("Ctrl-W · Delete word") { _ = actions.perform(.ctrlW) }
-                    Button("Alt-B · Previous word") { _ = actions.perform(.altB) }
-                    Button("Alt-F · Next word") { _ = actions.perform(.altF) }
-                }
-            } label: {
-                menuLabel("control", active: isControlArmed || isAltArmed)
+            Button { showsKeypad = true } label: {
+                menuLabel("keyboard.badge.ellipsis", active: isControlArmed || isAltArmed)
             }
-            .accessibilityLabel(String(localized: "Shortcuts"))
-            .accessibilityIdentifier("terminal.shortcuts")
-
-            Menu {
-                Section {
-                    Button("Esc") { _ = actions.perform(.escape) }
-                    Button("Tab") { _ = actions.perform(.tab) }
-                    Button("Shift-Tab") { _ = actions.perform(.shiftTab) }
-                }
-                Section {
-                    Button("←  Left") { _ = actions.perform(.arrowLeft) }
-                    Button("↑  Up") { _ = actions.perform(.arrowUp) }
-                    Button("↓  Down") { _ = actions.perform(.arrowDown) }
-                    Button("→  Right") { _ = actions.perform(.arrowRight) }
-                }
-                Section {
-                    Button("Home") { _ = actions.perform(.home) }
-                    Button("End") { _ = actions.perform(.end) }
-                    Button("Page Up") { _ = actions.perform(.pageUp) }
-                    Button("Page Down") { _ = actions.perform(.pageDown) }
-                }
-                Section {
-                    Button("?") { _ = actions.perform(.questionMark) }
-                    Button("/") { _ = actions.perform(.slash) }
-                }
-            } label: {
-                menuLabel("command")
-            }
-            .accessibilityLabel(String(localized: "Terminal keys"))
-            .accessibilityIdentifier("terminal.keys")
+            .accessibilityLabel(String(localized: "Keypad"))
+            .accessibilityIdentifier("terminal.keypad")
+            .disabled(!isEnabled)
 
             Menu {
                 Section {
@@ -211,23 +163,30 @@ struct GhosttyKeyboardChrome: View {
             }
             .accessibilityLabel(String(localized: "tmux actions"))
             .accessibilityIdentifier("terminal.tmux-actions")
-        }
-        .disabled(!isEnabled)
-    }
-
-    private var navigationControls: some View {
-        HStack(spacing: isCompact ? 1 : 2) {
-            icon("rectangle.stack", id: "terminal.sessions", label: String(localized: "Sessions")) { actions.perform(.sessions) }
-            icon("rectangle.on.rectangle", id: "terminal.windows", label: String(localized: "Windows"), enabled: windowCount > 0) { actions.perform(.windows) }
-            icon("square.split.2x1", id: "terminal.panes", label: String(localized: "Panes"), enabled: paneCount > 0) { actions.perform(.panes) }
+            .disabled(!isEnabled)
         }
     }
 
-    private var inputControls: some View {
-        HStack(spacing: isCompact ? 1 : 2) {
-            icon("house", id: "terminal.home", label: String(localized: "Library"), enabled: true) { actions.perform(.library) }
-            icon("keyboard", id: "terminal.keyboard", label: keyboardMode == .hidden ? String(localized: "Show keyboard") : String(localized: "Hide keyboard"), enabled: true, active: keyboardMode == .system) { actions.perform(.keyboard) }
+    private var navigatorControl: some View {
+        Button { _ = actions.perform(.navigator) } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "rectangle.stack")
+                Text(String(localized: "Navigator"))
+                    .font(.system(size: 12, weight: .semibold))
+            }
         }
+        .buttonStyle(ChromeButtonStyle(active: false, width: isCompact ? 100 : 116))
+        .accessibilityIdentifier("terminal.navigator")
+    }
+
+    private var keyboardControl: some View {
+        icon(
+            "keyboard",
+            id: "terminal.keyboard",
+            label: keyboardMode == .hidden ? String(localized: "Show keyboard") : String(localized: "Hide keyboard"),
+            enabled: true,
+            active: keyboardMode == .system
+        ) { actions.perform(.keyboard) }
     }
 
     private func menuLabel(_ systemName: String, active: Bool = false) -> some View {

@@ -24,18 +24,15 @@ core:
   runtime trace, and deterministic test transport.
 - `Ghostty/`: runtime/control and managed surfaces, pane/local viewport and
   scroll physics, key/mouse/scroll mappings, responder/text-input/focus/input
-  coordination, modifier state, keyboard visibility/trackpad, the retained
-  Ctrl/Esc/Tab/session/window/pane/system-keyboard chrome, preview layout,
-  topology/selection projections, selection sheets, and
-  `GhosttyTerminalCoreView` (the minimal upstream-derived composition root).
-- `App/ActiveSessionSwitcherView.swift`: an account-free active-session
-  switcher projection and view.
+  coordination, modifier state, keyboard visibility/trackpad, compact keypad
+  and system-keyboard chrome, preview layout, topology/selection projections,
+  selection sheets, and `GhosttyTerminalCoreView` (the minimal
+  upstream-derived composition root).
 - `Domain/TerminalSettings.swift`: terminal appearance only.
 
 The paired `MoriRemoteTerminalTests` target ports the matching upstream tests
 for controller/session/link/adapter teardown, scrolling and viewport state,
-responder and keyboard input, modifier state, selection projections, and the
-active-session switcher.
+responder and keyboard input, modifier state, and selection projections.
 
 ## Explicit Phase-1 exclusions
 
@@ -60,9 +57,8 @@ transport remains solely a terminal-core test fixture.
 | `GhosttyTerminalDisconnectReasonClassifier.swift` | Transport-agnostic classifier. | No Phase-1 dependency on NIO, SSH errors, or host-trust types. |
 | Runtime status types | Local terminal-only `TerminalRuntimeState` / disconnect vocabulary. | Avoids importing remux connection/account domain objects. |
 | `GhosttySingleViewportView.swift` | 850-line subtractive adaptation of upstream's 883-line viewport. It retains local text-selection long press/update/end, selection handles and endpoint drag, selection-geometry recovery, copy edit-menu, surface tap/focus, horizontal window swipe, and mouse routing. | Preview candidate resolution/action is removed; copy remains. Picker sheets are topology UI, not text selection. |
-| `GhosttyKeyboardChrome.swift` | Restores remux's compact three-group dock, keeps Sessions/Windows/Panes and trailing keyboard placement, and folds one-shot modifiers, common shell/line-editing shortcuts, terminal keys, and Mori shared tmux actions into native menus. Composer and shortcut-store actions remain excluded. | Native menus preserve remux density while essential Mori terminal operations stay reachable without importing deferred product domains. |
-| `GhosttyTerminalCompositionState.swift` + `GhosttyTerminalCoreView.swift` | Small upstream-derived composition root over `TmuxTerminalScreenAdapter`; consumes keyboard notifications, visibility projection, viewport holds, responder callbacks, delayed prefix flush, viewport, text selection, cursor-trackpad HUD, chrome, and picker sheets. | No SSH construction or persistence dependency. |
-| `ActiveSessionSwitcherView.swift` | Uses `UUID`/title/subtitle DTOs and select/disconnect callbacks. | Prevents profile/repository types from entering terminal core. |
+| `GhosttyKeyboardChrome.swift` + `GhosttyKeypadSheet.swift` | Keeps remux's compact dock and trailing keyboard placement, combines modifiers, terminal keys, and common shell/line-editing shortcuts in one categorized keypad, and retains a separate Mori shared-tmux menu. | One keypad removes overlapping shortcut categories while keeping exact terminal input local to the terminal module. Composer and shortcut-store domains remain excluded. |
+| `GhosttyTerminalCompositionState.swift` + `GhosttyTerminalCoreView.swift` | Small upstream-derived composition root over `TmuxTerminalScreenAdapter`; consumes keyboard notifications, visibility projection, viewport holds, responder callbacks, delayed prefix flush, viewport, text selection, cursor-trackpad HUD, and chrome. | Host/session/window/pane navigation belongs to Mori's app boundary, where server discovery and metadata already live. |
 | iOS 17 | Keeps `#available(iOS 26, *)` styling fallback in upstream selection UI; terminal framework deployment target is `17.0`. | Upstream source uses no required iOS 18 API in this closed slice. |
 
 ## Test provenance

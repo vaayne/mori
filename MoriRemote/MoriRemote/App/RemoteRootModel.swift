@@ -72,6 +72,27 @@ struct ServerWorkspaceDraft: Identifiable, Sendable {
     }
 }
 
+enum RemoteNavigatorProjection {
+    static func sessions(_ values: [SavedWorkspace], matching query: String) -> [SavedWorkspace] {
+        values.filter { query.isEmpty || $0.tmuxSession.localizedCaseInsensitiveContains(query) }
+    }
+
+    static func windows(_ values: [MoriRemoteTerminalWindow], matching query: String) -> [MoriRemoteTerminalWindow] {
+        values.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) || String($0.id).contains(query) }
+    }
+
+    static func panes(
+        _ values: [MoriRemoteTerminalPane],
+        windows: [MoriRemoteTerminalWindow],
+        matching query: String
+    ) -> [MoriRemoteTerminalPane] {
+        values.filter { pane in
+            let windowTitle = windows.first(where: { $0.id == pane.windowID })?.title ?? ""
+            return query.isEmpty || String(pane.id).contains(query) || windowTitle.localizedCaseInsensitiveContains(query)
+        }
+    }
+}
+
 enum ServerSessionDiscoveryStatus: Equatable, Sendable {
     case idle
     case loading

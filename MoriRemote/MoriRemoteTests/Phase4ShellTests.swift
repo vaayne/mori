@@ -1,6 +1,7 @@
 import Foundation
 import Security
 import Testing
+import MoriRemoteTerminal
 @testable import MoriRemote
 
 @Suite("Phase 4 app shell contracts") struct Phase4ShellTests {
@@ -66,6 +67,28 @@ import Testing
         #expect(Set(first.workspaces.map(\.tmuxSession)) == ["main", "ops"])
         let second = try await library.synchronizeDiscoveredSessions(serverID: serverID, names: ["main", "ops"])
         #expect(second.workspaces.count == 2)
+    }
+
+    @Test("navigator filters sessions, windows, and panes within their scopes")
+    func navigatorFiltering() {
+        let serverID = UUID()
+        let sessions = [
+            SavedWorkspace(serverID: serverID, name: "Main", tmuxSession: "cs/main"),
+            SavedWorkspace(serverID: serverID, name: "Backup", tmuxSession: "cs/backup-v2"),
+        ]
+        #expect(RemoteNavigatorProjection.sessions(sessions, matching: "BACKUP").map(\.tmuxSession) == ["cs/backup-v2"])
+
+        let windows = [
+            MoriRemoteTerminalWindow(id: 1, title: "editor", active: true, activePaneID: 10),
+            MoriRemoteTerminalWindow(id: 2, title: "deploy", active: false, activePaneID: 20),
+        ]
+        let panes = [
+            MoriRemoteTerminalPane(id: 10, windowID: 1, columns: 120, rows: 40),
+            MoriRemoteTerminalPane(id: 20, windowID: 2, columns: 80, rows: 24),
+        ]
+        #expect(RemoteNavigatorProjection.windows(windows, matching: "DEPLOY").map(\.id) == [2])
+        #expect(RemoteNavigatorProjection.panes(panes, windows: windows, matching: "editor").map(\.id) == [10])
+        #expect(RemoteNavigatorProjection.panes(panes, windows: windows, matching: "20").map(\.id) == [20])
     }
 
     @Test("connection attempt admission is synchronous and stale tokens cannot finish")

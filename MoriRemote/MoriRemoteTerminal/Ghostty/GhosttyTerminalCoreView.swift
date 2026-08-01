@@ -11,27 +11,23 @@ import UIKit
 struct GhosttyTerminalCoreView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @ObservedObject private var screen: TmuxTerminalScreenAdapter
-    private let onShowSessions: () -> Void
-    private let onShowLibrary: () -> Void
+    private let onShowNavigator: () -> Void
     private let onSharedMutationRequest: (MoriRemoteTerminalSharedMutation) -> Void
     @State private var terminalInputController = GhosttyTerminalInputController()
     @State private var responderHandoff = GhosttyKeyboardResponderHandoff()
     @State private var trackpadDriver = GhosttyKeyboardCursorTrackpadDriver()
     @State private var trackpadFeedback = GhosttyKeyboardCursorTrackpad.FeedbackState.hidden
-    @State private var selectionSheet: GhosttySurfaceSelectionSheet?
     @State private var compositionState = GhosttyTerminalCompositionState()
     @State private var prefixFlushTask: Task<Void, Never>?
     @State private var sessionGeneration: UInt64 = 0
 
     init(
         screen: TmuxTerminalScreenAdapter,
-        onShowSessions: @escaping () -> Void = {},
-        onShowLibrary: @escaping () -> Void = {},
+        onShowNavigator: @escaping () -> Void = {},
         onSharedMutationRequest: @escaping (MoriRemoteTerminalSharedMutation) -> Void = { _ in }
     ) {
         self.screen = screen
-        self.onShowSessions = onShowSessions
-        self.onShowLibrary = onShowLibrary
+        self.onShowNavigator = onShowNavigator
         self.onSharedMutationRequest = onSharedMutationRequest
     }
 
@@ -91,13 +87,8 @@ struct GhosttyTerminalCoreView: View {
                 isCompact: horizontalSizeClass == .compact,
                 isControlArmed: terminalInputController.isControlArmed,
                 isAltArmed: terminalInputController.isAltArmed,
-                windowCount: interaction.windowCount,
-                paneCount: interaction.paneCount,
                 actions: .init(
-                    showSessions: onShowSessions,
-                    showLibrary: onShowLibrary,
-                    showWindows: showWindows,
-                    showPanes: showPanes,
+                    showNavigator: onShowNavigator,
                     toggleKeyboard: toggleKeyboard,
                     toggleControl: { terminalInputController.toggleControl() },
                     toggleAlt: { terminalInputController.toggleAlt() },
@@ -123,28 +114,6 @@ struct GhosttyTerminalCoreView: View {
             // A session lifecycle change must not let delayed or latched input
             // reach a replacement surface.
             if oldState != newState { cancelTransientInput() }
-        }
-        .sheet(item: $selectionSheet) { sheet in
-            switch sheet {
-            case .windows(let previews):
-                GhosttyWindowSelectionSheet(
-                    session: previews,
-                    projection: screen.windowSelectionSheetRenderProjection(),
-                    sessionName: "tmux",
-                    onCreateWindow: nil,
-                    onSelect: { _ = screen.focusTmuxTopLevel($0) },
-                    onRemoveWindow: { _ in }
-                )
-            case .panes(let topLevelID, let previews):
-                GhosttyPaneSelectionSheet(
-                    session: previews,
-                    projection: screen.paneSelectionSheetRenderProjection(topLevelID: topLevelID),
-                    onSplitPane: nil,
-                    onStackPane: nil,
-                    onSelect: { _ = screen.focusTmuxPane($0) },
-                    onRemovePane: { _ in }
-                )
-            }
         }
     }
 
@@ -196,7 +165,7 @@ struct GhosttyTerminalCoreView: View {
             keyboardMode: compositionState.inputCoordinator.keyboardMode,
             isDismissSystemKeyboardRequested: compositionState.inputCoordinator.isDismissSystemKeyboardRequested,
             isInputAvailable: screen.terminalInteractionProjection.isInputAvailable,
-            isSelectionSheetPresented: selectionSheet != nil,
+            isSelectionSheetPresented: false,
             isAwaitingSystemKeyboardPresentation: compositionState.keyboardTransitionCoordinator.isAwaitingSystemKeyboardPresentation,
             isSceneActive: true
         )
@@ -269,22 +238,4 @@ struct GhosttyTerminalCoreView: View {
         )
     }
 
-    private func showWindows() {
-        guard let projection = screen.windowSheetPresentationProjection() else { return }
-        selectionSheet = .windows(screen.makePanePreviewSession(
-            leafIDs: projection.previewLeafIDs,
-            previewSizing: .windowGridForCurrentScreen
-        ))
-    }
-
-    private func showPanes() {
-        guard let projection = screen.selectedPaneSheetPresentationProjection() else { return }
-        selectionSheet = .panes(
-            topLevelID: projection.topLevelID,
-            previews: screen.makePanePreviewSession(
-                leafIDs: projection.previewLeafIDs,
-                previewSizing: .paneGridForCurrentScreen
-            )
-        )
-    }
 }
