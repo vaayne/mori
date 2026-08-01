@@ -29,24 +29,23 @@ jobs:
             Frameworks/GhosttyKit.xcframework
             Frameworks/ghostty-resources
             Frameworks/.ghosttykit-provenance
-          key: ghosttykit-universal-v2-${{ steps.ghostty-sha.outputs.sha }}
+          key: ghosttykit-universal-v4-${{ hashFiles('ghosttykit-lock.json') }}
 
-      - name: Install Zig 0.15.2
+      - name: Install verified Zig
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          ZIG_REQUIRED="0.15.2"
-          if command -v zig >/dev/null 2>&1 && zig version 2>/dev/null | grep -q "^${ZIG_REQUIRED}"; then
-            echo "zig ${ZIG_REQUIRED} already installed"
-          else
-            echo "Installing zig ${ZIG_REQUIRED} from tarball"
-            curl -fSL "https://ziglang.org/download/${ZIG_REQUIRED}/zig-aarch64-macos-${ZIG_REQUIRED}.tar.xz" -o /tmp/zig.tar.xz
-            tar xf /tmp/zig.tar.xz -C /tmp
-            sudo mkdir -p /usr/local/bin /usr/local/lib
-            sudo cp -f /tmp/zig-aarch64-macos-${ZIG_REQUIRED}/zig /usr/local/bin/zig
-            sudo cp -rf /tmp/zig-aarch64-macos-${ZIG_REQUIRED}/lib /usr/local/lib/zig
-          fi
-          zig version
+          source scripts/ghosttykit-contract.sh
+          ghosttykit_load_contract ghosttykit-lock.json
+          archive="$RUNNER_TEMP/zig.tar.xz"
+          extracted="$RUNNER_TEMP/zig-aarch64-macos-${MORI_GHOSTTYKIT_ZIG_VERSION}"
+          curl -fSL "https://ziglang.org/download/${MORI_GHOSTTYKIT_ZIG_VERSION}/zig-aarch64-macos-${MORI_GHOSTTYKIT_ZIG_VERSION}.tar.xz" -o "$archive"
+          printf '%s  %s\n' "$MORI_GHOSTTYKIT_ZIG_ARCHIVE_SHA256" "$archive" | shasum -a 256 -c -
+          tar xf "$archive" -C "$RUNNER_TEMP"
+          sudo mkdir -p /usr/local/bin /usr/local/lib
+          sudo cp -f "$extracted/zig" /usr/local/bin/zig
+          sudo cp -rf "$extracted/lib" /usr/local/lib/zig
+          [[ "$(zig version)" == "$MORI_GHOSTTYKIT_ZIG_VERSION" ]]
 
       - name: Select Xcode
         run: |
