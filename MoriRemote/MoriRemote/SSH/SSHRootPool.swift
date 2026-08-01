@@ -1,5 +1,4 @@
 import Foundation
-import MoriRemoteTerminal
 
 protocol SSHChildChannel: AnyObject, Sendable {
     var receivedBytes: AsyncThrowingStream<Data, Error> { get }
@@ -49,6 +48,11 @@ protocol SSHRootConnecting: Sendable {
 
 enum SSHRootPoolError: Error, Equatable, Sendable {
     case staleLease
+}
+
+enum SSHRootLeaseDisposition: Sendable {
+    case reusable
+    case invalidated
 }
 
 /// Shares authenticated SSH roots while preserving lease ownership. A generation token
@@ -121,7 +125,7 @@ actor SSHRootPool {
         }
     }
 
-    fileprivate func release(_ lease: SSHRootLease, disposition: MoriRemoteTerminalCloseDisposition) async {
+    fileprivate func release(_ lease: SSHRootLease, disposition: SSHRootLeaseDisposition) async {
         guard let key = lease.key, let token = lease.token else {
             await lease.root.close()
             return
@@ -226,7 +230,7 @@ struct SSHRootLease: Sendable {
         self.token = token
     }
 
-    func release(_ disposition: MoriRemoteTerminalCloseDisposition) async {
+    func release(_ disposition: SSHRootLeaseDisposition) async {
         let shouldRelease = releaseState.claim()
         guard shouldRelease else { return }
         await pool.release(self, disposition: disposition)

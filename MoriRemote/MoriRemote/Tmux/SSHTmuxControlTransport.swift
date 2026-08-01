@@ -232,7 +232,7 @@ actor SSHTmuxControlTransport {
         if let lease {
             let cleanup = await cleanupShadowIfPossible(using: lease)
             if cleanup == .invalidated { finalDisposition = .invalidated }
-            await lease.release(finalDisposition)
+            await lease.release(finalDisposition == .reusable ? .reusable : .invalidated)
         }
         lifecycle = .closed
         continuation.finish(throwing: error)
