@@ -230,6 +230,7 @@
 "Windows" = "Windows";
 "Panes" = "Panes";
 "Active workspaces" = "Active Workspaces";
+"Sessions on %@" = "Sessions on %@";
 "Workspace controls" = "Workspace Controls";
 "Server" = "Server";
 "Name" = "Name";

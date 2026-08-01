@@ -332,7 +332,10 @@ private struct RemoteTerminalDetailView: View {
         VStack(spacing: 0) {
             MoriRemoteTerminalView(
                 session: runtime.session,
-                onShowSessions: { showsSessions = true },
+                onShowSessions: {
+                    root.discoverSessions(serverID: runtime.workspace.serverID)
+                    showsSessions = true
+                },
                 onShowLibrary: showLibrary,
                 onSharedMutationRequest: { pendingSharedMutation = RemoteSharedMutation($0) }
             )
@@ -364,22 +367,24 @@ private struct RemoteTerminalDetailView: View {
     private var sessionSwitcher: some View {
         NavigationStack {
             ActiveSessionSwitcherView(
-                sessions: root.activeWorkspaces.map { workspace in
+                sessions: root.visibleWorkspaces(for: runtime.workspace.serverID).map { workspace in
                     let activeRuntime = root.runtimes[workspace.id]
                     return ActiveSessionSwitcherItem(
                         id: workspace.id,
-                        sessionName: workspace.name,
+                        sessionName: workspace.tmuxSession,
                         subtitle: activeRuntime?.status.title ?? String(localized: "Disconnected"),
                         isSelected: workspace.id == root.activeWorkspaceID,
+                        isConnected: activeRuntime != nil,
                         lastOpenedAt: workspace.lastConnectedAt ?? .distantPast
                     )
                 },
+                isRefreshing: root.sessionDiscovery[runtime.workspace.serverID] == .loading,
                 onSelectSession: { root.connect(workspaceID: $0) },
                 onDisconnectSession: { workspaceID in
                     Task { await root.disconnect(workspaceID: workspaceID) }
                 }
             )
-            .navigationTitle(String(localized: "Active workspaces"))
+            .navigationTitle(sessionSwitcherTitle)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(String(localized: "Done")) { showsSessions = false }
@@ -388,6 +393,10 @@ private struct RemoteTerminalDetailView: View {
         }
     }
 
+    private var sessionSwitcherTitle: String {
+        let serverName = root.servers.first(where: { $0.id == runtime.workspace.serverID })?.name ?? runtime.workspace.name
+        return String(format: String(localized: "Sessions on %@"), serverName)
+    }
 }
 
 private enum RemoteSharedMutation: Identifiable, Equatable {

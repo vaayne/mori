@@ -14,6 +14,12 @@ final class ActiveSessionSwitcherProjectionTests: XCTestCase {
         )
     }
 
+    func testItemsSortUnopenedHostSessionsByName() {
+        let zeta = item(name: "zeta", selected: false, opened: 0)
+        let alpha = item(name: "alpha", selected: false, opened: 0)
+        XCTAssertEqual(ActiveSessionSwitcherProjection.items([zeta, alpha]).map(\.sessionName), ["alpha", "zeta"])
+    }
+
     private func item(name: String, selected: Bool, opened: TimeInterval) -> ActiveSessionSwitcherItem {
         .init(
             id: UUID(),
