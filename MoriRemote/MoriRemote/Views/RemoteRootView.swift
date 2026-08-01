@@ -91,7 +91,12 @@ struct RemoteRootView: View {
 
     @ViewBuilder private var terminalDetail: some View {
         if let runtime = root.activeRuntime {
-            RemoteTerminalDetailView(root: root, runtime: runtime, showLibrary: { sheet = .library })
+            RemoteTerminalDetailView(
+                root: root,
+                runtime: runtime,
+                isInputSuspended: sheet != nil,
+                showLibrary: { sheet = .library }
+            )
         } else if sizeClass == .compact {
             NavigationStack { library }
         } else {
@@ -324,6 +329,7 @@ private struct AgentMetadataBadge: View {
 private struct RemoteTerminalDetailView: View {
     let root: RemoteRootModel
     let runtime: ActiveWorkspaceRuntime
+    let isInputSuspended: Bool
     let showLibrary: () -> Void
     @State private var showsNavigator = false
     @State private var pendingSharedMutation: RemoteSharedMutation?
@@ -332,6 +338,7 @@ private struct RemoteTerminalDetailView: View {
         VStack(spacing: 0) {
             MoriRemoteTerminalView(
                 session: runtime.session,
+                isInputSuspended: isInputSuspended || showsNavigator,
                 onShowNavigator: {
                     root.discoverSessions(serverID: runtime.workspace.serverID)
                     showsNavigator = true
@@ -393,40 +400,124 @@ private struct RemoteNavigatorView: View {
     let root: RemoteRootModel
     let runtime: ActiveWorkspaceRuntime
     let showLibrary: () -> Void
+    @State private var selectedServerID: UUID
     @State private var scope = Scope.sessions
     @State private var filter = ""
+
+    init(root: RemoteRootModel, runtime: ActiveWorkspaceRuntime, showLibrary: @escaping () -> Void) {
+        self.root = root
+        self.runtime = runtime
+        self.showLibrary = showLibrary
+        _selectedServerID = State(initialValue: runtime.workspace.serverID)
+    }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                hostSelector
+
                 Picker(String(localized: "Navigator"), selection: $scope) {
-                    ForEach(Scope.allCases) { Text($0.title).tag($0) }
+                    ForEach(Scope.allCases) { item in
+                        Text(item.title)
+                            .tag(item)
+                            .disabled(item != .sessions && !isBrowsingActiveHost)
+                    }
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.bottom, 10)
 
                 List { content }
                     .listStyle(.plain)
                     .overlay { emptyState }
             }
-            .navigationTitle(serverName)
+            .navigationTitle(String(localized: "Navigator"))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $filter, prompt: String(localized: "Filter sessions, windows, and panes"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(String(localized: "Servers"), systemImage: "server.rack", action: showLibrary)
+                    Button(action: showLibrary) { Image(systemName: "server.rack") }
+                        .accessibilityLabel(String(localized: "Manage servers"))
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
-                        root.discoverSessions(serverID: runtime.workspace.serverID)
+                        root.discoverSessions(serverID: selectedServerID)
                     } label: { Image(systemName: "arrow.clockwise") }
                     .accessibilityLabel(String(localized: "Refresh sessions"))
                     Button(String(localized: "Done")) { dismiss() }
                 }
             }
         }
-        .onChange(of: scope) { _, _ in filter = "" }
+        .onChange(of: scope) { _, newScope in
+            if newScope != .sessions, !isBrowsingActiveHost {
+                scope = .sessions
+            }
+            filter = ""
+        }
+        .onChange(of: selectedServerID) { _, serverID in
+            scope = .sessions
+            filter = ""
+            root.discoverSessions(serverID: serverID)
+        }
+    }
+
+    private var hostSelector: some View {
+        Menu {
+            ForEach(root.servers) { server in
+                Button {
+                    selectedServerID = server.id
+                } label: {
+                    Label {
+                        Text(verbatim: "\(server.name) · \(server.host)")
+                    } icon: {
+                        Image(systemName: hostMenuSymbol(for: server.id))
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "server.rack")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.mint)
+                    .frame(width: 32, height: 32)
+                    .background(Color.mint.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: selectedServer?.name ?? String(localized: "Server"))
+                        .font(.subheadline.weight(.semibold))
+                    if let server = selectedServer {
+                        Text(verbatim: "\(server.username)@\(server.host)")
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        if !isBrowsingActiveHost {
+                            Text(String(localized: "Choose a session to switch terminals"))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Spacer()
+                if isBrowsingActiveHost {
+                    Text(String(localized: "Current host"))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    private func hostMenuSymbol(for serverID: UUID) -> String {
+        if serverID == selectedServerID { return "checkmark.circle.fill" }
+        if serverID == runtime.workspace.serverID { return "terminal.fill" }
+        return "server.rack"
     }
 
     @ViewBuilder private var content: some View {
@@ -503,27 +594,32 @@ private struct RemoteNavigatorView: View {
     }
 
     @ViewBuilder private var emptyState: some View {
-        if scope == .sessions, root.sessionDiscovery[runtime.workspace.serverID] == .loading, filteredSessions.isEmpty {
+        if scope == .sessions, root.sessionDiscovery[selectedServerID] == .loading, filteredSessions.isEmpty {
             ProgressView(String(localized: "Loading sessions…"))
         } else if visibleItemCount == 0 {
-            ContentUnavailableView(emptyTitle, systemImage: "magnifyingglass")
+            ContentUnavailableView(emptyTitle, systemImage: filter.isEmpty ? "rectangle.stack.badge.minus" : "magnifyingglass")
         }
     }
 
     private var emptyTitle: String {
         filter.isEmpty ? String(localized: "Nothing here") : String(localized: "No matching results")
     }
-    private var serverName: String {
-        root.servers.first(where: { $0.id == runtime.workspace.serverID })?.name ?? runtime.workspace.name
+    private var selectedServer: SavedServer? {
+        root.servers.first { $0.id == selectedServerID }
+    }
+    private var isBrowsingActiveHost: Bool {
+        selectedServerID == runtime.workspace.serverID
     }
     private var filteredSessions: [SavedWorkspace] {
-        RemoteNavigatorProjection.sessions(root.visibleWorkspaces(for: runtime.workspace.serverID), matching: filter)
+        RemoteNavigatorProjection.sessions(root.visibleWorkspaces(for: selectedServerID), matching: filter)
     }
     private var filteredWindows: [MoriRemoteTerminalWindow] {
-        RemoteNavigatorProjection.windows(runtime.topology?.windows ?? [], matching: filter)
+        guard isBrowsingActiveHost else { return [] }
+        return RemoteNavigatorProjection.windows(runtime.topology?.windows ?? [], matching: filter)
     }
     private var filteredPanes: [MoriRemoteTerminalPane] {
-        RemoteNavigatorProjection.panes(
+        guard isBrowsingActiveHost else { return [] }
+        return RemoteNavigatorProjection.panes(
             runtime.topology?.panes ?? [],
             windows: runtime.topology?.windows ?? [],
             matching: filter

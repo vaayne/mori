@@ -105,9 +105,8 @@ struct GhosttyKeyboardChromeActions {
     }
 }
 
-/// Remux's compact three-group dock with Mori's terminal keys folded into
-/// native menus. Keeping the keyboard at the upstream trailing position makes
-/// its location stable while avoiding a horizontally scrolling toolbar.
+/// A single input accessory strip: four stable targets, no localized label
+/// can distort the terminal viewport or move the keyboard control.
 struct GhosttyKeyboardChrome: View {
     @Environment(\.ghosttyTerminalChromeStyle) private var chromeStyle
     @State private var showsKeypad = false
@@ -120,33 +119,13 @@ struct GhosttyKeyboardChrome: View {
     let actions: GhosttyKeyboardChromeActions
 
     var body: some View {
-        HStack(spacing: isCompact ? 6 : 10) {
-            controlGroup { menuControls }
-            controlGroup { navigatorControl }
-            controlGroup { keyboardControl }
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .fixedSize(horizontal: false, vertical: true)
-        .accessibilityElement(children: .contain)
-        .sheet(isPresented: $showsKeypad) {
-            GhosttyKeypadSheet(
-                isControlArmed: isControlArmed,
-                isAltArmed: isAltArmed,
-                actions: actions
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
-    }
-
-    private var menuControls: some View {
-        HStack(spacing: isCompact ? 1 : 2) {
-            Button { showsKeypad = true } label: {
-                menuLabel("keyboard.badge.ellipsis", active: isControlArmed || isAltArmed)
-            }
-            .accessibilityLabel(String(localized: "Keypad"))
-            .accessibilityIdentifier("terminal.keypad")
-            .disabled(!isEnabled)
+        HStack(spacing: 0) {
+            toolbarButton(
+                "keyboard.badge.ellipsis",
+                id: "terminal.keypad",
+                label: String(localized: "Keypad"),
+                active: isControlArmed || isAltArmed
+            ) { showsKeypad = true }
 
             Menu {
                 Section {
@@ -159,86 +138,72 @@ struct GhosttyKeyboardChrome: View {
                     Button("Close window", role: .destructive) { _ = actions.perform(.closeWindow) }
                 }
             } label: {
-                menuLabel("terminal")
+                toolbarIcon("terminal", active: false)
             }
+            .frame(maxWidth: .infinity)
             .accessibilityLabel(String(localized: "tmux actions"))
             .accessibilityIdentifier("terminal.tmux-actions")
             .disabled(!isEnabled)
+
+            toolbarButton(
+                "rectangle.stack",
+                id: "terminal.navigator",
+                label: String(localized: "Navigator"),
+                enabled: true
+            ) { _ = actions.perform(.navigator) }
+
+            toolbarButton(
+                "keyboard",
+                id: "terminal.keyboard",
+                label: keyboardMode == .hidden ? String(localized: "Show keyboard") : String(localized: "Hide keyboard"),
+                active: keyboardMode == .system
+            ) { _ = actions.perform(.keyboard) }
+        }
+        .frame(height: 46)
+        .padding(.horizontal, isCompact ? 8 : 16)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .top) { Divider().opacity(0.7) }
+        .preferredColorScheme(.dark)
+        .accessibilityElement(children: .contain)
+        .sheet(isPresented: $showsKeypad) {
+            GhosttyKeypadSheet(
+                isControlArmed: isControlArmed,
+                isAltArmed: isAltArmed,
+                actions: actions
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 
-    private var navigatorControl: some View {
-        Button { _ = actions.perform(.navigator) } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "rectangle.stack")
-                Text(String(localized: "Navigator"))
-                    .font(.system(size: 12, weight: .semibold))
-            }
-        }
-        .buttonStyle(ChromeButtonStyle(active: false, width: isCompact ? 100 : 116))
-        .accessibilityIdentifier("terminal.navigator")
-    }
-
-    private var keyboardControl: some View {
-        icon(
-            "keyboard",
-            id: "terminal.keyboard",
-            label: keyboardMode == .hidden ? String(localized: "Show keyboard") : String(localized: "Hide keyboard"),
-            enabled: true,
-            active: keyboardMode == .system
-        ) { actions.perform(.keyboard) }
-    }
-
-    private func menuLabel(_ systemName: String, active: Bool = false) -> some View {
-        Image(systemName: systemName)
-            .font(.system(size: 16, weight: .semibold))
-            .frame(width: dockButtonWidth, height: GhosttyKeyboardChromeSizing.dockButtonHeight)
-            .foregroundStyle(active ? chromeStyle.accent : Color.primary)
-            .background(active ? chromeStyle.accent.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: GhosttyKeyboardChromeSizing.dockButtonCornerRadius, style: .continuous))
-            .contentShape(Rectangle())
-    }
-
-    private func controlGroup<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        content()
-            .padding(.horizontal, isCompact ? 3 : 5)
-            .padding(.vertical, GhosttyKeyboardChromeSizing.controlGroupVerticalPadding)
-            .background(.thinMaterial, in: Capsule())
-            .overlay { Capsule().strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.75) }
-    }
-
-    private func icon(
-        _ name: String,
+    private func toolbarButton(
+        _ systemName: String,
         id: String,
         label: String,
-        enabled: Bool = true,
+        enabled: Bool? = nil,
         active: Bool = false,
-        action: @escaping () -> Bool
+        action: @escaping () -> Void
     ) -> some View {
-        Button { _ = action() } label: {
-            Image(systemName: name).font(.system(size: 16.5, weight: .semibold))
+        Button(action: action) {
+            toolbarIcon(systemName, active: active)
         }
-        .buttonStyle(ChromeButtonStyle(active: active, width: dockButtonWidth))
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
         .accessibilityLabel(label)
         .accessibilityIdentifier(id)
-        .disabled((!isEnabled && id != "terminal.home") || !enabled)
+        .disabled(!(enabled ?? isEnabled))
     }
 
-    private var dockButtonWidth: CGFloat {
-        isCompact ? GhosttyKeyboardChromeSizing.compactDockButtonWidth : GhosttyKeyboardChromeSizing.dockButtonWidth
-    }
-}
-
-private struct ChromeButtonStyle: ButtonStyle {
-    let active: Bool
-    let width: CGFloat
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .frame(width: width, height: GhosttyKeyboardChromeSizing.dockButtonHeight)
-            .foregroundStyle(active ? Color.accentColor : Color.primary)
-            .background(active ? Color.accentColor.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: GhosttyKeyboardChromeSizing.dockButtonCornerRadius, style: .continuous))
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .opacity(configuration.isPressed ? 0.65 : 1)
+    private func toolbarIcon(_ systemName: String, active: Bool) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(active ? chromeStyle.accent : Color.primary)
+            .frame(width: 44, height: 38)
+            .background(
+                active ? chromeStyle.accent.opacity(0.15) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+            .contentShape(Rectangle())
     }
 }
 

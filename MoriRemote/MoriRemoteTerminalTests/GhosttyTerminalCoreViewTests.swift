@@ -13,4 +13,19 @@ final class GhosttyTerminalCoreViewTests: XCTestCase {
         XCTAssertNotNil(view)
         XCTAssertEqual(adapter.stateTraceLabel, "released")
     }
+
+    func testInputSuspensionOverridesTerminalReadiness() {
+        XCTAssertTrue(GhosttyTerminalInputAvailabilityProjection(
+            isTerminalReady: true,
+            isSuspended: false
+        ).isInputAvailable)
+        XCTAssertFalse(GhosttyTerminalInputAvailabilityProjection(
+            isTerminalReady: true,
+            isSuspended: true
+        ).isInputAvailable)
+        XCTAssertFalse(GhosttyTerminalInputAvailabilityProjection(
+            isTerminalReady: false,
+            isSuspended: false
+        ).isInputAvailable)
+    }
 }

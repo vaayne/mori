@@ -118,6 +118,9 @@
 "Shortcuts" = "Shortcuts";
 "Keypad" = "Keypad";
 "Navigator" = "Navigator";
+"Current host" = "Current host";
+"Manage servers" = "Manage servers";
+"Choose a session to switch terminals" = "Choose a session to switch terminals";
 "Essential" = "Essential";
 "Process" = "Process";
 "One shot" = "One Shot";

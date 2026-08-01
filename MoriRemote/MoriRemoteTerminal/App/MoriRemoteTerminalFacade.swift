@@ -199,15 +199,18 @@ public final class MoriRemoteTerminalSession: ObservableObject {
 
 public struct MoriRemoteTerminalView: View {
     @ObservedObject private var session: MoriRemoteTerminalSession
+    private let isInputSuspended: Bool
     private let onShowNavigator: () -> Void
     private let onSharedMutationRequest: (MoriRemoteTerminalSharedMutation) -> Void
 
     public init(
         session: MoriRemoteTerminalSession,
+        isInputSuspended: Bool = false,
         onShowNavigator: @escaping () -> Void = {},
         onSharedMutationRequest: @escaping (MoriRemoteTerminalSharedMutation) -> Void = { _ in }
     ) {
         self.session = session
+        self.isInputSuspended = isInputSuspended
         self.onShowNavigator = onShowNavigator
         self.onSharedMutationRequest = onSharedMutationRequest
     }
@@ -215,6 +218,7 @@ public struct MoriRemoteTerminalView: View {
     public var body: some View {
         GhosttyTerminalCoreView(
             screen: session.screen.screenAdapter,
+            isInputSuspended: isInputSuspended,
             onShowNavigator: onShowNavigator,
             onSharedMutationRequest: onSharedMutationRequest
         )

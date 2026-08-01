@@ -117,7 +117,10 @@
 "Modifiers" = "修饰键";
 "Shortcuts" = "快捷键";
 "Keypad" = "按键面板";
-"Navigator" = "导航器";
+"Navigator" = "导航";
+"Current host" = "当前主机";
+"Manage servers" = "管理服务器";
+"Choose a session to switch terminals" = "选择会话后才会切换终端";
 "Essential" = "基础按键";
 "Process" = "进程控制";
 "One shot" = "一次性";

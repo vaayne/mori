@@ -13,6 +13,7 @@ struct GhosttyTerminalCoreView: View {
     @ObservedObject private var screen: TmuxTerminalScreenAdapter
     private let onShowNavigator: () -> Void
     private let onSharedMutationRequest: (MoriRemoteTerminalSharedMutation) -> Void
+    private let isInputSuspended: Bool
     @State private var terminalInputController = GhosttyTerminalInputController()
     @State private var responderHandoff = GhosttyKeyboardResponderHandoff()
     @State private var trackpadDriver = GhosttyKeyboardCursorTrackpadDriver()
@@ -23,10 +24,12 @@ struct GhosttyTerminalCoreView: View {
 
     init(
         screen: TmuxTerminalScreenAdapter,
+        isInputSuspended: Bool = false,
         onShowNavigator: @escaping () -> Void = {},
         onSharedMutationRequest: @escaping (MoriRemoteTerminalSharedMutation) -> Void = { _ in }
     ) {
         self.screen = screen
+        self.isInputSuspended = isInputSuspended
         self.onShowNavigator = onShowNavigator
         self.onSharedMutationRequest = onSharedMutationRequest
     }
@@ -34,6 +37,10 @@ struct GhosttyTerminalCoreView: View {
     var body: some View {
         let projection = screen.terminalScreenPresentationProjection
         let interaction = projection.interaction
+        let isInputAvailable = GhosttyTerminalInputAvailabilityProjection(
+            isTerminalReady: interaction.isInputAvailable,
+            isSuspended: isInputSuspended
+        ).isInputAvailable
         ZStack(alignment: .bottom) {
             Color.black.ignoresSafeArea()
             GeometryReader { geometry in
@@ -45,13 +52,13 @@ struct GhosttyTerminalCoreView: View {
                     terminalTheme: .ghosttyDefault,
                     trackpadDriver: trackpadDriver,
                     onSurfaceTap: { _ in activateTerminalInput() },
-                    onWindowSwipe: { _ = screen.focusAdjacentTmuxTopLevel($0) },
+                    onWindowSwipe: { guard isInputAvailable else { return }; _ = screen.focusAdjacentTmuxTopLevel($0) },
                     sendKeyEvent: sendTerminalKey,
                     onTrackpadFeedbackChange: { trackpadFeedback = $0 },
-                    isMouseCaptured: { screen.isMouseCaptured(for: $0) },
-                    submitMouseButton: { screen.sendMouseButton(to: $0, $1) },
-                    submitMousePosition: { screen.sendMousePosition(to: $0, $1, mods: $2) },
-                    submitMouseScroll: { screen.sendMouseScroll(to: $0, $1) }
+                    isMouseCaptured: { isInputAvailable && screen.isMouseCaptured(for: $0) },
+                    submitMouseButton: { isInputAvailable ? screen.sendMouseButton(to: $0, $1) : .surfaceRejected },
+                    submitMousePosition: { isInputAvailable ? screen.sendMousePosition(to: $0, $1, mods: $2) : .surfaceRejected },
+                    submitMouseScroll: { isInputAvailable ? screen.sendMouseScroll(to: $0, $1) : .surfaceRejected }
                 )
                 .frame(width: effectiveSize.width, height: effectiveSize.height, alignment: .topLeading)
                 .onAppear { reconcileViewport(liveSize) }
@@ -60,8 +67,8 @@ struct GhosttyTerminalCoreView: View {
             }
 
             GhosttyTerminalResponderRepresentable(
-                isEnabled: interaction.isInputAvailable,
-                wantsFirstResponder: compositionState.inputCoordinator.keyboardMode == .system,
+                isEnabled: isInputAvailable,
+                wantsFirstResponder: isInputAvailable && compositionState.inputCoordinator.keyboardMode == .system,
                 activationToken: compositionState.inputCoordinator.terminalActivationToken,
                 responderHandoff: responderHandoff,
                 trackpadDriver: trackpadDriver,
@@ -73,7 +80,7 @@ struct GhosttyTerminalCoreView: View {
                 onFirstResponderChange: { isFirstResponder in
                     if !isFirstResponder, compositionState.inputCoordinator.keyboardMode == .system,
                        !compositionState.inputCoordinator.isDismissSystemKeyboardRequested {
-                        compositionState.inputCoordinator.refocusSystemKeyboardIfActive(isInputAvailable: screen.terminalInteractionProjection.isInputAvailable)
+                        compositionState.inputCoordinator.refocusSystemKeyboardIfActive(isInputAvailable: isInputAvailable)
                     }
                 }
             )
@@ -83,7 +90,7 @@ struct GhosttyTerminalCoreView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             GhosttyKeyboardChrome(
                 keyboardMode: compositionState.inputCoordinator.keyboardMode,
-                isEnabled: interaction.isInputAvailable,
+                isEnabled: isInputAvailable,
                 isCompact: horizontalSizeClass == .compact,
                 isControlArmed: terminalInputController.isControlArmed,
                 isAltArmed: terminalInputController.isAltArmed,
@@ -97,19 +104,23 @@ struct GhosttyTerminalCoreView: View {
                     sendKey: sendTerminalKey
                 )
             )
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) {
+            guard !isInputSuspended else { return }
             updateKeyboardVisibility(with: $0)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+            guard !isInputSuspended else { return }
             completeKeyboardTransition(for: .shown)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
+            guard !isInputSuspended else { return }
             completeKeyboardTransition(for: .hidden)
         }
         .onDisappear { cancelTransientInput() }
+        .onChange(of: isInputSuspended) { _, isSuspended in
+            if isSuspended { cancelTransientInput() }
+        }
         .onChange(of: screen.stateTraceLabel) { oldState, newState in
             // A session lifecycle change must not let delayed or latched input
             // reach a replacement surface.
@@ -118,19 +129,20 @@ struct GhosttyTerminalCoreView: View {
     }
 
     private func toggleKeyboard() {
+        guard isTerminalInputAvailable else { return }
         let projection = GhosttyKeyboardToggleProjection(
             keyboardMode: compositionState.inputCoordinator.keyboardMode,
-            isInputAvailable: screen.terminalInteractionProjection.isInputAvailable
+            isInputAvailable: isTerminalInputAvailable
         )
         if let request = compositionState.keyboardTransitionCoordinator.transitionRequest(forToggle: projection) {
             beginKeyboardTransition(request)
         }
-        compositionState.inputCoordinator.toggleKeyboard(isInputAvailable: screen.terminalInteractionProjection.isInputAvailable)
+        compositionState.inputCoordinator.toggleKeyboard(isInputAvailable: isTerminalInputAvailable)
         if compositionState.inputCoordinator.keyboardMode == .hidden { _ = responderHandoff.transfer(to: .terminal) }
     }
 
     private func activateTerminalInput() {
-        guard screen.terminalInteractionProjection.isInputAvailable else { return }
+        guard isTerminalInputAvailable else { return }
         compositionState.inputCoordinator.showSystemKeyboard(isInputAvailable: true)
     }
 
@@ -164,8 +176,8 @@ struct GhosttyTerminalCoreView: View {
             activeTransitionTarget: compositionState.viewportCoordinator.keyboardTransitionTarget,
             keyboardMode: compositionState.inputCoordinator.keyboardMode,
             isDismissSystemKeyboardRequested: compositionState.inputCoordinator.isDismissSystemKeyboardRequested,
-            isInputAvailable: screen.terminalInteractionProjection.isInputAvailable,
-            isSelectionSheetPresented: false,
+            isInputAvailable: isTerminalInputAvailable,
+            isSelectionSheetPresented: isInputSuspended,
             isAwaitingSystemKeyboardPresentation: compositionState.keyboardTransitionCoordinator.isAwaitingSystemKeyboardPresentation,
             isSceneActive: true
         )
@@ -174,7 +186,8 @@ struct GhosttyTerminalCoreView: View {
     }
 
     private func sendTerminalText(_ text: String) -> Bool {
-        terminalInputController.performTextInput(
+        guard isTerminalInputAvailable else { return false }
+        return terminalInputController.performTextInput(
             text,
             submit: { screen.sendInputToFocusedSurface($0).isAccepted },
             schedulePrefixFlush: schedulePrefixFlush(token:),
@@ -191,6 +204,7 @@ struct GhosttyTerminalCoreView: View {
         prefixFlushTask = Task { @MainActor in
             do { try await Task.sleep(for: .milliseconds(750)) } catch { return }
             guard generation == sessionGeneration,
+                  isTerminalInputAvailable,
                   let input = terminalInputController.flushPendingTmuxPrefixInput(matching: token)
             else { return }
             _ = screen.sendInputToFocusedSurface(input)
@@ -210,6 +224,7 @@ struct GhosttyTerminalCoreView: View {
     }
 
     private func sendTerminalShortcut(_ text: String) -> Bool {
+        guard isTerminalInputAvailable else { return false }
         // A menu shortcut is explicit terminal input, never the second half of
         // a previously armed tmux prefix. Flush that prefix before sending the
         // exact control/meta sequence and clear one-shot modifiers.
@@ -223,7 +238,8 @@ struct GhosttyTerminalCoreView: View {
     }
 
     private func sendTerminalPaste(_ text: String) -> Bool {
-        terminalInputController.performPaste(
+        guard isTerminalInputAvailable else { return false }
+        return terminalInputController.performPaste(
             text,
             submitPendingPrefix: { screen.sendInputToFocusedSurface($0).isAccepted },
             sendPaste: { screen.sendPasteToFocusedSurface($0).isAccepted }
@@ -231,11 +247,33 @@ struct GhosttyTerminalCoreView: View {
     }
 
     private func sendTerminalKey(_ event: GhosttySurfaceKeyEvent) -> Bool {
-        terminalInputController.performKeyEvent(
+        guard isTerminalInputAvailable else { return false }
+        return terminalInputController.performKeyEvent(
             event,
             submitPendingPrefix: { screen.sendInputToFocusedSurface($0).isAccepted },
             sendKey: { screen.sendKeyEventToFocusedSurface($0).isAccepted }
         )
     }
 
+    private var isTerminalInputAvailable: Bool {
+        GhosttyTerminalInputAvailabilityProjection(
+            isTerminalReady: screen.terminalInteractionProjection.isInputAvailable,
+            isSuspended: isInputSuspended
+        ).isInputAvailable
+    }
+}
+
+struct GhosttyTerminalInputAvailabilityProjection {
+    static func isInputAvailable(isTerminalReady: Bool, isSuspended: Bool) -> Bool {
+        isTerminalReady && !isSuspended
+    }
+
+    let isInputAvailable: Bool
+
+    init(isTerminalReady: Bool, isSuspended: Bool) {
+        isInputAvailable = Self.isInputAvailable(
+            isTerminalReady: isTerminalReady,
+            isSuspended: isSuspended
+        )
+    }
 }
