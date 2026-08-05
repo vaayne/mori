@@ -1,6 +1,6 @@
 # Agent Hooks（代理钩子）
 
-Mori 可与编程代理（Claude Code、Codex CLI、Pi）集成，在标签页名称中显示其状态并发送通知。钩子通过**设置 > Agent Hooks** 手动启用/禁用。只要已经启用，Mori 每次启动都会刷新已安装的 hook 文件，让 `~/.config/mori/` 始终与当前应用 bundle 保持一致。
+Mori 可与编程代理（Claude Code、Codex CLI、Pi 和 Droid）集成，在标签页名称中显示其状态并发送通知。钩子通过**设置 > Agent Hooks** 手动启用/禁用。只要已经启用，Mori 每次启动都会刷新已安装的 hook 文件，让 `~/.config/mori/` 始终与当前应用 bundle 保持一致。
 
 ## 工作原理
 
@@ -28,13 +28,17 @@ Mori 可与编程代理（Claude Code、Codex CLI、Pi）集成，在标签页�
 
 1. 打开 Mori 设置 > Agent Hooks
 2. 开启 **Codex CLI**
-3. Mori 会创建/更新 `~/.codex/config.toml`：
-   ```toml
-   # Mori agent status hook
-   notify = ["/Users/you/.config/mori/hooks/mori-codex-hook.sh"]
+3. Mori 会创建/更新 `~/.codex/hooks.json`，且只注册以下生命周期钩子：
+   ```json
+   {
+     "hooks": {
+       "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "/Users/you/.config/mori/hooks/mori-codex-hook.sh UserPromptSubmit" }] }],
+       "Stop": [{ "hooks": [{ "type": "command", "command": "/Users/you/.config/mori/hooks/mori-codex-hook.sh Stop" }] }]
+     }
+   }
    ```
 
-**注意：** `notify` 条目必须位于 TOML 文件的**顶层**（在任何 `[section]` 标题之前）。Mori 会自动确保这一点。
+Mori 不会改动无关的 Codex 钩子。刷新时，`~/.codex/config.toml` 中已有的旧版 Mori `notify` 注册会迁移到此格式；移除旧项时不会改动其他 `notify` 条目。
 
 后续每次启动 Mori 时，如果 `~/.config/mori/hooks/mori-codex-hook.sh` 缺失或已过期，都会从当前 bundle 重新复制。
 
@@ -71,14 +75,11 @@ Mori 可与编程代理（Claude Code、Codex CLI、Pi）集成，在标签页�
 读取 stdin（Claude Code 通过管道传入 JSON 钩子数据），不在 tmux 中时静默退出。
 
 ### mori-codex-hook.sh（Codex CLI）
-处理旧版 Codex `notify` 钩子（JSON 作为参数 1）：
-```bash
-# 旧版格式 (Codex < 2.0)
-notify = ["/path/to/mori-codex-hook.sh"]
-# 钩子接收: mori-codex-hook.sh '{"type":"agent-turn-complete",...}'
-```
+处理两个已注册的 Codex 事件：
+- `UserPromptSubmit` → 状态：`"working"`
+- `Stop` → 状态：`"waiting"`
 
-如果 Codex 添加了显式钩子事件，也支持新版基于事件的格式。
+脚本也接受旧版 `notify` JSON（`{"type":"agent-turn-complete",...}`）并将其视为完成事件，确保迁移时已经运行的 Codex 进程仍可兼容。空参数、畸形参数和未知参数不会改变状态。
 
 ### mori-pi-extension.ts（Pi）
 监听 Pi 事件的 TypeScript 扩展：
@@ -89,7 +90,7 @@ notify = ["/path/to/mori-codex-hook.sh"]
 
 在设置 > Agent Hooks 中关闭对应代理。Mori 会移除：
 - `~/.config/mori/hooks/` 中的钩子脚本
-- 代理配置文件中的钩子条目（`~/.claude/settings.json`、`~/.codex/config.toml` 等）
+- 代理配置文件中的钩子条目（`~/.claude/settings.json`、`~/.codex/hooks.json`，以及 `~/.codex/config.toml` 中旧版 Mori 条目等）
 
 如果手动删除了钩子脚本，先关闭再重新开启即可重新安装。
 
@@ -116,7 +117,7 @@ notify = ["/path/to/mori-codex-hook.sh"]
 - 确认钩子脚本存在：`ls ~/.config/mori/hooks/`
 - 检查代理配置文件是否正确更新：
   - Claude Code：`cat ~/.claude/settings.json | grep mori`
-  - Codex：`cat ~/.codex/config.toml | grep mori`
+  - Codex：`cat ~/.codex/hooks.json | grep mori`
   - Pi：`cat ~/.pi/agent/settings.json | grep mori`
 - 确保代理在 _tmux 会话内_ 运行。钩子仅在 tmux 中有效。
 
@@ -128,17 +129,17 @@ notify = ["/path/to/mori-codex-hook.sh"]
 **钩子脚本权限被拒绝：**
 - 通过设置 > Agent Hooks 重新安装（先关闭再开启）。Mori 安装时会设置 `0755` 权限。
 
-**Codex notify 行未被添加：**
-- 确认 `~/.codex/config.toml` 存在且可读。
+**Codex 钩子未被添加：**
+- 确认 `~/.codex/hooks.json` 是可读的 JSON。
 - 如果在 Codex 创建文件后才添加 Mori 钩子，请关闭/开启钩子以重试。
-- 检查文件是否有语法错误（TOML 解析器可能会拒绝）。
+- Mori 会保留无法识别或格式错误的钩子文件而不覆盖；请先修复无效 JSON。
 
 ## 实现细节
 
 **AgentHookConfigurator**（Swift）：
 - 检测已安装的钩子：`isClaudeHookInstalled()`、`isCodexHookInstalled()`、`isPiExtensionInstalled()`
 - 安装/卸载：`installClaudeHook()`、`uninstallClaudeHook()` 等
-- 处理代理配置文件变更（Claude/Pi 用 JSON，Codex 用 TOML）
+- 处理代理配置文件变更（Claude/Codex/Pi 用 JSON；Codex 的旧 TOML 仅作清理）
 
 **WorkspaceManager**（Swift）：
 - 在 5 秒 tmux 轮询中读取 `@mori-agent-state` 和 `@mori-agent-name`

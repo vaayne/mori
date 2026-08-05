@@ -6,7 +6,7 @@
 "Open Project (⇧⌘O)" = "打开项目 (⇧⌘O)";
 "Agent Dashboard (⇧⌘A)" = "代理面板 (⇧⌘A)";
 "Settings (⌘,)" = "设置 (⌘,)";
-"Adds a notify entry to ~/.codex/config.toml for agent turn completion events." = "向 ~/.codex/config.toml 添加通知条目，用于代理回合完成事件。";
+"Adds low-noise prompt and stop hooks to ~/.codex/hooks.json." = "向 ~/.codex/hooks.json 添加低噪声的提示提交和停止钩子。";
 "Adds hooks to ~/.claude/settings.json for prompt submit, tool use, stop, and notification events." = "向 ~/.claude/settings.json 添加钩子，用于提示提交、工具使用、停止和通知事件。";
 "Agent" = "代理";
 "Attention" = "待处理";

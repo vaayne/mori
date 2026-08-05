@@ -1811,7 +1811,7 @@ private struct AgentHookSettingsContent: View {
         agentCard(
             name: .localized("Codex CLI"),
             icon: "chevron.left.forwardslash.chevron.right",
-            description: .localized("Adds a notify entry to ~/.codex/config.toml for agent turn completion events."),
+            description: .localized("Adds low-noise prompt and stop hooks to ~/.codex/hooks.json."),
             isEnabled: $model.codexEnabled
         )
 

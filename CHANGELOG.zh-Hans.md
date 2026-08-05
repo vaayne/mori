@@ -9,6 +9,7 @@
 
 ### ✨ 新功能
 
+- **macOS**：Codex agent hook 改用 `~/.codex/hooks.json` 中低噪声的 `UserPromptSubmit` 和 `Stop` 注册。刷新时会迁移已有 Mori `notify` 注册，同时保留无关 hook、notify 条目和配置文件软链接。
 - **iOS（MoriRemote）**：远程伴侣已重构为安全、以 pane 为原生单位的 tmux 控制运行时。支持保存工作区、密码或 OpenSSH 私钥认证、显式主机密钥信任、本地终端历史/选择、agent 状态和自适应 iPhone/iPad 界面。MoriRemote 现遵循 Remux 的客户端尺寸规则：手机视口和软件键盘变化会调整/重排共享 tmux 窗口，因此其他已连接的 Mac 客户端也可能发生可见重排。
 - **iOS（MoriRemote）**：恢复当前 Remux 的三胶囊终端 Dock 与按实际高度预留的安全区布局：Ctrl/Esc/Tab、会话/Agent、主页/按键面板/键盘。会话打开完整 Navigator，Agent 直接进入状态列表；主页打开资源库；按键面板继续提供终端快捷键和照片/剪贴板图片上传。模态表单仍会暂停终端响应器，中文等输入法的组合文本仍只会提交一次。
 - **iOS（MoriRemote）**：服务器配置现在会在 SSH 登录后自动发现实时 tmux 会话，用户直接选择，不再需要手动创建工作区记录。终端的 Sessions 按钮会刷新并列出当前主机上的全部 tmux 会话，包括手机尚未连接的会话。

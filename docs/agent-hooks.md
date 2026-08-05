@@ -1,6 +1,6 @@
 # Agent Hooks
 
-Mori integrates with coding agents (Claude Code, Codex CLI, Pi) to display their status in tab names and send notifications. Hooks are manually enabled/disabled in **Settings > Agent Hooks**. Once enabled, Mori refreshes the installed hook files on every launch so `~/.config/mori/` stays aligned with the current app bundle.
+Mori integrates with coding agents (Claude Code, Codex CLI, Pi, and Droid) to display their status in tab names and send notifications. Hooks are manually enabled/disabled in **Settings > Agent Hooks**. Once enabled, Mori refreshes the installed hook files on every launch so `~/.config/mori/` stays aligned with the current app bundle.
 
 ## How It Works
 
@@ -28,13 +28,17 @@ Run Claude Code in a tmux window. Tab renames to `claude` while working (⚡ bad
 
 1. Open Mori Settings > Agent Hooks
 2. Toggle **Codex CLI** on
-3. Mori creates/updates `~/.codex/config.toml` with:
-   ```toml
-   # Mori agent status hook
-   notify = ["/Users/you/.config/mori/hooks/mori-codex-hook.sh"]
+3. Mori creates/updates `~/.codex/hooks.json` with only these lifecycle hooks:
+   ```json
+   {
+     "hooks": {
+       "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "/Users/you/.config/mori/hooks/mori-codex-hook.sh UserPromptSubmit" }] }],
+       "Stop": [{ "hooks": [{ "type": "command", "command": "/Users/you/.config/mori/hooks/mori-codex-hook.sh Stop" }] }]
+     }
+   }
    ```
 
-**Important:** The `notify` entry must be **top-level** in the TOML file (before any `[section]` headers). Mori enforces this automatically.
+Mori leaves unrelated Codex hooks intact. On refresh, an existing legacy Mori `notify` registration in `~/.codex/config.toml` is migrated to this format and removed without changing other `notify` entries.
 
 On future launches, Mori re-copies the hook script from its bundled resources if the installed file is stale or missing.
 
@@ -71,14 +75,11 @@ Responds to Claude Code hook events:
 Drains stdin (Claude Code pipes JSON hook data) and bails silently if not in tmux.
 
 ### mori-codex-hook.sh (Codex CLI)
-Handles legacy Codex `notify` hook (JSON as arg 1):
-```bash
-# Legacy format (Codex < 2.0)
-notify = ["/path/to/mori-codex-hook.sh"]
-# Hook receives: mori-codex-hook.sh '{"type":"agent-turn-complete",...}'
-```
+Handles the two registered Codex events:
+- `UserPromptSubmit` → state: `"working"`
+- `Stop` → state: `"waiting"`
 
-Also supports modern event-based format if Codex adds explicit hook events.
+The script also accepts legacy `notify` JSON (`{"type":"agent-turn-complete",...}`) as a completion event so already-running Codex processes remain compatible during migration. Empty, malformed, and unrecognized arguments do not change state.
 
 ### mori-pi-extension.ts (Pi)
 TypeScript extension listening to Pi events:
@@ -89,7 +90,7 @@ TypeScript extension listening to Pi events:
 
 Toggle the agent off in Settings > Agent Hooks. Mori removes:
 - Hook script from `~/.config/mori/hooks/`
-- Hook entries from agent config files (`~/.claude/settings.json`, `~/.codex/config.toml`, etc.)
+- Hook entries from agent config files (`~/.claude/settings.json`, `~/.codex/hooks.json`, and legacy Mori entries in `~/.codex/config.toml`, etc.)
 
 If you manually delete hook scripts, toggle off then back on to reinstall.
 
@@ -116,7 +117,7 @@ Click the notification to focus the window. Bundled `.app` builds use `UNUserNot
 - Verify the hook script exists: `ls ~/.config/mori/hooks/`
 - Check the agent config file was updated correctly:
   - Claude Code: `cat ~/.claude/settings.json | grep mori`
-  - Codex: `cat ~/.codex/config.toml | grep mori`
+  - Codex: `cat ~/.codex/hooks.json | grep mori`
   - Pi: `cat ~/.pi/agent/settings.json | grep mori`
 - Ensure you're running the agent _inside a tmux session_. Hooks only work in tmux.
 
@@ -128,17 +129,17 @@ Click the notification to focus the window. Bundled `.app` builds use `UNUserNot
 **Hook script permission denied:**
 - Reinstall via Settings > Agent Hooks toggle (off then on). Mori sets `0755` permissions on install.
 
-**Codex notify line doesn't get added:**
-- Verify `~/.codex/config.toml` exists and is readable.
+**Codex hooks don't get added:**
+- Verify `~/.codex/hooks.json` is readable JSON.
 - If you added Mori hooks after Codex created the file, toggle the hook off/on to retry.
-- Check that the file doesn't have syntax errors (TOML parser may reject it).
+- Mori preserves unrecognized or malformed hook files rather than overwriting them; repair invalid JSON first.
 
 ## Implementation Details
 
 **AgentHookConfigurator** (Swift):
 - Detects installed hooks: `isClaudeHookInstalled()`, `isCodexHookInstalled()`, `isPiExtensionInstalled()`
 - Installs/uninstalls: `installClaudeHook()`, `uninstallClaudeHook()`, etc.
-- Handles agent config file mutations (JSON for Claude/Pi, TOML for Codex)
+- Handles agent config file mutations (JSON for Claude/Codex/Pi; legacy TOML cleanup for Codex)
 
 **WorkspaceManager** (Swift):
 - Reads `@mori-agent-state` and `@mori-agent-name` during 5s tmux poll
