@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Features
 
-- **iOS (MoriRemote)**: Rebuilt the remote companion around a secure, pane-native tmux control runtime. It supports saved workspaces, password or OpenSSH private-key authentication, explicit host-key trust, local terminal history/selection, agent status, and adaptive iPhone/iPad presentation without taking over another attached tmux client's selection or size.
+- **iOS (MoriRemote)**: Rebuilt the remote companion around a secure, pane-native tmux control runtime. It supports saved workspaces, password or OpenSSH private-key authentication, explicit host-key trust, local terminal history/selection, agent status, and adaptive iPhone/iPad presentation. MoriRemote now follows Remux client sizing: phone viewport and software-keyboard changes resize/reflow the shared tmux window, so other attached Mac clients may visibly reflow.
 - **iOS (MoriRemote)**: Restored the current Remux three-capsule terminal dock and its measured safe-area layout: Ctrl/Esc/Tab, Sessions/Windows/Panes, and Home/Keypad/Keyboard. Sessions, windows, and panes open the existing Navigator at the matching scope; Home opens the library; Keypad retains terminal shortcuts and photo/clipboard image upload. Modal forms still suspend the terminal responder, and Chinese and other IMEs still commit marked text exactly once.
 - **iOS (MoriRemote)**: Server profiles now discover their live tmux sessions after SSH login, so users choose a session instead of manually creating workspace records. The terminal’s Sessions button refreshes and lists every tmux session on the current host, including sessions not yet connected on the phone.
 

@@ -8,6 +8,7 @@ actor DeterministicTmuxControlTransport: TmuxControlTransport {
     private let chunks: [Data]
     private var started = false
     private var sentCommands: [Data] = []
+    private var startupViewport: TmuxControlViewport?
 
     init(chunks: [Data]) {
         self.chunks = chunks
@@ -20,7 +21,7 @@ actor DeterministicTmuxControlTransport: TmuxControlTransport {
     }
 
     func start(initialViewport: TmuxControlViewport?) async throws {
-        _ = initialViewport
+        startupViewport = initialViewport
         guard !started else { return }
         started = true
 
@@ -40,5 +41,9 @@ actor DeterministicTmuxControlTransport: TmuxControlTransport {
 
     func commandsSentByGhostty() -> [Data] {
         sentCommands
+    }
+
+    func receivedStartupViewport() -> TmuxControlViewport? {
+        startupViewport
     }
 }

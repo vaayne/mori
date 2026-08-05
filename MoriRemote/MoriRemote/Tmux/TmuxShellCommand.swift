@@ -99,7 +99,11 @@ enum TmuxCommandBuilder {
 
     /// `-f` applies flags to the newly attached control client, before it can receive navigation.
     static func attachShadow(executable: String, shadow: String) throws -> String {
-        try command(executable: executable, arguments: ["-C", "attach-session", "-t", shadow, "-f", "active-pane,ignore-size"])
+        // Native startup immediately emits refresh-client -C for this grid.
+        // Do not set ignore-size: this attached grouped-shadow client owns the
+        // shared grid just like a remux control attachment. Native startup's
+        // refresh-client owns the actual dimensions.
+        return try command(executable: executable, arguments: ["-C", "attach-session", "-t", shadow, "-f", "active-pane"])
     }
 
     struct ShadowCleanupPlan: Equatable, Sendable {

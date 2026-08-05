@@ -18,7 +18,7 @@ final class TmuxSessionLinkWriteFailureTests: XCTestCase {
         )
         let link = TmuxSessionLink(controller: controller, transport: transport)
 
-        try await link.start()
+        try await link.start(viewport: .default)
 
         try await waitUntil("transport was not invalidated after send failure") {
             await transport.closeDispositions().first == .invalidated
@@ -49,7 +49,7 @@ final class TmuxSessionLinkWriteFailureTests: XCTestCase {
         )
         let link = TmuxSessionLink(controller: controller, transport: transport)
 
-        try await link.start()
+        try await link.start(viewport: .default)
         try await waitUntil("startup commands were not sent") {
             await transport.sendCount() > 0
         }
@@ -78,7 +78,7 @@ final class TmuxSessionLinkWriteFailureTests: XCTestCase {
         )
         let link = TmuxSessionLink(controller: controller, transport: transport)
 
-        try await link.start()
+        try await link.start(viewport: .default)
         await transport.finishInput()
 
         try await waitUntil("transport was not invalidated after read end") {

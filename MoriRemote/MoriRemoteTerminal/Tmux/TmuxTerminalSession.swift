@@ -99,13 +99,13 @@ final class TmuxTerminalSession: ObservableObject {
 
     // MARK: Connection
 
-    func connect() async throws {
+    func connect(viewport: TmuxControlViewport) async throws {
         guard !isShutDown, !didStartLink else { return }
         didStartLink = true
         linkIsActive = true
         let link = self.link
         do {
-            try await link.start()
+            try await link.start(viewport: viewport)
         } catch {
             await connectFailed(link: link, error: error)
             throw error

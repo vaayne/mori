@@ -31,7 +31,7 @@ import MoriRemoteTerminal
             settings: .default,
             transport: .init(
                 receivedBytes: bytes,
-                start: {},
+                start: { _ in },
                 send: { _ in },
                 close: { _ in },
                 isActive: { false }

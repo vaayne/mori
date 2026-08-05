@@ -42,7 +42,7 @@ actor SSHTmuxControlTransport {
     nonisolated func asTerminalTransport() -> MoriRemoteTerminalTransport {
         MoriRemoteTerminalTransport(
             receivedBytes: receivedBytes,
-            start: { try await self.start() },
+            start: { try await self.start(initialViewport: $0) },
             send: { try await self.send($0) },
             close: { disposition in
                 await self.close(disposition: disposition)
@@ -51,7 +51,10 @@ actor SSHTmuxControlTransport {
         )
     }
 
-    func start() async throws {
+    func start(initialViewport: TmuxControlViewport) async throws {
+        guard initialViewport.columns >= 2, initialViewport.rows >= 2 else {
+            throw SSHTmuxControlTransportError.invalidViewport
+        }
         guard lifecycle != .closed && lifecycle != .closing else { throw SSHTmuxControlTransportError.closed }
         guard lifecycle == .idle else { throw SSHTmuxControlTransportError.alreadyStarted }
         lifecycle = .starting
@@ -242,6 +245,7 @@ actor SSHTmuxControlTransport {
 enum SSHTmuxControlTransportError: Error, Equatable, Sendable, LocalizedError {
     case closed
     case alreadyStarted
+    case invalidViewport
 
     var errorDescription: String? {
         switch self {
@@ -249,6 +253,8 @@ enum SSHTmuxControlTransportError: Error, Equatable, Sendable, LocalizedError {
             String(localized: "The tmux control connection is closed.")
         case .alreadyStarted:
             String(localized: "The tmux control connection has already started.")
+        case .invalidViewport:
+            String(localized: "The terminal viewport is invalid.")
         }
     }
 }

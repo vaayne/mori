@@ -7,8 +7,6 @@ import GhosttyKit
 /// single consumer task drains an ordered stream fed from the writer
 /// queue), and transport loss closes this attachment promptly.
 ///
-/// Viewport ownership stays in `TmuxTerminalSession`. The control client is
-/// deliberately unsized; all local viewport metrics stay renderer-only.
 actor TmuxSessionLink {
     let controller: TmuxSessionController
 
@@ -33,9 +31,11 @@ actor TmuxSessionLink {
         self.outboundContinuation = continuation
     }
 
-    /// Establish the control channel, then create an unsized native client.
-    func start() async throws {
+    /// Establish the control channel with the measured grid, then create the
+    /// native client with the exact same grid.
+    func start(viewport: TmuxControlViewport?) async throws {
         guard !stopped else { throw LinkError.stopped }
+        guard let viewport else { throw LinkError.missingInitialViewport }
 
         // Idempotent transport prewarm (auth/root channel) before the
         // session channel opens.
@@ -61,10 +61,12 @@ actor TmuxSessionLink {
             }
         }
 
-        try await transport.start(initialViewport: nil)
+        try await transport.start(initialViewport: viewport)
         guard !stopped else { throw LinkError.stopped }
         try await withCheckedThrowingContinuation { continuation in
-            controller.start { result in
+            controller.start(initialSize: .init(
+                cols: UInt32(viewport.columns), rows: UInt32(viewport.rows)
+            )) { result in
                 continuation.resume(with: result)
             }
         }

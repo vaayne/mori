@@ -72,6 +72,7 @@ final class TmuxSessionController: @unchecked Sendable {
         case selectPane
         case sharedMutation
         case sendInput
+        case setClientSize
     }
 
     enum SharedMutation: Sendable {
@@ -191,6 +192,7 @@ final class TmuxSessionController: @unchecked Sendable {
     private var successfulMutationRequiredAfterRevision: UInt64?
     private var topologyRevision: UInt64 = 0
     private var outboundSink: (@Sendable (Data) -> Void)?
+    private var clientSize: ClientSize?
     private var shuttingDown = false
     private let historyLineLimit: Int
 
@@ -215,15 +217,25 @@ final class TmuxSessionController: @unchecked Sendable {
     }
 
     /// Construct the native client only after transport.start has opened the
-    /// grouped shadow control channel.
-    /// Starts an unsized native client. tmux topology owns terminal engine
-    /// sizes; UIKit viewport metrics never become control-client dimensions.
-    func start(completion: @escaping @Sendable (Result<Void, StartError>) -> Void) {
+    /// grouped shadow control channel with this same real client grid.
+    func start(
+        initialSize: ClientSize,
+        completion: @escaping @Sendable (Result<Void, StartError>) -> Void
+    ) {
         queue.async { [self] in
             guard client == nil, !shuttingDown else {
                 completion(.failure(.alreadyStarted))
                 return
             }
+
+            guard let columns = UInt16(exactly: initialSize.cols),
+                  let rows = UInt16(exactly: initialSize.rows),
+                  columns > 0,
+                  rows > 0 else {
+                completion(.failure(.invalidInitialGrid))
+                return
+            }
+            clientSize = initialSize
 
             var config = ghostty_tmux_client_config_new()
             config.userdata = Unmanaged.passUnretained(self).toOpaque()
@@ -236,8 +248,8 @@ final class TmuxSessionController: @unchecked Sendable {
             config.history_line_limit_is_set = true
             config.history_line_limit = self.historyLineLimit
             config.max_scrollback = 10_000
-            config.initial_columns = 0
-            config.initial_rows = 0
+            config.initial_columns = columns
+            config.initial_rows = rows
 
             var created: ghostty_tmux_client_t?
             let result = ghostty_tmux_client_new(&config, &created)
@@ -290,6 +302,7 @@ final class TmuxSessionController: @unchecked Sendable {
             deferredNavigationIntent = nil
             successfulMutationRequiredAfterRevision = nil
             topology = nil
+            clientSize = nil
             retainedPaneIDs.removeAll()
             engineSizeByPaneID.removeAll()
             refreshStateByPaneID.removeAll()
@@ -647,6 +660,26 @@ final class TmuxSessionController: @unchecked Sendable {
         return true
     }
 
+    func setClientSize(cols: UInt32, rows: UInt32) {
+        guard cols > 0, rows > 0, cols <= UInt16.max, rows <= UInt16.max else {
+            DispatchQueue.main.async { self.callbacks.onRequestFailed(.setClientSize) }
+            return
+        }
+        let nextSize = ClientSize(cols: cols, rows: rows)
+        queue.async { [self] in
+            guard clientSize != nextSize else { return }
+            guard admitCommandOnWriter(
+                command: "refresh-client -C \(cols)x\(rows)",
+                request: .setClientSize
+            ) else { return }
+            clientSize = nextSize
+            if let paneID = activePaneID(in: topology) {
+                _ = admitPaneRefreshIfNeeded(paneID, failureRequest: .setClientSize)
+            }
+            _ = drainOutbound()
+        }
+    }
+
     /// Selectors target Mori's grouped shadow client only; they never resize
     /// panes, toggle zoom, or mutate shared layout.
     func requestSelectWindow(
@@ -801,7 +834,7 @@ final class TmuxSessionController: @unchecked Sendable {
         switch request {
         case .selectWindow, .selectPane, .sharedMutation:
             true
-        case .sendInput:
+        case .sendInput, .setClientSize:
             false
         }
     }

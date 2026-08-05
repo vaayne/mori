@@ -24,6 +24,8 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
 
     private var activeManagedSurface: GhosttyManagedSurface?
     private var initialViewportHandler: ((CGSize, CGFloat) -> Void)?
+    private var clientSizeHandler: ((TmuxSessionController.ClientSize) -> Void)?
+    private var viewportStabilityHandler: ((Bool) -> Void)?
 
     private var subscriptions: [AnyCancellable] = []
 
@@ -31,11 +33,15 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
     /// session is created.
     func activate(
         session: TmuxTerminalSession,
-        initialViewportHandler: @escaping (CGSize, CGFloat) -> Void
+        initialViewportHandler: @escaping (CGSize, CGFloat) -> Void,
+        clientSizeHandler: @escaping (TmuxSessionController.ClientSize) -> Void = { _ in },
+        viewportStabilityHandler: @escaping (Bool) -> Void = { _ in }
     ) {
         self.session = session
         self.controller = session.controller
         self.initialViewportHandler = initialViewportHandler
+        self.clientSizeHandler = clientSizeHandler
+        self.viewportStabilityHandler = viewportStabilityHandler
 
         session.$state
             .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -63,6 +69,8 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
         session = nil
         controller = nil
         initialViewportHandler = nil
+        clientSizeHandler = nil
+        viewportStabilityHandler = nil
         latestTopology = nil
     }
 
@@ -73,7 +81,9 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
     // MARK: Managed surface lifecycle
 
     private func rebuildActiveManagedSurface(for paneSurface: TmuxPaneSurface?) {
-        activeManagedSurface = paneSurface?.screenSurface { _, _, _ in }
+        activeManagedSurface = paneSurface?.screenSurface { [weak self] managed, _, _ in
+            self?.reportClientSizeIfActive(managed)
+        }
     }
 
     private func managedSurface(for id: UUID) -> GhosttyManagedSurface? {
@@ -86,11 +96,22 @@ final class TmuxTerminalScreenAdapter: ObservableObject {
     private var focusedManagedSurface: GhosttyManagedSurface? {
         activeManagedSurface
     }
+
+    private func reportClientSizeIfActive(_ managed: GhosttyManagedSurface) {
+        guard activeManagedSurface === managed else { return }
+        let size = managed.controlSurface.currentSize()
+        guard size.columns >= 2, size.rows >= 2 else { return }
+        clientSizeHandler?(.init(cols: UInt32(size.columns), rows: UInt32(size.rows)))
+    }
 }
 
 extension TmuxTerminalScreenAdapter {
     func prepareInitialViewport(size: CGSize, scale: CGFloat) {
         initialViewportHandler?(size, scale)
+    }
+
+    func setViewportStabilityHint(stable: Bool) {
+        viewportStabilityHandler?(stable)
     }
 
     var terminalViewportPresentationProjection: GhosttyTerminalViewportPresentationProjection {
@@ -100,8 +121,7 @@ extension TmuxTerminalScreenAdapter {
         )
     }
 
-    /// A read-only summary for phone chrome. It reflects tmux topology only;
-    /// viewport geometry remains owned by the fixed server-side client grid.
+    /// A read-only summary for phone chrome. It reflects tmux topology only.
     var terminalChromeTopologyProjection: GhosttyTerminalChromeTopologyProjection {
         let windows = latestTopology?.windows ?? []
         let activeWindowID = latestTopology?.activeWindowID

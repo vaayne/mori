@@ -21,6 +21,7 @@
 "No live Ghostty terminal surface arrived within 5 seconds." = "5 秒内未出现可用的 Ghostty 终端 surface。";
 "Ghostty renderer timed out: %@" = "Ghostty 渲染器超时：%@";
 "Connecting..." = "连接中...";
+"The terminal viewport is invalid." = "终端视口无效。";
 "Connecting…" = "正在连接…";
 "Connecting to Server" = "正在连接服务器";
 "Connection" = "连接";

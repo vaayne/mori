@@ -21,6 +21,7 @@
 "No live Ghostty terminal surface arrived within 5 seconds." = "No live Ghostty terminal surface arrived within 5 seconds.";
 "Ghostty renderer timed out: %@" = "Ghostty renderer timed out: %@";
 "Connecting..." = "Connecting...";
+"The terminal viewport is invalid." = "The terminal viewport is invalid.";
 "Connecting…" = "Connecting…";
 "Connecting to Server" = "Connecting to Server";
 "Connection" = "Connection";

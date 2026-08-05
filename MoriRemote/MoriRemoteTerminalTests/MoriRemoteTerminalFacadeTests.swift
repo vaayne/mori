@@ -6,6 +6,7 @@ import XCTest
 final class MoriRemoteTerminalFacadeTests: XCTestCase {
     func testStartFailurePublishesDisconnectedStateAndError() async throws {
         let session = try MoriRemoteTerminalSession(transport: failingTransport())
+        session.prepareInitialViewport(size: CGSize(width: 320, height: 480), scale: 2)
 
         do {
             try await session.start()
@@ -37,6 +38,42 @@ final class MoriRemoteTerminalFacadeTests: XCTestCase {
         XCTAssertEqual(result.body, "")
     }
 
+    func testCancelledStartBeforeViewportDoesNotStartTransport() async throws {
+        let recorder = FacadeStartRecorder()
+        let session = try MoriRemoteTerminalSession(transport: recordingTransport(recorder))
+        let start = Task { try await session.start() }
+
+        start.cancel()
+        do {
+            try await start.value
+            XCTFail("expected cancellation")
+        } catch is CancellationError {
+        } catch {
+            XCTFail("unexpected error: \(error)")
+        }
+
+        let startCount = await recorder.startCount
+        XCTAssertEqual(startCount, 0)
+        await session.stop()
+    }
+
+    func testStopReleasesStartWaitingForInitialViewport() async throws {
+        let recorder = FacadeStartRecorder()
+        let session = try MoriRemoteTerminalSession(transport: recordingTransport(recorder))
+        let start = Task { try await session.start() }
+
+        await Task.yield()
+        await session.stop()
+        do {
+            try await start.value
+            XCTFail("expected stopped start to fail")
+        } catch {
+        }
+
+        let startCount = await recorder.startCount
+        XCTAssertEqual(startCount, 0)
+    }
+
     func testFixedMetadataCommandUsesMoriHookOptionNames() {
         XCTAssertEqual(
             TmuxSessionController.agentMetadataQuery,
@@ -48,7 +85,7 @@ final class MoriRemoteTerminalFacadeTests: XCTestCase {
         let stream = AsyncThrowingStream<Data, Error> { $0.finish() }
         return .init(
             receivedBytes: stream,
-            start: { throw FacadeFailure.synthetic },
+            start: { _ in throw FacadeFailure.synthetic },
             send: { _ in },
             close: { _ in },
             isActive: { false }
@@ -59,11 +96,30 @@ final class MoriRemoteTerminalFacadeTests: XCTestCase {
         let stream = AsyncThrowingStream<Data, Error> { $0.finish() }
         return .init(
             receivedBytes: stream,
-            start: {},
+            start: { _ in },
             send: { _ in },
             close: { _ in },
             isActive: { false }
         )
+    }
+
+    private func recordingTransport(_ recorder: FacadeStartRecorder) -> MoriRemoteTerminalTransport {
+        let stream = AsyncThrowingStream<Data, Error> { _ in }
+        return .init(
+            receivedBytes: stream,
+            start: { await recorder.started(viewport: $0) },
+            send: { _ in },
+            close: { _ in },
+            isActive: { false }
+        )
+    }
+}
+
+private actor FacadeStartRecorder {
+    private(set) var startCount = 0
+
+    func started(viewport _: TmuxControlViewport) {
+        startCount += 1
     }
 }
 

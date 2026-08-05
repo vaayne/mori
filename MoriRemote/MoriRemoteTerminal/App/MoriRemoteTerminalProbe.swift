@@ -87,6 +87,10 @@ private actor ProbeTransport {
     nonisolated let receivedBytes: AsyncThrowingStream<Data, Error>
     private let continuation: AsyncThrowingStream<Data, Error>.Continuation
     private var started = false
+    private var viewport: TmuxControlViewport?
+    private var nextCommandNumber = 2
+    private var hydrationCommandCount = 0
+    private var didSendOutput = false
 
     init() {
         var continuation: AsyncThrowingStream<Data, Error>.Continuation!
@@ -97,25 +101,72 @@ private actor ProbeTransport {
     nonisolated func transport() -> MoriRemoteTerminalTransport {
         .init(
             receivedBytes: receivedBytes,
-            start: { try await self.start() },
-            send: { _ in },
+            start: { try await self.start(viewport: $0) },
+            send: { try await self.send($0) },
             close: { _ in await self.close() },
             isActive: { await self.started }
         )
     }
 
-    private func start() throws {
+    private func start(viewport: TmuxControlViewport) throws {
         guard !started else { return }
         started = true
-        let pane = "%0;83;44;0;0;1;;;;0;4294967295;4294967295;0;1;0;0;0;0;0;0;0;0;;;0;0;43;8,16\n"
-        let window = "$42 @0 1 %0 83 44 b7dd,83x44,0,0,0 b7dd,83x44,0,0,0 probe\n"
-        let transcript = "%begin 1 1 0\n%end 1 1 0\n%session-changed $42 main\n"
-            + "%begin 2 2 1\n3.1\n%end 2 2 1\n"
-            + "%begin 3 3 1\n\(window)%end 3 3 1\n"
-            + "%begin 4 4 1\n\(pane)%end 4 4 1\n"
-            + (5...8).map { "%begin \($0) \($0) 1\n%end \($0) \($0) 1\n" }.joined()
-        continuation.yield(Data(transcript.utf8))
-        continuation.yield(Data("%output %0 MoriRemote Ghostty transcript\\015\\012$ \n".utf8))
+        self.viewport = viewport
+        continuation.yield(Data("%begin 1 1 0\n%end 1 1 0\n%session-changed $42 main\n".utf8))
+    }
+
+    private func send(_ data: Data) throws {
+        guard started, let viewport else { return }
+        let commands = String(decoding: data, as: UTF8.self)
+            .split(separator: "\n")
+            .flatMap { $0.components(separatedBy: " ; ") }
+            .filter { !$0.isEmpty }
+
+        for command in commands {
+            let body: String
+            if command.contains("#{version}") {
+                body = "3.1\n"
+            } else if command.hasPrefix("list-windows ") {
+                body = Self.windowRecord(viewport: viewport)
+            } else if command.hasPrefix("display-message -p -t %0 ") {
+                body = Self.paneState(viewport: viewport)
+                hydrationCommandCount += 1
+            } else {
+                body = ""
+                if command.hasPrefix("capture-pane ") {
+                    hydrationCommandCount += 1
+                }
+            }
+            let number = nextCommandNumber
+            nextCommandNumber += 1
+            continuation.yield(Data(
+                "%begin \(number) \(number) 1\n\(body)%end \(number) \(number) 1\n".utf8
+            ))
+        }
+
+        if hydrationCommandCount >= 5, !didSendOutput {
+            didSendOutput = true
+            continuation.yield(Data("%output %0 MoriRemote Ghostty transcript\\015\\012$ \n".utf8))
+        }
+    }
+
+    private static func windowRecord(viewport: TmuxControlViewport) -> String {
+        let layoutBody = "\(viewport.columns)x\(viewport.rows),0,0,0"
+        let layout = "\(tmuxLayoutChecksum(layoutBody)),\(layoutBody)"
+        return "$42 @0 1 %0 \(viewport.columns) \(viewport.rows) \(layout) \(layout) probe\n"
+    }
+
+    private static func paneState(viewport: TmuxControlViewport) -> String {
+        let cursorY = viewport.rows - 1
+        return "%0;\(viewport.columns);\(viewport.rows);0;0;1;;;;0;4294967295;4294967295;0;1;0;0;0;0;0;0;0;0;;;0;0;\(cursorY);8,16\n"
+    }
+
+    private static func tmuxLayoutChecksum(_ layout: String) -> String {
+        let checksum = layout.utf8.reduce(UInt16(0)) { checksum, byte in
+            let rotated = (checksum >> 1) | ((checksum & 1) << 15)
+            return rotated &+ UInt16(byte)
+        }
+        return String(format: "%04x", checksum)
     }
 
     private func close() {

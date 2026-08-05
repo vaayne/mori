@@ -214,6 +214,11 @@ struct GhosttyTerminalCoreView: View {
             completeKeyboardTransition(for: .hidden)
         }
         .onDisappear { cancelTransientInput() }
+        .onChange(of: compositionState.inputCoordinator.keyboardMode) { _, mode in
+            // Set before SwiftUI applies keyboard-driven geometry so a reconnect
+            // can retain the last settled grid rather than a transient one.
+            screen.setViewportStabilityHint(stable: mode == .hidden)
+        }
         .onChange(of: isTerminalInputSuspended) { _, isSuspended in
             if isSuspended { cancelTransientInput() }
         }

@@ -7,14 +7,14 @@ public enum MoriRemoteTerminalCloseDisposition: Sendable { case reusable, invali
 
 public struct MoriRemoteTerminalTransport: Sendable {
     public let receivedBytes: AsyncThrowingStream<Data, Error>
-    public let start: @Sendable () async throws -> Void
+    public let start: @Sendable (TmuxControlViewport) async throws -> Void
     public let send: @Sendable (Data) async throws -> Void
     public let close: @Sendable (MoriRemoteTerminalCloseDisposition) async -> Void
     public let isActive: @Sendable () async -> Bool
 
     public init(
         receivedBytes: AsyncThrowingStream<Data, Error>,
-        start: @escaping @Sendable () async throws -> Void,
+        start: @escaping @Sendable (TmuxControlViewport) async throws -> Void,
         send: @escaping @Sendable (Data) async throws -> Void,
         close: @escaping @Sendable (MoriRemoteTerminalCloseDisposition) async -> Void,
         isActive: @escaping @Sendable () async -> Bool
@@ -27,10 +27,15 @@ public struct MoriRemoteTerminalTransport: Sendable {
     }
 }
 
+private enum ClosureTmuxControlTransportError: Error { case missingInitialViewport }
+
 private struct ClosureTmuxControlTransport: TmuxControlTransport, TmuxControlTransportLivenessChecking {
     let base: MoriRemoteTerminalTransport
     var receivedBytes: AsyncThrowingStream<Data, Error> { base.receivedBytes }
-    func start(initialViewport: TmuxControlViewport?) async throws { _ = initialViewport; try await base.start() }
+    func start(initialViewport: TmuxControlViewport?) async throws {
+        guard let initialViewport else { throw ClosureTmuxControlTransportError.missingInitialViewport }
+        try await base.start(initialViewport)
+    }
     func send(_ data: Data) async throws { try await base.send(data) }
     func close(disposition: TmuxControlTransportCloseDisposition) async {
         await base.close(disposition == .reusable ? .reusable : .invalidated)
@@ -128,11 +133,19 @@ public final class MoriRemoteTerminalSession {
     private let runtime: GhosttyKitRuntime
     private let terminalSession: TmuxTerminalSession
     fileprivate let screenAdapter: TmuxTerminalScreenAdapter
+    private var initialViewport: TmuxControlViewport?
+    private var initialViewportWaiter: CheckedContinuation<TmuxControlViewport, Error>?
+    private var initialViewportFailure: Error?
+    private var hasStopped = false
+    private var lastSubmittedClientSize: TmuxSessionController.ClientSize?
+    private var lastStableClientSize: TmuxSessionController.ClientSize?
+    private var viewportIsStable = true
 
     public init(
         transport: MoriRemoteTerminalTransport,
         initialScrollbackLines: Int = 2_000,
-        instanceID: UUID = UUID()
+        instanceID: UUID = UUID(),
+        carriedViewport: TmuxControlViewport? = nil
     ) throws {
         self.instanceID = instanceID
         let runtime = try GhosttyKitRuntime()
@@ -147,10 +160,25 @@ public final class MoriRemoteTerminalSession {
         let screenAdapter = TmuxTerminalScreenAdapter()
         self.terminalSession = terminalSession
         self.screenAdapter = screenAdapter
+        if let carriedViewport {
+            let carriedSize = TmuxSessionController.ClientSize(
+                cols: UInt32(carriedViewport.columns), rows: UInt32(carriedViewport.rows)
+            )
+            initialViewport = carriedViewport
+            lastSubmittedClientSize = carriedSize
+            lastStableClientSize = carriedSize
+        }
         screenAdapter.activate(
             session: terminalSession,
-            initialViewportHandler: { [weak terminalSession] size, scale in
+            initialViewportHandler: { [weak self, weak terminalSession] size, scale in
                 terminalSession?.updateViewportMetrics(size: size, scale: scale)
+                self?.resolveInitialViewport(size: size, scale: scale)
+            },
+            clientSizeHandler: { [weak self] size in
+                self?.submitClientSizeIfChanged(size)
+            },
+            viewportStabilityHandler: { [weak self] stable in
+                self?.setViewportStability(stable)
             }
         )
         terminalSession.onStateChange = { [weak self] state in self?.receive(state) }
@@ -159,7 +187,10 @@ public final class MoriRemoteTerminalSession {
 
     public func start() async throws {
         do {
-            try await terminalSession.connect()
+            guard !hasStopped else { throw InitialViewportError.stopped }
+            let viewport = try await awaitInitialViewport()
+            guard !hasStopped else { throw InitialViewportError.stopped }
+            try await terminalSession.connect(viewport: viewport)
         } catch {
             lastError = error.localizedDescription
             publishConnectionState(.disconnected)
@@ -168,6 +199,8 @@ public final class MoriRemoteTerminalSession {
     }
 
     public func stop() async {
+        hasStopped = true
+        finishInitialViewportWait(with: .failure(InitialViewportError.stopped))
         screenAdapter.invalidate()
         await terminalSession.shutdown()
         publishConnectionState(.disconnected)
@@ -175,6 +208,17 @@ public final class MoriRemoteTerminalSession {
 
     public func setPresentationActive(_ active: Bool) {
         terminalSession.setAppActive(active)
+    }
+
+    /// The grid safe to use before a replacement surface reports live metrics.
+    /// A software-keyboard transition is transient, so retain its last settled
+    /// grid when reconnecting a transport-loss replacement.
+    public var carriedViewport: TmuxControlViewport? {
+        (lastStableClientSize ?? lastSubmittedClientSize).flatMap(TmuxControlViewport.init(clientSize:))
+    }
+
+    func prepareInitialViewport(size: CGSize, scale: CGFloat) {
+        screenAdapter.prepareInitialViewport(size: size, scale: scale)
     }
 
     public func isControlChannelActive() async -> Bool { await terminalSession.controlChannelIsActive() }
@@ -198,6 +242,65 @@ public final class MoriRemoteTerminalSession {
         case .splitVertical: .splitVertical; case .closePane: .closePane; case .closeWindow: .closeWindow
         }
         terminalSession.controller.requestSharedMutation(value)
+    }
+
+    private enum InitialViewportError: Error { case stopped, alreadyWaiting }
+
+    private func resolveInitialViewport(size: CGSize, scale: CGFloat) {
+        guard initialViewport == nil, initialViewportFailure == nil else { return }
+        do {
+            guard let viewport = try runtime.measureTmuxViewport(size: size, scale: scale) else { return }
+            initialViewport = viewport
+            let initialSize = TmuxSessionController.ClientSize(
+                cols: UInt32(viewport.columns), rows: UInt32(viewport.rows)
+            )
+            lastSubmittedClientSize = initialSize
+            lastStableClientSize = initialSize
+            finishInitialViewportWait(with: .success(viewport))
+        } catch {
+            initialViewportFailure = error
+            finishInitialViewportWait(with: .failure(error))
+        }
+    }
+
+    private func awaitInitialViewport() async throws -> TmuxControlViewport {
+        guard !hasStopped else { throw InitialViewportError.stopped }
+        try Task.checkCancellation()
+        if let initialViewport { return initialViewport }
+        if let initialViewportFailure { throw initialViewportFailure }
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                if Task.isCancelled { continuation.resume(throwing: CancellationError()) }
+                else if let initialViewport { continuation.resume(returning: initialViewport) }
+                else if let initialViewportFailure { continuation.resume(throwing: initialViewportFailure) }
+                else if initialViewportWaiter != nil { continuation.resume(throwing: InitialViewportError.alreadyWaiting) }
+                else { initialViewportWaiter = continuation }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.finishInitialViewportWait(with: .failure(CancellationError()))
+            }
+        }
+    }
+
+    private func finishInitialViewportWait(with result: Result<TmuxControlViewport, Error>) {
+        guard let waiter = initialViewportWaiter else { return }
+        initialViewportWaiter = nil
+        waiter.resume(with: result)
+    }
+
+    @discardableResult
+    private func submitClientSizeIfChanged(_ size: TmuxSessionController.ClientSize) -> Bool {
+        guard size != lastSubmittedClientSize else { return false }
+        lastSubmittedClientSize = size
+        if viewportIsStable { lastStableClientSize = size }
+        terminalSession.controller.setClientSize(cols: size.cols, rows: size.rows)
+        return true
+    }
+
+    private func setViewportStability(_ stable: Bool) {
+        viewportIsStable = stable
+        if stable { lastStableClientSize = lastSubmittedClientSize }
     }
 
     private func receive(_ state: TmuxSessionController.SessionState) {

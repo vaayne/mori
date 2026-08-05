@@ -1,15 +1,22 @@
-struct TmuxControlViewport: Equatable, Sendable {
-    static let `default` = TmuxControlViewport(
+public struct TmuxControlViewport: Equatable, Sendable {
+    public static let `default` = TmuxControlViewport(
         columns: 120,
         rows: 40,
         pixelWidth: 0,
         pixelHeight: 0
     )
 
-    let columns: UInt16
-    let rows: UInt16
-    let pixelWidth: UInt32
-    let pixelHeight: UInt32
+    public let columns: UInt16
+    public let rows: UInt16
+    public let pixelWidth: UInt32
+    public let pixelHeight: UInt32
+
+    public init(columns: UInt16, rows: UInt16, pixelWidth: UInt32, pixelHeight: UInt32) {
+        self.columns = columns
+        self.rows = rows
+        self.pixelWidth = pixelWidth
+        self.pixelHeight = pixelHeight
+    }
 }
 
 extension TmuxControlViewport {

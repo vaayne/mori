@@ -159,13 +159,20 @@ final class ActiveWorkspaceRuntime {
     private(set) var status: WorkspaceRuntimeStatus = .connecting
     var onTransportLoss: (@MainActor (UUID) -> Void)?
 
-    init(workspace: SavedWorkspace, settings: RemoteSettings, transport: MoriRemoteTerminalTransport, instanceID: UUID = UUID()) throws {
+    init(
+        workspace: SavedWorkspace,
+        settings: RemoteSettings,
+        transport: MoriRemoteTerminalTransport,
+        instanceID: UUID = UUID(),
+        carriedViewport: TmuxControlViewport? = nil
+    ) throws {
         self.workspace = workspace
         self.instanceID = instanceID
         session = try MoriRemoteTerminalSession(
             transport: transport,
             initialScrollbackLines: settings.effectiveInitialScrollbackLines,
-            instanceID: instanceID
+            instanceID: instanceID,
+            carriedViewport: carriedViewport
         )
         metadataProjector = AgentMetadataProjector(instanceID: instanceID) { [session] in
             let result = await session.queryAgentMetadata()
@@ -189,6 +196,7 @@ final class ActiveWorkspaceRuntime {
         session.setPresentationActive(visible)
     }
     func foregrounded() { metadataProjector.foregrounded() }
+    var carriedViewport: TmuxControlViewport? { session.carriedViewport }
     func confirmTransportAfterForeground() async {
         guard await session.isControlChannelActive() else {
             status = .disconnected(String(localized: "Connection lost."))
@@ -353,7 +361,12 @@ final class RemoteRootModel {
         }
     }
 
-    func connect(workspaceID: UUID, automatic: Bool = false, activating: Bool? = nil) {
+    func connect(
+        workspaceID: UUID,
+        automatic: Bool = false,
+        activating: Bool? = nil,
+        carriedViewport: TmuxControlViewport? = nil
+    ) {
         let shouldActivate = activating ?? (!automatic || activeWorkspaceID == nil || activeWorkspaceID == workspaceID)
         deferredReconnects.remove(workspaceID)
         if let runtime = runtimes[workspaceID] {
@@ -361,9 +374,14 @@ final class RemoteRootModel {
                 // A background loss leaves its one-shot runtime intact until
                 // foregrounding or an explicit tap. Never "activate" a dead
                 // surface and strand the user without a reconnect path.
+                let carriedViewport = automatic ? (carriedViewport ?? runtime.carriedViewport) : nil
                 Task { [weak self] in
                     await self?.disconnect(workspaceID: workspaceID)
-                    self?.connect(workspaceID: workspaceID, automatic: automatic)
+                    self?.connect(
+                        workspaceID: workspaceID,
+                        automatic: automatic,
+                        carriedViewport: carriedViewport
+                    )
                 }
             } else if shouldActivate {
                 activate(workspaceID: workspaceID)
@@ -387,7 +405,8 @@ final class RemoteRootModel {
                     workspace: access.workspace,
                     settings: access.settings,
                     transport: transport.asTerminalTransport(),
-                    instanceID: instanceID
+                    instanceID: instanceID,
+                    carriedViewport: carriedViewport
                 )
                 runtime = created
                 guard self.attemptIsCurrent(attempt, workspaceID: workspaceID) else { await created.stop(); return }
@@ -544,13 +563,19 @@ final class RemoteRootModel {
     private func reconnectAfterTransportLoss(workspaceID: UUID, instanceID: UUID, activating: Bool) {
         Task { [weak self] in
             guard let self, self.runtimes[workspaceID]?.instanceID == instanceID else { return }
+            let carriedViewport = self.runtimes[workspaceID]?.carriedViewport
             await disconnect(workspaceID: workspaceID)
             try? await Task.sleep(for: .seconds(1))
             guard self.sceneIsActive else {
                 self.deferredReconnects.insert(workspaceID)
                 return
             }
-            self.connect(workspaceID: workspaceID, automatic: true, activating: activating)
+            self.connect(
+                workspaceID: workspaceID,
+                automatic: true,
+                activating: activating,
+                carriedViewport: carriedViewport
+            )
         }
     }
 

@@ -85,13 +85,14 @@ import Testing
         let transport = SSHTmuxControlTransport(
             connector: connector, pool: SSHRootPool(), poolKey: try key(), sourceSession: "workspace", runtimeID: id
         )
-        try await transport.start()
+        try await transport.start(initialViewport: .default)
         let commands = root.commands()
         #expect(commands.count == 3)
         #expect(commands[0].contains("'-V'"))
         #expect(commands[1].contains("'new-session'"))
         #expect(commands[2].contains("'-C' 'attach-session'"))
-        #expect(commands[2].contains("'active-pane,ignore-size'"))
+        #expect(commands[2].contains("'active-pane'"))
+        #expect(!commands[2].contains("ignore-size"))
         await transport.close(disposition: .reusable)
         #expect(root.commands().count == 5)
         #expect(root.commands()[3].contains("'display-message'"))
@@ -145,7 +146,7 @@ import Testing
             } catch {}
         }
 
-        try await transport.start()
+        try await transport.start(initialViewport: .default)
         try await eventually { recorder.values() == [expected] }
         await transport.close(disposition: .reusable)
         reader.cancel()
@@ -158,7 +159,7 @@ import Testing
             let transport = SSHTmuxControlTransport(
                 connector: FakeConnector(roots: [root]), pool: SSHRootPool(), poolKey: try key(), sourceSession: "workspace", runtimeID: UUID()
             )
-            await #expect(throws: Error.self) { try await transport.start() }
+            await #expect(throws: Error.self) { try await transport.start(initialViewport: .default) }
             #expect(root.commands().count == 1)
         }
         let root = FakeRoot(plans: [.finished("tmux 3.1\n")])
@@ -166,7 +167,7 @@ import Testing
             connector: FakeConnector(roots: [root]), pool: SSHRootPool(), poolKey: try key(), sourceSession: "workspace", runtimeID: UUID()
         )
         do {
-            try await transport.start()
+            try await transport.start(initialViewport: .default)
             Issue.record("unsupported tmux unexpectedly started")
         } catch let error as TmuxCommandError {
             #expect(error == .unsupportedVersion)
@@ -185,14 +186,14 @@ import Testing
         let failureTransport = SSHTmuxControlTransport(
             connector: FakeConnector(roots: [failedAttach]), pool: SSHRootPool(), poolKey: try key(), sourceSession: "workspace", runtimeID: id
         )
-        await #expect(throws: Error.self) { try await failureTransport.start() }
+        await #expect(throws: Error.self) { try await failureTransport.start(initialViewport: .default) }
         #expect(failedAttach.closed)
 
         let root = FakeRoot(plans: [.finished("tmux 3.2\n"), .finished(""), .open, .finished("wrong\tworkspace\n")])
         let transport = SSHTmuxControlTransport(
             connector: FakeConnector(roots: [root]), pool: SSHRootPool(), poolKey: try key(), sourceSession: "workspace", runtimeID: id
         )
-        try await transport.start()
+        try await transport.start(initialViewport: .default)
         await transport.close(disposition: .reusable)
         #expect(root.commands().count == 4)
         #expect(!root.commands().contains { $0.contains("'kill-session'") })
@@ -206,7 +207,7 @@ import Testing
         let transport = SSHTmuxControlTransport(
             connector: StartupRaceConnector(root: root), pool: SSHRootPool(), poolKey: try key(), sourceSession: "workspace"
         )
-        let start = Task { try await transport.start() }
+        let start = Task { try await transport.start(initialViewport: .default) }
         await child.waitUntilExecuting()
         await transport.close(disposition: .reusable)
         #expect(await child.closeCount() == 1)
@@ -221,7 +222,7 @@ import Testing
         let transport = SSHTmuxControlTransport(
             connector: connector, pool: SSHRootPool(), poolKey: try key(), sourceSession: "workspace"
         )
-        let start = Task { try await transport.start() }
+        let start = Task { try await transport.start(initialViewport: .default) }
         await connector.waitUntilRequested()
         await transport.close(disposition: .reusable)
         await connector.resume()
