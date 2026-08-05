@@ -24,11 +24,7 @@ export default function (pi: any) {
     await setState("working");
   });
 
-  pi.on("agent_end", async () => {
+  pi.on("agent_settled", async () => {
     await setState("waiting");
-  });
-
-  pi.on("tool_execution_start", async () => {
-    await setState("working");
   });
 }

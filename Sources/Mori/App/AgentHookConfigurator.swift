@@ -21,6 +21,12 @@ enum AgentHookConfigurator {
     /// Droid hook event names (same lifecycle events as Claude Code).
     private static let droidEvents = ["UserPromptSubmit", "Stop", "Notification"]
 
+    /// Removed in 30dca6a; migrate existing Mori registrations without touching other hooks.
+    private static let obsoleteToolUseEvent = "PreToolUse"
+
+    /// Codex's low-noise lifecycle events. Tool-level events intentionally remain unregistered.
+    private static let codexEvents = ["UserPromptSubmit", "Stop"]
+
     private static let home = FileManager.default.homeDirectoryForCurrentUser
 
     /// Mori config directory: $XDG_CONFIG_HOME/mori or ~/.config/mori
@@ -41,6 +47,22 @@ enum AgentHookConfigurator {
 
     private static var codexHookPath: String {
         hooksDir.appendingPathComponent("mori-codex-hook.sh").path
+    }
+
+    private static var codexHooksURL: URL {
+        home.appendingPathComponent(".codex/hooks.json")
+    }
+
+    private static var codexConfigURL: URL {
+        home.appendingPathComponent(".codex/config.toml")
+    }
+
+    /// The default path also recognizes installations created before an XDG override.
+    private static var knownCodexHookPaths: Set<String> {
+        [
+            codexHookPath,
+            home.appendingPathComponent(".config/mori/hooks/mori-codex-hook.sh").path,
+        ]
     }
 
     private static var droidHookPath: String {
@@ -93,11 +115,9 @@ enum AgentHookConfigurator {
         return hookEntryExists(in: hooks, event: "Stop", command: "\(claudeHookPath) Stop")
     }
 
-    /// Check if Codex CLI hook is installed in ~/.codex/config.toml.
+    /// Check modern hooks.json and the legacy top-level TOML notify registration.
     static func isCodexHookInstalled() -> Bool {
-        let configURL = home.appendingPathComponent(".codex/config.toml")
-        guard let content = try? String(contentsOf: configURL, encoding: .utf8) else { return false }
-        return content.contains(codexHookPath)
+        isModernCodexHookInstalled() || legacyCodexHookInstalled()
     }
 
     /// Check if Droid hooks are installed in ~/.factory/settings.json.
@@ -137,7 +157,10 @@ enum AgentHookConfigurator {
         installCommonScript()
         guard let source = loadBundledResource("mori-codex-hook", ext: "sh"),
               let path = installScript(name: "mori-codex-hook", source: source) else { return }
-        configureCodexSettings(hookPath: path)
+        // Establish the replacement first. Cross-file migration cannot be atomic, so a
+        // temporary duplicate is safer than dropping state reporting on a failed write.
+        guard configureCodexHooks(hookPath: path) else { return }
+        _ = removeLegacyCodexHookRegistration()
     }
 
     /// Install Droid hook and register in ~/.factory/settings.json.
@@ -166,9 +189,8 @@ enum AgentHookConfigurator {
            var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            var hooks = json["hooks"] as? [String: Any] {
             var changed = false
-            for event in claudeEvents {
-                let command = "\(claudeHookPath) \(event)"
-                if removeHookEntry(from: &hooks, event: event, command: command) {
+            for event in claudeEvents + [obsoleteToolUseEvent] {
+                if removeHookCommands(from: &hooks, event: event, commands: ["\(claudeHookPath) \(event)"]) {
                     changed = true
                 }
             }
@@ -189,28 +211,9 @@ enum AgentHookConfigurator {
         try? FileManager.default.removeItem(atPath: claudeHookPath)
     }
 
-    /// Remove Codex CLI hook from ~/.codex/config.toml and delete hook script.
+    /// Remove modern and legacy Codex registrations, then delete the dedicated script.
     static func uninstallCodexHook() {
-        let configURL = home.appendingPathComponent(".codex/config.toml")
-        if let content = try? String(contentsOf: configURL, encoding: .utf8),
-           content.contains(codexHookPath) {
-            var lines = content.components(separatedBy: "\n")
-            if let idx = lines.firstIndex(where: { $0.hasPrefix("notify") && $0.contains(codexHookPath) }) {
-                var entries = parseTomlStringArray(lines[idx])
-                entries.removeAll { $0 == codexHookPath }
-                if entries.isEmpty {
-                    // Remove the notify line and the comment above it
-                    lines.remove(at: idx)
-                    if idx > 0 && lines[idx - 1] == "# Mori agent status hook" {
-                        lines.remove(at: idx - 1)
-                    }
-                } else {
-                    lines[idx] = "notify = [\(entries.map { "\"\($0)\"" }.joined(separator: ", "))]"
-                }
-            }
-            let cleaned = lines.joined(separator: "\n")
-            try? cleaned.write(to: configURL, atomically: true, encoding: .utf8)
-        }
+        guard removeModernCodexHookRegistration(), removeLegacyCodexHookRegistration() else { return }
         try? FileManager.default.removeItem(atPath: codexHookPath)
     }
 
@@ -220,9 +223,8 @@ enum AgentHookConfigurator {
            var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            var hooks = json["hooks"] as? [String: Any] {
             var changed = false
-            for event in droidEvents {
-                let command = "\(droidHookPath) \(event)"
-                if removeHookEntry(from: &hooks, event: event, command: command) {
+            for event in droidEvents + [obsoleteToolUseEvent] {
+                if removeHookCommands(from: &hooks, event: event, commands: ["\(droidHookPath) \(event)"]) {
                     changed = true
                 }
             }
@@ -312,7 +314,11 @@ enum AgentHookConfigurator {
         }
 
         var hooks = settings["hooks"] as? [String: Any] ?? [:]
-        var changed = false
+        var changed = removeHookCommands(
+            from: &hooks,
+            event: obsoleteToolUseEvent,
+            commands: ["\(hookPath) \(obsoleteToolUseEvent)"]
+        )
 
         for event in claudeEvents {
             let command = "\(hookPath) \(event)"
@@ -334,39 +340,127 @@ enum AgentHookConfigurator {
 
     // MARK: - Codex CLI
 
-    private static func configureCodexSettings(hookPath: String) {
-        let configURL = home.appendingPathComponent(".codex/config.toml")
-
-        let existing = (try? String(contentsOf: configURL, encoding: .utf8)) ?? ""
-
-        if existing.contains(hookPath) { return }
-
-        try? FileManager.default.createDirectory(
-            at: configURL.deletingLastPathComponent(), withIntermediateDirectories: true
-        )
-
-        var lines = existing.components(separatedBy: "\n")
-        if let idx = lines.firstIndex(where: { $0.hasPrefix("notify") && $0.contains("[") }) {
-            // Append to existing notify array, preserving other entries
-            let existingLine = lines[idx]
-            let entries = parseTomlStringArray(existingLine)
-            if !entries.contains(hookPath) {
-                var updated = entries
-                updated.append(hookPath)
-                lines[idx] = "notify = [\(updated.map { "\"\($0)\"" }.joined(separator: ", "))]"
-            }
-        } else {
-            // Insert before the first [section] header to keep it top-level
-            let notifyLines = ["# Mori agent status hook", "notify = [\"\(hookPath)\"]", ""]
-            if let sectionIdx = lines.firstIndex(where: { $0.hasPrefix("[") }) {
-                lines.insert(contentsOf: notifyLines, at: sectionIdx)
-            } else {
-                if !lines.last!.isEmpty { lines.append("") }
-                lines.append(contentsOf: notifyLines)
+    private static func isModernCodexHookInstalled() -> Bool {
+        guard let data = try? Data(contentsOf: codexHooksURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let hooks = json["hooks"] as? [String: Any] else { return false }
+        return codexEvents.contains { event in
+            knownCodexHookPaths.contains { path in
+                hookEntryExists(in: hooks, event: event, command: "\(path) \(event)")
             }
         }
-        let config = lines.joined(separator: "\n")
-        try? config.write(to: configURL, atomically: true, encoding: .utf8)
+    }
+
+    private static func legacyCodexHookInstalled() -> Bool {
+        guard let content = try? String(contentsOf: codexConfigURL, encoding: .utf8) else { return false }
+        return topLevelNotifyEntries(in: content).contains { entry in
+            knownCodexHookPaths.contains(entry) || embeddedNotifyContainsMoriHook(entry)
+        }
+    }
+
+    /// Upsert only Mori's two commands, retaining every other JSON field and hook.
+    private static func configureCodexHooks(hookPath: String) -> Bool {
+        var settings: [String: Any] = [:]
+        if FileManager.default.fileExists(atPath: codexHooksURL.path) {
+            guard let data = try? Data(contentsOf: codexHooksURL),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
+            settings = json
+        } else {
+            try? FileManager.default.createDirectory(
+                at: codexHooksURL.deletingLastPathComponent(), withIntermediateDirectories: true
+            )
+        }
+
+        var hooks: [String: Any]
+        if let existingHooks = settings["hooks"] {
+            guard let parsedHooks = existingHooks as? [String: Any] else { return false }
+            hooks = parsedHooks
+        } else {
+            hooks = [:]
+        }
+
+        var changed = false
+        for event in codexEvents {
+            let command = "\(hookPath) \(event)"
+            if !hookEntryExists(in: hooks, event: event, command: command) {
+                var eventHooks: [[String: Any]]
+                if let existingEventHooks = hooks[event] {
+                    guard let parsedEventHooks = existingEventHooks as? [[String: Any]] else { return false }
+                    eventHooks = parsedEventHooks
+                } else {
+                    eventHooks = []
+                }
+                eventHooks.append(["hooks": [["type": "command", "command": command]]])
+                hooks[event] = eventHooks
+                changed = true
+            }
+        }
+
+        guard changed else { return true }
+        settings["hooks"] = hooks
+        return writeJSON(settings, to: codexHooksURL)
+    }
+
+    private static func removeModernCodexHookRegistration() -> Bool {
+        guard FileManager.default.fileExists(atPath: codexHooksURL.path) else { return true }
+        guard let data = try? Data(contentsOf: codexHooksURL),
+              var settings = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
+        guard var hooks = settings["hooks"] as? [String: Any] else { return settings["hooks"] == nil }
+
+        var changed = false
+        for event in codexEvents {
+            if removeHookCommands(from: &hooks, event: event, commands: knownCodexHookPaths.map { "\($0) \(event)" }) {
+                changed = true
+            }
+        }
+        guard changed else { return true }
+        if hooks.isEmpty {
+            settings.removeValue(forKey: "hooks")
+        } else {
+            settings["hooks"] = hooks
+        }
+        return writeJSON(settings, to: codexHooksURL)
+    }
+
+    /// Remove only Mori paths from the legacy *top-level* `notify` array.
+    /// A conservative parser means unsupported TOML is left untouched rather than rewritten.
+    private static func removeLegacyCodexHookRegistration() -> Bool {
+        guard let content = try? String(contentsOf: codexConfigURL, encoding: .utf8) else { return true }
+        var lines = content.components(separatedBy: "\n")
+        var inSection = false
+        var changed = false
+
+        for index in lines.indices {
+            let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("[") { inSection = true }
+            guard !inSection, isTopLevelNotifyLine(trimmed), let entries = parseTomlStringArray(lines[index]) else { continue }
+
+            let updated = entries.compactMap { entry -> String? in
+                if knownCodexHookPaths.contains(entry) { return nil }
+                guard let payload = entry.data(using: .utf8),
+                      var nested = try? JSONSerialization.jsonObject(with: payload) as? [String] else { return entry }
+                let originalCount = nested.count
+                nested.removeAll { knownCodexHookPaths.contains($0) }
+                guard nested.count != originalCount,
+                      let encoded = try? JSONSerialization.data(withJSONObject: nested),
+                      let value = String(data: encoded, encoding: .utf8) else { return entry }
+                return value
+            }
+            guard updated.count != entries.count || updated != entries else { continue }
+            if updated.isEmpty {
+                lines.remove(at: index)
+                if index > 0,
+                   lines[index - 1].trimmingCharacters(in: .whitespaces) == "# Mori agent status hook" {
+                    lines.remove(at: index - 1)
+                }
+            } else {
+                guard let encoded = encodeTomlStringArray(updated) else { return false }
+                lines[index] = "notify = \(encoded)"
+            }
+            changed = true
+            break // TOML permits one top-level `notify` key.
+        }
+        return !changed || writeText(lines.joined(separator: "\n"), to: codexConfigURL)
     }
 
     // MARK: - Droid
@@ -379,7 +473,11 @@ enum AgentHookConfigurator {
         }
 
         var hooks = settings["hooks"] as? [String: Any] ?? [:]
-        var changed = false
+        var changed = removeHookCommands(
+            from: &hooks,
+            event: obsoleteToolUseEvent,
+            commands: ["\(hookPath) \(obsoleteToolUseEvent)"]
+        )
 
         for event in droidEvents {
             let command = "\(hookPath) \(event)"
@@ -459,40 +557,95 @@ enum AgentHookConfigurator {
     }
 
     @discardableResult
-    private static func removeHookEntry(
-        from hooks: inout [String: Any], event: String, command: String
-    ) -> Bool {
-        guard var entries = hooks[event] as? [[String: Any]] else { return false }
-        let originalCount = entries.count
-        entries.removeAll { entry in
-            guard let hookList = entry["hooks"] as? [[String: Any]] else { return false }
-            return hookList.contains { $0["command"] as? String == command }
-        }
-        guard entries.count != originalCount else { return false }
-        hooks[event] = entries
-        return true
-    }
-
-    private static func writeJSON(_ object: [String: Any], to url: URL) {
+    private static func writeJSON(_ object: [String: Any], to url: URL) -> Bool {
         guard let data = try? JSONSerialization.data(
             withJSONObject: object, options: [.prettyPrinted, .sortedKeys]
-        ) else { return }
+        ) else { return false }
         // `.atomic` uses rename(), which replaces a symlink target with a
         // regular file instead of following it. Resolve first so users whose
         // settings.json is a symlink into a dotfiles repo keep the link intact.
         let resolved = url.resolvingSymlinksInPath()
-        try? data.write(to: resolved, options: .atomic)
+        do {
+            try data.write(to: resolved, options: .atomic)
+            return true
+        } catch {
+            return false
+        }
     }
 
-    /// Parse a TOML string array like `notify = ["/a", "/b"]` into `["/a", "/b"]`.
-    private static func parseTomlStringArray(_ line: String) -> [String] {
-        guard let open = line.firstIndex(of: "["),
-              let close = line.lastIndex(of: "]") else { return [] }
-        let inner = line[line.index(after: open)..<close]
-        return inner.split(separator: ",").compactMap { segment in
-            let trimmed = segment.trimmingCharacters(in: .whitespaces)
-            guard trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") else { return nil }
-            return String(trimmed.dropFirst().dropLast())
+    private static func writeText(_ text: String, to url: URL) -> Bool {
+        do {
+            try text.write(to: url.resolvingSymlinksInPath(), atomically: true, encoding: .utf8)
+            return true
+        } catch {
+            return false
         }
+    }
+
+    private static func removeHookCommands(
+        from hooks: inout [String: Any], event: String, commands: [String]
+    ) -> Bool {
+        guard var entries = hooks[event] as? [[String: Any]] else { return false }
+        var changed = false
+        for index in entries.indices.reversed() {
+            guard let hookList = entries[index]["hooks"] as? [[String: Any]] else { continue }
+            let retained = hookList.filter { hook in
+                guard let command = hook["command"] as? String else { return true }
+                return !commands.contains(command)
+            }
+            guard retained.count != hookList.count else { continue }
+            changed = true
+            if retained.isEmpty {
+                entries.remove(at: index)
+            } else {
+                entries[index]["hooks"] = retained
+            }
+        }
+        guard changed else { return false }
+        if entries.isEmpty {
+            hooks.removeValue(forKey: event)
+        } else {
+            hooks[event] = entries
+        }
+        return true
+    }
+
+    private static func topLevelNotifyEntries(in content: String) -> [String] {
+        var inSection = false
+        for line in content.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("[") { inSection = true }
+            guard !inSection, isTopLevelNotifyLine(trimmed), let entries = parseTomlStringArray(line) else { continue }
+            return entries
+        }
+        return []
+    }
+
+    private static func embeddedNotifyContainsMoriHook(_ entry: String) -> Bool {
+        guard let payload = entry.data(using: .utf8),
+              let nested = try? JSONSerialization.jsonObject(with: payload) as? [String] else { return false }
+        return nested.contains { knownCodexHookPaths.contains($0) }
+    }
+
+    private static func isTopLevelNotifyLine(_ trimmed: String) -> Bool {
+        guard let equals = trimmed.firstIndex(of: "=") else { return false }
+        return trimmed[..<equals].trimmingCharacters(in: .whitespaces) == "notify"
+    }
+
+    /// Parse a single-line TOML string array without rewriting unsupported TOML values.
+    private static func parseTomlStringArray(_ line: String) -> [String]? {
+        guard let open = line.firstIndex(of: "["),
+              let close = line.lastIndex(of: "]"), open < close else { return nil }
+        let array = String(line[open...close])
+        guard let data = array.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String]
+    }
+
+    /// A JSON array of strings is also valid TOML; reject values we cannot encode safely.
+    private static func encodeTomlStringArray(_ values: [String]) -> String? {
+        guard let data = try? JSONSerialization.data(
+            withJSONObject: values, options: [.withoutEscapingSlashes]
+        ) else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 }

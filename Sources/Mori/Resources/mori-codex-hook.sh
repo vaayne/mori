@@ -9,23 +9,26 @@ AGENT_NAME="codex"
 # Bail if not inside tmux
 [ -z "${TMUX:-}" ] && exit 0
 
-# Determine hook type.
-# Legacy notify: JSON payload as first arg with "type" field, e.g. {"type":"agent-turn-complete",...}
-# Modern codex_hooks: first arg is the event name (UserPromptSubmit, Stop, etc.)
-# No args: treat as done.
+# Determine hook type. Modern hooks pass an explicit event argument. Legacy `notify`
+# passed a JSON payload as arg 1, so retain its completion mapping for Codex processes
+# that were already running when Mori migrated their registration.
 RAW_ARG="${1:-}"
 
-if [ -z "$RAW_ARG" ]; then
-    HOOK_TYPE="Stop"
-elif echo "$RAW_ARG" | grep -q '^{'; then
-    # JSON arg — extract "type" field
-    HOOK_TYPE="$(echo "$RAW_ARG" | sed -n 's/.*"type" *: *"\([^"]*\)".*/\1/p')"
-    [ -z "$HOOK_TYPE" ] && HOOK_TYPE="Stop"
-else
-    HOOK_TYPE="$RAW_ARG"
-fi
+case "$RAW_ARG" in
+    UserPromptSubmit|Stop)
+        HOOK_TYPE="$RAW_ARG"
+        ;;
+    \{*)
+        HOOK_TYPE="$(printf '%s' "$RAW_ARG" | sed -n 's/.*"type"[[:space:]]*:[[:space:]]*"\([^\"]*\)".*/\1/p')"
+        ;;
+    *)
+        # Empty, malformed, and unknown events must not manufacture a waiting state.
+        exit 0
+        ;;
+esac
 
-# Drain stdin if present (modern hooks send JSON on stdin)
+# Modern Codex hooks send their payload on stdin. Consume it even though the
+# explicit event argument is sufficient, so the producer never blocks on a full pipe.
 cat > /dev/null 2>&1 || true
 
 # shellcheck source=mori-hook-common.sh
@@ -36,7 +39,7 @@ case "$HOOK_TYPE" in
     UserPromptSubmit)
         set_state "working"
         ;;
-    Stop|Notification|agent-turn-complete)
+    Stop|agent-turn-complete)
         set_state "waiting"
         ;;
     *)
