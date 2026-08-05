@@ -7,7 +7,7 @@
 "Agent Dashboard (⇧⌘A)" = "代理面板 (⇧⌘A)";
 "Settings (⌘,)" = "设置 (⌘,)";
 "Adds low-noise prompt and stop hooks to ~/.codex/hooks.json." = "向 ~/.codex/hooks.json 添加低噪声的提示提交和停止钩子。";
-"Adds hooks to ~/.claude/settings.json for prompt submit, tool use, stop, and notification events." = "向 ~/.claude/settings.json 添加钩子，用于提示提交、工具使用、停止和通知事件。";
+"Adds low-noise prompt submit, stop, and notification hooks to ~/.claude/settings.json." = "向 ~/.claude/settings.json 添加低噪声的提示提交、停止和通知钩子。";
 "Agent" = "代理";
 "Attention" = "待处理";
 "Agent Hooks" = "代理钩子";
@@ -48,7 +48,7 @@
 "Directional Pane Nav" = "方向键面板导航";
 "Distribute extra padding evenly around the terminal content to center it within the window." = "在终端内容周围均匀分配额外边距，使其在窗口中居中。";
 "Droid" = "Droid";
-"Adds hooks to ~/.factory/settings.json for prompt submit, tool use, stop, and notification events." = "向 ~/.factory/settings.json 添加钩子，用于提示提交、工具使用、停止和通知事件。";
+"Adds low-noise prompt submit, stop, and notification hooks to ~/.factory/settings.json." = "向 ~/.factory/settings.json 添加低噪声的提示提交、停止和通知钩子。";
 "Equalize Panes" = "均分面板";
 "Error" = "错误";
 "Expand Projects" = "展开项目列表";
@@ -94,7 +94,7 @@
 "Previous Pane" = "上一个面板";
 "Previous Tab" = "上一个标签页";
 "Previous Worktree" = "上一个工作区";
-"Registers an extension in Pi's settings.json for agent start, end, and tool execution events." = "在 Pi 的 settings.json 中注册扩展，用于代理启动、结束和工具执行事件。";
+"Registers an extension in Pi's settings.json for agent start and settled events." = "在 Pi 的 settings.json 中注册扩展，用于代理启动和完全静止事件。";
 "Remove Project…" = "移除项目…";
 "Import Existing Worktrees" = "导入已有 Worktree";
 "Remove Worktree…" = "移除工作树…";

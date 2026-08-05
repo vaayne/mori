@@ -21,6 +21,9 @@ enum AgentHookConfigurator {
     /// Droid hook event names (same lifecycle events as Claude Code).
     private static let droidEvents = ["UserPromptSubmit", "Stop", "Notification"]
 
+    /// Removed in 30dca6a; migrate existing Mori registrations without touching other hooks.
+    private static let obsoleteToolUseEvent = "PreToolUse"
+
     /// Codex's low-noise lifecycle events. Tool-level events intentionally remain unregistered.
     private static let codexEvents = ["UserPromptSubmit", "Stop"]
 
@@ -186,9 +189,8 @@ enum AgentHookConfigurator {
            var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            var hooks = json["hooks"] as? [String: Any] {
             var changed = false
-            for event in claudeEvents {
-                let command = "\(claudeHookPath) \(event)"
-                if removeHookEntry(from: &hooks, event: event, command: command) {
+            for event in claudeEvents + [obsoleteToolUseEvent] {
+                if removeHookCommands(from: &hooks, event: event, commands: ["\(claudeHookPath) \(event)"]) {
                     changed = true
                 }
             }
@@ -221,9 +223,8 @@ enum AgentHookConfigurator {
            var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            var hooks = json["hooks"] as? [String: Any] {
             var changed = false
-            for event in droidEvents {
-                let command = "\(droidHookPath) \(event)"
-                if removeHookEntry(from: &hooks, event: event, command: command) {
+            for event in droidEvents + [obsoleteToolUseEvent] {
+                if removeHookCommands(from: &hooks, event: event, commands: ["\(droidHookPath) \(event)"]) {
                     changed = true
                 }
             }
@@ -313,7 +314,11 @@ enum AgentHookConfigurator {
         }
 
         var hooks = settings["hooks"] as? [String: Any] ?? [:]
-        var changed = false
+        var changed = removeHookCommands(
+            from: &hooks,
+            event: obsoleteToolUseEvent,
+            commands: ["\(hookPath) \(obsoleteToolUseEvent)"]
+        )
 
         for event in claudeEvents {
             let command = "\(hookPath) \(event)"
@@ -468,7 +473,11 @@ enum AgentHookConfigurator {
         }
 
         var hooks = settings["hooks"] as? [String: Any] ?? [:]
-        var changed = false
+        var changed = removeHookCommands(
+            from: &hooks,
+            event: obsoleteToolUseEvent,
+            commands: ["\(hookPath) \(obsoleteToolUseEvent)"]
+        )
 
         for event in droidEvents {
             let command = "\(hookPath) \(event)"
@@ -545,21 +554,6 @@ enum AgentHookConfigurator {
             for hook in hookList where hook["command"] as? String == command { return true }
         }
         return false
-    }
-
-    @discardableResult
-    private static func removeHookEntry(
-        from hooks: inout [String: Any], event: String, command: String
-    ) -> Bool {
-        guard var entries = hooks[event] as? [[String: Any]] else { return false }
-        let originalCount = entries.count
-        entries.removeAll { entry in
-            guard let hookList = entry["hooks"] as? [[String: Any]] else { return false }
-            return hookList.contains { $0["command"] as? String == command }
-        }
-        guard entries.count != originalCount else { return false }
-        hooks[event] = entries
-        return true
     }
 
     @discardableResult

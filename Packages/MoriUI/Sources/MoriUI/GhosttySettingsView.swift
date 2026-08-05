@@ -1804,7 +1804,7 @@ private struct AgentHookSettingsContent: View {
         agentCard(
             name: .localized("Claude Code"),
             icon: "terminal",
-            description: .localized("Adds hooks to ~/.claude/settings.json for prompt submit, tool use, stop, and notification events."),
+            description: .localized("Adds low-noise prompt submit, stop, and notification hooks to ~/.claude/settings.json."),
             isEnabled: $model.claudeEnabled
         )
 
@@ -1818,14 +1818,14 @@ private struct AgentHookSettingsContent: View {
         agentCard(
             name: .localized("Pi"),
             icon: "sparkle",
-            description: .localized("Registers an extension in Pi's settings.json for agent start, end, and tool execution events."),
+            description: .localized("Registers an extension in Pi's settings.json for agent start and settled events."),
             isEnabled: $model.piEnabled
         )
 
         agentCard(
             name: .localized("Droid"),
             icon: "cpu",
-            description: .localized("Adds hooks to ~/.factory/settings.json for prompt submit, tool use, stop, and notification events."),
+            description: .localized("Adds low-noise prompt submit, stop, and notification hooks to ~/.factory/settings.json."),
             isEnabled: $model.droidEnabled
         )
     }

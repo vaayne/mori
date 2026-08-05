@@ -22,6 +22,8 @@ During Mori's 5-second polling cycle, it reads these options directly from tmux 
    - `Notification` (completion notification)
 4. On future launches, Mori re-copies the hook script from its bundled resources if the installed file is stale or missing.
 
+During installation and refresh, Claude Code and Droid remove only their obsolete Mori `PreToolUse` command left by older releases, preserving other hooks in the same configuration.
+
 Run Claude Code in a tmux window. Tab renames to `claude` while working (⚡ badge shown in sidebar), then shows waiting badge (❗) when the turn completes. Click the waiting badge to reply inline.
 
 ### Codex CLI
@@ -83,8 +85,8 @@ The script also accepts legacy `notify` JSON (`{"type":"agent-turn-complete",...
 
 ### mori-pi-extension.ts (Pi)
 TypeScript extension listening to Pi events:
-- `agent_start`, `tool_execution_start` → state: `"working"`
-- `agent_end` → state: `"waiting"`
+- `agent_start` → state: `"working"`
+- `agent_settled` → state: `"waiting"` after all automatic retries, compaction retries, and queued follow-ups finish
 
 ## Disabling Hooks
 

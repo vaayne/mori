@@ -22,6 +22,8 @@ Mori 可与编程代理（Claude Code、Codex CLI、Pi 和 Droid）集成，在�
    - `Notification`（完成通知）
 4. 后续每次启动 Mori 时，如果 `~/.config/mori/` 里的 hook 脚本缺失或已过期，都会从当前 bundle 重新复制。
 
+安装和刷新时，Claude Code 和 Droid 还会仅移除旧版遗留的 Mori `PreToolUse` 命令；同一配置中的其他钩子会被保留。
+
 在 tmux 窗口中运行 Claude Code。运行期间标签页会重命名为 `claude`（侧边栏显示 ⚡ 徽章），一轮完成后显示等待徽章（❗）。
 
 ### Codex CLI
@@ -83,8 +85,8 @@ Mori 不会改动无关的 Codex 钩子。刷新时，`~/.codex/config.toml` 中
 
 ### mori-pi-extension.ts（Pi）
 监听 Pi 事件的 TypeScript 扩展：
-- `agent_start`、`tool_execution_start` → 状态：`"working"`
-- `agent_end` → 状态：`"waiting"`
+- `agent_start` → 状态：`"working"`
+- `agent_settled` → 在全部自动重试、压缩重试和排队后续任务完成后变为 `"waiting"`
 
 ## 禁用钩子
 
