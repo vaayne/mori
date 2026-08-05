@@ -353,28 +353,6 @@ private struct RemoteTerminalDetailView: View {
                 .background(Color.black)
         }
         .background(Color.black.ignoresSafeArea())
-        .overlay(alignment: .topTrailing) {
-            let summary = root.agentAttentionSummary(for: runtime.workspace.serverID)
-            if summary.total > 0 {
-                Button {
-                    root.discoverSessions(serverID: runtime.workspace.serverID)
-                    navigatorScope = .agents
-                    showsNavigator = true
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "bell.badge.fill")
-                        Text(summary.total, format: .number)
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(attentionTint(for: summary))
-                .padding(12)
-                .accessibilityLabel(String(localized: "Agents"))
-            }
-        }
         .sheet(isPresented: $showsNavigator) {
             RemoteNavigatorView(root: root, runtime: runtime, initialScope: navigatorScope) {
                 showsNavigator = false
@@ -404,12 +382,6 @@ private struct RemoteTerminalDetailView: View {
 
     private var sharedMutationConfirmationBinding: Binding<Bool> {
         .init(get: { pendingSharedMutation != nil }, set: { if !$0 { pendingSharedMutation = nil } })
-    }
-
-    private func attentionTint(for summary: AgentAttentionSummary) -> Color {
-        if summary.waiting > 0 { return .orange }
-        if summary.working > 0 { return .mint }
-        return .green
     }
 
 }
@@ -730,8 +702,7 @@ private extension RemoteNavigatorView.Scope {
     init(_ scope: MoriRemoteTerminalNavigatorScope) {
         self = switch scope {
         case .sessions: .sessions
-        case .windows: .windows
-        case .panes: .panes
+        case .agents: .agents
         }
     }
 }

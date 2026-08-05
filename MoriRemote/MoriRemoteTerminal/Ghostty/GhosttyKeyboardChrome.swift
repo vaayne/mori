@@ -84,13 +84,6 @@ struct GhosttyRenderedBottomChromeHeightPreferenceKey: PreferenceKey {
     }
 }
 
-struct GhosttyTerminalChromeTopologyProjection: Equatable {
-    let selectedWindowIndex: Int?
-    let windowCount: Int
-    let selectedPaneIndex: Int?
-    let paneCount: Int
-}
-
 struct GhosttyTerminalChromeStyle {
     let accent: Color
     let accentForeground: Color
@@ -116,12 +109,10 @@ extension EnvironmentValues {
     }
 }
 
-/// Testable action boundary. The navigator scopes remain deliberately distinct
-/// even though Mori currently presents them in one existing Navigator sheet.
+/// Testable action boundary for the terminal's persistent controls.
 struct GhosttyKeyboardChromeActions {
     let showSessions: () -> Void
-    let showWindows: () -> Void
-    let showPanes: () -> Void
+    let showAgents: () -> Void
     let showLibrary: () -> Void
     let toggleKeyboard: () -> Void
     let toggleControl: () -> Void
@@ -135,11 +126,8 @@ struct GhosttyKeyboardChromeActions {
         case .sessions:
             showSessions()
             return true
-        case .windows:
-            showWindows()
-            return true
-        case .panes:
-            showPanes()
+        case .agents:
+            showAgents()
             return true
         case .library:
             showLibrary()
@@ -232,7 +220,7 @@ struct GhosttyKeyboardChromeActions {
     }
 
     enum Action {
-        case sessions, windows, panes, library, keyboard, control, alt
+        case sessions, agents, library, keyboard, control, alt
         case escape, tab, shiftTab, arrowLeft, arrowUp, arrowDown, arrowRight
         case home, end, pageUp, pageDown, questionMark, slash
         case ctrlC, ctrlD, ctrlZ, ctrlL, ctrlA, ctrlE, ctrlR, ctrlU, ctrlK, ctrlW, altB, altF
@@ -256,7 +244,6 @@ struct GhosttyKeyboardChrome: View {
     let isCompact: Bool
     let isControlArmed: Bool
     let isAltArmed: Bool
-    let topology: GhosttyTerminalChromeTopologyProjection
     let imageUploader: MoriRemoteTerminalImageUploader?
     let insertImagePath: (String) -> Bool
     let onImagePresentationChange: (Bool) -> Void
@@ -346,22 +333,12 @@ struct GhosttyKeyboardChrome: View {
                     _ = actions.perform(.sessions)
                 }
                 dock(
-                    "rectangle.on.rectangle",
-                    id: "terminal.windows",
-                    label: windowLabel,
-                    badge: badge(topology.selectedWindowIndex, topology.windowCount),
-                    enabled: isEnabled && topology.windowCount > 0
+                    "person.2",
+                    id: "terminal.agents",
+                    label: String(localized: "Agents"),
+                    enabled: true
                 ) {
-                    _ = actions.perform(.windows)
-                }
-                dock(
-                    "square.split.2x1",
-                    id: "terminal.panes",
-                    label: paneLabel,
-                    badge: badge(topology.selectedPaneIndex, topology.paneCount),
-                    enabled: isEnabled && topology.paneCount > 0
-                ) {
-                    _ = actions.perform(.panes)
+                    _ = actions.perform(.agents)
                 }
             }
         }
@@ -455,33 +432,6 @@ struct GhosttyKeyboardChrome: View {
             : GhosttyKeyboardChromeSizing.dockButtonWidth
     }
 
-    private var windowLabel: String {
-        topology.windowCount == 0
-            ? String(localized: "Windows")
-            : String(
-                format: String(localized: "Window %lld of %lld"),
-                displayIndex(topology.selectedWindowIndex, topology.windowCount),
-                topology.windowCount
-            )
-    }
-
-    private var paneLabel: String {
-        topology.paneCount == 0
-            ? String(localized: "Panes")
-            : String(
-                format: String(localized: "Pane %lld of %lld"),
-                displayIndex(topology.selectedPaneIndex, topology.paneCount),
-                topology.paneCount
-            )
-    }
-
-    private func badge(_ index: Int?, _ count: Int) -> String? {
-        count > 1 ? "\(displayIndex(index, count))" : nil
-    }
-
-    private func displayIndex(_ index: Int?, _ count: Int) -> Int {
-        min(max((index ?? 0) + 1, 1), max(count, 1))
-    }
 }
 
 private struct GhosttyKeyboardChromeDockButton: View {

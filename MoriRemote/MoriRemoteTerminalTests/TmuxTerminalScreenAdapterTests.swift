@@ -5,7 +5,7 @@ import XCTest
 
 @MainActor
 final class TmuxTerminalScreenAdapterTests: XCTestCase {
-    func testTopologyProjectionReflectsEmittedTopologyImmediately() async throws {
+    func testViewportProjectionReflectsEmittedTopologyImmediately() async throws {
         let runtime = try GhosttyKitRuntime()
         let session = makeSession(runtime: runtime)
         let adapter = TmuxTerminalScreenAdapter()
@@ -26,10 +26,6 @@ final class TmuxTerminalScreenAdapterTests: XCTestCase {
 
         let first = adapter.terminalViewportPresentationProjection
         XCTAssertEqual(first.windowCount, 2)
-        XCTAssertEqual(
-            adapter.terminalChromeTopologyProjection,
-            .init(selectedWindowIndex: 0, windowCount: 2, selectedPaneIndex: 0, paneCount: 2)
-        )
 
         session.handleTopology(.init(
             sessionName: "fresh-test",
@@ -40,10 +36,6 @@ final class TmuxTerminalScreenAdapterTests: XCTestCase {
 
         let second = adapter.terminalViewportPresentationProjection
         XCTAssertEqual(second.windowCount, 1)
-        XCTAssertEqual(
-            adapter.terminalChromeTopologyProjection,
-            .init(selectedWindowIndex: 0, windowCount: 1, selectedPaneIndex: 0, paneCount: 1)
-        )
 
         await session.shutdown()
     }
