@@ -630,7 +630,10 @@ final class TmuxSessionController: @unchecked Sendable {
     /// leaves a stale server copy mode; renderer-local selection and scrolling
     /// never issue this command.
     static let cancelStaleSharedInputMode = "if-shell -F '#{pane_in_mode}' 'send-keys -X cancel' ''"
-    static let agentMetadataQuery = "list-panes -a -F '#{pane_id}\\t#{@mori-agent-state}\\t#{@mori-agent-name}'"
+    // tmux 3.2's `q` modifier escapes separators and backslashes. Filter out
+    // control characters first because that version cannot encode them; this
+    // keeps every emitted pane on exactly one line without raising our minimum.
+    static let agentMetadataQuery = "list-panes -a -f '#{&&:#{==:#{m/r:[[:cntrl:]],#{session_name}},0},#{&&:#{==:#{m/r:[[:cntrl:]],#{window_name}},0},#{&&:#{==:#{m/r:[[:cntrl:]],#{@mori-agent-state}},0},#{==:#{m/r:[[:cntrl:]],#{@mori-agent-name}},0}}}}' -F '#{q:session_name}|#{window_id}|#{q:window_name}|#{pane_id}|#{q:@mori-agent-state}|#{q:@mori-agent-name}'"
 
     func sendInput(paneID: TmuxPaneID, _ bytes: Data) -> Bool {
         guard !bytes.isEmpty else { return true }

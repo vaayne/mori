@@ -159,7 +159,6 @@ struct GhosttyTerminalCoreView: View {
                             isCompact: chrome.isCompact,
                             isControlArmed: terminalInputController.isControlArmed,
                             isAltArmed: terminalInputController.isAltArmed,
-                            topology: screen.terminalChromeTopologyProjection,
                             imageUploader: imageUploader,
                             insertImagePath: insertUploadedImagePath,
                             onImagePresentationChange: {
@@ -167,8 +166,7 @@ struct GhosttyTerminalCoreView: View {
                             },
                             actions: .init(
                                 showSessions: { onShowNavigator(.sessions) },
-                                showWindows: { onShowNavigator(.windows) },
-                                showPanes: { onShowNavigator(.panes) },
+                                showAgents: { onShowNavigator(.agents) },
                                 showLibrary: onShowLibrary,
                                 toggleKeyboard: toggleKeyboard,
                                 toggleControl: { terminalInputController.toggleControl() },

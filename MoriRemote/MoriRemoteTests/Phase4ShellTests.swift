@@ -109,6 +109,36 @@ import MoriRemoteTerminal
         #expect(RemoteNavigatorProjection.windows(windows, matching: "DEPLOY").map(\.id) == [2])
         #expect(RemoteNavigatorProjection.panes(panes, windows: windows, matching: "editor").map(\.id) == [10])
         #expect(RemoteNavigatorProjection.panes(panes, windows: windows, matching: "20").map(\.id) == [20])
+
+        let workspace = SavedWorkspace(serverID: serverID, name: "Main", tmuxSession: "cs/main")
+        let attention = AgentAttentionWorkspaceTarget(
+            workspace: workspace,
+            target: .init(
+                sessionName: "cs/main", windowID: 1, windowTitle: "editor", paneID: 10,
+                metadata: .init(state: .waiting, name: "claude")
+            )
+        )
+        #expect(RemoteNavigatorProjection.attention([attention], matching: "claude") == [attention])
+    }
+
+    @Test("attention selection applies only to its fenced runtime topology")
+    func fencedAttentionSelection() {
+        let workspaceID = UUID(), runtimeID = UUID()
+        var selection = PendingAgentAttentionSelection(workspaceID: workspaceID, windowID: 4, paneID: 8)
+        let matching = MoriRemoteTerminalTopology(
+            windows: [.init(id: 4, title: "editor", active: true, activePaneID: 8)],
+            panes: [.init(id: 8, windowID: 4, columns: 120, rows: 40)],
+            activeWindowID: 4
+        )
+        #expect(!selection.matches(workspaceID: workspaceID, runtimeInstanceID: runtimeID, topology: matching))
+        selection.bind(runtimeInstanceID: runtimeID)
+        #expect(selection.matches(workspaceID: workspaceID, runtimeInstanceID: runtimeID, topology: matching))
+        #expect(!selection.matches(workspaceID: workspaceID, runtimeInstanceID: UUID(), topology: matching))
+        #expect(!selection.matches(
+            workspaceID: workspaceID,
+            runtimeInstanceID: runtimeID,
+            topology: .init(windows: [.init(id: 4, title: "editor", active: true, activePaneID: 9)], panes: [.init(id: 9, windowID: 4, columns: 120, rows: 40)], activeWindowID: 4)
+        ))
     }
 
     @Test("connection attempt admission is synchronous and stale tokens cannot finish")

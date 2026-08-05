@@ -48,7 +48,7 @@ public enum MoriRemoteTerminalConnectionState: Equatable, Sendable {
 }
 
 public enum MoriRemoteTerminalNavigatorScope: Sendable {
-    case sessions, windows, panes
+    case sessions, agents
 }
 
 enum MoriRemoteTerminalConnectionProjection {
