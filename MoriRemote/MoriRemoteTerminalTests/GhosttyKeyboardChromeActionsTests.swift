@@ -32,7 +32,10 @@ final class GhosttyKeyboardChromeActionsTests: XCTestCase {
     func testSelectorsAndModifiersInvokeTheirRetainedActions() {
         var calls: [String] = []
         let actions = GhosttyKeyboardChromeActions(
-            showNavigator: { calls.append("navigator") },
+            showSessions: { calls.append("sessions") },
+            showWindows: { calls.append("windows") },
+            showPanes: { calls.append("panes") },
+            showLibrary: { calls.append("library") },
             toggleKeyboard: { calls.append("keyboard") },
             toggleControl: { calls.append("control") },
             toggleAlt: { calls.append("alt") },
@@ -49,7 +52,10 @@ final class GhosttyKeyboardChromeActionsTests: XCTestCase {
             sendKey: { _ in false }
         )
 
-        XCTAssertTrue(actions.perform(.navigator))
+        XCTAssertTrue(actions.perform(.sessions))
+        XCTAssertTrue(actions.perform(.windows))
+        XCTAssertTrue(actions.perform(.panes))
+        XCTAssertTrue(actions.perform(.library))
         XCTAssertTrue(actions.perform(.keyboard))
         XCTAssertTrue(actions.perform(.control))
         XCTAssertTrue(actions.perform(.alt))
@@ -59,7 +65,7 @@ final class GhosttyKeyboardChromeActionsTests: XCTestCase {
         XCTAssertTrue(actions.perform(.closePane))
         XCTAssertTrue(actions.perform(.closeWindow))
         XCTAssertEqual(calls, [
-            "navigator", "keyboard", "control", "alt",
+            "sessions", "windows", "panes", "library", "keyboard", "control", "alt",
             "new-window", "split-horizontal", "split-vertical", "close-pane", "close-window",
         ])
     }
@@ -67,7 +73,7 @@ final class GhosttyKeyboardChromeActionsTests: XCTestCase {
     func testCommonShortcutsSendExactTerminalSequences() {
         var sequences: [String] = []
         let actions = GhosttyKeyboardChromeActions(
-            showNavigator: {},
+            showSessions: {}, showWindows: {}, showPanes: {}, showLibrary: {},
             toggleKeyboard: {}, toggleControl: {}, toggleAlt: {},
             requestSharedMutation: { _ in },
             sendShortcut: { sequences.append($0); return true },
@@ -90,7 +96,7 @@ final class GhosttyKeyboardChromeActionsTests: XCTestCase {
         sendKey: @escaping (GhosttySurfaceKeyEvent) -> Bool
     ) -> GhosttyKeyboardChromeActions {
         GhosttyKeyboardChromeActions(
-            showNavigator: {},
+            showSessions: {}, showWindows: {}, showPanes: {}, showLibrary: {},
             toggleKeyboard: {}, toggleControl: {}, toggleAlt: {},
             requestSharedMutation: { _ in }, sendShortcut: { _ in false }, sendKey: sendKey
         )

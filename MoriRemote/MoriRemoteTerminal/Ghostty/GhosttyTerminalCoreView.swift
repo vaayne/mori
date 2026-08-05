@@ -9,9 +9,9 @@ import UIKit
 /// chrome. Its only construction input is the
 /// adapter, so deterministic tests never need Mori SSH or persistence.
 struct GhosttyTerminalCoreView: View {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @ObservedObject private var screen: TmuxTerminalScreenAdapter
-    private let onShowNavigator: () -> Void
+    private let onShowNavigator: (MoriRemoteTerminalNavigatorScope) -> Void
+    private let onShowLibrary: () -> Void
     private let onSharedMutationRequest: (MoriRemoteTerminalSharedMutation) -> Void
     private let isInputSuspended: Bool
     private let imageUploader: MoriRemoteTerminalImageUploader?
@@ -20,6 +20,7 @@ struct GhosttyTerminalCoreView: View {
     @State private var trackpadDriver = GhosttyKeyboardCursorTrackpadDriver()
     @State private var trackpadFeedback = GhosttyKeyboardCursorTrackpad.FeedbackState.hidden
     @State private var compositionState = GhosttyTerminalCompositionState()
+    @State private var bottomChromeReservation = GhosttyBottomChromeReservation()
     @State private var prefixFlushTask: Task<Void, Never>?
     @State private var sessionGeneration: UInt64 = 0
     @State private var isImageAttachmentPresented = false
@@ -28,13 +29,15 @@ struct GhosttyTerminalCoreView: View {
         screen: TmuxTerminalScreenAdapter,
         isInputSuspended: Bool = false,
         imageUploader: MoriRemoteTerminalImageUploader? = nil,
-        onShowNavigator: @escaping () -> Void = {},
+        onShowNavigator: @escaping (MoriRemoteTerminalNavigatorScope) -> Void = { _ in },
+        onShowLibrary: @escaping () -> Void = {},
         onSharedMutationRequest: @escaping (MoriRemoteTerminalSharedMutation) -> Void = { _ in }
     ) {
         self.screen = screen
         self.isInputSuspended = isInputSuspended
         self.imageUploader = imageUploader
         self.onShowNavigator = onShowNavigator
+        self.onShowLibrary = onShowLibrary
         self.onSharedMutationRequest = onSharedMutationRequest
     }
 
@@ -44,73 +47,160 @@ struct GhosttyTerminalCoreView: View {
             isTerminalReady: screen.isInputAvailable,
             isSuspended: isInputSuspended || isImageAttachmentPresented
         ).isInputAvailable
-        ZStack(alignment: .bottom) {
-            Color.black.ignoresSafeArea()
-            GeometryReader { geometry in
-                let liveSize = GhosttyTerminalViewportCoordinator.normalized(geometry.size)
-                let effectiveSize = compositionState.viewportCoordinator.effectiveSize(liveSize: liveSize)
-                GhosttySingleViewportView(
-                    surfaceLookup: screen.terminalManagedSurfaceLookup,
-                    projection: viewportPresentation,
-                    terminalTheme: .ghosttyDefault,
-                    trackpadDriver: trackpadDriver,
-                    onSurfaceTap: { _ in activateTerminalInput() },
-                    onWindowSwipe: { guard isInputAvailable else { return }; screen.focusAdjacentTmuxTopLevel($0) },
-                    sendKeyEvent: sendTerminalKey,
-                    onTrackpadFeedbackChange: { trackpadFeedback = $0 },
-                    isMouseCaptured: { isInputAvailable && screen.isMouseCaptured(for: $0) },
-                    submitMouseButton: { isInputAvailable ? screen.sendMouseButton(to: $0, $1) : .surfaceRejected },
-                    submitMousePosition: { isInputAvailable ? screen.sendMousePosition(to: $0, $1, mods: $2) : .surfaceRejected },
-                    submitMouseScroll: { isInputAvailable ? screen.sendMouseScroll(to: $0, $1) : .surfaceRejected }
-                )
-                .frame(width: effectiveSize.width, height: effectiveSize.height, alignment: .topLeading)
-                .onAppear { reconcileViewport(liveSize) }
-                .onChange(of: liveSize) { _, size in reconcileViewport(size) }
-                .overlay(alignment: .center) { GhosttyKeyboardCursorTrackpadHUD(state: trackpadFeedback) }
-            }
+        GeometryReader { screenGeometry in
+            let chrome = GhosttyPhoneChromeLayout(screenSize: screenGeometry.size)
+            let fallbackChromeHeight = GhosttyKeyboardChromeSizing.baselineHeight
+                + 4
+                + chrome.bottomPadding
+            let bottomChromeHeight = bottomChromeReservation.layoutHeight(
+                fallback: fallbackChromeHeight
+            )
 
-            GhosttyTerminalResponderRepresentable(
-                isEnabled: isInputAvailable,
-                wantsFirstResponder: isInputAvailable && compositionState.inputCoordinator.keyboardMode == .system,
-                activationToken: compositionState.inputCoordinator.terminalActivationToken,
-                responderHandoff: responderHandoff,
-                trackpadDriver: trackpadDriver,
-                keyboardAppearance: TerminalTheme.ghosttyDefault.terminalKeyboardAppearance,
-                sendText: sendTerminalText,
-                sendPaste: sendTerminalPaste,
-                sendKeyEvent: sendTerminalKey,
-                onTrackpadFeedbackChange: { trackpadFeedback = $0 },
-                onFirstResponderChange: { isFirstResponder in
-                    if !isFirstResponder, compositionState.inputCoordinator.keyboardMode == .system,
-                       !compositionState.inputCoordinator.isDismissSystemKeyboardRequested {
-                        compositionState.inputCoordinator.refocusSystemKeyboardIfActive(isInputAvailable: isInputAvailable)
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+
+                GeometryReader { geometry in
+                    let liveSize = GhosttyTerminalViewportCoordinator.normalized(
+                        geometry.size
+                    )
+                    let effectiveSize = compositionState.viewportCoordinator.effectiveSize(
+                        liveSize: liveSize
+                    )
+                    ZStack(alignment: .topLeading) {
+                        GhosttySingleViewportView(
+                            surfaceLookup: screen.terminalManagedSurfaceLookup,
+                            projection: viewportPresentation,
+                            terminalTheme: .ghosttyDefault,
+                            trackpadDriver: trackpadDriver,
+                            onSurfaceTap: { _ in
+                                activateTerminalInput()
+                            },
+                            onWindowSwipe: {
+                                guard isInputAvailable else { return }
+                                screen.focusAdjacentTmuxTopLevel($0)
+                            },
+                            sendKeyEvent: sendTerminalKey,
+                            onTrackpadFeedbackChange: { trackpadFeedback = $0 },
+                            isMouseCaptured: {
+                                isInputAvailable && screen.isMouseCaptured(for: $0)
+                            },
+                            submitMouseButton: {
+                                isInputAvailable
+                                    ? screen.sendMouseButton(to: $0, $1)
+                                    : .surfaceRejected
+                            },
+                            submitMousePosition: {
+                                isInputAvailable
+                                    ? screen.sendMousePosition(to: $0, $1, mods: $2)
+                                    : .surfaceRejected
+                            },
+                            submitMouseScroll: {
+                                isInputAvailable
+                                    ? screen.sendMouseScroll(to: $0, $1)
+                                    : .surfaceRejected
+                            }
+                        )
+                        .frame(
+                            width: effectiveSize.width,
+                            height: effectiveSize.height,
+                            alignment: .topLeading
+                        )
+
+                        GhosttyTerminalResponderRepresentable(
+                            isEnabled: isInputAvailable,
+                            wantsFirstResponder: isInputAvailable
+                                && compositionState.inputCoordinator.keyboardMode == .system,
+                            activationToken: compositionState.inputCoordinator.terminalActivationToken,
+                            responderHandoff: responderHandoff,
+                            trackpadDriver: trackpadDriver,
+                            keyboardAppearance: TerminalTheme.ghosttyDefault.terminalKeyboardAppearance,
+                            sendText: sendTerminalText,
+                            sendPaste: sendTerminalPaste,
+                            sendKeyEvent: sendTerminalKey,
+                            onTrackpadFeedbackChange: { trackpadFeedback = $0 },
+                            onFirstResponderChange: { isFirstResponder in
+                                if !isFirstResponder,
+                                   compositionState.inputCoordinator.keyboardMode == .system,
+                                   !compositionState.inputCoordinator.isDismissSystemKeyboardRequested {
+                                    compositionState.inputCoordinator.refocusSystemKeyboardIfActive(
+                                        isInputAvailable: isInputAvailable
+                                    )
+                                }
+                            }
+                        )
+                        .frame(
+                            width: effectiveSize.width,
+                            height: effectiveSize.height,
+                            alignment: .topLeading
+                        )
+                        .opacity(0.01)
+                        .allowsHitTesting(false)
+                    }
+                    .onAppear {
+                        reconcileViewport(liveSize)
+                    }
+                    .onChange(of: liveSize) { _, size in
+                        reconcileViewport(size)
+                    }
+                    .overlay(alignment: .center) {
+                        GhosttyKeyboardCursorTrackpadHUD(state: trackpadFeedback)
                     }
                 }
-            )
-            .frame(width: 1, height: 1)
-            .accessibilityHidden(true)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            GhosttyKeyboardChrome(
-                keyboardMode: compositionState.inputCoordinator.keyboardMode,
-                isEnabled: isInputAvailable,
-                isCompact: horizontalSizeClass == .compact,
-                isControlArmed: terminalInputController.isControlArmed,
-                isAltArmed: terminalInputController.isAltArmed,
-                imageUploader: imageUploader,
-                insertImagePath: insertUploadedImagePath,
-                onImagePresentationChange: { isImageAttachmentPresented = $0 },
-                actions: .init(
-                    showNavigator: onShowNavigator,
-                    toggleKeyboard: toggleKeyboard,
-                    toggleControl: { terminalInputController.toggleControl() },
-                    toggleAlt: { terminalInputController.toggleAlt() },
-                    requestSharedMutation: onSharedMutationRequest,
-                    sendShortcut: sendTerminalShortcut,
-                    sendKey: sendTerminalKey
+
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Color.clear
+                    .frame(height: bottomChromeHeight)
+                    .overlay(alignment: .bottom) {
+                        GhosttyKeyboardChrome(
+                            keyboardMode: compositionState.inputCoordinator.keyboardMode,
+                            isEnabled: isInputAvailable,
+                            isCompact: chrome.isCompact,
+                            isControlArmed: terminalInputController.isControlArmed,
+                            isAltArmed: terminalInputController.isAltArmed,
+                            topology: screen.terminalChromeTopologyProjection,
+                            imageUploader: imageUploader,
+                            insertImagePath: insertUploadedImagePath,
+                            onImagePresentationChange: {
+                                isImageAttachmentPresented = $0
+                            },
+                            actions: .init(
+                                showSessions: { onShowNavigator(.sessions) },
+                                showWindows: { onShowNavigator(.windows) },
+                                showPanes: { onShowNavigator(.panes) },
+                                showLibrary: onShowLibrary,
+                                toggleKeyboard: toggleKeyboard,
+                                toggleControl: { terminalInputController.toggleControl() },
+                                toggleAlt: { terminalInputController.toggleAlt() },
+                                requestSharedMutation: onSharedMutationRequest,
+                                sendShortcut: sendTerminalShortcut,
+                                sendKey: sendTerminalKey
+                            )
+                        )
+                        .padding(.horizontal, chrome.surfaceHorizontalPadding)
+                        .padding(.top, 4)
+                        .padding(.bottom, chrome.bottomPadding)
+                        .frame(maxWidth: .infinity, alignment: .bottom)
+                        .background {
+                            GeometryReader { proxy in
+                                Color.clear.preference(
+                                    key: GhosttyRenderedBottomChromeHeightPreferenceKey.self,
+                                    value: proxy.size.height
+                                )
+                            }
+                        }
+                    }
+            }
+            .onPreferenceChange(GhosttyRenderedBottomChromeHeightPreferenceKey.self) {
+                renderedHeight in
+                _ = bottomChromeReservation.observe(
+                    renderedHeight: renderedHeight,
+                    isTransient: false
                 )
-            )
+            }
         }
+        .ghosttyTerminalChromePresentation()
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) {
             guard !isTerminalInputSuspended else { return }
             updateKeyboardVisibility(with: $0)

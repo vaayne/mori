@@ -42,6 +42,10 @@ public enum MoriRemoteTerminalConnectionState: Equatable, Sendable {
     case connecting, ready, disconnected
 }
 
+public enum MoriRemoteTerminalNavigatorScope: Sendable {
+    case sessions, windows, panes
+}
+
 enum MoriRemoteTerminalConnectionProjection {
     static func applying(_ incoming: MoriRemoteTerminalConnectionState, hasTopology: Bool) -> MoriRemoteTerminalConnectionState {
         incoming == .connecting && hasTopology ? .ready : incoming
@@ -231,20 +235,23 @@ public struct MoriRemoteTerminalView: View {
     private let session: MoriRemoteTerminalSession
     private let isInputSuspended: Bool
     private let imageUploader: MoriRemoteTerminalImageUploader?
-    private let onShowNavigator: () -> Void
+    private let onShowNavigator: (MoriRemoteTerminalNavigatorScope) -> Void
+    private let onShowLibrary: () -> Void
     private let onSharedMutationRequest: (MoriRemoteTerminalSharedMutation) -> Void
 
     public init(
         session: MoriRemoteTerminalSession,
         isInputSuspended: Bool = false,
         imageUploader: MoriRemoteTerminalImageUploader? = nil,
-        onShowNavigator: @escaping () -> Void = {},
+        onShowNavigator: @escaping (MoriRemoteTerminalNavigatorScope) -> Void = { _ in },
+        onShowLibrary: @escaping () -> Void = {},
         onSharedMutationRequest: @escaping (MoriRemoteTerminalSharedMutation) -> Void = { _ in }
     ) {
         self.session = session
         self.isInputSuspended = isInputSuspended
         self.imageUploader = imageUploader
         self.onShowNavigator = onShowNavigator
+        self.onShowLibrary = onShowLibrary
         self.onSharedMutationRequest = onSharedMutationRequest
     }
 
@@ -254,6 +261,7 @@ public struct MoriRemoteTerminalView: View {
             isInputSuspended: isInputSuspended,
             imageUploader: imageUploader,
             onShowNavigator: onShowNavigator,
+            onShowLibrary: onShowLibrary,
             onSharedMutationRequest: onSharedMutationRequest
         )
     }

@@ -332,6 +332,7 @@ private struct RemoteTerminalDetailView: View {
     let isInputSuspended: Bool
     let showLibrary: () -> Void
     @State private var showsNavigator = false
+    @State private var navigatorScope: RemoteNavigatorView.Scope = .sessions
     @State private var pendingSharedMutation: RemoteSharedMutation?
 
     var body: some View {
@@ -340,10 +341,12 @@ private struct RemoteTerminalDetailView: View {
                 session: runtime.session,
                 isInputSuspended: isInputSuspended || showsNavigator,
                 imageUploader: root.imageUploader(for: runtime.workspace.id),
-                onShowNavigator: {
+                onShowNavigator: { scope in
                     root.discoverSessions(serverID: runtime.workspace.serverID)
+                    navigatorScope = .init(scope)
                     showsNavigator = true
                 },
+                onShowLibrary: showLibrary,
                 onSharedMutationRequest: { pendingSharedMutation = RemoteSharedMutation($0) }
             )
                 .id(runtime.instanceID)
@@ -351,7 +354,7 @@ private struct RemoteTerminalDetailView: View {
         }
         .background(Color.black.ignoresSafeArea())
         .sheet(isPresented: $showsNavigator) {
-            RemoteNavigatorView(root: root, runtime: runtime) {
+            RemoteNavigatorView(root: root, runtime: runtime, initialScope: navigatorScope) {
                 showsNavigator = false
                 Task { @MainActor in
                     await Task.yield()
@@ -405,11 +408,12 @@ private struct RemoteNavigatorView: View {
     @State private var scope = Scope.sessions
     @State private var filter = ""
 
-    init(root: RemoteRootModel, runtime: ActiveWorkspaceRuntime, showLibrary: @escaping () -> Void) {
+    init(root: RemoteRootModel, runtime: ActiveWorkspaceRuntime, initialScope: Scope = .sessions, showLibrary: @escaping () -> Void) {
         self.root = root
         self.runtime = runtime
         self.showLibrary = showLibrary
         _selectedServerID = State(initialValue: runtime.workspace.serverID)
+        _scope = State(initialValue: initialScope)
     }
 
     var body: some View {
@@ -637,6 +641,16 @@ private struct RemoteNavigatorView: View {
             .filter { $0.windowID == window.id }
             .map { runtime.metadata(for: $0.id) }
             .max { $0.state.priority < $1.state.priority } ?? .unknown
+    }
+}
+
+private extension RemoteNavigatorView.Scope {
+    init(_ scope: MoriRemoteTerminalNavigatorScope) {
+        self = switch scope {
+        case .sessions: .sessions
+        case .windows: .windows
+        case .panes: .panes
+        }
     }
 }
 

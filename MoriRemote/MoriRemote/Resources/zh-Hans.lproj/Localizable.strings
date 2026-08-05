@@ -198,6 +198,12 @@
 "Split down (⌘⇧D)" = "向下分屏（⌘⇧D）";
 "Split Down" = "向下分屏";
 "Split right (⌘D)" = "向右分屏（⌘D）";
+"Home" = "主页";
+"Open keypad" = "打开按键面板";
+"Show keyboard" = "显示键盘";
+"Hide keyboard" = "隐藏键盘";
+"Window %lld of %lld" = "第 %lld 个窗口，共 %lld 个";
+"Pane %lld of %lld" = "第 %lld 个面板，共 %lld 个";
 "Split Right" = "向右分屏";
 "Symbols" = "符号";
 "Tab key" = "Tab 键";

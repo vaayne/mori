@@ -100,6 +100,29 @@ extension TmuxTerminalScreenAdapter {
         )
     }
 
+    /// A read-only summary for phone chrome. It reflects tmux topology only;
+    /// viewport geometry remains owned by the fixed server-side client grid.
+    var terminalChromeTopologyProjection: GhosttyTerminalChromeTopologyProjection {
+        let windows = latestTopology?.windows ?? []
+        let activeWindowID = latestTopology?.activeWindowID
+        let selectedWindowIndex = activeWindowID.flatMap { id in
+            windows.firstIndex(where: { $0.id == id })
+        }
+        let panes = activeWindowID.flatMap { activeID in
+            latestTopology?.panes.filter { $0.windowID == activeID }
+        } ?? []
+        let activePaneID = windows.first(where: { $0.id == activeWindowID })?.activePaneID
+
+        return GhosttyTerminalChromeTopologyProjection(
+            selectedWindowIndex: selectedWindowIndex,
+            windowCount: windows.count,
+            selectedPaneIndex: activePaneID.flatMap { id in
+                panes.firstIndex(where: { $0.id == id })
+            },
+            paneCount: panes.count
+        )
+    }
+
     var isInputAvailable: Bool {
         isTransportWritable && activeManagedSurface != nil
     }

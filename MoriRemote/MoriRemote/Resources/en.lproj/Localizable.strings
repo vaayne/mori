@@ -198,6 +198,12 @@
 "Split down (⌘⇧D)" = "Split down (⌘⇧D)";
 "Split Down" = "Split Down";
 "Split right (⌘D)" = "Split right (⌘D)";
+"Home" = "Home";
+"Open keypad" = "Open keypad";
+"Show keyboard" = "Show keyboard";
+"Hide keyboard" = "Hide keyboard";
+"Window %lld of %lld" = "Window %lld of %lld";
+"Pane %lld of %lld" = "Pane %lld of %lld";
 "Split Right" = "Split Right";
 "Symbols" = "Symbols";
 "Tab key" = "Tab key";
