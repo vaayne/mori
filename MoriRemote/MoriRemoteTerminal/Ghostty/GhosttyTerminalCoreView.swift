@@ -9,7 +9,6 @@ import UIKit
 /// chrome. Its only construction input is the
 /// adapter, so deterministic tests never need Mori SSH or persistence.
 struct GhosttyTerminalCoreView: View {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @ObservedObject private var screen: TmuxTerminalScreenAdapter
     private let onShowNavigator: () -> Void
     private let onSharedMutationRequest: (MoriRemoteTerminalSharedMutation) -> Void
@@ -96,7 +95,7 @@ struct GhosttyTerminalCoreView: View {
             GhosttyKeyboardChrome(
                 keyboardMode: compositionState.inputCoordinator.keyboardMode,
                 isEnabled: isInputAvailable,
-                isCompact: horizontalSizeClass == .compact,
+                isCompact: false,
                 isControlArmed: terminalInputController.isControlArmed,
                 isAltArmed: terminalInputController.isAltArmed,
                 imageUploader: imageUploader,
@@ -112,6 +111,8 @@ struct GhosttyTerminalCoreView: View {
                     sendKey: sendTerminalKey
                 )
             )
+            .padding(.horizontal, GhosttyKeyboardChromeSizing.dockContentHorizontalPadding)
+            .padding(.vertical, GhosttyKeyboardChromeSizing.dockContentVerticalPadding)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) {
             guard !isTerminalInputSuspended else { return }
