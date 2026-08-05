@@ -6,7 +6,7 @@ import Testing
     @Test("parser retains host context and strictly normalizes untrusted output")
     func parserNormalization() {
         let parser = AgentMetadataResponseParser()
-        let records = parser.parse("main\t@1\teditor\t%1\tworking\tclaude\nmain\t@2\tdeploy\t%2\tWAITING\tcodex\n")
+        let records = parser.parse("main|@1|editor|%1|working|claude\nmain|@2|deploy|%2|WAITING|codex\n")
         #expect(records == [
             target(session: "main", windowID: 1, windowTitle: "editor", paneID: 1, state: .working, name: "claude"),
             target(session: "main", windowID: 2, windowTitle: "deploy", paneID: 2, state: .unknown, name: "codex")
@@ -17,21 +17,22 @@ import Testing
     @Test("malformed, injected, and duplicate source records fail closed while shadows stay hidden")
     func parserRejectsInjectionAndRecordOverflow() {
         let parser = AgentMetadataResponseParser()
-        let injectedName = "claude\nmain\t@2\tdeploy\t%2\twaiting\tclaude"
-        let response = "main\t@1\teditor\t%1\tworking\t\(injectedName)\nmain\t@2\tdeploy\t%2\tdone\tpi\n"
+        let injectedName = "claude\nmain|@2|deploy|%2|waiting|claude"
+        let response = "main|@1|editor|%1|working|\(injectedName)\nmain|@2|deploy|%2|done|pi\n"
         #expect(parser.parse(response).isEmpty)
 
-        #expect(parser.parse("main\tbad\teditor\t%1\tworking\tclaude\n").isEmpty)
-        #expect(parser.parse("main\t@1\teditor\t%1\tworking\tclaude\nmain\t@1\teditor\t%1\tdone\tpi\n").isEmpty)
+        #expect(parser.parse("main|bad|editor|%1|working|claude\n").isEmpty)
+        #expect(parser.parse("main|@1|editor|%1|working|claude\nmain|@1|editor|%1|done|pi\n").isEmpty)
+        #expect(parser.parse("main|@1|editor|title|%1|working|claude\n").isEmpty)
 
         let shadowID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
         let shadow = "main--mori-remote-\(shadowID.uuidString.lowercased())"
-        #expect(parser.parse("\(shadow)\t@1\teditor\t%1\tworking\tclaude\nmain\t@1\teditor\t%1\twaiting\tpi\n") == [
+        #expect(parser.parse("\(shadow)|@1|editor|%1|working|claude\nmain|@1|editor|%1|waiting|pi\n") == [
             target(session: "main", windowID: 1, windowTitle: "editor", paneID: 1, state: .waiting, name: "pi")
         ])
 
         let overLimit = (0...AgentMetadataResponseParser.maximumRecords)
-            .map { "main\t@1\teditor\t%\($0)\tworking\tclaude\n" }
+            .map { "main|@1|editor|%\($0)|working|claude\n" }
             .joined()
         #expect(parser.parse(overLimit).isEmpty)
     }
@@ -68,13 +69,13 @@ import Testing
         projector.setVisible(true)
         await relay.waitUntilRequested()
 
-        relay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\tworking\tclaude\n"))
+        relay.complete(.init(succeeded: true, body: "main|@1|editor|%1|working|claude\n"))
         await eventually { projector.metadata[1] == .init(state: .working, name: "claude") }
         #expect(projector.metadata[1] == .init(state: .working, name: "claude"))
 
         projector.foregrounded()
         await relay.waitUntilRequested()
-        relay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\twaiting\tclaude\n"))
+        relay.complete(.init(succeeded: true, body: "main|@1|editor|%1|waiting|claude\n"))
         await eventually { projector.metadata[1] == .init(state: .waiting, name: "claude") }
         #expect(projector.metadata[1] == .init(state: .waiting, name: "claude"))
         projector.stop()
@@ -95,7 +96,7 @@ import Testing
         projector.foregrounded()
         await relay.waitUntilRequested()
         projector.stop()
-        relay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\tworking\tlate\n"))
+        relay.complete(.init(succeeded: true, body: "main|@1|editor|%1|working|late\n"))
         await Task.yield()
         #expect(projector.metadata.isEmpty)
     }
@@ -107,7 +108,7 @@ import Testing
         projector.topologyDidChange(paneIDs: [1])
         projector.setVisible(true)
         await relay.waitUntilRequested()
-        relay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\tworking\tclaude\n"))
+        relay.complete(.init(succeeded: true, body: "main|@1|editor|%1|working|claude\n"))
         await eventually { projector.metadata[1] == .init(state: .working, name: "claude") }
 
         projector.foregrounded()
@@ -116,10 +117,10 @@ import Testing
         #expect(projector.metadata.isEmpty)
         projector.setVisible(true)
         await relay.waitUntilRequested()
-        relay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\tdone\tlate\n"))
+        relay.complete(.init(succeeded: true, body: "main|@1|editor|%1|done|late\n"))
         await Task.yield()
         #expect(projector.metadata.isEmpty)
-        relay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\twaiting\tclaude\n"))
+        relay.complete(.init(succeeded: true, body: "main|@1|editor|%1|waiting|claude\n"))
         await eventually { projector.metadata[1] == .init(state: .waiting, name: "claude") }
         #expect(projector.metadata[1] == .init(state: .waiting, name: "claude"))
         projector.stop()
@@ -139,8 +140,8 @@ import Testing
         replacement.topologyDidChange(paneIDs: [1])
         replacement.setVisible(true)
         await newRelay.waitUntilRequested()
-        oldRelay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\tdone\told\n"))
-        newRelay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\tworking\tnew\n"))
+        oldRelay.complete(.init(succeeded: true, body: "main|@1|editor|%1|done|old\n"))
+        newRelay.complete(.init(succeeded: true, body: "main|@1|editor|%1|working|new\n"))
         await eventually { replacement.metadata[1] == .init(state: .working, name: "new") }
         #expect(old.metadata.isEmpty)
         #expect(replacement.metadata[1] == .init(state: .working, name: "new"))

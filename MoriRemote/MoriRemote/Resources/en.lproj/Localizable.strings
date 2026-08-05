@@ -282,6 +282,7 @@
 "Agents" = "Agents";
 "No agents reporting status" = "No agents reporting status";
 "Start an agent with Mori hooks enabled to see it here." = "Start an agent with Mori hooks enabled to see it here.";
+"Filter sessions, windows, panes, and agents" = "Filter sessions, windows, panes, and agents";
 "Sessions on %@" = "Sessions on %@";
 "Workspace controls" = "Workspace Controls";
 "Server" = "Server";

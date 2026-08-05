@@ -630,7 +630,10 @@ final class TmuxSessionController: @unchecked Sendable {
     /// leaves a stale server copy mode; renderer-local selection and scrolling
     /// never issue this command.
     static let cancelStaleSharedInputMode = "if-shell -F '#{pane_in_mode}' 'send-keys -X cancel' ''"
-    static let agentMetadataQuery = "list-panes -a -F '#{session_name}\\t#{window_id}\\t#{window_name}\\t#{pane_id}\\t#{@mori-agent-state}\\t#{@mori-agent-name}'"
+    // tmux control mode preserves `\t` as two literal characters in format
+    // output. Use one fixed printable delimiter; the app parser rejects any
+    // record whose untrusted fields introduce another delimiter.
+    static let agentMetadataQuery = "list-panes -a -F '#{session_name}|#{window_id}|#{window_name}|#{pane_id}|#{@mori-agent-state}|#{@mori-agent-name}'"
 
     func sendInput(paneID: TmuxPaneID, _ bytes: Data) -> Bool {
         guard !bytes.isEmpty else { return true }

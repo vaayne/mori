@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Bug Fixes
 
+- **iOS (MoriRemote)**: Fixed the Agents scope showing zero states because tmux control mode preserved the query's `\\t` delimiters literally, and stopped the empty-state overlay from drawing over its summary header.
 - **iOS (MoriRemote)**: Make workspace runtime status, topology, and agent metadata directly observable, so an open Navigator and library badges update instead of writing to an unused revision counter.
 - **iOS (MoriRemote)**: Refresh local scrollback geometry after Ghostty publishes each completed renderer frame, so output arriving after the pre-render terminal-change callback no longer leaves a stale hard stop above the true bottom.
 - **iOS (MoriRemote)**: Prevented a usable terminal from remaining labeled “Connecting…” when a delayed syncing callback arrives after live topology.

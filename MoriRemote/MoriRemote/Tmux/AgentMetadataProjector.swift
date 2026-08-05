@@ -72,7 +72,7 @@ struct AgentMetadataResponseParser: Sendable {
         var result: [AgentAttentionTarget] = []
         var seenPaneIDs = Set<UInt64>()
         for line in records {
-            let fields = line.split(separator: "\t", omittingEmptySubsequences: false)
+            let fields = line.split(separator: "|", omittingEmptySubsequences: false)
             guard fields.count == 6,
                   let sessionName = normalizeText(fields[0], maximumLength: Self.maximumSessionNameLength),
                   let windowID = parseWindowID(fields[1]),

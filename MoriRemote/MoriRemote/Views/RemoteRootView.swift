@@ -467,7 +467,7 @@ private struct RemoteNavigatorView: View {
             }
             .navigationTitle(String(localized: "Navigator"))
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $filter, prompt: String(localized: "Filter sessions, windows, and panes"))
+            .searchable(text: $filter, prompt: String(localized: "Filter sessions, windows, panes, and agents"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: showLibrary) { Image(systemName: "server.rack") }
@@ -625,28 +625,30 @@ private struct RemoteNavigatorView: View {
                 }
             }
         case .agents:
-            Section {
-                ForEach(filteredAttention) { value in
-                    Button {
-                        root.selectAttentionTarget(value)
-                        dismiss()
-                    } label: {
-                        HStack {
-                            Image(systemName: "person.crop.circle")
-                                .foregroundStyle(.secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(verbatim: value.workspace.tmuxSession)
-                                Text(verbatim: "\(value.target.windowTitle) · %\(value.target.paneID)")
-                                    .font(.caption.monospaced())
+            if !filteredAttention.isEmpty {
+                Section {
+                    ForEach(filteredAttention) { value in
+                        Button {
+                            root.selectAttentionTarget(value)
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Image(systemName: "person.crop.circle")
                                     .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(verbatim: value.workspace.tmuxSession)
+                                    Text(verbatim: "\(value.target.windowTitle) · %\(value.target.paneID)")
+                                        .font(.caption.monospaced())
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                AgentMetadataBadge(metadata: value.target.metadata)
                             }
-                            Spacer()
-                            AgentMetadataBadge(metadata: value.target.metadata)
                         }
                     }
+                } header: {
+                    AgentAttentionSummaryView(summary: root.agentAttentionSummary(for: selectedServerID))
                 }
-            } header: {
-                AgentAttentionSummaryView(summary: root.agentAttentionSummary(for: selectedServerID))
             }
         }
     }
