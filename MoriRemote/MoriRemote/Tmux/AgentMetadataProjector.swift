@@ -26,6 +26,26 @@ struct AgentMetadata: Equatable, Sendable {
     static let unknown = Self(state: .unknown, name: nil)
 }
 
+/// One safe, host-wide agent record. The fixed tmux query is the sole source;
+/// this never becomes a general remote-navigation command surface.
+struct AgentAttentionTarget: Identifiable, Equatable, Sendable {
+    let sessionName: String
+    let windowID: UInt64
+    let windowTitle: String
+    let paneID: UInt64
+    let metadata: AgentMetadata
+
+    var id: UInt64 { paneID }
+}
+
+struct AgentAttentionSummary: Equatable, Sendable {
+    let waiting: Int
+    let working: Int
+    let done: Int
+
+    var total: Int { waiting + working + done }
+}
+
 /// App-local projection of the facade's fixed query result. It intentionally
 /// carries no tmux-controller detail across the terminal boundary.
 struct AgentMetadataQueryResult: Sendable {
@@ -33,28 +53,41 @@ struct AgentMetadataQueryResult: Sendable {
     let body: String
 }
 
-/// Parses the one bounded, fixed-format tmux response. Pane options are
-/// untrusted remote text: state is exact-match only, and labels cannot smuggle
-/// a row/delimiter into the navigation projection.
+/// Parses the one bounded, fixed-format tmux response. Every field is untrusted
+/// remote text. A malformed or duplicate source record invalidates the whole
+/// response; MoriRemote shadow sessions are discarded before pane de-duplication.
 struct AgentMetadataResponseParser: Sendable {
     static let maximumResponseBytes = 65_536
     static let maximumRecords = 512
+    static let maximumSessionNameLength = 128
+    static let maximumWindowTitleLength = 256
     static let maximumNameLength = 64
 
-    func parse(_ body: String) -> [UInt64: AgentMetadata] {
-        guard body.utf8.count <= Self.maximumResponseBytes else { return [:] }
+    func parse(_ body: String) -> [AgentAttentionTarget] {
+        guard body.utf8.count <= Self.maximumResponseBytes else { return [] }
         let records = body.split(separator: "\n", omittingEmptySubsequences: true)
         // Never prefix-truncate: an injected valid row can otherwise be hidden
         // after the cap, and a duplicate must invalidate the whole response.
-        guard records.count <= Self.maximumRecords else { return [:] }
-        var result: [UInt64: AgentMetadata] = [:]
+        guard records.count <= Self.maximumRecords else { return [] }
+        var result: [AgentAttentionTarget] = []
         var seenPaneIDs = Set<UInt64>()
         for line in records {
             let fields = line.split(separator: "\t", omittingEmptySubsequences: false)
-            guard let first = fields.first, let paneID = parsePaneID(first) else { continue }
-            guard seenPaneIDs.insert(paneID).inserted else { return [:] }
-            guard fields.count == 3 else { continue }
-            result[paneID] = .init(state: normalizeState(fields[1]), name: normalizeName(fields[2]))
+            guard fields.count == 6,
+                  let sessionName = normalizeText(fields[0], maximumLength: Self.maximumSessionNameLength),
+                  let windowID = parseWindowID(fields[1]),
+                  let windowTitle = normalizeText(fields[2], maximumLength: Self.maximumWindowTitleLength),
+                  let paneID = parsePaneID(fields[3])
+            else { return [] }
+            guard !isMoriRemoteShadow(sessionName) else { continue }
+            guard seenPaneIDs.insert(paneID).inserted else { return [] }
+            result.append(.init(
+                sessionName: sessionName,
+                windowID: windowID,
+                windowTitle: windowTitle,
+                paneID: paneID,
+                metadata: .init(state: normalizeState(fields[4]), name: normalizeName(fields[5]))
+            ))
         }
         return result
     }
@@ -64,16 +97,30 @@ struct AgentMetadataResponseParser: Sendable {
         return UInt64(field.dropFirst())
     }
 
+    private func parseWindowID(_ field: Substring) -> UInt64? {
+        guard field.first == "@", field.dropFirst().allSatisfy(\.isNumber) else { return nil }
+        return UInt64(field.dropFirst())
+    }
+
     private func normalizeState(_ field: Substring) -> MoriAgentState {
         MoriAgentState(rawValue: String(field)) ?? .unknown
     }
 
     private func normalizeName(_ field: Substring) -> String? {
+        normalizeText(field, maximumLength: Self.maximumNameLength)
+    }
+
+    private func normalizeText(_ field: Substring, maximumLength: Int) -> String? {
         let value = String(field)
-        guard !value.isEmpty, value.count <= Self.maximumNameLength,
+        guard !value.isEmpty, value.count <= maximumLength,
               value.unicodeScalars.allSatisfy({ $0.value >= 0x20 && $0.value != 0x7F })
         else { return nil }
         return value
+    }
+
+    private func isMoriRemoteShadow(_ sessionName: String) -> Bool {
+        guard let marker = sessionName.range(of: "--mori-remote-", options: .backwards) else { return false }
+        return UUID(uuidString: String(sessionName[marker.upperBound...])) != nil
     }
 }
 
@@ -81,14 +128,43 @@ struct AgentMetadataResponseParser: Sendable {
 /// A successful response is authoritative, so missing or cleared options erase
 /// old metadata; a failed response intentionally yields unknown instead.
 struct AgentMetadataProjection: Sendable {
-    static func merge(_ records: [UInt64: AgentMetadata], paneIDs: [UInt64]) -> [UInt64: AgentMetadata] {
-        // Corrupt/native snapshots must not crash the UI. First occurrence wins,
-        // matching the topology order used everywhere else in the projection.
+    static func retain(_ metadata: [UInt64: AgentMetadata], paneIDs: [UInt64]) -> [UInt64: AgentMetadata] {
         var projection: [UInt64: AgentMetadata] = [:]
         for paneID in paneIDs where projection[paneID] == nil {
-            projection[paneID] = records[paneID] ?? .unknown
+            projection[paneID] = metadata[paneID] ?? .unknown
         }
         return projection
+    }
+
+    static func merge(_ records: [AgentAttentionTarget], paneIDs: [UInt64]) -> [UInt64: AgentMetadata] {
+        // Corrupt/native snapshots must not crash the UI. First occurrence wins,
+        // matching the topology order used everywhere else in the projection.
+        let metadataByPaneID = Dictionary(uniqueKeysWithValues: records.map { ($0.paneID, $0.metadata) })
+        return retain(metadataByPaneID, paneIDs: paneIDs)
+    }
+}
+
+enum AgentAttentionProjection {
+    static func ordered(_ records: [AgentAttentionTarget]) -> [AgentAttentionTarget] {
+        records
+            .filter { $0.metadata.state != .unknown }
+            .sorted { lhs, rhs in
+                if lhs.metadata.state.priority != rhs.metadata.state.priority {
+                    return lhs.metadata.state.priority > rhs.metadata.state.priority
+                }
+                let sessionOrder = lhs.sessionName.localizedStandardCompare(rhs.sessionName)
+                if sessionOrder != .orderedSame { return sessionOrder == .orderedAscending }
+                if lhs.windowID != rhs.windowID { return lhs.windowID < rhs.windowID }
+                return lhs.paneID < rhs.paneID
+            }
+    }
+
+    static func summary(_ records: [AgentAttentionTarget]) -> AgentAttentionSummary {
+        .init(
+            waiting: records.count { $0.metadata.state == .waiting },
+            working: records.count { $0.metadata.state == .working },
+            done: records.count { $0.metadata.state == .done }
+        )
     }
 }
 
@@ -113,6 +189,7 @@ final class AgentMetadataProjector {
     private var queryGeneration: UInt64 = 0
 
     private(set) var metadata: [UInt64: AgentMetadata] = [:]
+    private(set) var attention: [AgentAttentionTarget] = []
     private(set) var lastFailure: String?
     var onChange: (@MainActor () -> Void)?
 
@@ -124,7 +201,7 @@ final class AgentMetadataProjector {
     func topologyDidChange(paneIDs: [UInt64]) {
         guard !stopped else { return }
         self.paneIDs = paneIDs
-        metadata = AgentMetadataProjection.merge(metadata, paneIDs: paneIDs)
+        metadata = AgentMetadataProjection.retain(metadata, paneIDs: paneIDs)
         onChange?()
         refreshImmediately()
     }
@@ -147,6 +224,7 @@ final class AgentMetadataProjector {
             queryGeneration &+= 1
             queryInFlight = false
             metadata = [:]
+            attention = []
             onChange?()
         }
     }
@@ -163,6 +241,7 @@ final class AgentMetadataProjector {
         refreshTask = nil
         queryInFlight = false
         metadata = [:]
+        attention = []
     }
 
     private func refreshImmediately() {
@@ -182,10 +261,13 @@ final class AgentMetadataProjector {
         queryInFlight = false
         if result.succeeded {
             lastFailure = nil
-            metadata = AgentMetadataProjection.merge(parser.parse(result.body), paneIDs: paneIDs)
+            let records = parser.parse(result.body)
+            metadata = AgentMetadataProjection.merge(records, paneIDs: paneIDs)
+            attention = AgentAttentionProjection.ordered(records)
         } else {
             lastFailure = result.body
-            metadata = AgentMetadataProjection.merge([:], paneIDs: paneIDs)
+            metadata = AgentMetadataProjection.merge([], paneIDs: paneIDs)
+            attention = []
         }
         onChange?()
     }

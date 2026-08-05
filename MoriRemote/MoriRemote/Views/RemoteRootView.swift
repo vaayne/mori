@@ -353,6 +353,28 @@ private struct RemoteTerminalDetailView: View {
                 .background(Color.black)
         }
         .background(Color.black.ignoresSafeArea())
+        .overlay(alignment: .topTrailing) {
+            let summary = root.agentAttentionSummary(for: runtime.workspace.serverID)
+            if summary.total > 0 {
+                Button {
+                    root.discoverSessions(serverID: runtime.workspace.serverID)
+                    navigatorScope = .attention
+                    showsNavigator = true
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "bell.badge.fill")
+                        Text(summary.total, format: .number)
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(attentionTint(for: summary))
+                .padding(12)
+                .accessibilityLabel(String(localized: "Agent Attention"))
+            }
+        }
         .sheet(isPresented: $showsNavigator) {
             RemoteNavigatorView(root: root, runtime: runtime, initialScope: navigatorScope) {
                 showsNavigator = false
@@ -384,18 +406,25 @@ private struct RemoteTerminalDetailView: View {
         .init(get: { pendingSharedMutation != nil }, set: { if !$0 { pendingSharedMutation = nil } })
     }
 
+    private func attentionTint(for summary: AgentAttentionSummary) -> Color {
+        if summary.waiting > 0 { return .orange }
+        if summary.working > 0 { return .mint }
+        return .green
+    }
+
 }
 
 @MainActor
 private struct RemoteNavigatorView: View {
     enum Scope: String, CaseIterable, Identifiable {
-        case sessions, windows, panes
+        case sessions, windows, panes, attention
         var id: Self { self }
         var title: String {
             switch self {
             case .sessions: String(localized: "Sessions")
             case .windows: String(localized: "Windows")
             case .panes: String(localized: "Panes")
+            case .attention: String(localized: "Agent Attention")
             }
         }
     }
@@ -595,6 +624,30 @@ private struct RemoteNavigatorView: View {
                     }
                 }
             }
+        case .attention:
+            Section {
+                ForEach(filteredAttention) { value in
+                    Button {
+                        root.selectAttentionTarget(value)
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Image(systemName: "bell.badge.fill")
+                                .foregroundStyle(.orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(verbatim: value.workspace.tmuxSession)
+                                Text(verbatim: "\(value.target.windowTitle) · %\(value.target.paneID)")
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            AgentMetadataBadge(metadata: value.target.metadata)
+                        }
+                    }
+                }
+            } header: {
+                AgentAttentionSummaryView(summary: root.agentAttentionSummary(for: selectedServerID))
+            }
         }
     }
 
@@ -630,8 +683,17 @@ private struct RemoteNavigatorView: View {
             matching: filter
         )
     }
+    private var filteredAttention: [AgentAttentionWorkspaceTarget] {
+        guard isBrowsingActiveHost else { return [] }
+        return RemoteNavigatorProjection.attention(root.agentAttention(for: selectedServerID), matching: filter)
+    }
     private var visibleItemCount: Int {
-        switch scope { case .sessions: filteredSessions.count; case .windows: filteredWindows.count; case .panes: filteredPanes.count }
+        switch scope {
+        case .sessions: filteredSessions.count
+        case .windows: filteredWindows.count
+        case .panes: filteredPanes.count
+        case .attention: filteredAttention.count
+        }
     }
     private func windowTitle(for pane: MoriRemoteTerminalPane) -> String {
         runtime.topology?.windows.first(where: { $0.id == pane.windowID })?.title ?? String(localized: "Window")
@@ -641,6 +703,18 @@ private struct RemoteNavigatorView: View {
             .filter { $0.windowID == window.id }
             .map { runtime.metadata(for: $0.id) }
             .max { $0.state.priority < $1.state.priority } ?? .unknown
+    }
+}
+
+private struct AgentAttentionSummaryView: View {
+    let summary: AgentAttentionSummary
+
+    var body: some View {
+        Text(verbatim: [
+            "\(String(localized: "Waiting")): \(summary.waiting)",
+            "\(String(localized: "Working")): \(summary.working)",
+            "\(String(localized: "Done")): \(summary.done)"
+        ].joined(separator: " · "))
     }
 }
 

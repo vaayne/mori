@@ -62,6 +62,17 @@ enum RemoteNavigatorProjection {
             return query.isEmpty || String(pane.id).contains(query) || windowTitle.localizedCaseInsensitiveContains(query)
         }
     }
+
+    static func attention(_ values: [AgentAttentionWorkspaceTarget], matching query: String) -> [AgentAttentionWorkspaceTarget] {
+        values.filter { value in
+            let target = value.target
+            return query.isEmpty
+                || value.workspace.tmuxSession.localizedCaseInsensitiveContains(query)
+                || target.windowTitle.localizedCaseInsensitiveContains(query)
+                || String(target.paneID).contains(query)
+                || (target.metadata.name?.localizedCaseInsensitiveContains(query) ?? false)
+        }
+    }
 }
 
 enum ServerSessionDiscoveryStatus: Equatable, Sendable {
@@ -74,6 +85,38 @@ enum ServerSessionDiscoveryStatus: Equatable, Sendable {
 enum PendingSSHTrustAction: Equatable, Sendable {
     case connect(UUID)
     case discover(UUID)
+}
+
+struct AgentAttentionWorkspaceTarget: Identifiable, Equatable, Sendable {
+    let workspace: SavedWorkspace
+    let target: AgentAttentionTarget
+
+    var id: UInt64 { target.id }
+}
+
+/// A selection from the host-wide snapshot cannot target a runtime until that
+/// runtime has published the exact source topology. The instance fence drops a
+/// late topology callback from a replaced control client.
+struct PendingAgentAttentionSelection: Equatable, Sendable {
+    let workspaceID: UUID
+    let windowID: UInt64
+    let paneID: UInt64
+    private(set) var runtimeInstanceID: UUID?
+
+    init(workspaceID: UUID, windowID: UInt64, paneID: UInt64) {
+        self.workspaceID = workspaceID
+        self.windowID = windowID
+        self.paneID = paneID
+    }
+
+    mutating func bind(runtimeInstanceID: UUID) { self.runtimeInstanceID = runtimeInstanceID }
+
+    func matches(workspaceID: UUID, runtimeInstanceID: UUID, topology: MoriRemoteTerminalTopology) -> Bool {
+        self.workspaceID == workspaceID
+            && self.runtimeInstanceID == runtimeInstanceID
+            && topology.windows.contains(where: { $0.id == windowID })
+            && topology.panes.contains(where: { $0.id == paneID && $0.windowID == windowID })
+    }
 }
 
 enum WorkspaceRuntimeStatus: Equatable {
@@ -152,12 +195,17 @@ final class ActiveWorkspaceRuntime {
         _ = metadataRevision
         return metadataProjector.metadata
     }
+    var agentAttention: [AgentAttentionTarget] {
+        _ = metadataRevision
+        return metadataProjector.attention
+    }
     var focusedPaneID: UInt64? {
         guard let activeWindowID = topology?.activeWindowID else { return nil }
         return topology?.windows.first(where: { $0.id == activeWindowID })?.activePaneID
     }
     private(set) var status: WorkspaceRuntimeStatus = .connecting
     var onTransportLoss: (@MainActor (UUID) -> Void)?
+    var onTopologyChange: (@MainActor (MoriRemoteTerminalTopology) -> Void)?
 
     init(
         workspace: SavedWorkspace,
@@ -184,6 +232,7 @@ final class ActiveWorkspaceRuntime {
             self.topology = topology
             self.status = .ready
             self.metadataProjector.topologyDidChange(paneIDs: topology.panes.map(\.id))
+            self.onTopologyChange?(topology)
         }
         session.onConnectionStateChange = { [weak self] state in self?.receive(state) }
         session.setPresentationActive(false)
@@ -256,6 +305,7 @@ final class RemoteRootModel {
     var errorMessage: String?
     var migrationReport: LegacyMigrationReport?
     private var pendingTrustAction: PendingSSHTrustAction?
+    private var pendingAgentAttentionSelection: PendingAgentAttentionSelection?
     private(set) var isLoaded = false
     var libraryLoadError: String? { bootstrapFailure }
     var isBootstrapping: Bool { loadingTask != nil }
@@ -284,6 +334,17 @@ final class RemoteRootModel {
     }
     func agentSummary(for workspaceID: UUID) -> AgentMetadata { runtimes[workspaceID]?.agentSummary ?? .unknown }
     func metadata(for workspaceID: UUID, paneID: UInt64) -> AgentMetadata { runtimes[workspaceID]?.metadata(for: paneID) ?? .unknown }
+    func agentAttention(for serverID: UUID) -> [AgentAttentionWorkspaceTarget] {
+        guard activeRuntime?.workspace.serverID == serverID else { return [] }
+        return activeRuntime?.agentAttention.compactMap { target in
+            workspace(serverID: serverID, tmuxSession: target.sessionName).map {
+                .init(workspace: $0, target: target)
+            }
+        } ?? []
+    }
+    func agentAttentionSummary(for serverID: UUID) -> AgentAttentionSummary {
+        AgentAttentionProjection.summary(agentAttention(for: serverID).map(\.target))
+    }
 
     func bootstrap() {
         guard !isLoaded, loadingTask == nil else { return }
@@ -367,6 +428,9 @@ final class RemoteRootModel {
         activating: Bool? = nil,
         carriedViewport: TmuxControlViewport? = nil
     ) {
+        if !automatic, pendingAgentAttentionSelection?.workspaceID != workspaceID {
+            pendingAgentAttentionSelection = nil
+        }
         let shouldActivate = activating ?? (!automatic || activeWorkspaceID == nil || activeWorkspaceID == workspaceID)
         deferredReconnects.remove(workspaceID)
         if let runtime = runtimes[workspaceID] {
@@ -376,7 +440,7 @@ final class RemoteRootModel {
                 // surface and strand the user without a reconnect path.
                 let carriedViewport = automatic ? (carriedViewport ?? runtime.carriedViewport) : nil
                 Task { [weak self] in
-                    await self?.disconnect(workspaceID: workspaceID)
+                    await self?.disconnect(workspaceID: workspaceID, clearingPendingAttentionSelection: false)
                     self?.connect(
                         workspaceID: workspaceID,
                         automatic: automatic,
@@ -385,6 +449,7 @@ final class RemoteRootModel {
                 }
             } else if shouldActivate {
                 activate(workspaceID: workspaceID)
+                bindPendingAttentionSelection(to: runtime, workspaceID: workspaceID)
             }
             return
         }
@@ -411,11 +476,17 @@ final class RemoteRootModel {
                 runtime = created
                 guard self.attemptIsCurrent(attempt, workspaceID: workspaceID) else { await created.stop(); return }
                 created.onTransportLoss = { [weak self] id in self?.lost(workspaceID: workspaceID, instanceID: id) }
+                created.onTopologyChange = { [weak self] topology in
+                    self?.receivedTopology(workspaceID: workspaceID, instanceID: instanceID, topology: topology)
+                }
                 self.runtimes[workspaceID] = created
+                self.bindPendingAttentionSelection(to: created, workspaceID: workspaceID)
                 // An automatic reconnect must not steal focus from another
                 // healthy workspace. If the lost workspace was focused,
                 // disconnect() cleared the active ID and it is restored here.
-                if shouldActivate {
+                // A later attention tap may also upgrade an already-admitted
+                // background attempt into an explicit activation request.
+                if shouldActivate || self.pendingAgentAttentionSelection?.workspaceID == workspaceID {
                     self.activate(workspaceID: workspaceID)
                 }
                 try await created.start()
@@ -435,6 +506,7 @@ final class RemoteRootModel {
                     self.pendingTrust = challenge
                     self.pendingTrustAction = .connect(workspaceID)
                 case let .error(message):
+                    self.clearPendingAttentionSelection(for: workspaceID)
                     self.pendingTrust = nil
                     self.pendingTrustAction = nil
                     self.errorMessage = message
@@ -442,6 +514,7 @@ final class RemoteRootModel {
             } catch {
                 guard self.attemptIsCurrent(attempt, workspaceID: workspaceID) else { if let runtime { await self.stop(runtime, workspaceID: workspaceID) }; return }
                 if let runtime { await self.stop(runtime, workspaceID: workspaceID) }
+                self.clearPendingAttentionSelection(for: workspaceID)
                 self.connectionAttempts.end(attempt, for: workspaceID)
                 if !automatic { self.errorMessage = error.localizedDescription }
             }
@@ -449,6 +522,9 @@ final class RemoteRootModel {
     }
 
     func dismissTrust() {
+        if case let .connect(workspaceID) = pendingTrustAction {
+            clearPendingAttentionSelection(for: workspaceID)
+        }
         pendingTrust = nil
         pendingTrustAction = nil
     }
@@ -470,9 +546,10 @@ final class RemoteRootModel {
         }
     }
 
-    func disconnect(workspaceID: UUID) async {
+    func disconnect(workspaceID: UUID, clearingPendingAttentionSelection: Bool = true) async {
         connectionAttempts.cancel(workspaceID: workspaceID)
         deferredReconnects.remove(workspaceID)
+        if clearingPendingAttentionSelection { clearPendingAttentionSelection(for: workspaceID) }
         guard let runtime = runtimes.removeValue(forKey: workspaceID) else { return }
         if activeWorkspaceID == workspaceID { activeWorkspaceID = nil }
         runtime.setVisible(false)
@@ -480,8 +557,22 @@ final class RemoteRootModel {
     }
 
     func disconnectActive() { if let activeWorkspaceID { Task { await disconnect(workspaceID: activeWorkspaceID) } } }
-    func selectWindow(_ id: UInt64) { activeRuntime?.selectWindow(id) }
-    func selectPane(_ id: UInt64) { activeRuntime?.selectPane(id) }
+    func selectWindow(_ id: UInt64) {
+        pendingAgentAttentionSelection = nil
+        activeRuntime?.selectWindow(id)
+    }
+    func selectPane(_ id: UInt64) {
+        pendingAgentAttentionSelection = nil
+        activeRuntime?.selectPane(id)
+    }
+    func selectAttentionTarget(_ target: AgentAttentionWorkspaceTarget) {
+        pendingAgentAttentionSelection = .init(
+            workspaceID: target.workspace.id,
+            windowID: target.target.windowID,
+            paneID: target.target.paneID
+        )
+        connect(workspaceID: target.workspace.id, activating: true)
+    }
     func performSharedMutation(_ mutation: MoriRemoteTerminalSharedMutation) {
         activeRuntime?.performSharedMutation(mutation)
     }
@@ -535,6 +626,43 @@ final class RemoteRootModel {
         runtimes[workspaceID]?.setVisible(sceneIsActive)
     }
 
+    private func workspace(serverID: UUID, tmuxSession: String) -> SavedWorkspace? {
+        workspaces
+            .filter { $0.serverID == serverID && $0.tmuxSession == tmuxSession }
+            .max { lhs, rhs in
+                let lhsActive = runtimes[lhs.id] != nil
+                let rhsActive = runtimes[rhs.id] != nil
+                if lhsActive != rhsActive { return !lhsActive && rhsActive }
+                return (lhs.lastConnectedAt ?? .distantPast, lhs.id.uuidString)
+                    < (rhs.lastConnectedAt ?? .distantPast, rhs.id.uuidString)
+            }
+    }
+
+    private func bindPendingAttentionSelection(to runtime: ActiveWorkspaceRuntime, workspaceID: UUID) {
+        guard pendingAgentAttentionSelection?.workspaceID == workspaceID else { return }
+        pendingAgentAttentionSelection?.bind(runtimeInstanceID: runtime.instanceID)
+        bindAndApplyPendingAttentionSelection(using: runtime, workspaceID: workspaceID)
+    }
+
+    private func bindAndApplyPendingAttentionSelection(using runtime: ActiveWorkspaceRuntime, workspaceID: UUID) {
+        guard let topology = runtime.topology else { return }
+        receivedTopology(workspaceID: workspaceID, instanceID: runtime.instanceID, topology: topology)
+    }
+
+    private func receivedTopology(workspaceID: UUID, instanceID: UUID, topology: MoriRemoteTerminalTopology) {
+        guard let selection = pendingAgentAttentionSelection,
+              selection.matches(workspaceID: workspaceID, runtimeInstanceID: instanceID, topology: topology),
+              runtimes[workspaceID]?.instanceID == instanceID
+        else { return }
+        pendingAgentAttentionSelection = nil
+        runtimes[workspaceID]?.selectPane(selection.paneID)
+    }
+
+    private func clearPendingAttentionSelection(for workspaceID: UUID) {
+        guard pendingAgentAttentionSelection?.workspaceID == workspaceID else { return }
+        pendingAgentAttentionSelection = nil
+    }
+
     private func attemptIsCurrent(_ attempt: UUID, workspaceID: UUID) -> Bool {
         connectionAttempts.isCurrent(attempt, for: workspaceID)
     }
@@ -564,7 +692,7 @@ final class RemoteRootModel {
         Task { [weak self] in
             guard let self, self.runtimes[workspaceID]?.instanceID == instanceID else { return }
             let carriedViewport = self.runtimes[workspaceID]?.carriedViewport
-            await disconnect(workspaceID: workspaceID)
+            await disconnect(workspaceID: workspaceID, clearingPendingAttentionSelection: false)
             try? await Task.sleep(for: .seconds(1))
             guard self.sceneIsActive else {
                 self.deferredReconnects.insert(workspaceID)

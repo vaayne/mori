@@ -279,6 +279,7 @@
 "Windows" = "Windows";
 "Panes" = "Panes";
 "Active workspaces" = "Active Workspaces";
+"Agent Attention" = "Agent Attention";
 "Sessions on %@" = "Sessions on %@";
 "Workspace controls" = "Workspace Controls";
 "Server" = "Server";

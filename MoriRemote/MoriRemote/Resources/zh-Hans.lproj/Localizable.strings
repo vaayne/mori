@@ -279,6 +279,7 @@
 "Windows" = "窗口";
 "Panes" = "面板";
 "Active workspaces" = "活动工作区";
+"Agent Attention" = "Agent 注意事项";
 "Sessions on %@" = "%@ 上的会话";
 "Workspace controls" = "工作区控制";
 "Server" = "服务器";

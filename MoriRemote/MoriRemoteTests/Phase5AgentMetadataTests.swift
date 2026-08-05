@@ -3,47 +3,60 @@ import Testing
 @testable import MoriRemote
 
 @Suite("Agent metadata facade projection") struct Phase5AgentMetadataTests {
-    @Test("parser strictly normalizes UInt64 pane IDs and bounds untrusted output")
+    @Test("parser retains host context and strictly normalizes untrusted output")
     func parserNormalization() {
         let parser = AgentMetadataResponseParser()
-        let metadata = parser.parse("%1\tworking\tclaude\n%2\tWAITING\tcodex\n%3\tdone\tpi\ninvalid\tworking\tbad\n%4\twaiting\tbad\u{0000}name\n")
-        #expect(metadata[1] == .init(state: .working, name: "claude"))
-        #expect(metadata[2] == .init(state: .unknown, name: "codex"))
-        #expect(metadata[3] == .init(state: .done, name: "pi"))
-        #expect(metadata[4] == .init(state: .waiting, name: nil))
-        #expect(metadata[99] == nil)
+        let records = parser.parse("main\t@1\teditor\t%1\tworking\tclaude\nmain\t@2\tdeploy\t%2\tWAITING\tcodex\n")
+        #expect(records == [
+            target(session: "main", windowID: 1, windowTitle: "editor", paneID: 1, state: .working, name: "claude"),
+            target(session: "main", windowID: 2, windowTitle: "deploy", paneID: 2, state: .unknown, name: "codex")
+        ])
         #expect(parser.parse(String(repeating: "x", count: AgentMetadataResponseParser.maximumResponseBytes + 1)).isEmpty)
     }
 
-    @Test("injected valid pane rows and over-limit responses fail closed")
+    @Test("malformed, injected, and duplicate source records fail closed while shadows stay hidden")
     func parserRejectsInjectionAndRecordOverflow() {
         let parser = AgentMetadataResponseParser()
-        let injectedName = "claude\n%2\twaiting\tclaude"
-        let response = "%1\tworking\t\(injectedName)\n%2\tdone\tpi\n"
+        let injectedName = "claude\nmain\t@2\tdeploy\t%2\twaiting\tclaude"
+        let response = "main\t@1\teditor\t%1\tworking\t\(injectedName)\nmain\t@2\tdeploy\t%2\tdone\tpi\n"
         #expect(parser.parse(response).isEmpty)
 
+        #expect(parser.parse("main\tbad\teditor\t%1\tworking\tclaude\n").isEmpty)
+        #expect(parser.parse("main\t@1\teditor\t%1\tworking\tclaude\nmain\t@1\teditor\t%1\tdone\tpi\n").isEmpty)
+
+        let shadowID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
+        let shadow = "main--mori-remote-\(shadowID.uuidString.lowercased())"
+        #expect(parser.parse("\(shadow)\t@1\teditor\t%1\tworking\tclaude\nmain\t@1\teditor\t%1\twaiting\tpi\n") == [
+            target(session: "main", windowID: 1, windowTitle: "editor", paneID: 1, state: .waiting, name: "pi")
+        ])
+
         let overLimit = (0...AgentMetadataResponseParser.maximumRecords)
-            .map { "%\($0)\tworking\tclaude\n" }
+            .map { "main\t@1\teditor\t%\($0)\tworking\tclaude\n" }
             .joined()
         #expect(parser.parse(overLimit).isEmpty)
     }
 
-    @Test("authoritative merge clears missing records and ignores removed panes")
+    @Test("host-wide attention is ordered and summarized before local projection")
     func projectionMerge() {
-        let records: [UInt64: AgentMetadata] = [
-            1: .init(state: .working, name: "claude"),
-            9: .init(state: .done, name: "other")
+        let records = [
+            target(session: "zeta", windowID: 2, windowTitle: "deploy", paneID: 9, state: .done, name: "other"),
+            target(session: "main", windowID: 1, windowTitle: "editor", paneID: 1, state: .working, name: "claude"),
+            target(session: "main", windowID: 3, windowTitle: "review", paneID: 3, state: .waiting, name: "pi")
         ]
         let merged = AgentMetadataProjection.merge(records, paneIDs: [1, 2])
         #expect(merged == [
             1: .init(state: .working, name: "claude"),
             2: .unknown
         ])
+        #expect(AgentAttentionProjection.ordered(records).map(\.paneID) == [3, 1, 9])
+        #expect(AgentAttentionProjection.summary(records) == .init(waiting: 1, working: 1, done: 1))
     }
 
     @Test("duplicate facade topology panes are deterministically uniqued")
     func projectionDuplicateTopology() {
-        let merged = AgentMetadataProjection.merge([1: .init(state: .done, name: "pi")], paneIDs: [1, 1, 2])
+        let merged = AgentMetadataProjection.merge([
+            target(session: "main", windowID: 1, windowTitle: "editor", paneID: 1, state: .done, name: "pi")
+        ], paneIDs: [1, 1, 2])
         #expect(merged == [1: .init(state: .done, name: "pi"), 2: .unknown])
     }
 
@@ -55,13 +68,13 @@ import Testing
         projector.setVisible(true)
         await relay.waitUntilRequested()
 
-        relay.complete(.init(succeeded: true, body: "%1\tworking\tclaude\n"))
+        relay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\tworking\tclaude\n"))
         await eventually { projector.metadata[1] == .init(state: .working, name: "claude") }
         #expect(projector.metadata[1] == .init(state: .working, name: "claude"))
 
         projector.foregrounded()
         await relay.waitUntilRequested()
-        relay.complete(.init(succeeded: true, body: "%1\twaiting\tclaude\n"))
+        relay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\twaiting\tclaude\n"))
         await eventually { projector.metadata[1] == .init(state: .waiting, name: "claude") }
         #expect(projector.metadata[1] == .init(state: .waiting, name: "claude"))
         projector.stop()
@@ -82,7 +95,7 @@ import Testing
         projector.foregrounded()
         await relay.waitUntilRequested()
         projector.stop()
-        relay.complete(.init(succeeded: true, body: "%1\tworking\tlate\n"))
+        relay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\tworking\tlate\n"))
         await Task.yield()
         #expect(projector.metadata.isEmpty)
     }
@@ -94,7 +107,7 @@ import Testing
         projector.topologyDidChange(paneIDs: [1])
         projector.setVisible(true)
         await relay.waitUntilRequested()
-        relay.complete(.init(succeeded: true, body: "%1\tworking\tclaude\n"))
+        relay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\tworking\tclaude\n"))
         await eventually { projector.metadata[1] == .init(state: .working, name: "claude") }
 
         projector.foregrounded()
@@ -103,10 +116,10 @@ import Testing
         #expect(projector.metadata.isEmpty)
         projector.setVisible(true)
         await relay.waitUntilRequested()
-        relay.complete(.init(succeeded: true, body: "%1\tdone\tlate\n"))
+        relay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\tdone\tlate\n"))
         await Task.yield()
         #expect(projector.metadata.isEmpty)
-        relay.complete(.init(succeeded: true, body: "%1\twaiting\tclaude\n"))
+        relay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\twaiting\tclaude\n"))
         await eventually { projector.metadata[1] == .init(state: .waiting, name: "claude") }
         #expect(projector.metadata[1] == .init(state: .waiting, name: "claude"))
         projector.stop()
@@ -126,13 +139,30 @@ import Testing
         replacement.topologyDidChange(paneIDs: [1])
         replacement.setVisible(true)
         await newRelay.waitUntilRequested()
-        oldRelay.complete(.init(succeeded: true, body: "%1\tdone\told\n"))
-        newRelay.complete(.init(succeeded: true, body: "%1\tworking\tnew\n"))
+        oldRelay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\tdone\told\n"))
+        newRelay.complete(.init(succeeded: true, body: "main\t@1\teditor\t%1\tworking\tnew\n"))
         await eventually { replacement.metadata[1] == .init(state: .working, name: "new") }
         #expect(old.metadata.isEmpty)
         #expect(replacement.metadata[1] == .init(state: .working, name: "new"))
         replacement.stop()
     }
+}
+
+private func target(
+    session: String,
+    windowID: UInt64,
+    windowTitle: String,
+    paneID: UInt64,
+    state: MoriAgentState,
+    name: String?
+) -> AgentAttentionTarget {
+    .init(
+        sessionName: session,
+        windowID: windowID,
+        windowTitle: windowTitle,
+        paneID: paneID,
+        metadata: .init(state: state, name: name)
+    )
 }
 
 @MainActor
