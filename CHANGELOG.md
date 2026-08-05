@@ -10,11 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Features
 
 - **iOS (MoriRemote)**: Rebuilt the remote companion around a secure, pane-native tmux control runtime. It supports saved workspaces, password or OpenSSH private-key authentication, explicit host-key trust, local terminal history/selection, agent status, and adaptive iPhone/iPad presentation without taking over another attached tmux client's selection or size.
-- **iOS (MoriRemote)**: Restored the remux-derived terminal dock layout: Ctrl/Esc/Tab, Sessions/Windows/Panes, and Keyboard return as three material capsule groups with the original spacing. The navigation controls currently open the existing Navigator; their action boundary remains separate for later remapping. Navigator has an explicit host selector and switches terminals only after choosing a session; modal forms suspend the terminal responder; Chinese and other IMEs now commit marked text exactly once.
+- **iOS (MoriRemote)**: Reworked terminal navigation and input chrome: a slim four-icon keyboard accessory replaces the oversized capsule dock; Navigator has an explicit host selector and switches terminals only after choosing a session; modal forms suspend the terminal responder; Chinese and other IMEs now commit marked text exactly once. Keypad also adds photo/clipboard image input through the current authenticated SSH root: MoriRemote previews and atomically uploads the image, then inserts a shell-escaped remote path without pressing Enter.
 - **iOS (MoriRemote)**: Server profiles now discover their live tmux sessions after SSH login, so users choose a session instead of manually creating workspace records. The terminal’s Sessions button refreshes and lists every tmux session on the current host, including sessions not yet connected on the phone.
 
 ### 🐛 Bug Fixes
 
+- **iOS (MoriRemote)**: Keep the terminal viewport above the software keyboard instead of letting keyboard-safe-area-ignoring backgrounds cover terminal text.
 - **iOS (MoriRemote)**: Make workspace runtime status, topology, and agent metadata directly observable, so an open Navigator and library badges update instead of writing to an unused revision counter.
 - **iOS (MoriRemote)**: Refresh local scrollback geometry after Ghostty publishes each completed renderer frame, so output arriving after the pre-render terminal-change callback no longer leaves a stale hard stop above the true bottom.
 - **iOS (MoriRemote)**: Prevented a usable terminal from remaining labeled “Connecting…” when a delayed syncing callback arrives after live topology.

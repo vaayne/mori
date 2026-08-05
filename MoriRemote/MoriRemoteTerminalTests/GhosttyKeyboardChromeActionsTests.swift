@@ -49,9 +49,7 @@ final class GhosttyKeyboardChromeActionsTests: XCTestCase {
             sendKey: { _ in false }
         )
 
-        XCTAssertTrue(actions.perform(.sessions))
-        XCTAssertTrue(actions.perform(.windows))
-        XCTAssertTrue(actions.perform(.panes))
+        XCTAssertTrue(actions.perform(.navigator))
         XCTAssertTrue(actions.perform(.keyboard))
         XCTAssertTrue(actions.perform(.control))
         XCTAssertTrue(actions.perform(.alt))
@@ -61,7 +59,7 @@ final class GhosttyKeyboardChromeActionsTests: XCTestCase {
         XCTAssertTrue(actions.perform(.closePane))
         XCTAssertTrue(actions.perform(.closeWindow))
         XCTAssertEqual(calls, [
-            "navigator", "navigator", "navigator", "keyboard", "control", "alt",
+            "navigator", "keyboard", "control", "alt",
             "new-window", "split-horizontal", "split-vertical", "close-pane", "close-window",
         ])
     }

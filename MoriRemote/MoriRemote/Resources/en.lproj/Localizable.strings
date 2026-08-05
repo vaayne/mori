@@ -269,7 +269,6 @@
 "Library unavailable" = "Library Unavailable";
 "Copy selection" = "Copy Selection";
 "Waiting for the active tmux pane." = "Waiting for the active tmux pane.";
-"Sessions" = "Sessions";
 "Windows" = "Windows";
 "Panes" = "Panes";
 "Active workspaces" = "Active Workspaces";
