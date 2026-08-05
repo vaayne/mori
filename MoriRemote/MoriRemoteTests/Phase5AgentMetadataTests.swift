@@ -14,12 +14,25 @@ import Testing
         #expect(parser.parse(String(repeating: "x", count: AgentMetadataResponseParser.maximumResponseBytes + 1)).isEmpty)
     }
 
-    @Test("malformed, injected, and duplicate source records fail closed while shadows stay hidden")
+    @Test("q fields preserve legal names and empty titles without delimiter collisions")
+    func parserDecodesShellEscaping() {
+        let parser = AgentMetadataResponseParser()
+        let records = parser.parse(
+            "build\\|prod\\ space|@1|api\\\"worker\\|x|%1|working|clau\\'de\\|x\n"
+                + "main|@2||%2|waiting|pi\\\\agent\n"
+        )
+        #expect(records == [
+            target(session: "build|prod space", windowID: 1, windowTitle: "api\"worker|x", paneID: 1, state: .working, name: "clau'de|x"),
+            target(session: "main", windowID: 2, windowTitle: "", paneID: 2, state: .waiting, name: "pi\\agent")
+        ])
+    }
+
+    @Test("malformed, injected, and duplicate escaped records fail closed while shadows stay hidden")
     func parserRejectsInjectionAndRecordOverflow() {
         let parser = AgentMetadataResponseParser()
-        let injectedName = "claude\nmain|@2|deploy|%2|waiting|claude"
-        let response = "main|@1|editor|%1|working|\(injectedName)\nmain|@2|deploy|%2|done|pi\n"
-        #expect(parser.parse(response).isEmpty)
+        #expect(parser.parse("main\tforged|@1|editor|%1|working|claude\n").isEmpty)
+        #expect(parser.parse("main|@1|editor|extra|%1|working|claude\n").isEmpty)
+        #expect(parser.parse("main|@1|editor|%1|working|trailing\\\n").isEmpty)
 
         #expect(parser.parse("main|bad|editor|%1|working|claude\n").isEmpty)
         #expect(parser.parse("main|@1|editor|%1|working|claude\nmain|@1|editor|%1|done|pi\n").isEmpty)

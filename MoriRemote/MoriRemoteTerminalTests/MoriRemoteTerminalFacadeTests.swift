@@ -77,7 +77,7 @@ final class MoriRemoteTerminalFacadeTests: XCTestCase {
     func testFixedMetadataCommandUsesMoriHookOptionNames() {
         XCTAssertEqual(
             TmuxSessionController.agentMetadataQuery,
-            "list-panes -a -F '#{session_name}|#{window_id}|#{window_name}|#{pane_id}|#{@mori-agent-state}|#{@mori-agent-name}'"
+            "list-panes -a -f '#{&&:#{==:#{m/r:[[:cntrl:]],#{session_name}},0},#{&&:#{==:#{m/r:[[:cntrl:]],#{window_name}},0},#{&&:#{==:#{m/r:[[:cntrl:]],#{@mori-agent-state}},0},#{==:#{m/r:[[:cntrl:]],#{@mori-agent-name}},0}}}}' -F '#{q:session_name}|#{window_id}|#{q:window_name}|#{pane_id}|#{q:@mori-agent-state}|#{q:@mori-agent-name}'"
         )
     }
 

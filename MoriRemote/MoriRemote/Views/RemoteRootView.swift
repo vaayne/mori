@@ -609,7 +609,7 @@ private struct RemoteNavigatorView: View {
                                     .foregroundStyle(.secondary)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(verbatim: value.workspace.tmuxSession)
-                                    Text(verbatim: "\(value.target.windowTitle) · %\(value.target.paneID)")
+                                    Text(verbatim: "\(agentWindowTitle(value.target)) · %\(value.target.paneID)")
                                         .font(.caption.monospaced())
                                         .foregroundStyle(.secondary)
                                 }
@@ -678,6 +678,11 @@ private struct RemoteNavigatorView: View {
     private func windowTitle(for pane: MoriRemoteTerminalPane) -> String {
         runtime.topology?.windows.first(where: { $0.id == pane.windowID })?.title ?? String(localized: "Window")
     }
+
+    private func agentWindowTitle(_ target: AgentAttentionTarget) -> String {
+        target.windowTitle.isEmpty ? String(localized: "Window") : target.windowTitle
+    }
+
     private func windowMetadata(_ window: MoriRemoteTerminalWindow) -> AgentMetadata {
         runtime.topology?.panes
             .filter { $0.windowID == window.id }

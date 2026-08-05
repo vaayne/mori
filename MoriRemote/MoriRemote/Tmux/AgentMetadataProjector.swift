@@ -72,11 +72,10 @@ struct AgentMetadataResponseParser: Sendable {
         var result: [AgentAttentionTarget] = []
         var seenPaneIDs = Set<UInt64>()
         for line in records {
-            let fields = line.split(separator: "|", omittingEmptySubsequences: false)
-            guard fields.count == 6,
+            guard let fields = decodeShellEscapedFields(line), fields.count == 6,
                   let sessionName = normalizeText(fields[0], maximumLength: Self.maximumSessionNameLength),
                   let windowID = parseWindowID(fields[1]),
-                  let windowTitle = normalizeText(fields[2], maximumLength: Self.maximumWindowTitleLength),
+                  let windowTitle = normalizeText(fields[2], maximumLength: Self.maximumWindowTitleLength, allowsEmpty: true),
                   let paneID = parsePaneID(fields[3])
             else { return [] }
             guard !isMoriRemoteShadow(sessionName) else { continue }
@@ -92,30 +91,48 @@ struct AgentMetadataResponseParser: Sendable {
         return result
     }
 
-    private func parsePaneID(_ field: Substring) -> UInt64? {
+    private func parsePaneID(_ field: String) -> UInt64? {
         guard field.first == "%", field.dropFirst().allSatisfy(\.isNumber) else { return nil }
         return UInt64(field.dropFirst())
     }
 
-    private func parseWindowID(_ field: Substring) -> UInt64? {
+    private func parseWindowID(_ field: String) -> UInt64? {
         guard field.first == "@", field.dropFirst().allSatisfy(\.isNumber) else { return nil }
         return UInt64(field.dropFirst())
     }
 
-    private func normalizeState(_ field: Substring) -> MoriAgentState {
-        MoriAgentState(rawValue: String(field)) ?? .unknown
+    private func normalizeState(_ value: String) -> MoriAgentState {
+        MoriAgentState(rawValue: value) ?? .unknown
     }
 
-    private func normalizeName(_ field: Substring) -> String? {
-        normalizeText(field, maximumLength: Self.maximumNameLength)
+    private func normalizeName(_ value: String) -> String? {
+        normalizeText(value, maximumLength: Self.maximumNameLength)
     }
 
-    private func normalizeText(_ field: Substring, maximumLength: Int) -> String? {
-        let value = String(field)
-        guard !value.isEmpty, value.count <= maximumLength,
+    private func normalizeText(_ value: String, maximumLength: Int, allowsEmpty: Bool = false) -> String? {
+        guard (allowsEmpty || !value.isEmpty), value.count <= maximumLength,
               value.unicodeScalars.allSatisfy({ $0.value >= 0x20 && $0.value != 0x7F })
         else { return nil }
         return value
+    }
+
+    /// Splits one record while decoding tmux 3.2's shell-style `q` escaping.
+    private func decodeShellEscapedFields(_ line: Substring) -> [String]? {
+        var fields = [""]
+        var escaped = false
+        for character in line {
+            if escaped {
+                fields[fields.count - 1].append(character)
+                escaped = false
+            } else if character == "\\" {
+                escaped = true
+            } else if character == "|" {
+                fields.append("")
+            } else {
+                fields[fields.count - 1].append(character)
+            }
+        }
+        return escaped ? nil : fields
     }
 
     private func isMoriRemoteShadow(_ sessionName: String) -> Bool {
