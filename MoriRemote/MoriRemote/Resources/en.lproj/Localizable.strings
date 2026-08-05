@@ -279,7 +279,9 @@
 "Windows" = "Windows";
 "Panes" = "Panes";
 "Active workspaces" = "Active Workspaces";
-"Agent Attention" = "Agent Attention";
+"Agents" = "Agents";
+"No agents reporting status" = "No agents reporting status";
+"Start an agent with Mori hooks enabled to see it here." = "Start an agent with Mori hooks enabled to see it here.";
 "Sessions on %@" = "Sessions on %@";
 "Workspace controls" = "Workspace Controls";
 "Server" = "Server";

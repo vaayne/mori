@@ -358,7 +358,7 @@ private struct RemoteTerminalDetailView: View {
             if summary.total > 0 {
                 Button {
                     root.discoverSessions(serverID: runtime.workspace.serverID)
-                    navigatorScope = .attention
+                    navigatorScope = .agents
                     showsNavigator = true
                 } label: {
                     HStack(spacing: 5) {
@@ -372,7 +372,7 @@ private struct RemoteTerminalDetailView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(attentionTint(for: summary))
                 .padding(12)
-                .accessibilityLabel(String(localized: "Agent Attention"))
+                .accessibilityLabel(String(localized: "Agents"))
             }
         }
         .sheet(isPresented: $showsNavigator) {
@@ -417,14 +417,14 @@ private struct RemoteTerminalDetailView: View {
 @MainActor
 private struct RemoteNavigatorView: View {
     enum Scope: String, CaseIterable, Identifiable {
-        case sessions, windows, panes, attention
+        case sessions, windows, panes, agents
         var id: Self { self }
         var title: String {
             switch self {
             case .sessions: String(localized: "Sessions")
             case .windows: String(localized: "Windows")
             case .panes: String(localized: "Panes")
-            case .attention: String(localized: "Agent Attention")
+            case .agents: String(localized: "Agents")
             }
         }
     }
@@ -624,7 +624,7 @@ private struct RemoteNavigatorView: View {
                     }
                 }
             }
-        case .attention:
+        case .agents:
             Section {
                 ForEach(filteredAttention) { value in
                     Button {
@@ -632,8 +632,8 @@ private struct RemoteNavigatorView: View {
                         dismiss()
                     } label: {
                         HStack {
-                            Image(systemName: "bell.badge.fill")
-                                .foregroundStyle(.orange)
+                            Image(systemName: "person.crop.circle")
+                                .foregroundStyle(.secondary)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(verbatim: value.workspace.tmuxSession)
                                 Text(verbatim: "\(value.target.windowTitle) · %\(value.target.paneID)")
@@ -654,6 +654,12 @@ private struct RemoteNavigatorView: View {
     @ViewBuilder private var emptyState: some View {
         if scope == .sessions, root.sessionDiscovery[selectedServerID] == .loading, filteredSessions.isEmpty {
             ProgressView(String(localized: "Loading sessions…"))
+        } else if scope == .agents, filteredAttention.isEmpty, filter.isEmpty {
+            ContentUnavailableView(
+                String(localized: "No agents reporting status"),
+                systemImage: "person.2",
+                description: Text(String(localized: "Start an agent with Mori hooks enabled to see it here."))
+            )
         } else if visibleItemCount == 0 {
             ContentUnavailableView(emptyTitle, systemImage: filter.isEmpty ? "rectangle.stack.badge.minus" : "magnifyingglass")
         }
@@ -692,7 +698,7 @@ private struct RemoteNavigatorView: View {
         case .sessions: filteredSessions.count
         case .windows: filteredWindows.count
         case .panes: filteredPanes.count
-        case .attention: filteredAttention.count
+        case .agents: filteredAttention.count
         }
     }
     private func windowTitle(for pane: MoriRemoteTerminalPane) -> String {

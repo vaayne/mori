@@ -279,7 +279,9 @@
 "Windows" = "窗口";
 "Panes" = "面板";
 "Active workspaces" = "活动工作区";
-"Agent Attention" = "Agent 注意事项";
+"Agents" = "Agent";
+"No agents reporting status" = "没有正在上报状态的 Agent";
+"Start an agent with Mori hooks enabled to see it here." = "启用 Mori hooks 并启动 Agent 后，它会显示在这里。";
 "Sessions on %@" = "%@ 上的会话";
 "Workspace controls" = "工作区控制";
 "Server" = "服务器";
