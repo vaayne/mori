@@ -45,9 +45,7 @@ struct GhosttyTerminalCoreView: View {
             isSuspended: isInputSuspended || isImageAttachmentPresented
         ).isInputAvailable
         ZStack(alignment: .bottom) {
-            // Extend behind device chrome, but retain the keyboard safe area so
-            // GeometryReader reports the visible terminal viewport.
-            Color.black.ignoresSafeArea(.container)
+            Color.black.ignoresSafeArea()
             GeometryReader { geometry in
                 let liveSize = GhosttyTerminalViewportCoordinator.normalized(geometry.size)
                 let effectiveSize = compositionState.viewportCoordinator.effectiveSize(liveSize: liveSize)

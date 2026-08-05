@@ -349,7 +349,7 @@ private struct RemoteTerminalDetailView: View {
                 .id(runtime.instanceID)
                 .background(Color.black)
         }
-        .background(Color.black.ignoresSafeArea(.container))
+        .background(Color.black.ignoresSafeArea())
         .sheet(isPresented: $showsNavigator) {
             RemoteNavigatorView(root: root, runtime: runtime) {
                 showsNavigator = false
