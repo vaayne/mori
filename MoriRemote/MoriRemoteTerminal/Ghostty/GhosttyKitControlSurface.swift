@@ -136,7 +136,7 @@ struct GhosttyLocalSelectionSnapshot: Equatable {
     }
 
     private static func rect(
-        _ value: ghostty_terminal_surface_selection_rect_s,
+        _ value: ghostty_terminal_surface_cell_geometry_s,
         scaleFactor: Double
     ) -> CGRect? {
         guard value.visible else { return nil }

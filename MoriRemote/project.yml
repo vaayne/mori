@@ -105,7 +105,10 @@ targets:
     sources:
       - path: MoriRemoteTerminalTests
     dependencies:
+      # Linking the static terminal archive is enough; embedding a synthetic
+      # framework bundle into the test host breaks the signed payload.
       - target: MoriRemoteTerminal
+        embed: false
     settings:
       base:
         SWIFT_VERSION: "6.0"

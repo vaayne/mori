@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build GhosttyKit XCFramework from Ghostty source.
-# Requires: zig 0.15.2 (installed via mise)
+# Requires: zig 0.16.0 (installed via mise)
 #
 # Usage: bash scripts/build-ghostty.sh [--clean] [--universal]
 #   default: native macOS slice only
@@ -29,9 +29,6 @@ normalize_universal_xcframework() {
     local canonical_library="libghostty-internal-fat.a"
     [[ -d "$macos_slice" ]] || return 0
 
-    if [[ -f "$macos_slice/ghostty-internal.a" ]]; then
-        mv "$macos_slice/ghostty-internal.a" "$macos_slice/$canonical_library"
-    fi
     [[ -f "$macos_slice/$canonical_library" ]] || {
         echo "Universal GhosttyKit is missing its macOS static library." >&2
         return 1

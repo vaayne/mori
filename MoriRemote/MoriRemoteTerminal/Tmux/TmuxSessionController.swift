@@ -393,7 +393,7 @@ final class TmuxSessionController: @unchecked Sendable {
             handleTopology(action.value.topology)
 
         case GHOSTTY_TMUX_ACTION_PANE_CHANGED:
-            handlePaneChanged(TmuxPaneID(action.value.pane_id))
+            handlePaneChanged(TmuxPaneID(action.value.pane_change.pane_id))
 
         case GHOSTTY_TMUX_ACTION_COMMAND_COMPLETE:
             handleCommandCompletion(action.value.command)

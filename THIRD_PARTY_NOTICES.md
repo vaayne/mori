@@ -9,8 +9,8 @@ archive. The versions below are the resolved versions in
 Mori and MoriRemote statically link the Mori-built universal
 `GhosttyKit.xcframework`, compiled from
 [remux-ghostty](https://github.com/h3nock/remux-ghostty) source commit
-`aeb8f73790946d9c9ad175b3dafaec9911ef36bb` (211 commits atop Ghostty
-`b213a72c03b427607b43c89ff4223a7baa079fe8`). The source adds the
+`3306070c32d2591573928843cbd98fa8bb2ee384` (123 commits atop Ghostty
+`c7cbc9bfd44cb11a9c7eae00f1166624671e363b`). The source adds the
 `ghostty_tmux_client_*` ABI required by MoriRemote. CI verifies the source
 provenance, macOS/iOS slices, iOS 17 compatibility, and ABI before either app
 consumes its same-workflow artifact.

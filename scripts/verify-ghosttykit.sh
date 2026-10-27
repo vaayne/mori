@@ -114,8 +114,12 @@ macos_library="$xcframework/macos-arm64_x86_64/libghostty-internal-fat.a"
 [[ -f "$macos_library" ]] || fail "missing macOS static library"
 [[ "$(lipo -archs "$macos_library")" == *"arm64"* && "$(lipo -archs "$macos_library")" == *"x86_64"* ]] || fail "macOS slice is not universal"
 
+# Upstream only emits the `-fat` suffix for the multi-arch macOS archive; the
+# single-arch iOS slices keep the plain library name their Info.plist points at.
+ios_library_name="libghostty-internal.a"
+
 for slice in ios-arm64 ios-arm64-simulator; do
-    library="$xcframework/$slice/libghostty-internal-fat.a"
+    library="$xcframework/$slice/$ios_library_name"
     [[ -f "$library" ]] || fail "missing $slice static library"
     [[ "$(lipo -archs "$library")" == *"arm64"* ]] || fail "$slice lacks arm64"
 done
@@ -161,7 +165,7 @@ int main(void) { printf("%d\n", (int)ghostty_info().build_mode); }
 SOURCE
 [[ "$("$macos_probe")" == "$MORI_GHOSTTYKIT_BUILD_MODE" ]] || fail "artifact has an unexpected build mode"
 
-for library in "$macos_library" "$xcframework/ios-arm64/libghostty-internal-fat.a" "$xcframework/ios-arm64-simulator/libghostty-internal-fat.a"; do
+for library in "$macos_library" "$xcframework/ios-arm64/$ios_library_name" "$xcframework/ios-arm64-simulator/$ios_library_name"; do
     symbols="$(nm -gU "$library")"
     for symbol in _ghostty_info _ghostty_tmux_client_config_new _ghostty_tmux_client_new _ghostty_tmux_client_feed _ghostty_tmux_client_outbound _ghostty_tmux_client_consume; do
         grep -q "${symbol}$" <<<"$symbols" || fail "$(basename "$(dirname "$library")") lacks $symbol"
@@ -169,7 +173,7 @@ for library in "$macos_library" "$xcframework/ios-arm64/libghostty-internal-fat.
 done
 
 for slice in ios-arm64 ios-arm64-simulator; do
-    minos_values="$(otool -l "$xcframework/$slice/libghostty-internal-fat.a" | awk '/minos / { print $2 }' | sort -u)"
+    minos_values="$(otool -l "$xcframework/$slice/$ios_library_name" | awk '/minos / { print $2 }' | sort -u)"
     [[ -n "$minos_values" ]] || fail "$slice has no LC_BUILD_VERSION minimum OS metadata"
     while IFS= read -r minos; do
         major="${minos%%.*}"

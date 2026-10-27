@@ -72,7 +72,7 @@ mise run ios:run                         # 验证启动、存活、崩溃日志�
 <details>
 <summary>从源码编译</summary>
 
-需要 macOS 14+、tmux、[mise](https://mise.jdx.dev/)、Zig 0.15.2 和 Xcode。
+需要 macOS 14+、tmux、[mise](https://mise.jdx.dev/)、Zig 0.16.0 和 Xcode。
 
 ```bash
 mise run build    # Debug 构建（自动引导 macOS libghostty）

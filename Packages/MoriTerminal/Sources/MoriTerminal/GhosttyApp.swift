@@ -45,11 +45,6 @@ private struct SendableRawPointer: @unchecked Sendable {
     let pointer: UnsafeMutableRawPointer
 }
 
-/// Sendable wrapper for const C string pointers.
-private struct SendableCString: @unchecked Sendable {
-    let pointer: UnsafePointer<CChar>
-}
-
 /// Singleton managing the ghostty application context.
 /// Owns the `ghostty_app_t` instance, runtime callbacks, and event loop tick scheduling.
 /// Created once and shared by all GhosttyAdapter surfaces.
@@ -243,9 +238,13 @@ final class GhosttyApp {
             supports_selection_clipboard: false,
             wakeup_cb: { userdata in GhosttyApp.onWakeup(userdata) },
             action_cb: { app, target, action in GhosttyApp.onAction(app, target: target, action: action) },
-            read_clipboard_cb: { userdata, loc, state in GhosttyApp.onReadClipboard(userdata, location: loc, state: state) },
-            confirm_read_clipboard_cb: { userdata, str, state, request in
-                GhosttyApp.onConfirmReadClipboard(userdata, string: str, state: state, request: request)
+            read_clipboard_cb: { userdata, loc, state, mimes, mimesLen, list in
+                GhosttyApp.onReadClipboard(
+                    userdata, location: loc, state: state,
+                    mimes: mimes, mimesLen: mimesLen, list: list)
+            },
+            confirm_read_clipboard_cb: { userdata, confirm, state, request in
+                GhosttyApp.onConfirmReadClipboard(userdata, confirm: confirm, state: state, request: request)
             },
             write_clipboard_cb: { userdata, loc, content, len, confirm in
                 GhosttyApp.onWriteClipboard(userdata, location: loc, content: content, len: len, confirm: confirm)
@@ -365,43 +364,170 @@ final class GhosttyApp {
         return true
     }
 
+    /// Complete a pending clipboard read with a single text representation.
+    /// libghostty copies the payload during the call, so the buffers only need
+    /// to outlive it. A `nil` text completes the request with no contents, which
+    /// is what an availability-only listing asks for.
+    private static func completeClipboardRequest(
+        surface: ghostty_surface_t,
+        state: UnsafeMutableRawPointer,
+        mime: String,
+        text: String?,
+        available: [String] = [],
+        confirmed: Bool,
+        remember: Bool = false
+    ) {
+        // Strings and payload bytes share one ownership list: everything here is
+        // malloc'd so a single `free` sweep releases it after the call.
+        var owned: [UnsafeMutableRawPointer] = []
+        defer { owned.forEach { free($0) } }
+
+        func duplicate(_ value: String) -> UnsafePointer<CChar>? {
+            guard let duplicated = strdup(value) else { return nil }
+            owned.append(UnsafeMutableRawPointer(duplicated))
+            return UnsafePointer(duplicated)
+        }
+
+        var contents: [ghostty_clipboard_content_s] = []
+        if let text, let cMime = duplicate(mime) {
+            let bytes = Array(text.utf8)
+            let data = malloc(max(bytes.count, 1))
+            if let data {
+                owned.append(data)
+                if let base = bytes.withUnsafeBytes({ $0.baseAddress }) {
+                    data.copyMemory(from: base, byteCount: bytes.count)
+                }
+                contents.append(ghostty_clipboard_content_s(
+                    mime: cMime,
+                    data: data.assumingMemoryBound(to: CChar.self),
+                    len: bytes.count))
+            }
+        }
+        var cAvailable: [UnsafePointer<CChar>?] = []
+        for entry in available {
+            cAvailable.append(duplicate(entry))
+        }
+
+        contents.withUnsafeBufferPointer { contentsBuf in
+            cAvailable.withUnsafeBufferPointer { availableBuf in
+                var complete = ghostty_clipboard_complete_s(
+                    contents: contentsBuf.baseAddress,
+                    contents_len: contentsBuf.count,
+                    available: availableBuf.baseAddress,
+                    available_len: availableBuf.count,
+                    confirmed: confirmed,
+                    remember: remember
+                )
+                ghostty_surface_complete_clipboard_request(surface, &complete, state)
+            }
+        }
+    }
+
+    /// Pick the representation to answer a read with. Ghostty names the MIME
+    /// types it wants; Mori only ever serves text, so prefer the requested
+    /// `text/plain`, then any requested text type, then a plain fallback.
+    private nonisolated static func textMime(
+        from mimes: UnsafePointer<UnsafePointer<CChar>?>?,
+        count: Int
+    ) -> String {
+        guard let mimes, count > 0 else { return "text/plain" }
+        var requested: [String] = []
+        for index in 0..<count {
+            guard let pointer = mimes[index] else { continue }
+            requested.append(String(cString: pointer))
+        }
+        return requested.first(where: { $0 == "text/plain" })
+            ?? requested.first(where: { $0.hasPrefix("text/") })
+            ?? "text/plain"
+    }
+
     private nonisolated static func onReadClipboard(
         _ userdata: UnsafeMutableRawPointer?,
         location: ghostty_clipboard_e,
-        state: UnsafeMutableRawPointer?
-    ) -> Bool {
-        guard let userdata, let state else { return false }
+        state: UnsafeMutableRawPointer?,
+        mimes: UnsafePointer<UnsafePointer<CChar>?>?,
+        mimesLen: Int,
+        list: Bool
+    ) -> ghostty_clipboard_read_result_e {
+        guard let userdata, let state else { return GHOSTTY_CLIPBOARD_READ_UNSUPPORTED }
         let ud = SendableRawPointer(pointer: userdata)
         let st = SendableRawPointer(pointer: state)
+        let mime = textMime(from: mimes, count: mimesLen)
+        let available = list ? [mime] : []
 
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
-                let pasteboard = NSPasteboard.general
-                guard let str = pasteboard.string(forType: .string) else { return }
                 guard let surface = GhosttyApp.shared.surfaceFromUserdata(ud.pointer) else { return }
-                str.withCString { ptr in
-                    ghostty_surface_complete_clipboard_request(surface, ptr, st.pointer, false)
+                guard let str = NSPasteboard.general.string(forType: .string) else {
+                    if available.isEmpty {
+                        ghostty_surface_deny_clipboard_request(surface, st.pointer)
+                    } else {
+                        GhosttyApp.completeClipboardRequest(
+                            surface: surface, state: st.pointer,
+                            mime: mime, text: nil, available: available, confirmed: false)
+                    }
+                    return
                 }
+                GhosttyApp.completeClipboardRequest(
+                    surface: surface, state: st.pointer,
+                    mime: mime, text: str, available: available, confirmed: false)
             }
         }
-        return true
+        return GHOSTTY_CLIPBOARD_READ_STARTED
     }
 
     private nonisolated static func onConfirmReadClipboard(
         _ userdata: UnsafeMutableRawPointer?,
-        string: UnsafePointer<CChar>?,
+        confirm: UnsafePointer<ghostty_clipboard_confirm_s>?,
         state: UnsafeMutableRawPointer?,
         request: ghostty_clipboard_request_e
     ) {
-        guard let userdata, let string, let state else { return }
+        guard let userdata, let confirm, let state else { return }
         let ud = SendableRawPointer(pointer: userdata)
-        let str = SendableCString(pointer: string)
         let st = SendableRawPointer(pointer: state)
+
+        // Ghostty hands over the representations it would have served. They are
+        // borrowed for the callback only, so decode them to owned values before
+        // hopping to the main actor.
+        let payload = confirm.pointee
+        var text: String?
+        if let contents = payload.contents, payload.contents_len > 0 {
+            let buffer = UnsafeBufferPointer(start: contents, count: payload.contents_len)
+            let preferred = buffer.first { item in
+                guard let mime = item.mime else { return false }
+                return String(cString: mime) == "text/plain"
+            } ?? buffer.first
+            if let item = preferred, let data = item.data {
+                // Data is binary-safe with an explicit length and not
+                // NUL-terminated; decode the exact buffer, not past it.
+                // Use the repairing initializer so malformed UTF-8 still
+                // yields a value instead of aborting the clipboard operation.
+                text = String(
+                    decoding: UnsafeRawBufferPointer(start: data, count: item.len),
+                    as: UTF8.self
+                )
+            }
+        }
+        var available: [String] = []
+        if let list = payload.available {
+            for index in 0..<payload.available_len {
+                guard let pointer = list[index] else { continue }
+                available.append(String(cString: pointer))
+            }
+        }
 
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
                 guard let surface = GhosttyApp.shared.surfaceFromUserdata(ud.pointer) else { return }
-                ghostty_surface_complete_clipboard_request(surface, str.pointer, st.pointer, true)
+                guard let text else {
+                    // Mori has no permission prompt and nothing decodable to
+                    // approve: deny so ghostty is never left waiting.
+                    ghostty_surface_deny_clipboard_request(surface, st.pointer)
+                    return
+                }
+                GhosttyApp.completeClipboardRequest(
+                    surface: surface, state: st.pointer, mime: "text/plain",
+                    text: text, available: available, confirmed: true)
             }
         }
     }
@@ -421,7 +547,15 @@ final class GhosttyApp {
             let item = content[i]
             guard let mime = item.mime, let data = item.data else { continue }
             if String(cString: mime) == "text/plain" {
-                textContent = String(cString: data)
+                // Data is binary-safe with an explicit length and not
+                // NUL-terminated; decode the exact buffer, not past it.
+                // Use the repairing initializer so malformed UTF-8 still
+                // copies (with replacement characters) instead of silently
+                // dropping the write.
+                textContent = String(
+                    decoding: UnsafeRawBufferPointer(start: data, count: item.len),
+                    as: UTF8.self
+                )
                 break
             }
         }

@@ -6,7 +6,7 @@ ripgrep = "latest"
 fd = "latest"
 xcbeautify = "latest"
 tmux = "latest"
-zig = "0.15.2"
+zig = "0.16.0"
 
 [env]
 PROJECT_NAME = "Mori"

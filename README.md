@@ -82,7 +82,7 @@ not downloaded from a third-party prebuilt artifact. See
 <details>
 <summary>Build from source</summary>
 
-Requires macOS 14+, tmux, [mise](https://mise.jdx.dev/), Zig 0.15.2, and Xcode.
+Requires macOS 14+, tmux, [mise](https://mise.jdx.dev/), Zig 0.16.0, and Xcode.
 
 ```bash
 mise run build    # Debug build (bootstraps macOS libghostty automatically)
